@@ -1,9 +1,36 @@
 # AGENTS.md
 
-This file governs how you work in this repository.
+This file governs how Claude Code works in this repository.
 Read this file completely before starting any task.
 
 ---
+
+## Skills
+
+Domain-specific reference skills live in `.codex/skills/`.
+Load them when relevant — do not load all at once.
+
+| Working on                                                 | Load skill                          |
+| ---------------------------------------------------------- | ----------------------------------- |
+| Entity CRUD, status transitions, lifecycle rules,          | `contractor-crm`                    |
+| financial operations, contact dedup, quote/invoice flows,  | → `references/business-rules.md`    |
+| job creation, pipeline stages, soft delete, relationships  |                                     |
+| ---------------------------------------------------------- | ------------------                  |
+| Permission checks, auth middleware, RLS policies, JWT,     | `contractor-crm`                    |
+| role templates, /jafar, team member CRUD, member           | → `references/permissions-auth.md`  |
+| deactivation, navigation rendering                         |                                     |
+| ---------------------------------------------------------- | ------------------                  |
+| Outbox events, BullMQ workers, automation sequences,       | `contractor-crm`                    |
+| Realtime, notification dispatch, idempotency keys,         | → `references/automation-events.md` |
+| webhook handlers (Twilio, Stripe), event emission          |                                     |
+| ---------------------------------------------------------- | ------------------                  |
+| Any .svelte file, +page.ts, +layout, Bits UI, SCSS,        | `contractor-crm-svelte-ui`          |
+| navigation, Realtime in UI, client auth guard              |                                     |
+
+The `contractor-crm` skill covers business rules, permission matrix,
+transaction patterns, and automation architecture. Its SKILL.md has
+universal rules; read only the specific reference file for your task.
+Do not reconstruct business rules from memory — always consult the skill.
 
 ## Reference Documents
 
@@ -16,13 +43,15 @@ All architecture documents live in `/docs/`. Before starting any task, read the 
 | `Core Schema Design v1.md`         | Exact table/column definitions — authoritative      |
 | `Event System Architecture v1.md`  | Outbox pattern, event catalog, worker logic         |
 | `RLS Policy Matrix v1.md`          | All Row Level Security policies                     |
-| `Roles & Access Matrix v2.md`      | 39 permission booleans, role templates, nav rules   |
+| `Roles & Access Matrix v2.md`      | 40 permission booleans, role templates, nav rules   |
 
 **Never assume schema structure from memory. Always read the relevant doc first.**
 
 ---
 
 ## Commands
+
+run these commands only when necessary
 
 ```bash
 npm run dev           # start dev server
@@ -123,187 +152,25 @@ src/
 
 ---
 
-## Non-Negotiable Technical Rules
+## Non-Negotiable Rules
 
 These rules are never overridden by a prompt. If a task conflicts with any of these, stop and flag it.
 
----
+Full patterns and code examples live in skills — these are the guardrails.
 
-### 1 — Svelte 5 Runes Only
-
-No Svelte 4 syntax anywhere. Ever.
-
-```svelte
-// CORRECT
-let { value, onClose } = $props();
-let doubled = $derived(value * 2);
-$effect(() => { console.log(value); });
-<button onclick={handler}>Click</button>
-<input oninput={handler} />
-
-// FORBIDDEN
-export let value;
-$: doubled = value * 2;
-import { createEventDispatcher } from 'svelte';
-<button on:click={handler}>Click</button>
-<input on:input={handler} />
-```
-
----
-
-### 2 — SCSS Only. No Exceptions.
-
-No Tailwind. No inline styles unless genuinely unavoidable (e.g. dynamic CSS custom property values).
-
-Bits UI components expose state via data attributes — style them that way:
-
-```scss
-// CORRECT
-[data-dialog-content][data-state='open'] {
-	opacity: 1;
-}
-[data-menu-item][data-highlighted] {
-	background: var(--color-accent);
-}
-[data-menu-item][data-disabled] {
-	opacity: 0.4;
-}
-
-// WRONG — Bits UI does not add state classes
-.dialog.open {
-}
-.menu-item.highlighted {
-}
-```
-
-Use CSS custom properties (`--color-background`, `--color-foreground`, `--font-family-base`) — never hardcode values.
-
----
-
-### 3 — Mobile-First. Always.
-
-90% of users are on mobile. Every component and layout is designed for 375px first, then scaled up.
-
-- Minimum touch target: 44px height on all interactive elements
-- No hover-only interactions — every action must be tap-accessible
-- Bottom navigation is the primary nav pattern on mobile
-- Test at 375px before testing at 1280px
-
----
-
-### 4 — CSR Only. SSR Never.
-
-`ssr = false` in `src/routes/+layout.ts`. Never override this on any route.
-All data loading happens client-side via `fetch()` to `/api/*` routes.
-Never use `+page.server.ts` for UI data loading.
-
----
-
-### 5 — Server Isolation is Absolute.
-
-`SUPABASE_SERVICE_ROLE_KEY` must never appear in any `.svelte` file or `+page.ts` file.
-All database writes go through SvelteKit API routes (`/api/*`).
-`src/lib/server/*` is never imported in `.svelte` files — SvelteKit enforces this.
-
----
-
-### 6 — Workers Run as a Standalone Process.
-
-Workers run via `worker.ts` at the project root — a separate Node.js process.
-Workers are NEVER started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
-Starting workers inside SvelteKit creates competing instances under load and restart loops in development.
-
-```bash
-# Correct: two separate processes
-npm run dev       # terminal 1 — SvelteKit app
-npx tsx worker.ts # terminal 2 — worker process
-```
-
----
-
-### 7 — All Permission Checks Go Through `checkPermission()`.
-
-The 39 boolean columns on `org_members` are the sole authority for access control.
-The `role` column is for display only — never used for access decisions.
-
-```typescript
-// CORRECT
-const allowed = await checkPermission(member.id, 'can_view_all_quotes');
-if (!allowed) return json({ error: 'Forbidden' }, { status: 403 });
-
-// FORBIDDEN — direct boolean reads scattered in route handlers
-if (!member.can_view_all_quotes) return ...
-if (member.role === 'admin') return ...
-```
-
-All permission checks route through `src/lib/server/permissions/index.ts`. No exceptions.
-
----
-
-### 8 — Transaction Boundary Law.
-
-This is the most critical operational rule in the system.
-
-**INSIDE a database transaction:**
-
-- All business row mutations
-- `outbox_events` INSERT (always last, always inside)
-
-**OUTSIDE (via outbox worker only):**
-
-- BullMQ job enqueue
-- Twilio SMS dispatch
-- Resend email dispatch
-- Any external HTTP call
-- Supabase Realtime publish
-
-Never call Twilio, email, or any external service inside a database transaction.
-If the transaction rolls back, the external call cannot be undone.
-
----
-
-### 9 — Tenant Isolation Is Absolute.
-
-Every table has `org_id`. Every query filters by it. No exceptions.
-An `org_id` mismatch must never return data across tenant boundaries.
-RLS enforces this at the database layer. The API layer must also enforce it.
-
----
-
-### 10 — Schema Is Authoritative.
-
-Do not invent columns, tables, relationships, or enum values not in `Core Schema Design v1.md`.
-If something appears to be missing, stop and ask — do not add it.
-Before writing any database logic: read the relevant schema section, verify exact names.
-
----
-
-### 11 — Outbox Pattern Is Non-Negotiable.
-
-Business events must flow through the outbox/event architecture.
-Never trigger automations, SMS, or emails directly from route handlers.
-Never call external services directly from page components.
-Workers process all side effects asynchronously after commit.
-
----
-
-### 12 — /jafar Is Completely Isolated.
-
-The `/jafar` session and the contractor Supabase session are architecturally separate.
-`/jafar` routes use their own `jafarSession` cookie — not Supabase Auth.
-The Platform Owner has no `org_id`, no `org_members` row, no Supabase auth record.
-Never check a jafar session inside contractor middleware. Never mix them.
-
----
-
-### 13 — Client-Side Auth Guard Is Mandatory
-
-hooks.server.ts protects the initial page load and all API routes.
-It does NOT fire on client-side navigation between pages.
-
-/(app)/+layout.svelte must also check session validity on mount
-and on every navigation event. If no valid session: redirect to /auth/login.
-Both guards are required. Neither replaces the other.
+1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Details in `contractor-crm-svelte-ui` skill.
+2. **SCSS only** — no Tailwind, no inline styles. Bits UI styled via data attributes. Details in `contractor-crm-svelte-ui` skill.
+3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
+4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
+5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
+6. **Workers run standalone** — `npx tsx worker.ts` in a separate terminal. Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
+7. **All permission checks go through `checkPermission()`** — the 40 booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
+8. **Transaction boundary law** — business mutations + `outbox_events` INSERT inside the transaction. BullMQ enqueue, Twilio, Resend, any external call OUTSIDE (via outbox worker only). Never call external services inside a transaction.
+9. **Tenant isolation absolute** — every table has `org_id`, every query filters by it. RLS enforces at DB layer. API layer also enforces.
+10. **Schema is authoritative** — do not invent columns, tables, or enums. If something seems missing, ask. Read the relevant schema section before writing any DB logic.
+11. **Outbox pattern non-negotiable** — business events flow through `outbox_events` → outbox worker → BullMQ. Never trigger automations, SMS, or emails directly from route handlers.
+12. **`/jafar` completely isolated** — separate `jafarSession` cookie, no `org_id`, no `org_members` row, no Supabase auth. Never check jafar session in contractor middleware. Never mix.
+13. **Client-side auth guard mandatory** — `hooks.server.ts` protects initial load + API routes. `/(app)/+layout.svelte` protects client-side navigation. Both required. Neither replaces the other.
 
 ---
 
@@ -316,41 +183,9 @@ Both guards are required. Neither replaces the other.
 | Contractor     | `/(app)/*` | Supabase Auth cookie       | `org_members` row    |
 | Platform Owner | `/jafar/*` | Custom httpOnly JWT cookie | None — env vars only |
 
-### Three-Layer Architecture
-
-```
-Layer 1 — DB (PostgreSQL + Drizzle)
-  Source of truth. Atomic transactions. outbox_events inserted here.
-
-Layer 2 — Async Infrastructure (outbox worker + BullMQ + Redis)
-  Guaranteed at-least-once delivery. Workers process side effects.
-
-Layer 3 — Reactive UI (Supabase Realtime)
-  UI delivery only. Never used for business-critical orchestration.
-```
-
-Supabase Realtime is a UI convenience, not an event bus. A missed Realtime event
-is a UX inconvenience. A missed outbox event is a business failure.
-
-### RLS Responsibility Split
-
-RLS enforces: `org_id` tenant isolation on every table.
-API middleware enforces: all 39 fine-grained permission checks.
-These two layers have distinct, non-overlapping responsibilities.
-
----
-
-## Component Library Rules
-
-**Bits UI** is used for all accessibility-critical interactive primitives:
-Dialog, Sheet, DropdownMenu, Select, Popover, Accordion, Tooltip, Switch, Combobox, Tabs.
-
-**Custom SCSS components** handle everything else:
-Layout, cards, badges, nav, skeleton loaders, empty states, page wrappers.
-
-Domain components live in `src/lib/components/{domain}/`.
-Shared components live in `src/lib/components/shared/`.
-Never put business logic in component files — keep them presentation-focused.
+Three-layer architecture (DB → outbox+BullMQ → Realtime) and the RLS
+responsibility split are defined in the `contractor-crm` skill.
+Load `references/automation-events.md` or `references/permissions-auth.md` for detail.
 
 ---
 
@@ -409,54 +244,12 @@ Ask: **"Anything to adjust before we move on?"**
 
 ---
 
-## Code Quality Rules
-
-### No Over-Engineering
+## Code Quality
 
 - Prefer explicit code over clever abstractions
 - Do not create generic builders, factories, registries, or plugin systems
 - Avoid reusable abstractions until duplication is proven across 3+ use cases
 - Optimize for readability and maintainability — not theoretical flexibility
 - Business logic should be domain-oriented and readable
-
-### Minimal Edits
-
-Before modifying a large existing file:
-
-- Explain exactly what will change and why
-- Avoid rewriting sections unrelated to the task
-- Prefer surgical edits over complete rewrites
-- Preserve existing naming conventions unless told otherwise
-
-### Validation
-
-Every `POST` and `PATCH` API route validates input with a Zod schema.
-Validation schemas are co-located with the route or in `src/lib/types/`.
-Phone fields: E.164 normalization applied before every write.
-Monetary values: reject negative amounts. USD only. `numeric(12,2)`.
-
----
-
-## Database Rules
-
-- Never perform external API calls inside transactions
-- Never use PostgreSQL CASCADE DELETE on the `organizations` table
-- Never hard-delete production entities unless explicitly specified in the task
-- Never bypass `org_id` filtering — tenant isolation is absolute
-- Soft deletes use `deleted_at`. Immutable records (payments, messages, reviews) have no `deleted_at`
-- Sequential numbers (`quote_number`, `invoice_number`) use `SELECT FOR UPDATE` on `org_counters`
-- `payments` rows are never edited or deleted — they are financial records
-
----
-
-## Event System Rules
-
-- All async side effects flow through `outbox_events` → outbox worker → BullMQ
-- Never enqueue BullMQ jobs directly from API routes — only from the outbox worker
-- Every BullMQ worker checks idempotency before executing
-- Every BullMQ worker checks `sms_opt_out` before sending SMS
-- Every BullMQ worker checks `automation_settings` enabled flag before proceeding
-- Job cancellation: find `automation_jobs` by resource, call `queue.remove()`, set status='cancelled'
-- Workers must check `automation_jobs.status` at start — exit immediately if 'cancelled'
-
----
+- Before modifying a large file: explain what changes and why. Prefer surgical edits over rewrites.
+- Every `POST` and `PATCH` route validates input with Zod. Phone: E.164 normalized. Money: reject negatives, `numeric(12,2)`.

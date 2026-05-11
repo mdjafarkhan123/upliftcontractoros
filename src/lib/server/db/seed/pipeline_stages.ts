@@ -1,6 +1,8 @@
 import { db } from '../client';
 import { pipelineStages } from '../schema';
 
+type PipelineStageDb = Pick<typeof db, 'insert'>;
+
 const DEFAULT_STAGES = [
 	{
 		name: 'New Lead',
@@ -60,8 +62,11 @@ const DEFAULT_STAGES = [
 	}
 ] as const;
 
-export async function seedPipelineStages(orgId: string): Promise<void> {
-	await db.insert(pipelineStages).values(
+export async function seedPipelineStages(
+	orgId: string,
+	client: PipelineStageDb = db
+): Promise<void> {
+	await client.insert(pipelineStages).values(
 		DEFAULT_STAGES.map((stage) => ({
 			org_id: orgId,
 			...stage

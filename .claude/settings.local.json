@@ -7,7 +7,30 @@
       "PowerShell(ls \"D:\\\\Projects\\\\ContractorOs\" | ForEach-Object { if \\($_.PSIsContainer\\) { Write-Host \"$\\($_.Name\\)/\" } else { Write-Host $_.Name } })",
       "Bash(npx supabase *)",
       "Bash(npx drizzle-kit *)",
-      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\Projects\\\\ContractorOs\\\\src\\\\lib\\\\types\\\\database.types.ts'\\).Count\")"
+      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\Projects\\\\ContractorOs\\\\src\\\\lib\\\\types\\\\database.types.ts'\\).Count\")",
+      "Bash(awk '{print $2}')",
+      "Bash(supabase --version)",
+      "Bash(Get-Content D:/Projects/ContractorOs/.env)",
+      "Bash(Select-String \"SUPABASE_URL\")",
+      "PowerShell($env:DATABASE_URL; $env:SUPABASE_URL)",
+      "PowerShell(cd D:/Projects/ContractorOs && npx supabase gen types typescript --project-id wqodecwlynshdujaphaz > src/lib/types/supabase.ts 2>&1; echo \"Exit: $LASTEXITCODE\")",
+      "PowerShell(cd D:/Projects/ContractorOs; $dbUrl = \\(Get-Content .env | Where-Object { $_ -match '^DATABASE_URL=' }\\) -replace '^DATABASE_URL=',''; $env:DATABASE_URL = $dbUrl; npx drizzle-kit pull 2>&1)",
+      "PowerShell(node --version)",
+      "Bash(npm run *)",
+      "Bash(Get-Content *)",
+      "Bash(node *)",
+      "Bash(npx shadcn-svelte@latest add button input label card alert --yes)",
+      "Bash(echo \"Started PID $!\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:5174/auth/login -o /tmp/login.html)",
+      "Bash(curl -s \"http://localhost:5174/src/routes/+layout.svelte\")",
+      "Bash(curl -s \"http://localhost:5174/src/lib/styles/app.css\")",
+      "Bash(curl -sI http://localhost:5174/auth/login)",
+      "Bash(curl -s http://localhost:5174/auth/login)",
+      "Bash(curl -s \"http://localhost:5174/@fs/D:/Projects/ContractorOs/.svelte-kit/generated/client/app.js\")",
+      "Bash(kill 365)",
+      "Bash(pkill -f vite)",
+      "Bash(npm install *)"
     ]
   }
 }

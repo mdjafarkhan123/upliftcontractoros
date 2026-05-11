@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem *)",
+      "Bash(npx svelte-check *)",
+      "Bash(npx tsc *)",
+      "mcp__ide__getDiagnostics"
+    ]
+  }
+}

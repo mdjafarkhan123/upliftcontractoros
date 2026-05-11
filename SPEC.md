@@ -78,6 +78,11 @@ active → suspended → pending_deletion → deleted
 - `pending_deletion` — 90 days post-suspension, deletion scheduled
 - `deleted` — all data permanently removed by cron
 
+A newly created organization starts with `is_setup_complete = false` (provisioning).
+During this phase, the contractor sees a "Your system is being set up" screen,
+not the operational dashboard. The Platform Owner completes onboarding and
+sets `is_setup_complete = true` to unlock the full app.
+
 ---
 
 ## 4. User Roles

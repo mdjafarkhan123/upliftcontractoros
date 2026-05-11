@@ -30,6 +30,7 @@ export const organizations = pgTable('organizations', {
 	city: text('city'),
 	state: text('state'),
 	zip: text('zip'),
+	is_setup_complete: boolean('is_setup_complete').notNull().default(false),
 	suspended_at: timestamp('suspended_at', { withTimezone: true }),
 	deletion_scheduled_at: timestamp('deletion_scheduled_at', { withTimezone: true }),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
@@ -78,6 +79,9 @@ export const orgMembers = pgTable('org_members', {
 	can_view_full_pipeline: boolean('can_view_full_pipeline').notNull().default(false),
 	can_move_pipeline_stages: boolean('can_move_pipeline_stages').notNull().default(false),
 	can_create_opportunities: boolean('can_create_opportunities').notNull().default(false),
+
+	// Module 4 (cont.): Jobs
+	can_view_assigned_jobs: boolean('can_view_assigned_jobs').notNull().default(false),
 
 	// Module 5: Quotes
 	can_view_all_quotes: boolean('can_view_all_quotes').notNull().default(false),

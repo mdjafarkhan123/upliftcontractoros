@@ -1247,6 +1247,7 @@ export type Database = {
           can_view_all_quotes: boolean
           can_view_assigned_appointments: boolean
           can_view_assigned_conversations: boolean
+          can_view_assigned_jobs: boolean
           can_view_dashboard: boolean
           can_view_full_pipeline: boolean
           can_view_growth_feed: boolean
@@ -1299,6 +1300,7 @@ export type Database = {
           can_view_all_quotes?: boolean
           can_view_assigned_appointments?: boolean
           can_view_assigned_conversations?: boolean
+          can_view_assigned_jobs?: boolean
           can_view_dashboard?: boolean
           can_view_full_pipeline?: boolean
           can_view_growth_feed?: boolean
@@ -1351,6 +1353,7 @@ export type Database = {
           can_view_all_quotes?: boolean
           can_view_assigned_appointments?: boolean
           can_view_assigned_conversations?: boolean
+          can_view_assigned_jobs?: boolean
           can_view_dashboard?: boolean
           can_view_full_pipeline?: boolean
           can_view_growth_feed?: boolean
@@ -1388,6 +1391,7 @@ export type Database = {
           deleted_at: string | null
           deletion_scheduled_at: string | null
           id: string
+          is_setup_complete: boolean
           logo_url: string | null
           name: string
           plan: string
@@ -1414,6 +1418,7 @@ export type Database = {
           deleted_at?: string | null
           deletion_scheduled_at?: string | null
           id?: string
+          is_setup_complete?: boolean
           logo_url?: string | null
           name: string
           plan?: string
@@ -1440,6 +1445,7 @@ export type Database = {
           deleted_at?: string | null
           deletion_scheduled_at?: string | null
           id?: string
+          is_setup_complete?: boolean
           logo_url?: string | null
           name?: string
           plan?: string
