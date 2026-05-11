@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\ContractorOs\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "PowerShell(head *)",
+      "PowerShell(ls \"D:\\\\Projects\\\\ContractorOs\" | ForEach-Object { if \\($_.PSIsContainer\\) { Write-Host \"$\\($_.Name\\)/\" } else { Write-Host $_.Name } })",
+      "Bash(npx supabase *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\Projects\\\\ContractorOs\\\\src\\\\lib\\\\types\\\\database.types.ts'\\).Count\")"
+    ]
+  }
+}
