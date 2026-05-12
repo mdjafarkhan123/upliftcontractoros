@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import type { RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 
 const COOKIE_NAME = 'jafar_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
@@ -31,8 +32,8 @@ export function setJafarSession(event: RequestEvent): void {
 	});
 	event.cookies.set(COOKIE_NAME, token, {
 		httpOnly: true,
-		secure: true,
-		sameSite: 'strict',
+		secure: !dev,
+		sameSite: 'lax',
 		path: '/',
 		maxAge: SESSION_TTL_SECONDS
 	});

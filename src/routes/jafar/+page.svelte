@@ -3,9 +3,17 @@
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import AuthField from '$lib/components/auth/AuthField.svelte';
 
-	let { data }: { data: { errorMessage: string | null } } = $props();
+	let {
+		data,
+		form
+	}: {
+		data: { errorMessage: string | null };
+		form: { errorMessage?: string } | null;
+	} = $props();
 
 	let loading = $state(false);
+
+	const errorMessage = $derived(form?.errorMessage ?? data.errorMessage);
 </script>
 
 <svelte:head>
@@ -58,8 +66,8 @@
 			</div>
 
 			<div class="px-8 py-8 space-y-5">
-				{#if data.errorMessage}
-					<AuthAlert message={data.errorMessage} variant="destructive" />
+				{#if errorMessage}
+					<AuthAlert message={errorMessage} variant="destructive" />
 				{/if}
 
 				<form
