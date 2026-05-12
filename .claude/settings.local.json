@@ -30,7 +30,8 @@
       "Bash(curl -s \"http://localhost:5174/@fs/D:/Projects/ContractorOs/.svelte-kit/generated/client/app.js\")",
       "Bash(kill 365)",
       "Bash(pkill -f vite)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)"
     ]
   }
 }
