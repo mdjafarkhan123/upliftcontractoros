@@ -1,28 +1,10 @@
 import { SvelteMap } from 'svelte/reactivity';
-
-export type ContactListItem = {
-	id: string;
-	full_name: string;
-	phone: string;
-	email: string | null;
-	status: 'lead' | 'customer' | 'archived';
-	lead_source: string;
-	assigned_to: string | null;
-	sms_opt_out: boolean;
-	tags: string[];
-	created_at: string;
-	assignee_name: string | null;
-};
-
-export type ContactsFilters = {
-	q: string;
-	statusFilter: 'all' | 'leads' | 'customers';
-};
+import type { JobListItem, JobsFilters } from '$lib/types/jobs';
 
 type Status = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
 
 type CacheEntry = {
-	items: ContactListItem[];
+	items: JobListItem[];
 	nextCursor: string | null;
 	fetchedAt: number;
 };
@@ -35,30 +17,30 @@ let status = $state<Status>('idle');
 let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
-function buildKey(f: ContactsFilters): string {
-	return `${f.q.trim()}|${f.statusFilter}`;
+function buildKey(f: JobsFilters): string {
+	return `${f.status}|${f.assignedTo ?? ''}`;
 }
 
-function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams {
+function buildParams(f: JobsFilters, cursor: string | null): URLSearchParams {
 	const params = new URLSearchParams();
-	if (f.q.trim()) params.set('q', f.q.trim());
-	if (f.statusFilter !== 'all') params.set('status', f.statusFilter);
+	if (f.status !== 'all') params.set('status', f.status);
+	if (f.assignedTo) params.set('assigned_to', f.assignedTo);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }
 
 async function fetchPage(
-	f: ContactsFilters,
+	f: JobsFilters,
 	cursor: string | null,
 	signal: AbortSignal
-): Promise<{ items: ContactListItem[]; next_cursor: string | null }> {
-	const res = await fetch(`/api/contacts?${buildParams(f, cursor).toString()}`, { signal });
-	if (!res.ok) throw new Error('Failed to load contacts');
-	return (await res.json()) as { items: ContactListItem[]; next_cursor: string | null };
+): Promise<{ items: JobListItem[]; next_cursor: string | null }> {
+	const res = await fetch(`/api/jobs?${buildParams(f, cursor).toString()}`, { signal });
+	if (!res.ok) throw new Error('Failed to load jobs');
+	return (await res.json()) as { items: JobListItem[]; next_cursor: string | null };
 }
 
-export const contactsStore = {
-	get items(): ContactListItem[] {
+export const jobsStore = {
+	get items(): JobListItem[] {
 		return cache.get(currentKey)?.items ?? [];
 	},
 	get nextCursor(): string | null {
@@ -74,7 +56,7 @@ export const contactsStore = {
 		return cache.get(currentKey)?.fetchedAt ?? 0;
 	},
 
-	async load(filters: ContactsFilters, force = false): Promise<void> {
+	async load(filters: JobsFilters, force = false): Promise<void> {
 		const key = buildKey(filters);
 		currentKey = key;
 
@@ -103,14 +85,14 @@ export const contactsStore = {
 			status = 'ready';
 		} catch (e) {
 			if ((e as { name?: string })?.name === 'AbortError') return;
-			error = e instanceof Error ? e.message : 'Failed to load contacts';
+			error = e instanceof Error ? e.message : 'Failed to load jobs';
 			status = cached ? 'ready' : 'error';
 		} finally {
 			if (activeController === controller) activeController = null;
 		}
 	},
 
-	async loadMore(filters: ContactsFilters): Promise<void> {
+	async loadMore(filters: JobsFilters): Promise<void> {
 		const key = buildKey(filters);
 		const cached = cache.get(key);
 		if (!cached?.nextCursor) return;
@@ -124,19 +106,17 @@ export const contactsStore = {
 				fetchedAt: Date.now()
 			});
 		} catch {
-			// swallow — user can retry by tapping again
+			// swallow — user can retry
 		}
 	},
 
-	update(item: ContactListItem): void {
+	update(patch: Partial<JobListItem> & { id: string }): void {
 		for (const [k, entry] of cache) {
-			const idx = entry.items.findIndex((i) => i.id === item.id);
+			const idx = entry.items.findIndex((i) => i.id === patch.id);
 			if (idx >= 0) {
 				const next = entry.items.slice();
-				next[idx] = item;
+				next[idx] = { ...next[idx], ...patch };
 				cache.set(k, { ...entry, items: next });
-			} else if (k === currentKey) {
-				cache.set(k, { ...entry, items: [item, ...entry.items] });
 			}
 		}
 	},

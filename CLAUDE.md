@@ -33,6 +33,10 @@ Load them when relevant — do not load all at once.
 | Any .svelte file, \*.svelte.ts, +page.ts, +layout,         | `contractor-crm-svelte-ui`          |
 | Shadcn Svelte, navigation, Realtime in UI, client auth     |                                     |
 | guard, cache stores in $lib/stores/                        |                                     |
+| ---------------------------------------------------------- | ------------------                  |
+| Any tabbed/filtered list page (contacts, jobs, invoices,   | `contractor-crm-svelte-ui`          |
+| quotes, appointments, etc.) — per-key cache, SWR, empty    | → `references/list-stores.md`       |
+| state, no skeleton flash on tab switch                     |                                     |
 
 The `contractor-crm` skill covers business rules, permission matrix,
 transaction patterns, and automation architecture. Its SKILL.md has
@@ -160,6 +164,7 @@ Full patterns and code examples live in skills — these are the guardrails.
     Never use `message`, `msg`, `details`, or any other top-level key.
     `field_errors` keys match the form field names exactly. UI reads `error` for
     toast messages and `field_errors` to map to inline field errors.
+15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
 
 ---
 
