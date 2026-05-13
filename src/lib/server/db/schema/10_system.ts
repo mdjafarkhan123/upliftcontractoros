@@ -96,6 +96,7 @@ export const notifications = pgTable('notifications', {
 	body: text('body'),
 	resource_type: text('resource_type'),
 	resource_id: uuid('resource_id'),
+	idempotency_key: text('idempotency_key'),
 	read_at: timestamp('read_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
