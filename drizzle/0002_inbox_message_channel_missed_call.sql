@@ -1,0 +1,1 @@
+ALTER TYPE "public"."message_channel" ADD VALUE 'missed_call' BEFORE 'email';

@@ -14,6 +14,7 @@
 	import DesktopSidebar from '$lib/components/app-shell/DesktopSidebar.svelte';
 	import MoreSheet from '$lib/components/app-shell/MoreSheet.svelte';
 	import SetupBanner from '$lib/components/app-shell/SetupBanner.svelte';
+	import Toaster from '$lib/components/shared/Toaster.svelte';
 	import { sessionStore, type AppSessionData } from '$lib/stores/session.svelte';
 
 	let { data, children } = $props<{ data: { session: AppSessionData }; children: () => unknown }>();
@@ -102,4 +103,5 @@
 		onMoreClick={() => (moreOpen = true)}
 	/>
 	<MoreSheet bind:open={moreOpen} items={split.secondary} member={session.member} />
+	<Toaster />
 </div>

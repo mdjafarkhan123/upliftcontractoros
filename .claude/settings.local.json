@@ -33,7 +33,9 @@
       "Bash(npm install *)",
       "Bash(npm uninstall *)",
       "Bash(npx svelte-kit *)",
-      "Bash(npx prettier *)"
+      "Bash(npx prettier *)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(npx tsx *)"
     ]
   }
 }

@@ -17,7 +17,7 @@ export const conversationStatusEnum = pgEnum('conversation_status', [
 	'archived'
 ]);
 
-export const messageChannelEnum = pgEnum('message_channel', ['sms', 'email', 'webchat']);
+export const messageChannelEnum = pgEnum('message_channel', ['sms', 'missed_call', 'email', 'webchat']);
 
 export const messageDirectionEnum = pgEnum('message_direction', ['inbound', 'outbound']);
 

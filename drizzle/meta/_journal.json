@@ -15,6 +15,13 @@
       "when": 1778592763166,
       "tag": "0001_feature_flags_and_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778651172851,
+      "tag": "0002_inbox_message_channel_missed_call",
+      "breakpoints": true
     }
   ]
 }
