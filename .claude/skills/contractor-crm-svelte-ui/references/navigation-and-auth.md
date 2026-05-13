@@ -16,7 +16,7 @@ client-side SvelteKit navigation. This layout guard covers navigation.
 <!-- src/routes/(app)/+layout.svelte -->
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { setMemberContext, setOrgContext } from '$lib/context/member';
   import Toaster from '$lib/components/shared/Toaster.svelte';
 
@@ -26,9 +26,10 @@ client-side SvelteKit navigation. This layout guard covers navigation.
   setOrgContext(data.org);
 
   // $effect runs on mount AND on every client-side navigation.
-  // Reactive dependencies: $page.url.pathname, data.session, data.org
+  // Reactive dependencies: page.url.pathname, data.session, data.org
+  // NOTE: page is from $app/state — use page.x directly, NOT $page.x
   $effect(() => {
-    const path = $page.url.pathname;
+    const path = page.url.pathname;
 
     if (!data.session) {
       goto('/auth/login');
@@ -49,6 +50,12 @@ client-side SvelteKit navigation. This layout guard covers navigation.
 {@render children()}
 <Toaster />
 ```
+
+> **Edge case — mid-session token expiry:** The `$effect` guard only fires when its
+> reactive dependencies change. A silently expired token mid-session won't trigger it.
+> Every `/api/*` fetch wrapper must check for a `401` response and call `goto('/auth/login')`
+> immediately. Define a shared `apiFetch()` utility that handles this centrally rather
+> than checking `401` in every component.
 
 ---
 
@@ -150,6 +157,7 @@ Never show locked/disabled states — if no access, the item is absent.
 </nav>
 
 <!-- Secondary items in BottomSheet (mobile) / sidebar (desktop) -->
+<!-- BottomSheet must declare `open` as $bindable() in its $props() — see runes-and-reactivity.md -->
 <BottomSheet bind:open={showMore}>
   {#if can(member, 'can_view_all_quotes')}
     <a href="/quotes">Quotes</a>
@@ -182,17 +190,18 @@ Provide one inside the `(app)` group so errors inherit the app layout.
 ```svelte
 <!-- src/routes/(app)/+error.svelte -->
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import EmptyState from '$lib/components/shared/EmptyState.svelte';
   import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 </script>
 
 <PageWrapper title="Error">
   <EmptyState
-    title={$page.status === 404 ? 'Page not found' : 'Something went wrong'}
-    description={$page.error?.message ?? 'An unexpected error occurred.'}
+    title={page.status === 404 ? 'Page not found' : 'Something went wrong'}
+    description={page.error?.message ?? 'An unexpected error occurred.'}
     actionLabel="Go to Dashboard"
-    onAction={() => window.location.href = '/dashboard'}
+    onAction={() => goto('/dashboard')}
   />
 </PageWrapper>
 ```
@@ -202,12 +211,12 @@ Root-level fallback for errors outside the `(app)` group:
 ```svelte
 <!-- src/routes/+error.svelte -->
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
 </script>
 
 <div class="error-page">
-  <h1>{$page.status}</h1>
-  <p>{$page.error?.message ?? 'Something went wrong.'}</p>
+  <h1>{page.status}</h1>
+  <p>{page.error?.message ?? 'Something went wrong.'}</p>
   <a href="/">Back to home</a>
 </div>
 ```

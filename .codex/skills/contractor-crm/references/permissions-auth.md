@@ -214,6 +214,17 @@ Injected via `app_metadata` at account creation using
 }
 ```
 
+### Auth Hook Alternative (Option C)
+
+A Supabase Auth Hook function `custom_access_token_hook` can inject `org_id`
+and `role` into the JWT `app_metadata` on every token refresh. This replaces
+the manual `updateUserById()` call at account creation. If this hook is
+installed, Steps 5‑6 in the Admin Account Creation flow (Section 5) may be
+skipped provided the hook correctly resolves the member's org_id and role.
+
+When the hook is active, the JWT structure remains identical — the source of
+the claims is transparent to RLS policies and the frontend.
+
 - `org_id` is used by RLS for tenant isolation
 - `role` is for coarse UI awareness ONLY — never for permission checks
 - The 40 permission booleans are NEVER in the JWT — too large, stale immediately on change

@@ -31,7 +31,7 @@
 		{#if sent}
 			<div class="text-center py-4">
 				<div
-					class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100"
+					class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -43,7 +43,7 @@
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						class="text-green-600"
+						class="text-primary"
 					>
 						<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
 						<polyline points="22 4 12 14.01 9 11.01" />
@@ -80,7 +80,8 @@
 				<button
 					type="submit"
 					disabled={loading}
-					class="w-full h-11 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
+					class="group relative inline-flex h-11 w-full items-center justify-center overflow-hidden rounded-xl text-sm font-semibold text-white shadow-lg shadow-primary/30 transition-all duration-150 hover:shadow-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+					style="background: linear-gradient(135deg, hsl(var(--brand-primary)) 0%, hsl(var(--brand-deep)) 100%);"
 				>
 					{#if loading}
 						<span class="inline-flex items-center justify-center gap-2">

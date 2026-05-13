@@ -174,6 +174,7 @@ export type Database = {
           appointment_reminder_hours_before: number
           appointment_reminder_message: string
           created_at: string
+          google_review_link: string | null
           id: string
           invoice_reminder_delay_days: number
           invoice_reminder_enabled: boolean
@@ -197,6 +198,7 @@ export type Database = {
           appointment_reminder_hours_before?: number
           appointment_reminder_message?: string
           created_at?: string
+          google_review_link?: string | null
           id?: string
           invoice_reminder_delay_days?: number
           invoice_reminder_enabled?: boolean
@@ -220,6 +222,7 @@ export type Database = {
           appointment_reminder_hours_before?: number
           appointment_reminder_message?: string
           created_at?: string
+          google_review_link?: string | null
           id?: string
           invoice_reminder_delay_days?: number
           invoice_reminder_enabled?: boolean
@@ -1250,6 +1253,7 @@ export type Database = {
           can_view_all_quotes: boolean
           can_view_assigned_appointments: boolean
           can_view_assigned_conversations: boolean
+          can_view_assigned_jobs: boolean
           can_view_dashboard: boolean
           can_view_full_pipeline: boolean
           can_view_growth_feed: boolean
@@ -1302,6 +1306,7 @@ export type Database = {
           can_view_all_quotes?: boolean
           can_view_assigned_appointments?: boolean
           can_view_assigned_conversations?: boolean
+          can_view_assigned_jobs?: boolean
           can_view_dashboard?: boolean
           can_view_full_pipeline?: boolean
           can_view_growth_feed?: boolean
@@ -1354,6 +1359,7 @@ export type Database = {
           can_view_all_quotes?: boolean
           can_view_assigned_appointments?: boolean
           can_view_assigned_conversations?: boolean
+          can_view_assigned_jobs?: boolean
           can_view_dashboard?: boolean
           can_view_full_pipeline?: boolean
           can_view_growth_feed?: boolean
@@ -1390,9 +1396,39 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           deletion_scheduled_at: string | null
+          feature_advanced_reporting: boolean
+          feature_ai_assistant: boolean
+          feature_api_access: boolean
+          feature_appointment_reminders: boolean
+          feature_appointments: boolean
+          feature_automation_engine: boolean
+          feature_bulk_sms: boolean
+          feature_client_portal: boolean
+          feature_conversations: boolean
+          feature_custom_branding: boolean
+          feature_financial_tools: boolean
+          feature_flags_updated_by: string | null
+          feature_growth_feed: boolean
+          feature_invoice_reminders: boolean
+          feature_media_uploads: boolean
+          feature_missed_call_textback: boolean
+          feature_one_way_sms: boolean
+          feature_overrides_updated_at: string | null
+          feature_review_funnel: boolean
+          feature_stripe_payments: boolean
+          feature_team_management: boolean
+          feature_two_way_sms: boolean
+          feature_webhooks: boolean
           id: string
+          integration_status: Json
           is_setup_complete: boolean
           logo_url: string | null
+          max_ai_requests_per_month: number
+          max_automation_workflows: number
+          max_bulk_sms_per_day: number
+          max_monthly_sms: number
+          max_storage_gb: number
+          max_team_members: number
           name: string
           plan: string
           primary_color: string | null
@@ -1417,9 +1453,39 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deletion_scheduled_at?: string | null
+          feature_advanced_reporting?: boolean
+          feature_ai_assistant?: boolean
+          feature_api_access?: boolean
+          feature_appointment_reminders?: boolean
+          feature_appointments?: boolean
+          feature_automation_engine?: boolean
+          feature_bulk_sms?: boolean
+          feature_client_portal?: boolean
+          feature_conversations?: boolean
+          feature_custom_branding?: boolean
+          feature_financial_tools?: boolean
+          feature_flags_updated_by?: string | null
+          feature_growth_feed?: boolean
+          feature_invoice_reminders?: boolean
+          feature_media_uploads?: boolean
+          feature_missed_call_textback?: boolean
+          feature_one_way_sms?: boolean
+          feature_overrides_updated_at?: string | null
+          feature_review_funnel?: boolean
+          feature_stripe_payments?: boolean
+          feature_team_management?: boolean
+          feature_two_way_sms?: boolean
+          feature_webhooks?: boolean
           id?: string
+          integration_status?: Json
           is_setup_complete?: boolean
           logo_url?: string | null
+          max_ai_requests_per_month?: number
+          max_automation_workflows?: number
+          max_bulk_sms_per_day?: number
+          max_monthly_sms?: number
+          max_storage_gb?: number
+          max_team_members?: number
           name: string
           plan?: string
           primary_color?: string | null
@@ -1444,9 +1510,39 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deletion_scheduled_at?: string | null
+          feature_advanced_reporting?: boolean
+          feature_ai_assistant?: boolean
+          feature_api_access?: boolean
+          feature_appointment_reminders?: boolean
+          feature_appointments?: boolean
+          feature_automation_engine?: boolean
+          feature_bulk_sms?: boolean
+          feature_client_portal?: boolean
+          feature_conversations?: boolean
+          feature_custom_branding?: boolean
+          feature_financial_tools?: boolean
+          feature_flags_updated_by?: string | null
+          feature_growth_feed?: boolean
+          feature_invoice_reminders?: boolean
+          feature_media_uploads?: boolean
+          feature_missed_call_textback?: boolean
+          feature_one_way_sms?: boolean
+          feature_overrides_updated_at?: string | null
+          feature_review_funnel?: boolean
+          feature_stripe_payments?: boolean
+          feature_team_management?: boolean
+          feature_two_way_sms?: boolean
+          feature_webhooks?: boolean
           id?: string
+          integration_status?: Json
           is_setup_complete?: boolean
           logo_url?: string | null
+          max_ai_requests_per_month?: number
+          max_automation_workflows?: number
+          max_bulk_sms_per_day?: number
+          max_monthly_sms?: number
+          max_storage_gb?: number
+          max_team_members?: number
           name?: string
           plan?: string
           primary_color?: string | null
@@ -1465,7 +1561,15 @@ export type Database = {
           updated_at?: string
           zip?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_feature_flags_updated_by_fkey"
+            columns: ["feature_flags_updated_by"]
+            isOneToOne: false
+            referencedRelation: "org_members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outbox_events: {
         Row: {
@@ -2212,6 +2316,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       get_my_member_id: { Args: never; Returns: string }
       get_my_org_id: { Args: never; Returns: string }
     }

@@ -1,7 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { createServiceClient } from '$lib/server/auth/supabase';
-import { getContractorSession } from '$lib/server/auth/session';
 
 type ChangePasswordActionData = {
 	error?: string;
@@ -9,10 +8,10 @@ type ChangePasswordActionData = {
 
 export const actions: Actions = {
 	default: async (event) => {
-		const contractorSession = await getContractorSession(event);
-		if (!contractorSession) throw redirect(303, '/auth/login');
+		const auth = event.locals.auth;
+		if (!auth) throw redirect(303, '/auth/login');
 
-		if (contractorSession.supabaseUser.app_metadata.password_changed) {
+		if (auth.supabaseUser.app_metadata.password_changed) {
 			throw redirect(303, '/dashboard');
 		}
 
@@ -44,10 +43,10 @@ export const actions: Actions = {
 
 		const serviceClient = createServiceClient();
 		const { error: metadataError } = await serviceClient.auth.admin.updateUserById(
-			contractorSession.supabaseUser.id,
+			auth.supabaseUser.id,
 			{
 				app_metadata: {
-					...contractorSession.supabaseUser.app_metadata,
+					...auth.supabaseUser.app_metadata,
 					password_changed: true
 				}
 			}

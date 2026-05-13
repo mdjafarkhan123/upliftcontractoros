@@ -1,51 +1,424 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import PlanTemplateSelector from '$lib/components/jafar/PlanTemplateSelector.svelte';
+	import FeatureFlagsEditor from '$lib/components/jafar/FeatureFlagsEditor.svelte';
+	import LimitsEditor from '$lib/components/jafar/LimitsEditor.svelte';
+	import PermissionMatrixEditor from '$lib/components/jafar/PermissionMatrixEditor.svelte';
+	import {
+		getPlanTemplate,
+		type PlanName,
+		type PlanTemplate
+	} from '$lib/admin/planTemplates';
+	import { fullAdminPermissions } from '$lib/permissions/permissions-matrix';
+	import type { FeatureFlags, OrgLimits, PermissionKey } from '$lib/types';
 
-	let { data } = $props<{ data: { errorMessage: string | null } }>();
+	let submitting = $state(false);
+	let errorMessage = $state<string | null>(null);
+
+	let plan = $state<PlanName>('starter');
+	const starter = getPlanTemplate('starter');
+	let flags = $state<FeatureFlags>({ ...starter.flags });
+	let limits = $state<OrgLimits>({ ...starter.limits });
+	let adminPermissions = $state<Record<PermissionKey, boolean>>(fullAdminPermissions());
+
+	function applyTemplate(t: PlanTemplate) {
+		plan = t.plan;
+		flags = { ...t.flags };
+		limits = { ...t.limits };
+	}
+
+	async function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (submitting) return;
+
+		submitting = true;
+		errorMessage = null;
+
+		const formData = new FormData(event.currentTarget as HTMLFormElement);
+		const base = Object.fromEntries(formData.entries());
+
+		const payload = {
+			...base,
+			plan,
+			featureFlags: flags,
+			limits,
+			adminPermissions
+		};
+
+		try {
+			const response = await fetch('/api/admin/orgs', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+
+			const result = await response.json().catch(() => ({}));
+
+			if (!response.ok) {
+				errorMessage = result?.error ?? 'Organization creation failed.';
+				submitting = false;
+				return;
+			}
+
+			await goto(`/jafar/orgs/${result.orgId}`);
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Network error.';
+			submitting = false;
+		}
+	}
 </script>
 
 <svelte:head>
-	<title>New Organization</title>
+	<title>New Organization · Jafar</title>
 </svelte:head>
 
-<main>
-	<h1>Create Organization</h1>
-	<p><a href="/jafar/dashboard">Back to dashboard</a></p>
+<div class="space-y-6">
+	<!-- Breadcrumb / Back -->
+	<div>
+		<a
+			href="/jafar/dashboard"
+			class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="14"
+				height="14"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<polyline points="15 18 9 12 15 6" />
+			</svg>
+			Back to dashboard
+		</a>
+	</div>
 
-	{#if data.errorMessage}
-		<p role="alert">{data.errorMessage}</p>
+	<!-- Header -->
+	<div>
+		<h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Create organization</h1>
+		<p class="mt-1 text-sm text-slate-400">
+			Provision a new tenant, seed its first admin, and set entitlements.
+		</p>
+	</div>
+
+	{#if errorMessage}
+		<div
+			role="alert"
+			class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="18"
+				height="18"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				class="mt-0.5 shrink-0 text-red-300"
+				aria-hidden="true"
+			>
+				<circle cx="12" cy="12" r="10" />
+				<line x1="12" y1="8" x2="12" y2="12" />
+				<line x1="12" y1="16" x2="12.01" y2="16" />
+			</svg>
+			<div>
+				<p class="font-semibold text-red-100">Could not create organization</p>
+				<p class="mt-0.5 text-red-200/90">{errorMessage}</p>
+			</div>
+		</div>
 	{/if}
 
-	<form method="POST">
-		<label for="businessName">Business name</label>
-		<input id="businessName" name="businessName" required />
+	<form onsubmit={handleSubmit} class="space-y-6">
+		<!-- Business details -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Business details</h2>
+				<p class="mt-0.5 text-xs text-slate-500">Public identity and operating region.</p>
+			</header>
 
-		<label for="slug">Slug</label>
-		<input id="slug" name="slug" required />
+			<div class="grid gap-5 px-5 py-5 sm:grid-cols-2">
+				<div class="space-y-1.5 sm:col-span-2">
+					<label for="businessName" class="block text-xs font-semibold text-slate-300">
+						Business name <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="businessName"
+						name="businessName"
+						required
+						placeholder="Acme Plumbing & Heating"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
 
-		<label for="tradeType">Trade type</label>
-		<input id="tradeType" name="tradeType" required />
+				<div class="space-y-1.5">
+					<label for="slug" class="block text-xs font-semibold text-slate-300">
+						Slug <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="slug"
+						name="slug"
+						required
+						placeholder="acme-plumbing"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm font-mono text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+					<p class="text-[11px] text-slate-500">Lowercase, hyphen-separated. Used in URLs.</p>
+				</div>
 
-		<label for="city">City</label>
-		<input id="city" name="city" required />
+				<div class="space-y-1.5">
+					<label for="tradeType" class="block text-xs font-semibold text-slate-300">
+						Trade type <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="tradeType"
+						name="tradeType"
+						required
+						placeholder="Plumbing"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
 
-		<label for="state">State</label>
-		<input id="state" name="state" required />
+				<div class="space-y-1.5">
+					<label for="city" class="block text-xs font-semibold text-slate-300">
+						City <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="city"
+						name="city"
+						required
+						placeholder="Austin"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
 
-		<label for="timezone">Timezone</label>
-		<input id="timezone" name="timezone" value="America/Chicago" required />
+				<div class="space-y-1.5">
+					<label for="state" class="block text-xs font-semibold text-slate-300">
+						State <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="state"
+						name="state"
+						required
+						placeholder="TX"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
 
-		<label for="twilioPhoneNumber">Twilio phone number</label>
-		<input id="twilioPhoneNumber" name="twilioPhoneNumber" required />
+				<div class="space-y-1.5 sm:col-span-2">
+					<label for="timezone" class="block text-xs font-semibold text-slate-300">
+						Timezone <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="timezone"
+						name="timezone"
+						value="America/Chicago"
+						required
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm font-mono text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+					<p class="text-[11px] text-slate-500">IANA timezone (e.g., America/Chicago).</p>
+				</div>
+			</div>
+		</section>
 
-		<label for="adminFullName">Admin full name</label>
-		<input id="adminFullName" name="adminFullName" required />
+		<!-- Telephony -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Telephony</h2>
+				<p class="mt-0.5 text-xs text-slate-500">Dedicated Twilio number for this tenant.</p>
+			</header>
 
-		<label for="adminEmail">Admin email</label>
-		<input id="adminEmail" name="adminEmail" type="email" required />
+			<div class="px-5 py-5">
+				<div class="space-y-1.5">
+					<label for="twilioPhoneNumber" class="block text-xs font-semibold text-slate-300">
+						Twilio phone number <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="twilioPhoneNumber"
+						name="twilioPhoneNumber"
+						required
+						placeholder="+15125550123"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm font-mono text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+					<p class="text-[11px] text-slate-500">E.164 format (e.g., +15125550123).</p>
+				</div>
+			</div>
+		</section>
 
-		<label for="adminTemporaryPassword">Admin temporary password</label>
-		<input id="adminTemporaryPassword" name="adminTemporaryPassword" type="password" required />
+		<!-- Plan template -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Plan template</h2>
+				<p class="mt-0.5 text-xs text-slate-500">
+					Pre-fills flags + limits. Plan label is display-only; flags below are the entitlement.
+				</p>
+			</header>
+			<div class="px-5 py-5">
+				<PlanTemplateSelector bind:value={plan} onApply={applyTemplate} />
+			</div>
+		</section>
 
-		<button type="submit">Create</button>
+		<!-- Feature flags -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Feature flags</h2>
+				<p class="mt-0.5 text-xs text-slate-500">
+					The authoritative entitlement layer. Tenants only get what's toggled on here.
+				</p>
+			</header>
+			<div class="px-5 py-5">
+				<FeatureFlagsEditor bind:flags />
+			</div>
+		</section>
+
+		<!-- Limits -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Usage limits</h2>
+				<p class="mt-0.5 text-xs text-slate-500">
+					Hard caps. Use 0 for disabled or unlimited, depending on the field.
+				</p>
+			</header>
+			<div class="px-5 py-5">
+				<LimitsEditor bind:limits />
+			</div>
+		</section>
+
+		<!-- Admin -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Initial admin</h2>
+				<p class="mt-0.5 text-xs text-slate-500">
+					First member of the organization. They will be prompted to change their password on
+					login.
+				</p>
+			</header>
+
+			<div class="grid gap-5 px-5 py-5 sm:grid-cols-2">
+				<div class="space-y-1.5 sm:col-span-2">
+					<label for="adminFullName" class="block text-xs font-semibold text-slate-300">
+						Full name <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="adminFullName"
+						name="adminFullName"
+						required
+						placeholder="Jane Doe"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
+
+				<div class="space-y-1.5">
+					<label for="adminEmail" class="block text-xs font-semibold text-slate-300">
+						Email <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="adminEmail"
+						name="adminEmail"
+						type="email"
+						required
+						placeholder="jane@acme.com"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+				</div>
+
+				<div class="space-y-1.5">
+					<label for="adminTemporaryPassword" class="block text-xs font-semibold text-slate-300">
+						Temporary password <span class="text-red-400">*</span>
+					</label>
+					<input
+						id="adminTemporaryPassword"
+						name="adminTemporaryPassword"
+						type="password"
+						required
+						placeholder="••••••••••"
+						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					/>
+					<p class="text-[11px] text-slate-500">Admin must reset on first sign-in.</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Initial admin permissions -->
+		<section
+			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+		>
+			<header class="border-b border-slate-800/80 px-5 py-4">
+				<h2 class="text-base font-semibold text-white">Initial admin permissions</h2>
+				<p class="mt-0.5 text-xs text-slate-500">
+					Role is display metadata. These booleans are the actual authorization layer.
+				</p>
+			</header>
+			<div class="px-5 py-5">
+				<PermissionMatrixEditor bind:permissions={adminPermissions} />
+			</div>
+		</section>
+
+		<!-- Actions -->
+		<div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+			<a
+				href="/jafar/dashboard"
+				class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/60 px-4 text-sm font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
+			>
+				Cancel
+			</a>
+			<button
+				type="submit"
+				disabled={submitting}
+				class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-red-500 to-red-600 px-5 text-sm font-semibold text-white shadow-md shadow-red-900/40 hover:from-red-500 hover:to-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
+			>
+				{#if submitting}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.4"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="animate-spin"
+						aria-hidden="true"
+					>
+						<path d="M21 12a9 9 0 1 1-6.219-8.56" />
+					</svg>
+					Creating…
+				{:else}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.4"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<line x1="12" y1="5" x2="12" y2="19" />
+						<line x1="5" y1="12" x2="19" y2="12" />
+					</svg>
+					Create organization
+				{/if}
+			</button>
+		</div>
 	</form>
-</main>
+</div>

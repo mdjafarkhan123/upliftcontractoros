@@ -4,7 +4,10 @@
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import AuthField from '$lib/components/auth/AuthField.svelte';
 
-	let { data, form }: {
+	let {
+		data,
+		form
+	}: {
 		data: { errorMessage: string | null };
 		form?: { error?: string; email?: string };
 	} = $props();
@@ -47,46 +50,77 @@
 				required
 			/>
 
-			<div class="space-y-1.5">
-				<div class="flex items-center justify-between">
-					<label for="password" class="block text-sm font-semibold text-foreground/80">
-						Password
-					</label>
+			<AuthField
+				id="password"
+				label="Password"
+				type="password"
+				autocomplete="current-password"
+				placeholder="••••••••"
+				required
+			>
+				{#snippet trailing()}
 					<a
 						href="/auth/forgot-password"
-						class="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+						class="text-xs font-medium text-primary transition-colors hover:text-primary/80"
 					>
 						Forgot password?
 					</a>
-				</div>
-				<input
-					id="password"
-					name="password"
-					type="password"
-					autocomplete="current-password"
-					placeholder="••••••••"
-					required
-					class="flex h-11 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60 focus:bg-white transition-all duration-150"
-				/>
-			</div>
+				{/snippet}
+			</AuthField>
 
 			<button
 				type="submit"
 				disabled={loading}
-				class="w-full h-11 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
+				class="group relative inline-flex h-11 w-full items-center justify-center overflow-hidden rounded-xl text-sm font-semibold text-white shadow-lg shadow-primary/30 transition-all duration-150 hover:shadow-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+				style="background: linear-gradient(135deg, hsl(var(--brand-primary)) 0%, hsl(var(--brand-deep)) 100%);"
 			>
-				{#if loading}
-					<span class="inline-flex items-center gap-2">
-						<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				<span
+					class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+					style="background: linear-gradient(135deg, hsl(var(--brand-light)) 0%, hsl(var(--brand-primary)) 100%);"
+				></span>
+				<span class="relative inline-flex items-center gap-2">
+					{#if loading}
+						<svg
+							class="h-4 w-4 animate-spin"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+						>
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+							></path>
 						</svg>
 						Signing in…
-					</span>
-				{:else}
-					Sign in
-				{/if}
+					{:else}
+						Sign in
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							class="transition-transform duration-150 group-hover:translate-x-0.5"
+						>
+							<path d="M5 12h14" />
+							<path d="m12 5 7 7-7 7" />
+						</svg>
+					{/if}
+				</span>
 			</button>
 		</form>
+	{/snippet}
+
+	{#snippet footer()}
+		<p class="text-xs text-muted-foreground">
+			Need an account? <span class="font-medium text-foreground">Contact your administrator.</span>
+		</p>
 	{/snippet}
 </AuthCard>

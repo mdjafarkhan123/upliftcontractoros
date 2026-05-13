@@ -9,12 +9,17 @@
 ```svelte
 <script lang="ts">
   // ── Props — always $props(), never export let ─────────────
-  let { value, onClose, variant = 'default', children } = $props<{
+  let {
+    value,
+    onClose,
+    variant = 'default',
+    children,
+  }: {
     value: string;
     onClose: () => void;
     variant?: 'default' | 'success' | 'danger';
     children?: import('svelte').Snippet;
-  }>();
+  } = $props();
 
   // ── State ──────────────────────────────────────────────────
   let loading = $state(false);
@@ -25,7 +30,11 @@
   let isEmpty = $derived(filteredItems.length === 0 && !loading);
 
   // ── Derived (multi-step — use $derived.by) ─────────────────
-  // NEVER use $effect + $state as a workaround for complex derived values
+  // Use $derived.by() for synchronous multi-step derivations.
+  // NEVER use $effect + $state for synchronous derived values — that is always wrong.
+  // Exception: async-derived values have no $derived equivalent.
+  //   For async derivations, $effect + $state IS the correct pattern, not a workaround:
+  //   $effect(() => { fetchSomething(id).then(result => { derivedValue = result; }); });
   let filteredItems = $derived.by(() => {
     const q = searchQuery.toLowerCase();
     const filtered = items.filter(i => i.full_name.toLowerCase().includes(q));
@@ -33,6 +42,78 @@
   });
 </script>
 ```
+
+### Rest Props — Wrapping Native Elements or shadcn Components
+
+```svelte
+<!-- InputField.svelte — wraps a native <input> -->
+<script lang="ts">
+  import { cn } from '$lib/utils';
+
+  let {
+    class: className,
+    label,
+    error,
+    ...rest          // all remaining props passed through to <input>
+  }: {
+    class?: string;
+    label: string;
+    error?: string;
+    [key: string]: unknown; // index signature required for rest spread to HTML element
+  } = $props();
+</script>
+
+<div class="flex flex-col gap-1">
+  <label class="text-sm font-medium">{label}</label>
+  <input class={cn('input-base', className)} {...rest} />
+  {#if error}
+    <span class="text-sm text-destructive">{error}</span>
+  {/if}
+</div>
+```
+
+---
+
+## Bindable Props
+
+Use `$bindable()` when a parent should be able to use `bind:propName` on a component.
+
+```svelte
+<!-- ToggleSwitch.svelte -->
+<script lang="ts">
+  let {
+    checked = $bindable(false),
+    disabled = false,
+    onchange,
+  }: {
+    checked?: boolean;
+    disabled?: boolean;
+    onchange?: (value: boolean) => void;
+  } = $props();
+</script>
+
+<button
+  role="switch"
+  aria-checked={checked}
+  {disabled}
+  class="min-h-[44px]"
+  onclick={() => {
+    checked = !checked;
+    onchange?.(checked);
+  }}
+>
+  <span class={checked ? 'translate-x-5' : 'translate-x-0'} />
+</button>
+
+<!-- Parent usage -->
+<!-- <ToggleSwitch bind:checked={notificationsEnabled} /> -->
+```
+
+**Rules:**
+- Only declare a prop as `$bindable()` when two-way binding genuinely makes sense (toggles, inputs, dialogs open state, controlled form fields).
+- Always provide a default value inside `$bindable(defaultValue)`.
+- Callback prop (`onchange`) is still recommended alongside `$bindable()` for side-effect notifications.
+- Never use `$bindable()` as a substitute for unidirectional data flow — prefer callback props for most cases.
 
 ---
 
@@ -76,10 +157,10 @@ card content).
   import type { Snippet } from 'svelte';
   import type { Contact } from '$lib/types';
 
-  let { items, row } = $props<{
+  let { items, row }: {
     items: Contact[];
     row: Snippet<[Contact]>;
-  }>();
+  } = $props();
 </script>
 
 {#each items as item (item.id)}
@@ -139,3 +220,26 @@ $effect(() => {
 ```ts
 $inspect(items, searchQuery); // remove before committing — never in main
 ```
+
+---
+
+## Template Helpers
+
+### `{@const}` — Avoid Redundant Computation in Loops
+
+Inside `{#each}` blocks, use `{@const}` to compute values once per iteration.
+
+```svelte
+{#each contacts as contact (contact.id)}
+  {@const fullName = `${contact.first_name} ${contact.last_name}`}
+  {@const isOverdue = contact.follow_up_date && new Date(contact.follow_up_date) < new Date()}
+  <div class="contact-row">
+    <span>{fullName}</span>
+    {#if isOverdue}
+      <Badge variant="destructive">Overdue</Badge>
+    {/if}
+  </div>
+{/each}
+```
+
+Never call helper functions with the same arguments multiple times in one template iteration — compute once with `{@const}`.

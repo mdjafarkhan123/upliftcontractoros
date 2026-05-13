@@ -31,7 +31,9 @@
       "Bash(kill 365)",
       "Bash(pkill -f vite)",
       "Bash(npm install *)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(npx svelte-kit *)",
+      "Bash(npx prettier *)"
     ]
   }
 }

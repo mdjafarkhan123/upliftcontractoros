@@ -8,9 +8,9 @@
 	} = $props();
 
 	const styles = {
-		destructive: 'bg-red-50 border-red-200 text-red-700',
-		success: 'bg-green-50 border-green-200 text-green-700',
-		default: 'bg-blue-50 border-blue-200 text-blue-700'
+		destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
+		success: 'border-primary/30 bg-primary/10 text-foreground',
+		default: 'border-border/60 bg-muted/40 text-foreground'
 	};
 
 	const icons = {
@@ -22,7 +22,7 @@
 
 <div
 	role="alert"
-	class="flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm {styles[variant]}"
+	class="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm {styles[variant]}"
 >
 	<svg
 		xmlns="http://www.w3.org/2000/svg"

@@ -140,16 +140,37 @@ Every data-dependent view must handle all three states. Copy this structure exac
 
 ```svelte
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
   import EmptyState from '$lib/components/shared/EmptyState.svelte';
 
-  let { data } = $props();
-
-  let loading = $state(false);
+  // CSR-only: +page.ts never fetches data — load() returns URL params only.
+  // All data fetching happens in onMount (initial) or loadMore (pagination).
+  let loading = $state(true);
   let fetchError = $state<string | null>(null);
-  let items = $state(data.contacts ?? []);
-  let nextCursor = $state<string | null>(data.nextCursor ?? null);
+  let items = $state<Contact[]>([]);
+  let nextCursor = $state<string | null>(null);
+
+  onMount(async () => {
+    await load();
+  });
+
+  async function load() {
+    loading = true;
+    fetchError = null;
+    try {
+      const res = await fetch('/api/contacts');
+      if (!res.ok) throw new Error('Failed to load');
+      const json = await res.json();
+      items = json.items ?? [];
+      nextCursor = json.next_cursor ?? null;
+    } catch {
+      fetchError = 'Could not load contacts. Tap to retry.';
+    } finally {
+      loading = false;
+    }
+  }
 
   async function loadMore() {
     if (!nextCursor || loading) return;

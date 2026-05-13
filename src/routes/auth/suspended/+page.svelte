@@ -44,12 +44,14 @@
 				</p>
 
 				<div class="mt-8 space-y-3">
-					<a
-						href="/auth/logout"
-						class="flex w-full items-center justify-center h-11 rounded-xl bg-destructive text-sm font-semibold text-white shadow-md shadow-destructive/20 hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50 focus-visible:ring-offset-2 transition-all duration-150"
-					>
-						Sign out
-					</a>
+					<form method="POST" action="/auth/logout">
+						<button
+							type="submit"
+							class="flex w-full items-center justify-center h-11 rounded-xl bg-destructive text-sm font-semibold text-white shadow-md shadow-destructive/20 hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50 focus-visible:ring-offset-2 transition-all duration-150"
+						>
+							Sign out
+						</button>
+					</form>
 				</div>
 			</div>
 		</div>

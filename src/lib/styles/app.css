@@ -2,52 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Geist Font ──────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+
 @layer base {
+	/* ─── Dark Mode (default) ─────────────────────────────────────────── */
 	:root {
-		--primary: green;
-		--background: 0 0% 100%;
-		--foreground: 222.2 84% 4.9%;
-		--card: 0 0% 100%;
-		--card-foreground: 222.2 84% 4.9%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 222.2 84% 4.9%;
-		--primary: 221.2 83.2% 53.3%;
-		--primary-foreground: 210 40% 98%;
-		--secondary: 210 40% 96.1%;
-		--secondary-foreground: 222.2 47.4% 11.2%;
-		--muted: 210 40% 96.1%;
-		--muted-foreground: 215.4 16.3% 46.9%;
-		--accent: 210 40% 96.1%;
-		--accent-foreground: 222.2 47.4% 11.2%;
-		--destructive: 0 84.2% 60.2%;
-		--destructive-foreground: 210 40% 98%;
-		--border: 214.3 31.8% 91.4%;
-		--input: 214.3 31.8% 91.4%;
-		--ring: 221.2 83.2% 53.3%;
+		/* Backgrounds — layered surface system */
+		--background: 224 71% 4%; /* zinc-950 tinted navy — page bg */
+		--card: 222 47% 8%; /* zinc-900 tinted — card surface */
+		--popover: 222 47% 8%; /* same as card */
+		--muted: 215 28% 12%; /* subtle bg for empty states, disabled */
+		--accent: 215 28% 14%; /* hover / selected bg */
+		--secondary: 215 28% 14%; /* secondary button bg */
+
+		/* Brand Primary — Contractor OS green */
+		--primary: 150 57% 31%; /* #227d53 — brand primary */
+		--primary-foreground: 0 0% 100%;
+
+		/* Brand palette (use sparingly for gradients, accents, glow) */
+		--brand-deep: 150 57% 17%; /* #13452d — deep green */
+		--brand-primary: 150 57% 31%; /* #227d53 — primary green */
+		--brand-light: 147 41% 56%; /* #5fbd92 — light green */
+
+		/* Text */
+		--foreground: 210 40% 96%; /* near-white — primary text */
+		--card-foreground: 210 40% 96%;
+		--popover-foreground: 210 40% 96%;
+		--muted-foreground: 215 20% 55%; /* zinc-400 — secondary/helper text */
+		--accent-foreground: 210 40% 96%;
+		--secondary-foreground: 210 40% 96%;
+
+		/* Semantic */
+		--destructive: 0 72% 51%; /* red-600 */
+		--destructive-foreground: 0 0% 100%;
+
+		/* Borders & Inputs */
+		--border: 215 28% 17%; /* subtle dark border */
+		--input: 215 28% 17%;
+		--ring: 147 41% 56%; /* #5fbd92 — brand light focus ring */
+
+		/* Radius */
 		--radius: 0.5rem;
+
+		/* App layout */
 		--bottom-nav-height: 64px;
+		--sidebar-width: 240px;
+		--header-height: 56px;
+		--content-max-width: 768px;
+
+		/* Status colours (semantic — used by Badge, status dots) */
+		--status-active: 147 41% 56%; /* #5fbd92 — brand light */
+		--status-pending: 45 93% 47%; /* yellow-500 */
+		--status-inactive: 215 20% 45%; /* zinc-500 */
+		--status-overdue: 0 72% 51%; /* red-600 */
+		--status-lead: 199 89% 48%; /* sky-500 */
+		--status-draft: 215 20% 45%; /* zinc-500 */
 	}
 
-	.dark {
-		--background: 222.2 84% 4.9%;
-		--foreground: 210 40% 98%;
-		--card: 222.2 84% 4.9%;
-		--card-foreground: 210 40% 98%;
-		--popover: 222.2 84% 4.9%;
-		--popover-foreground: 210 40% 98%;
-		--primary: 217.2 91.2% 59.8%;
-		--primary-foreground: 222.2 47.4% 11.2%;
-		--secondary: 217.2 32.6% 17.5%;
-		--secondary-foreground: 210 40% 98%;
-		--muted: 217.2 32.6% 17.5%;
-		--muted-foreground: 215 20.2% 65.1%;
-		--accent: 217.2 32.6% 17.5%;
-		--accent-foreground: 210 40% 98%;
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 210 40% 98%;
-		--border: 217.2 32.6% 17.5%;
-		--input: 217.2 32.6% 17.5%;
-		--ring: 224.3 76.3% 48%;
+	/* ─── Light Mode Override ─────────────────────────────────────────── */
+	.light {
+		--background: 0 0% 100%;
+		--card: 0 0% 98%;
+		--popover: 0 0% 100%;
+		--muted: 210 40% 96%;
+		--accent: 210 40% 94%;
+		--secondary: 210 40% 94%;
+
+		--primary: 150 57% 31%;
+		--primary-foreground: 0 0% 100%;
+
+		--foreground: 222 47% 11%;
+		--card-foreground: 222 47% 11%;
+		--popover-foreground: 222 47% 11%;
+		--muted-foreground: 215 16% 47%;
+		--accent-foreground: 222 47% 11%;
+		--secondary-foreground: 222 47% 11%;
+
+		--destructive: 0 72% 51%;
+		--destructive-foreground: 0 0% 100%;
+
+		--border: 214 32% 91%;
+		--input: 214 32% 91%;
+		--ring: 150 57% 31%;
 	}
 }
 
@@ -55,10 +92,81 @@
 	* {
 		@apply border-border;
 	}
+
+	html {
+		font-family: 'Geist', 'Inter', system-ui, sans-serif;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
 	body {
 		@apply bg-background text-foreground;
 		font-feature-settings:
 			'rlig' 1,
 			'calt' 1;
 	}
+
+	/* Scrollbar — dark themed */
+	::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+	::-webkit-scrollbar-track {
+		@apply bg-transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		@apply bg-border rounded-full;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		@apply bg-muted-foreground/50;
+	}
+}
+
+/* ─── Shimmer animation (SkeletonLoader) ──────────────────────────── */
+@keyframes shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}
+
+.skeleton-shimmer {
+	background: linear-gradient(
+		90deg,
+		hsl(var(--muted)) 25%,
+		hsl(var(--accent)) 50%,
+		hsl(var(--muted)) 75%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ─── Status dot (used inline next to status text) ───────────────── */
+.status-dot {
+	@apply inline-block w-2 h-2 rounded-full;
+}
+.status-dot-active {
+	background: hsl(var(--status-active));
+}
+.status-dot-pending {
+	background: hsl(var(--status-pending));
+}
+.status-dot-inactive {
+	background: hsl(var(--status-inactive));
+}
+.status-dot-overdue {
+	background: hsl(var(--status-overdue));
+}
+.status-dot-lead {
+	background: hsl(var(--status-lead));
+}
+.status-dot-draft {
+	background: hsl(var(--status-draft));
+}
+
+/* ─── Focus visible global override ──────────────────────────────── */
+:focus-visible {
+	@apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
 }

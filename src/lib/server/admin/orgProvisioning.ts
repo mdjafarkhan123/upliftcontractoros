@@ -5,6 +5,16 @@ import { createServiceClient } from '$lib/server/auth/supabase';
 import { db } from '$lib/server/db/client';
 import { automationSettings, orgCounters, orgMembers, organizations } from '$lib/server/db/schema';
 import { seedPipelineStages } from '$lib/server/db/seed/pipeline_stages';
+import {
+	featureFlagsSchema,
+	limitsSchema,
+	planNameSchema,
+	PLAN_TEMPLATES
+} from '$lib/admin/planTemplates';
+import {
+	adminPermissionsSchema,
+	fullAdminPermissions
+} from '$lib/permissions/permissions-matrix';
 
 export const createOrgSchema = z.object({
 	businessName: z.string().trim().min(1, 'Business name is required'),
@@ -23,53 +33,14 @@ export const createOrgSchema = z.object({
 		.regex(/^\+[1-9]\d{1,14}$/, 'Twilio phone number must be E.164, e.g. +15551234567'),
 	adminFullName: z.string().trim().min(1, 'Admin full name is required'),
 	adminEmail: z.string().trim().email('Admin email must be valid'),
-	adminTemporaryPassword: z.string().min(8, 'Temporary password must be at least 8 characters')
+	adminTemporaryPassword: z.string().min(8, 'Temporary password must be at least 8 characters'),
+	plan: planNameSchema.optional(),
+	featureFlags: featureFlagsSchema.optional(),
+	limits: limitsSchema.optional(),
+	adminPermissions: adminPermissionsSchema.optional()
 });
 
 type CreateOrgInput = z.infer<typeof createOrgSchema>;
-
-const ADMIN_PERMISSIONS = {
-	can_view_dashboard: true,
-	can_view_revenue: true,
-	can_view_pipeline_snapshot: true,
-	can_view_all_conversations: true,
-	can_view_assigned_conversations: true,
-	can_send_messages: true,
-	can_delete_conversations: true,
-	can_view_all_contacts: true,
-	can_create_contacts: true,
-	can_edit_contacts: true,
-	can_delete_contacts: true,
-	can_view_full_pipeline: true,
-	can_move_pipeline_stages: true,
-	can_create_opportunities: true,
-	can_view_assigned_jobs: true,
-	can_view_all_quotes: true,
-	can_create_quotes: true,
-	can_send_quotes: true,
-	can_edit_quotes: true,
-	can_delete_quotes: true,
-	can_view_all_invoices: true,
-	can_create_invoices: true,
-	can_send_invoices: true,
-	can_record_payments: true,
-	can_delete_invoices: true,
-	can_view_all_appointments: true,
-	can_view_assigned_appointments: true,
-	can_create_appointments: true,
-	can_reschedule_appointments: true,
-	can_view_reviews: true,
-	can_send_review_requests: true,
-	can_view_negative_feedback: true,
-	can_view_growth_feed: true,
-	can_view_all_files: true,
-	can_upload_files: true,
-	can_delete_files: true,
-	can_view_team_members: true,
-	can_create_team_members: true,
-	can_edit_team_members: true,
-	can_delete_team_members: true
-} as const;
 
 const AUTOMATION_DEFAULTS = {
 	missed_call_textback_message:
@@ -98,6 +69,12 @@ export async function createOrganizationWithAdmin(
 	const supabase = createServiceClient();
 	const orgId = randomUUID();
 	let authUserId: string | null = null;
+
+	const plan = input.plan ?? 'starter';
+	const template = PLAN_TEMPLATES[plan];
+	const flags = input.featureFlags ?? template.flags;
+	const limits = input.limits ?? template.limits;
+	const adminPermissions = input.adminPermissions ?? fullAdminPermissions();
 
 	const { data: createdUser, error: createUserError } = await supabase.auth.admin.createUser({
 		email: input.adminEmail,
@@ -140,7 +117,11 @@ export async function createOrganizationWithAdmin(
 				state: input.state,
 				timezone: input.timezone,
 				twilio_phone_number: input.twilioPhoneNumber,
-				is_setup_complete: false
+				is_setup_complete: false,
+				plan,
+				...flags,
+				...limits,
+				feature_overrides_updated_at: new Date()
 			});
 
 			await tx.insert(orgCounters).values({
@@ -156,6 +137,7 @@ export async function createOrganizationWithAdmin(
 				...AUTOMATION_DEFAULTS
 			});
 
+			// role is display metadata; the permission booleans are the authority.
 			await tx.insert(orgMembers).values({
 				org_id: orgId,
 				supabase_user_id: authUserId,
@@ -163,7 +145,7 @@ export async function createOrganizationWithAdmin(
 				full_name: input.adminFullName,
 				role: 'admin',
 				is_active: true,
-				...ADMIN_PERMISSIONS
+				...adminPermissions
 			});
 		});
 	} catch (error) {

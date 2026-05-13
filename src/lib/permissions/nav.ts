@@ -13,7 +13,7 @@ import {
 	Settings,
 	MoreHorizontal
 } from '@lucide/svelte';
-import type { OrgMember } from '$lib/types';
+import type { OrgMember, FeatureFlags } from '$lib/types';
 import { can, canAny } from './can';
 
 export type NavItem = {
@@ -23,14 +23,15 @@ export type NavItem = {
 	icon: Component;
 };
 
-export function buildVisibleNav(member: OrgMember): NavItem[] {
+export function buildVisibleNav(member: OrgMember, features?: FeatureFlags): NavItem[] {
 	const items: NavItem[] = [];
+	const f = features;
 
 	if (can(member, 'can_view_dashboard')) {
 		items.push({ key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard });
 	}
 
-	if (canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations'])) {
+	if (canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations']) && (!f || f.feature_conversations)) {
 		items.push({ key: 'inbox', label: 'Inbox', href: '/inbox', icon: Inbox });
 	}
 
@@ -46,15 +47,15 @@ export function buildVisibleNav(member: OrgMember): NavItem[] {
 		items.push({ key: 'jobs', label: 'Jobs', href: '/jobs', icon: Briefcase });
 	}
 
-	if (can(member, 'can_view_all_quotes')) {
+	if (can(member, 'can_view_all_quotes') && (!f || f.feature_financial_tools)) {
 		items.push({ key: 'quotes', label: 'Quotes', href: '/quotes', icon: FileText });
 	}
 
-	if (can(member, 'can_view_all_invoices')) {
+	if (can(member, 'can_view_all_invoices') && (!f || f.feature_financial_tools)) {
 		items.push({ key: 'invoices', label: 'Invoices', href: '/invoices', icon: Receipt });
 	}
 
-	if (canAny(member, ['can_view_all_appointments', 'can_view_assigned_appointments'])) {
+	if (canAny(member, ['can_view_all_appointments', 'can_view_assigned_appointments']) && (!f || f.feature_appointments)) {
 		items.push({ key: 'appointments', label: 'Appointments', href: '/appointments', icon: Calendar });
 	}
 
@@ -62,7 +63,7 @@ export function buildVisibleNav(member: OrgMember): NavItem[] {
 		items.push({ key: 'reputation', label: 'Reputation', href: '/reputation', icon: Star });
 	}
 
-	if (can(member, 'can_view_growth_feed')) {
+	if (can(member, 'can_view_growth_feed') && (!f || f.feature_growth_feed)) {
 		items.push({ key: 'growth', label: 'Growth', href: '/growth', icon: TrendingUp });
 	}
 

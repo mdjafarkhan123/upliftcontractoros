@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import type { Org, OrgMember } from '$lib/types';
 	import UserMenu from './UserMenu.svelte';
+	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
 
 	let {
 		org,
@@ -38,6 +39,7 @@
 	</a>
 
 	<div class="flex items-center gap-1 md:gap-2">
+		<ThemeToggle />
 		<button
 			type="button"
 			onclick={() => goto('/notifications')}

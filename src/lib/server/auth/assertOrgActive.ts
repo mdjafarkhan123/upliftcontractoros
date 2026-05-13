@@ -1,29 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/client';
-import { organizations } from '$lib/server/db/schema';
+import type { AuthContext } from './loadAuthContext';
 
-export async function assertOrgActive(
-	orgId: string,
-	options?: { requireSetupComplete?: boolean }
-): Promise<void> {
-	const [org] = await db
-		.select({ status: organizations.status, is_setup_complete: organizations.is_setup_complete })
-		.from(organizations)
-		.where(eq(organizations.id, orgId))
-		.limit(1);
-
-	if (!org) error(403, 'Organization not found.');
-
-	if (
-		org.status === 'suspended' ||
-		org.status === 'pending_deletion' ||
-		org.status === 'deleted'
-	) {
+export function assertOrgActive(auth: AuthContext | null | undefined): asserts auth is AuthContext {
+	if (!auth) error(401, 'Not authenticated.');
+	if (!auth.member.is_active) error(403, 'Member is inactive.');
+	if (auth.orgStatus === 'suspended') error(403, 'Organization is suspended.');
+	if (auth.orgStatus === 'pending_deletion' || auth.orgStatus === 'deleted') {
 		error(403, 'Organization is not active.');
-	}
-
-	if (options?.requireSetupComplete && !org.is_setup_complete) {
-		error(403, 'Organization setup is not complete.');
 	}
 }

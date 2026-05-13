@@ -20,12 +20,19 @@ Load them when relevant — do not load all at once.
 | role templates, /jafar, team member CRUD, member           | → `references/permissions-auth.md`  |
 | deactivation, navigation rendering                         |                                     |
 | ---------------------------------------------------------- | ------------------                  |
+| hooks.server.ts, event.locals.auth, /api/session,          | `contractor-crm`                    |
+| feature flags, plan quotas, integration_status, feature    | → `references/auth-session.md`      |
+| guards, status poll, setup banner                          |                                     |
+| ---------------------------------------------------------- | ------------------                  |
 | Outbox events, BullMQ workers, automation sequences,       | `contractor-crm`                    |
 | Realtime, notification dispatch, idempotency keys,         | → `references/automation-events.md` |
 | webhook handlers (Twilio, Stripe), event emission          |                                     |
 | ---------------------------------------------------------- | ------------------                  |
-| Any .svelte file, +page.ts, +layout, Shadcn Svelte,        | `contractor-crm-svelte-ui`          |
-| navigation, Realtime in UI, client auth guard              |                                     |
+| Any .svelte UI, styling, design, colours, layout           | `contractor-crm-design-reference`   |
+| ---------------------------------------------------------- | ------------------                  |
+| Any .svelte file, \*.svelte.ts, +page.ts, +layout,         | `contractor-crm-svelte-ui`          |
+| Shadcn Svelte, navigation, Realtime in UI, client auth     |                                     |
+| guard, cache stores in $lib/stores/                        |                                     |
 
 The `contractor-crm` skill covers business rules, permission matrix,
 transaction patterns, and automation architecture. Its SKILL.md has
@@ -60,7 +67,7 @@ npx drizzle-kit studio     # open Drizzle Studio GUI
 
 | Layer            | Technology                                           |
 | ---------------- | ---------------------------------------------------- |
-| Framework        | SvelteKit 5 + Svelte 5 (runes)                       |
+| Framework        | SvelteKit 2 + Svelte 5 (runes)                       |
 | Rendering        | CSR only — `ssr = false` globally                    |
 | Database         | PostgreSQL via Supabase + Drizzle ORM + postgres.js  |
 | Auth             | Supabase SSR + JWT + bcryptjs + otplib (TOTP)        |
@@ -99,21 +106,8 @@ src/
       cron/                   ← Cron job registrations
       media/                  ← R2 upload/delete helpers
       org/                    ← Org deletion cascade
-    components/
+    components/               ← Feature components, one folder per domain
       shared/                 ← SkeletonLoader, EmptyState, PageWrapper, Badge, etc.
-      contacts/
-      pipeline/
-      jobs/
-      inbox/
-      quotes/
-      invoices/
-      appointments/
-      reputation/
-      notifications/
-      team/
-      dashboard/
-      growth/
-      settings/
     styles/
       app.css                 ← Tailwind base imports + CSS custom properties (colors, spacing, bottom-nav height, touch target minimum)
     types/                    ← Shared TypeScript types
@@ -141,8 +135,8 @@ drizzle.config.ts             ← Points to schema/index.ts and DATABASE_URL
 These rules are never overridden by a prompt. If a task conflicts with any of these, stop and flag it.
 Full patterns and code examples live in skills — these are the guardrails.
 
-1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Details in `contractor-crm-svelte-ui` skill.
-2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`.
+1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
+2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`. Always add required mark for medatory form field.
 3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
 4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
 5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
@@ -154,6 +148,18 @@ Full patterns and code examples live in skills — these are the guardrails.
 11. **Outbox pattern non-negotiable** — business events flow through `outbox_events` → outbox worker → BullMQ. Never trigger automations, SMS, or emails directly from route handlers.
 12. **`/jafar` completely isolated** — separate `jafarSession` cookie, no `org_id`, no `org_members` row, no Supabase auth. Never check jafar session in contractor middleware. Never mix.
 13. **Client-side auth guard mandatory** — `hooks.server.ts` protects initial load + API routes. `/(app)/+layout.svelte` protects client-side navigation. Both required. Neither replaces the other.
+14. **API error response shape is fixed** — every `/api/*` error response must use
+    this exact shape:
+    ```ts
+    // Error
+    { error: string; field_errors?: Partial<Record<string, string>>; }
+    // Success with data
+    { data: T }
+    // Success with no body: return 204
+    ```
+    Never use `message`, `msg`, `details`, or any other top-level key.
+    `field_errors` keys match the form field names exactly. UI reads `error` for
+    toast messages and `field_errors` to map to inline field errors.
 
 ---
 
@@ -195,8 +201,6 @@ When in doubt about task scope: ask. Do not guess and build.
 - If a task requires a new library: **name options with tradeoffs**, ask before installing
 - If touching auth, database, permissions, or payments: **confirm approach first**
 - Only modify files directly related to the requested task
-- Always make beautiful design.
-- Always use shadcdn svelte component. If you dont find any create them in compoent folder first then use
 
 ---
 
@@ -218,9 +222,6 @@ Ask: **"Anything to adjust before we move on?"**
 - Do not install packages without approval
 - Do not resolve ambiguities silently — surface them
 - Do not use Svelte 4 patterns for any reason
-- Do not start workers from SvelteKit lifecycle hooks
-- Do not perform external API calls inside database transactions
-- Do not scatter permission boolean reads across route handlers
 - Do not write mutations from `.svelte` files or `+page.ts`
 - Do not expose service role credentials in any client-reachable file
 - Do not refactor unrelated code during feature work
@@ -231,10 +232,6 @@ Ask: **"Anything to adjust before we move on?"**
 
 ## Code Quality
 
-- Prefer explicit code over clever abstractions
-- Do not create generic builders, factories, registries, or plugin systems
-- Avoid reusable abstractions until duplication is proven across 3+ use cases
-- Optimize for readability and maintainability — not theoretical flexibility
-- Business logic should be domain-oriented and readable
-- Before modifying a large file: explain what changes and why. Prefer surgical edits over rewrites.
+- Prefer explicit over clever. No generic builders, factories, or plugin systems.
+- No reusable abstractions until duplication is proven across 3+ use cases.
 - Every `POST` and `PATCH` route validates input with Zod. Phone: E.164 normalized. Money: reject negatives, `numeric(12,2)`.

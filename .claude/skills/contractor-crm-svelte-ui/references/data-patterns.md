@@ -8,9 +8,13 @@
 
 Every form follows this pattern. No exceptions, no invented variations.
 
+API error shape contract (must match CLAUDE.md Rule 20):
+- `error: string` — shown in toast
+- `field_errors?: Record<string, string>` — mapped to inline field errors, keys match form field names
+
 ```svelte
 <script lang="ts">
-  import { beforeNavigate, invalidate } from '$app/navigation';
+  import { beforeNavigate } from '$app/navigation';
   import { toast } from '$lib/stores/toast.svelte';
 
   // ── Form state ─────────────────────────────────────────────
@@ -82,14 +86,16 @@ Every form follows this pattern. No exceptions, no invented variations.
           errors = body.field_errors;
           return;
         }
-        throw new Error(body.message ?? 'Save failed');
+        throw new Error(body.error ?? 'Save failed');
       }
 
       const saved = await res.json();
       initialForm = structuredClone($state.snapshot(form)); // clear dirty flag
       toast.success('Contact saved');
 
-      await invalidate('/api/contacts');
+      // Update the cache store in-place — never wipe and refetch
+      // Replace with your domain store, e.g.:
+      // contactStore.update(saved);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
