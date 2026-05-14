@@ -31,19 +31,14 @@ automation boundaries, and the edge cases that cause bugs when missed.
 Before writing code for a specific domain, read the relevant reference file in
 `references/`. Read only what the current task requires — not all three.
 
-| You are working on...                                        | Read this reference             |
-| ------------------------------------------------------------ | ------------------------------- |
-| Entity CRUD, status transitions, lifecycle rules, any domain | `references/business-rules.md`  |
-| logic, financial operations, contact dedup, quote/invoice     |                                 |
-| flows, job creation, pipeline stages, soft delete behavior   |                                 |
-| ------------------------------------------------------------ | ------------------------------- |
-| Permission checks, auth middleware, RLS policies, JWT claims,| `references/permissions-auth.md`|
-| role templates, /jafar super admin, team member CRUD,        |                                 |
-| member deactivation, navigation rendering                    |                                 |
-| ------------------------------------------------------------ | ------------------------------- |
-| Outbox events, BullMQ workers, automation sequences,         | `references/automation-events.md`|
-| Supabase Realtime, notification dispatch, idempotency keys,  |                                 |
-| webhook handlers (Twilio, Stripe), event emission            |                                 |
+| You are working on...                                                                                                                                                                   | Read this reference               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Entity CRUD, status transitions, lifecycle rules, any domain<br>logic, financial operations, contact dedup, quote/invoice<br>flows, job creation, pipeline stages, soft delete behavior | `references/business-rules.md`    |
+| Permission checks, auth middleware, RLS policies, JWT claims,<br>role templates, /jafar super admin, team member CRUD,<br>member deactivation, navigation rendering                     | `references/permissions-auth.md`  |
+| Event catalog, event types by domain, typed payload<br>contracts, idempotency key patterns, event naming rules,<br>event versioning strategy                                            | `references/automation-events.md` |
+| Outbox infrastructure, transaction boundary law, outbox\_<br>events schema, worker startup & claim loop, pg_notify,<br>exponential backoff, dead-letter ops, Realtime boundaries        | `references/outbox-worker.md`     |
+| BullMQ queue names, worker idempotency implementation,<br>worker checklist, job cancellation, notification dispatch<br>chain, automation settings, webhook security (Twilio/Stripe)     | `references/bullmq-workers.md`    |
+| End-to-end business flows (missed call, opp won, quote<br>accepted, invoice paid, job completed), concurrency patterns<br>(race conditions), contact activity timeline + pagination     | `references/event-flows.md`       |
 
 If the task spans multiple concerns (e.g. "record a payment" involves business rules
 for invoice status transitions AND automation for notification dispatch), read both.
@@ -52,23 +47,23 @@ for invoice status transitions AND automation for notification dispatch), read b
 
 ## Tech Stack Context
 
-| Layer              | Technology                                          |
-| ------------------ | --------------------------------------------------- |
-| Framework          | SvelteKit (CSR — `ssr = false` globally)            |
-| Language           | TypeScript, Svelte 5 Runes                          |
-| Rendering          | Client-side only; data via `+page.ts` → `fetch()`  |
-| API layer          | SvelteKit server routes (`/api/*`)                  |
-| Database           | Supabase PostgreSQL                                 |
-| ORM                | Drizzle ORM                                         |
-| Auth               | Supabase Auth                                       |
-| Realtime           | Supabase Realtime (UI delivery only — not event bus)|
-| Queue              | Redis + BullMQ                                      |
-| SMS/Phone          | Twilio                                              |
-| Email              | Resend                                              |
-| Payments           | Stripe (contractor-owned accounts, restricted key)  |
-| Object storage     | Cloudflare R2                                       |
-| Deployment adapter | adapter-node                                        |
-| Architecture       | Modular monolith                                    |
+| Layer              | Technology                                           |
+| ------------------ | ---------------------------------------------------- |
+| Framework          | SvelteKit (CSR — `ssr = false` globally)             |
+| Language           | TypeScript, Svelte 5 Runes                           |
+| Rendering          | Client-side only; data via `+page.ts` → `fetch()`    |
+| API layer          | SvelteKit server routes (`/api/*`)                   |
+| Database           | Supabase PostgreSQL                                  |
+| ORM                | Drizzle ORM                                          |
+| Auth               | Supabase Auth                                        |
+| Realtime           | Supabase Realtime (UI delivery only — not event bus) |
+| Queue              | Redis + BullMQ                                       |
+| SMS/Phone          | Twilio                                               |
+| Email              | Resend                                               |
+| Payments           | Stripe (contractor-owned accounts, restricted key)   |
+| Object storage     | Cloudflare R2                                        |
+| Deployment adapter | adapter-node                                         |
+| Architecture       | Modular monolith                                     |
 
 ### Data Flow Pattern
 
@@ -106,19 +101,19 @@ Default behavior: `WHERE deleted_at IS NULL` on every query unless auditing dele
 
 19 tables have `deleted_at`. The following 11 tables intentionally do NOT:
 
-| Table                    | Reason                                        |
-| ------------------------ | --------------------------------------------- |
-| `payments`               | Financial immutability — never edited/deleted  |
-| `quote_views`            | Append-only view tracking log                  |
-| `reviews`                | Immutable public review record                 |
-| `growth_feed_items`      | Permanent agency work log                      |
-| `internal_activity_log`  | Append-only audit log                          |
-| `notifications`          | Purged by cron at 90 days — no soft delete     |
-| `messages`               | Immutable communication record                 |
-| `automation_jobs`        | Permanent automation audit trail               |
-| `outbox_events`          | Permanent dispatch audit trail                 |
-| `automation_settings`    | One row per org — never independently deleted  |
-| `org_counters`           | One row per org — never independently deleted  |
+| Table                   | Reason                                        |
+| ----------------------- | --------------------------------------------- |
+| `payments`              | Financial immutability — never edited/deleted |
+| `quote_views`           | Append-only view tracking log                 |
+| `reviews`               | Immutable public review record                |
+| `growth_feed_items`     | Permanent agency work log                     |
+| `internal_activity_log` | Append-only audit log                         |
+| `notifications`         | Purged by cron at 90 days — no soft delete    |
+| `messages`              | Immutable communication record                |
+| `automation_jobs`       | Permanent automation audit trail              |
+| `outbox_events`         | Permanent dispatch audit trail                |
+| `automation_settings`   | One row per org — never independently deleted |
+| `org_counters`          | One row per org — never independently deleted |
 
 ### U3 — Permission Source of Truth (Rule 3)
 
@@ -192,14 +187,14 @@ manually release a reserved number through a dedicated override action.
 These fields are convenience values for query performance. Never trust them for
 financial or permission-critical logic:
 
-| Field                          | Source of Truth                                    |
-| ------------------------------ | -------------------------------------------------- |
-| `invoices.amount_paid`         | `SUM(payments.amount) WHERE invoice_id = ?`        |
-| `invoices.amount_due`          | `invoices.total - SUM(payments.amount)`            |
-| `conversations.unread_count`   | `COUNT(messages) WHERE direction='inbound' AND read_at IS NULL` |
-| `quote_line_items.total`       | `quantity * unit_price` (recalculate on change)    |
-| `invoice_line_items.total`     | `quantity * unit_price` (recalculate on change)    |
-| `quotes.total`                 | `subtotal + tax_amount` (recalculate on line item change) |
+| Field                        | Source of Truth                                                 |
+| ---------------------------- | --------------------------------------------------------------- |
+| `invoices.amount_paid`       | `SUM(payments.amount) WHERE invoice_id = ?`                     |
+| `invoices.amount_due`        | `invoices.total - SUM(payments.amount)`                         |
+| `conversations.unread_count` | `COUNT(messages) WHERE direction='inbound' AND read_at IS NULL` |
+| `quote_line_items.total`     | `quantity * unit_price` (recalculate on change)                 |
+| `invoice_line_items.total`   | `quantity * unit_price` (recalculate on change)                 |
+| `quotes.total`               | `subtotal + tax_amount` (recalculate on line item change)       |
 
 ---
 
@@ -209,6 +204,7 @@ This is NOT traditional self-serve SaaS. It is a done-for-you business growth sy
 for small-to-medium contractors (roofers, HVAC, plumbers, electricians, etc.).
 
 Key implications for code:
+
 - Users are non-technical, mobile-first, busy field workers
 - UX must feel like iMessage, not enterprise CRM — keep it simple
 - Contractors don't configure workflows; automation runs automatically

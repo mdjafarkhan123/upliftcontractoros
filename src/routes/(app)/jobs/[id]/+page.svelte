@@ -12,6 +12,7 @@
 	import JobScheduleSection from '$lib/components/jobs/JobScheduleSection.svelte';
 	import JobScopeSection from '$lib/components/jobs/JobScopeSection.svelte';
 	import JobLinksSection from '$lib/components/jobs/JobLinksSection.svelte';
+	import JobUpcomingAppointments from '$lib/components/jobs/JobUpcomingAppointments.svelte';
 	import JobReviewIndicator from '$lib/components/jobs/JobReviewIndicator.svelte';
 	import EditJobSheet from '$lib/components/jobs/EditJobSheet.svelte';
 	import { getMemberContext } from '$lib/context/member';
@@ -184,6 +185,8 @@
 				invoice_count={job.invoice_count}
 				appointment_count={job.appointment_count}
 			/>
+
+			<JobUpcomingAppointments jobId={job.id} />
 
 			<section class="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
 				<ImageIcon class="mx-auto h-6 w-6 text-muted-foreground" />

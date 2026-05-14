@@ -86,9 +86,7 @@
 		--input: 214 32% 91%;
 		--ring: 150 57% 31%;
 	}
-}
 
-@layer base {
 	* {
 		@apply border-border;
 	}
@@ -127,35 +125,27 @@
 	background: #e3e3e3;
 	background: linear-gradient(
 		90deg,
-		rgba(200, 200, 200, 1) 25%,
-		rgb(161, 161, 161) 50%,
-		rgba(200, 200, 200, 1) 100%
+		rgb(102, 102, 102) 25%,
+		rgb(78, 78, 78) 50%,
+		rgb(102, 102, 102) 100%
 	);
 }
-html.light .skeleton-shimmer {
-	background: linear-gradient(
-		45deg,
-		rgba(240, 240, 240, 1) 25%,
-		rgba(224, 224, 224, 1) 50%,
-		rgba(240, 240, 240, 1) 75%
-	);
-	/* 1. Change to 45deg for a more natural, metallic look */
-	background-size: 200% 100%;
-	/* 2. Use 'ease-in-out' instead of 'linear' to make it feel less robotic */
-	/* 3. Increased time to 2s for a calmer, more professional feel */
-	animation: shimmer 2s ease-in-out infinite;
 
-	/* Optional: Soften the edges */
+html.light .skeleton-shimmer {
+	background: #e3e3e3;
+	background: linear-gradient(
+		90deg,
+		rgba(240, 240, 240, 1) 25%,
+		rgba(220, 220, 220, 1) 50%,
+		rgba(240, 240, 240, 1) 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 1.2s ease-in-out infinite;
 	border-radius: 4px;
 }
 .skeleton-shimmer {
-	/* 1. Change to 45deg for a more natural, metallic look */
 	background-size: 200% 100%;
-	/* 2. Use 'ease-in-out' instead of 'linear' to make it feel less robotic */
-	/* 3. Increased time to 2s for a calmer, more professional feel */
-	animation: shimmer 2s ease-in-out infinite;
-
-	/* Optional: Soften the edges */
+	animation: shimmer 1.2s ease-in-out infinite;
 	border-radius: 4px;
 }
 

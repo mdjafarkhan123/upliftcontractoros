@@ -32,6 +32,10 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [{ queue: 'automation', jobName: 'appointment_reminder' }];
 		case 'appointment.rescheduled':
 			return [{ queue: 'automation', jobName: 'appointment_reschedule' }];
+		case 'appointment.completed':
+		case 'appointment.cancelled':
+		case 'appointment.no_show':
+			return [{ queue: 'automation', jobName: 'appointment_cancel_reminders' }];
 		case 'opportunity.won':
 		case 'job.created':
 		case 'invoice.paid':

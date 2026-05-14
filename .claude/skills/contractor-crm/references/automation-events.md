@@ -1,400 +1,450 @@
-# Automation & Events Reference
+# Automation & Events Reference — Event Catalog
 
-Cross-reference: Master Domain Architecture v1 (Rules 28–30, Section 7),
-Core Schema Design v1 (outbox_events, automation_jobs, automation_settings),
-Blueprint v3 (Section 10–11).
+Cross-reference: Event System Architecture v1 (authoritative source),
+outbox-worker.md (infrastructure mechanics), bullmq-workers.md (worker implementation),
+event-flows.md (end-to-end business flows + concurrency patterns).
 
 ---
 
 ## Table of Contents
 
-1. Three-Layer Architecture
-2. Transaction Boundary Law
-3. Outbox Pattern
-4. outbox_events vs automation_jobs
-5. Idempotency Key Strategy
-6. BullMQ Automation Types & Triggers
-7. Automation Settings Defaults
-8. Dead-Letter Handling
-9. Supabase Realtime Boundaries
-10. Core Events List
-11. Webhook Security
-12. Contact Activity Timeline
+1. Complete Event Catalog (30 events, 7 domains)
+2. Event Payload Contracts
+3. Idempotency Key Strategy
+4. Event Naming Conventions
+5. Event Versioning Strategy
 
 ---
 
-## 1. Three-Layer Architecture
+## 1. Complete Event Catalog
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  LAYER 1 — TRANSACTIONAL CORE                           │
-│  PostgreSQL + Drizzle ORM                               │
-│                                                         │
-│  Responsible for:                                       │
-│  → Source of truth for all business state                │
-│  → Atomic multi-table operations                        │
-│  → Constraints, indexes, RLS                            │
-│  → outbox_events insertion (inside transaction)         │
-│                                                         │
-│  NEVER:                                                 │
-│  → Send SMS, email, or push notifications               │
-│  → Enqueue BullMQ jobs directly                         │
-│  → Call external APIs                                   │
-└──────────────────────┬──────────────────────────────────┘
-                       │ COMMIT includes outbox_events row
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  LAYER 2 — RELIABLE ASYNC INFRASTRUCTURE                │
-│  outbox_events + Outbox Worker + BullMQ + Redis         │
-│                                                         │
-│  Responsible for:                                       │
-│  → Guaranteed at-least-once event delivery               │
-│  → Retry semantics and dead-letter handling              │
-│  → Automation orchestration                              │
-│  → Async fanout (notifications, SMS, email)              │
-│  → Idempotency enforcement                               │
-│                                                         │
-│  NEVER:                                                 │
-│  → Mutate business state without going through Layer 1  │
-│  → Deliver real-time UI updates (that is Layer 3)       │
-└──────────────────────┬──────────────────────────────────┘
-                       │ BullMQ worker inserts notifications row
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  LAYER 3 — REACTIVE UX LAYER                            │
-│  Supabase Realtime                                      │
-│                                                         │
-│  Responsible for:                                       │
-│  → Live in-app notification delivery                     │
-│  → Inbox real-time message updates                       │
-│  → Dashboard live refreshes                              │
-│  → UI state synchronization                              │
-│                                                         │
-│  NEVER:                                                 │
-│  → Durable automation processing                         │
-│  → Business-critical orchestration                       │
-│  → Retry guarantees                                      │
-│  → Replacing outbox_events                               │
-└─────────────────────────────────────────────────────────┘
-```
+Every event in the system. Organised by domain. All event types follow
+`{domain}.{past_tense_verb}` format. See Section 4 for naming rules.
 
-**Critical rule:** Supabase Realtime is NOT an event bus. It is a UI delivery
-mechanism only. A missed Realtime notification is a UX inconvenience. A missed
-outbox event is a business failure. They must never be confused.
+> ⚠️ Naming corrections vs legacy notes:
+> `lead.created` → `contact.created` | `appointment.booked` → `appointment.created`
+> `negative_feedback` → `private_feedback.received`
 
 ---
 
-## 2. Transaction Boundary Law (Rule 28)
+### Domain: Contact
 
-Every business operation with side effects follows this pattern:
-
-```
-INSIDE the database transaction:
-  → All business row mutations (contacts, quotes, invoices, etc.)
-  → outbox_events row insertion
-
-OUTSIDE the database transaction (triggered by outbox worker after commit):
-  → BullMQ job enqueue
-  → Twilio SMS dispatch
-  → Resend email dispatch
-  → Supabase Realtime publish
-  → Stripe API calls
-  → Any external API call
-```
-
-Never enqueue BullMQ, send SMS, or call external services inside a database
-transaction. If the transaction rolls back, the external call cannot be undone.
-The outbox pattern is the only correct boundary.
+| Event Type                    | Trigger                                          | Resource |
+| ----------------------------- | ------------------------------------------------ | -------- |
+| `contact.created`             | New contact created (inbound lead, manual entry) | contact  |
+| `contact.duplicate_detected`  | Inbound lead matches existing phone in same org  | contact  |
+| `contact.status_changed`      | Status transitions (e.g. lead → customer)        | contact  |
+| `contact.sms_opted_in`        | Contact sends START/YES after prior opt-out      | contact  |
 
 ---
 
-## 3. Outbox Pattern
+### Domain: Pipeline
 
-### How the Outbox Worker Claims Events
+| Event Type                  | Trigger                                            | Resource    |
+| --------------------------- | -------------------------------------------------- | ----------- |
+| `opportunity.created`       | New opportunity added to pipeline                  | opportunity |
+| `opportunity.stage_changed` | Opportunity moved between pipeline stages          | opportunity |
+| `opportunity.won`           | Opportunity reaches Won stage — triggers job creation | opportunity |
+| `opportunity.lost`          | Opportunity reaches Lost stage                     | opportunity |
 
-```sql
--- Worker polling query (runs every 30s as fallback, or triggered by pg_notify)
-SELECT * FROM outbox_events
-WHERE status = 'pending'
-  AND available_at <= now()
-ORDER BY sequence ASC
-FOR UPDATE SKIP LOCKED
-LIMIT 10;
+---
+
+### Domain: Jobs
+
+| Event Type          | Trigger                                          | Resource |
+| ------------------- | ------------------------------------------------ | -------- |
+| `job.created`       | Job created from Won opportunity (only path)     | job      |
+| `job.assigned`      | Job assigned to a team member                    | job      |
+| `job.status_changed`| Job status transitions                           | job      |
+| `job.completed`     | Job marked complete — triggers review funnel     | job      |
+| `job.cancelled`     | Job cancelled                                    | job      |
+
+---
+
+### Domain: Communication
+
+| Event Type             | Trigger                                     | Resource     |
+| ---------------------- | ------------------------------------------- | ------------ |
+| `conversation.created` | New conversation opened                     | conversation |
+| `message.received`     | Inbound message from contact                | message      |
+| `message.sent`         | Outbound message to contact                 | message      |
+| `call.missed`          | Missed call received via Twilio webhook     | conversation |
+
+---
+
+### Domain: Revenue
+
+| Event Type        | Trigger                                          | Resource |
+| ----------------- | ------------------------------------------------ | -------- |
+| `quote.created`   | New quote drafted                                | quote    |
+| `quote.sent`      | Quote sent to contact                            | quote    |
+| `quote.viewed`    | Contact opens quote link (qualifying view)       | quote    |
+| `quote.accepted`  | Contact accepts quote                            | quote    |
+| `quote.declined`  | Contact declines quote                           | quote    |
+| `quote.expired`   | Quote passes expiry date unresponded             | quote    |
+| `invoice.created` | New invoice created                              | invoice  |
+| `invoice.sent`    | Invoice sent to contact                          | invoice  |
+| `invoice.paid`    | Invoice fully paid (amount_due = 0)              | invoice  |
+| `invoice.overdue` | Invoice passes due date unpaid (nightly cron)    | invoice  |
+| `payment.recorded`| Payment recorded against invoice                 | payment  |
+
+---
+
+### Domain: Appointments
+
+| Event Type                   | Trigger                                   | Resource    |
+| ---------------------------- | ----------------------------------------- | ----------- |
+| `appointment.created`        | Appointment scheduled                     | appointment |
+| `appointment.rescheduled`    | Appointment time changed                  | appointment |
+| `appointment.completed`      | Appointment marked complete               | appointment |
+| `appointment.cancelled`      | Appointment cancelled                     | appointment |
+| `appointment.no_show`        | Contact did not attend                    | appointment |
+
+---
+
+### Domain: Reputation
+
+| Event Type                  | Trigger                                          | Resource         |
+| --------------------------- | ------------------------------------------------ | ---------------- |
+| `review_request.sent`       | Review request SMS dispatched                    | review_request   |
+| `review.received`           | Positive review captured (score ≥ 4)             | review           |
+| `private_feedback.received` | Negative feedback submitted (score ≤ 3)          | private_feedback |
+
+---
+
+### Domain: Automation (Scheduled — BullMQ-dispatched)
+
+These fire via BullMQ after a triggering domain event. Idempotency key uses
+`automation_job_id`, not `resource_id` — same resource may receive multiple
+automation events over its lifetime.
+
+| Event Type                          | BullMQ Trigger                              | Resource    |
+| ----------------------------------- | ------------------------------------------- | ----------- |
+| `automation.missed_call_textback`   | `call.missed` + near-instant delay          | conversation|
+| `automation.speed_to_lead`          | `contact.created` + near-instant delay      | contact     |
+| `automation.quote_followup`         | `quote.sent` + 24h delay / 72h delay        | quote       |
+| `automation.invoice_reminder`       | `invoice.overdue` + configurable delay      | invoice     |
+| `automation.review_request`         | `job.completed` + configurable delay        | job         |
+| `automation.appointment_reminder_24h`| `appointment.created` + calculated delay   | appointment |
+| `automation.appointment_reminder_1h` | `appointment.created` + calculated delay   | appointment |
+
+---
+
+### Domain: Platform (System-level, org_id = null)
+
+| Event Type                        | Trigger                    | Resource |
+| --------------------------------- | -------------------------- | -------- |
+| `platform.monthly_summary`        | First day of month cron    | null     |
+| `platform.org_deletion_sweep`     | Nightly cron               | null     |
+| `platform.notification_cleanup`   | Nightly cron               | null     |
+
+---
+
+## 2. Event Payload Contracts
+
+Every event carries a typed payload in `outbox_events.payload JSONB`.
+Fields listed below are the minimum required. Additional context fields are permitted.
+
+---
+
+### `contact.created`
+
+```json
+{
+  "contact_id": "uuid",
+  "org_id": "uuid",
+  "phone": "string E.164",
+  "lead_source": "string",
+  "created_at": "ISO8601 timestamp"
+}
 ```
 
-- `FOR UPDATE SKIP LOCKED` — safe for multiple concurrent worker instances
-- Worker is woken immediately by `pg_notify('outbox_channel', NEW.id::text)` on INSERT
-- 30-second polling is the resilience fallback if pg_notify is missed
-- `sequence` (SERIAL auto-increment) guarantees processing order within a transaction
-- `available_at > now()` enables delayed processing (review funnel delay, quote follow-up delay)
+### `contact.sms_opted_in`
 
-### Outbox Event Lifecycle
-
-```
-pending → processing → processed    (success)
-                     → failed       (retriable — attempts < max_attempts)
-                     → dead_lettered (attempts = max_attempts — needs manual review)
+```json
+{
+  "contact_id": "uuid",
+  "org_id": "uuid",
+  "phone": "string E.164",
+  "opted_in_at": "ISO8601 timestamp"
+}
 ```
 
-- `max_attempts` defaults to 3
-- `event_version` (integer, default 1) supports forward-compatible payload schema changes
-- `org_id` is nullable — null for platform-level events (monthly cron, org status transitions)
-- Never deleted — permanent dispatch audit trail
+### `call.missed`
 
-### pg_notify Trigger
+```json
+{
+  "org_id": "uuid",
+  "twilio_phone_number": "string E.164",
+  "caller_phone": "string E.164",
+  "contact_id": "uuid | null",
+  "call_sid": "string",
+  "missed_at": "ISO8601 timestamp"
+}
+```
 
-```sql
-CREATE OR REPLACE FUNCTION public.notify_outbox_insert()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public AS $$
-BEGIN
-  PERFORM pg_notify('outbox_channel', NEW.id::text);
-  RETURN NEW;
-END;
-$$;
+### `opportunity.won`
 
-CREATE TRIGGER outbox_notify
-AFTER INSERT ON public.outbox_events
-FOR EACH ROW EXECUTE FUNCTION public.notify_outbox_insert();
+```json
+{
+  "opportunity_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "stage_id": "uuid",
+  "won_at": "ISO8601 timestamp"
+}
+```
+
+### `job.completed`
+
+```json
+{
+  "job_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "opportunity_id": "uuid",
+  "assigned_to": "uuid | null",
+  "completed_at": "ISO8601 timestamp"
+}
+```
+
+### `quote.accepted`
+
+```json
+{
+  "quote_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "opportunity_id": "uuid | null",
+  "total": "decimal string",
+  "accepted_at": "ISO8601 timestamp"
+}
+```
+
+### `quote.viewed`
+
+```json
+{
+  "quote_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "viewed_at": "ISO8601 timestamp",
+  "ip_hash": "string",
+  "notification_sent": false
+}
+```
+
+### `invoice.paid`
+
+```json
+{
+  "invoice_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "job_id": "uuid | null",
+  "total": "decimal string",
+  "amount_paid": "decimal string",
+  "paid_at": "ISO8601 timestamp"
+}
+```
+
+### `invoice.overdue`
+
+```json
+{
+  "invoice_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "total": "decimal string",
+  "amount_due": "decimal string",
+  "due_date": "ISO8601 date",
+  "days_overdue": "integer"
+}
+```
+
+### `appointment.rescheduled`
+
+```json
+{
+  "appointment_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "job_id": "uuid | null",
+  "assigned_to": "uuid | null",
+  "old_start_at": "ISO8601 timestamp",
+  "new_start_at": "ISO8601 timestamp",
+  "reminder_flags_reset": true
+}
+```
+
+### `automation.quote_followup`
+
+```json
+{
+  "automation_job_id": "uuid",
+  "quote_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "followup_number": 1,
+  "scheduled_for": "ISO8601 timestamp"
+}
+```
+
+### `automation.review_request`
+
+```json
+{
+  "automation_job_id": "uuid",
+  "job_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "delay_hours": 2,
+  "scheduled_for": "ISO8601 timestamp"
+}
 ```
 
 ---
 
-## 4. outbox_events vs automation_jobs
+## 3. Idempotency Key Strategy
 
-These are NOT interchangeable. Both must exist. Neither replaces the other.
+Idempotency key semantics define replay behaviour. Wrong keys = wrong replay.
+`outbox_events.idempotency_key` has a `UNIQUE` constraint — duplicate INSERTs
+fail gracefully, preventing double side effects.
 
-| Concern            | `outbox_events`                     | `automation_jobs`                    |
-| ------------------ | ----------------------------------- | ------------------------------------ |
-| Responsibility     | Dispatch guarantee (infrastructure) | Execution audit trail (observability)|
-| Question answered  | "Did this event get delivered?"     | "What did the automation do?"        |
-| Written when       | Inside DB transaction with business mutation | Before BullMQ job is enqueued |
-| Updated by         | Outbox worker                       | BullMQ worker as job progresses      |
-| Retry semantics    | Worker retry with dead-letter       | BullMQ built-in retry (max 3)       |
-| Contains           | Event payload (JSONB)               | Resource reference + bull_job_id     |
-| Deleted            | Never                               | Never                                |
+### Domain Events — Resource-Scoped Keys
 
----
-
-## 5. Idempotency Key Strategy
-
-### Domain Events (fire once per lifecycle transition)
-Format: `{event_type}:{resource_id}`
+Fire exactly once per lifecycle transition on a given resource.
 
 ```
-job.completed:abc-123
-quote.accepted:def-456
-invoice.paid:ghi-789
-opportunity.won:abc-123
-lead.created:xyz-789
+Pattern:  {event_type}:{resource_id}
+
+Examples:
+  job.completed:job-uuid-abc
+  quote.accepted:quote-uuid-def
+  invoice.paid:invoice-uuid-ghi
+  opportunity.won:opp-uuid-jkl
+  contact.created:contact-uuid-mno
 ```
 
-These use the UNIQUE index on `outbox_events.idempotency_key`. A duplicate business
-event (from concurrent requests, webhook retries, or automation replays) will fail
-the INSERT gracefully — no duplicate processing.
+Duplicate insert (webhook retry, race condition) → UNIQUE constraint fails gracefully.
+The business operation already completed. No duplicate side effects.
 
-### Scheduled Automation Events (may recur on same resource)
-Format: `{event_type}:{automation_job_id}`
+### Scheduled Automation Events — Execution-Scoped Keys
+
+May fire multiple times on the same resource over its lifetime.
 
 ```
-quote.followup:bullmq-job-id-001
-invoice.reminder:bullmq-job-id-002
-appointment.reminder:bullmq-job-id-003
+Pattern:  {event_type}:{automation_job_id}
+
+Examples:
+  automation.quote_followup:automation-job-uuid-001
+  automation.invoice_reminder:automation-job-uuid-002
+  automation.appointment_reminder_24h:automation-job-uuid-003
 ```
 
-These key on the automation_job_id (not the resource_id) because the same resource
-may legitimately have multiple scheduled automation events over time.
+`automation_job_id` is the idempotency anchor — each scheduled execution is a
+distinct event instance. The same quote can have multiple follow-up events.
+The same invoice can have multiple reminders. Each is independently idempotent.
+
+### Platform Events — Operation-Scoped Keys
+
+```
+Pattern:  {event_type}:{date_bucket}:{optional_scope}
+
+Examples:
+  platform.monthly_summary:2026-05-01
+  platform.org_deletion_sweep:2026-05-08
+  platform.notification_cleanup:2026-05-08
+```
 
 ### Notification Idempotency
+
 `notifications.idempotency_key` is NULLABLE:
-- **Set** for deduplicable events: `{event_type}:{resource_id}:{member_id}` — partial unique index blocks duplicates
+- **Set** for deduplicable events: `{event_type}:{resource_id}:{member_id}`
+  — partial unique index blocks duplicates
 - **NULL** for repeatable notifications (reminders, follow-ups) — allows multiple rows
 
 ---
 
-## 6. BullMQ Automation Types & Triggers
+## 4. Event Naming Conventions
 
-| Automation Type          | Trigger Event        | What It Does                                    |
-| ------------------------ | -------------------- | ----------------------------------------------- |
-| `missed_call_textback`   | `call.missed`        | SMS to caller within seconds + lead creation    |
-| `speed_to_lead`          | `lead.created`       | Instant SMS confirmation to new lead            |
-| `quote_followup`         | `quote.sent` + delay | Follow-up SMS at 24h and 72h (two reminders)    |
-| `invoice_reminder`       | `invoice.overdue`    | Reminder SMS; reschedules until paid             |
-| `review_request`         | `job.completed`      | Review request SMS after configurable delay      |
-| `appointment_reminder`   | `appointment.booked` | 24h and 1h before appointment                   |
+### Event Types
 
-### Automation Cancellation Rules
-- `quote_followup`: cancelled when quote is accepted, declined, or expired
-- `invoice_reminder`: cancelled when invoice is paid or cancelled
-- `appointment_reminder`: cancelled and re-created on reschedule (with flag reset)
-
-### Worker Rules
-- Max retry attempts: 3 by default for all types
-- After 3 failed attempts: `status → failed`, `last_error` recorded, no further retries
-- Every worker MUST check `contacts.sms_opt_out` before sending any SMS
-- One `automation_jobs` row per BullMQ job — created before enqueue
-- `bull_job_id` links DB record to BullMQ queue for management
-
-### Split Automation Model
 ```
-BullMQ (Redis) — tenant-critical, time-sensitive automations
-  → missed_call_textback, speed_to_lead, quote_followup,
-    invoice_reminder, review_request, appointment_reminder
+Pattern: {domain}.{past_tense_verb}
 
-N8N (self-hosted) — agency marketing workflows, non-time-critical
-  → GBP post publishing, social media, campaigns,
-    scheduled reporting, third-party integrations, review responses
+✅  job.completed
+✅  quote.accepted
+✅  invoice.paid
+✅  call.missed
+
+❌  jobCompleted       (camelCase)
+❌  JOB_COMPLETED      (SCREAMING_SNAKE)
+❌  job-completed      (kebab-case)
+❌  on_job_complete    (imperative)
 ```
 
-N8N is NOT the backend. The application backend is the source of truth.
-N8N reacts to events emitted by the backend. N8N never owns business logic,
-authentication, or tenant data.
+### Resource Types
 
----
+Singular lowercase noun matching the table name (without plural suffix):
 
-## 7. Automation Settings Defaults
+```
+job, quote, invoice, contact, opportunity, appointment,
+conversation, message, review_request, review, payment
+```
 
-One `automation_settings` row per org, created automatically on org creation.
-All settings accessible to Admin only in Contractor App.
-Agency team configures during onboarding.
+### Queue Names
 
-| Setting                               | Default                |
-| ------------------------------------- | ---------------------- |
-| `missed_call_textback_enabled`        | TRUE                   |
-| `missed_call_textback_message`        | "Hi! We missed your call. We'll be in touch shortly — or reply here and we'll get back to you right away." |
-| `quote_followup_enabled`              | TRUE                   |
-| `quote_followup_delay_1_hours`        | 24                     |
-| `quote_followup_delay_2_hours`        | 72                     |
-| `quote_followup_message`              | "Hi {contact_name}, just following up on the quote we sent. Any questions? We're happy to help." |
-| `invoice_reminder_enabled`            | TRUE                   |
-| `invoice_reminder_delay_days`         | 3                      |
-| `invoice_reminder_message`            | "Hi {contact_name}, just a reminder that your invoice is due. Please don't hesitate to reach out if you have any questions." |
-| `review_funnel_enabled`               | TRUE                   |
-| `review_funnel_delay_hours`           | 2                      |
-| `google_review_link`                  | NULL (set by agency)   |
-| `review_funnel_message`               | "Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1–5." |
-| `appointment_reminder_enabled`        | TRUE                   |
-| `appointment_reminder_hours_before`   | 24                     |
-| `appointment_reminder_message`        | "Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out." |
-| `speed_to_lead_enabled`               | TRUE                   |
-| `speed_to_lead_message`               | "Hi {contact_name}, thanks for reaching out! We'll get back to you shortly." |
+```
+Pattern: queue:{kebab-case-automation-name}
 
-Message templates support `{contact_name}` and `{org_name}` interpolation at send time.
-The same `quote_followup_message` is used for both follow-up reminders.
-
----
-
-## 8. Dead-Letter Handling (Rule 30)
-
-When `outbox_events.status` reaches `dead_lettered`:
-- Event is surfaced in the `/jafar` super admin panel
-- Platform Owner can inspect `last_error` and `payload`
-- Manual retry is possible via the admin panel
-- The affected org may need operational follow-up
-
-Dead-lettered events must NEVER be silently ignored. They represent a business
-operation that failed to complete.
-
-Index for `/jafar` visibility:
-```sql
-CREATE INDEX idx_outbox_events_dead_lettered
-  ON outbox_events (org_id, dead_lettered_at)
-  WHERE status = 'dead_lettered';
+Examples:
+  queue:missed-call-textback
+  queue:speed-to-lead
+  queue:quote-followup
+  queue:invoice-reminder
+  queue:review-request
+  queue:appointment-reminder
+  queue:notification-dispatch
 ```
 
 ---
 
-## 9. Supabase Realtime Boundaries
+## 5. Event Versioning Strategy
 
-Supabase Realtime is used for:
-- Live in-app notification delivery (notification bell)
-- Inbox real-time message updates
-- Dashboard live refreshes
-- UI state synchronization
+All outbox events carry `event_version integer default 1`.
 
-Supabase Realtime is NEVER used for:
-- Durable automation processing
-- Business-critical orchestration
-- Retry guarantees
-- Replacing the outbox pattern
+### Rules
 
-A missed Realtime notification = UX inconvenience (user refreshes page).
-A missed outbox event = business failure (payment not processed, SMS not sent).
-
----
-
-## 10. Core Events List
-
-Events emitted by the application via outbox_events:
-
-| Event                   | Emitted When                               | Triggers                                    |
-| ----------------------- | ------------------------------------------ | ------------------------------------------- |
-| `lead.created`          | New contact created as lead                | speed_to_lead SMS, new_lead notification    |
-| `call.missed`           | Twilio missed call webhook                 | missed_call_textback SMS                    |
-| `conversation.created`  | First message with contact on a channel    | —                                           |
-| `message.received`      | Inbound message from contact               | Realtime inbox update, notification         |
-| `quote.sent`            | Quote status → sent                        | quote_followup automation (24h, 72h delay)  |
-| `quote.viewed`          | First qualifying view of quote             | quote_viewed notification                   |
-| `quote.accepted`        | Customer accepts quote                     | quote_accepted notification, cancel followup|
-| `opportunity.won`       | Opportunity moved to Won stage             | Job creation, contact status → customer     |
-| `job.created`           | Job row inserted (from Won trigger)        | —                                           |
-| `job.completed`         | Job status → completed                     | review_request automation                   |
-| `invoice.sent`          | Invoice status → sent                      | —                                           |
-| `invoice.overdue`       | Nightly cron detects past-due invoice      | invoice_reminder automation                 |
-| `invoice.paid`          | Invoice fully paid (amount_due = 0)        | payment_received notification, cancel reminder |
-| `appointment.booked`    | Appointment created                        | appointment_reminder automation (24h, 1h)   |
-| `review.received`       | Positive review (score ≥ 4) recorded       | new_review notification                     |
-| `negative_feedback`     | Negative feedback (score ≤ 3) recorded     | negative_feedback notification              |
-
----
-
-## 11. Webhook Security
-
-### Twilio Webhooks
-- Signature verification middleware on EVERY Twilio webhook route — non-negotiable
-- Validate using Twilio's request signing mechanism before processing any payload
-- `messages.twilio_message_sid` has partial unique index — prevents duplicate processing
-
-### Stripe Webhooks
-- `stripe.webhooks.constructEvent()` on EVERY payment webhook — non-negotiable
-- Verify webhook signature using `stripe_webhook_secret` from `organizations` table
-- `payments.stripe_payment_intent_id` has partial unique index — prevents double-payment
-- Each contractor has their own Stripe account (restricted key model)
-- Platform never holds, processes, or intermediates contractor revenue
-
-Both must be implemented before first production deployment.
-
----
-
-## 12. Contact Activity Timeline
-
-The contact detail view shows a unified chronological timeline. This is NOT a separate
-table — it is assembled at query time via UNION across entities, all filtered by
-`contact_id` and `org_id`.
-
-### Timeline Sources
 ```
-messages          → "SMS received/sent — ..."
-quotes            → "Quote Q-0042 sent — $4,500" / "Quote accepted"
-quote_views       → "Quote Q-0042 viewed"
-invoices          → "Invoice INV-0042 sent" / "Invoice paid in full"
-payments          → "Payment received — $2,250"
-appointments      → "Appointment scheduled — May 15 at 9:00am" / "completed"
-jobs              → "Job created — Roof Replacement" / "Job completed"
-review_requests   → "Review request sent"
-reviews           → "5-star review received"
-private_feedback  → "Negative feedback received"
-contact_notes     → "Note by Sarah: Customer prefers contact after 2pm"
-automation_jobs   → "Missed call text-back sent"
+Version 1 is the initial payload schema.
+
+When a payload schema changes:
+  → bump event_version to 2
+  → consumers must handle BOTH v1 and v2
+  → never remove fields from v1 during a rolling deploy
+  → old events in the outbox still carry v1 — they must remain processable
+
+Version upgrade procedure:
+  1. Deploy new consumer that handles v1 and v2
+  2. Deploy new producer that emits v2
+  3. After all v1 events are processed, clean up v1 handling
 ```
 
-### Pagination
-Must use cursor-based pagination (not offset):
-```sql
-WHERE (created_at, source_table, id) < (:cursor_ts, :cursor_table, :cursor_id)
-ORDER BY created_at DESC, source_table DESC, id DESC
-LIMIT 50
+### Example
+
+```json
+// Version 1
+{ "event_version": 1, "job_id": "uuid", "contact_id": "uuid" }
+
+// Version 2 — adds assigned_to
+{ "event_version": 2, "job_id": "uuid", "contact_id": "uuid", "assigned_to": "uuid | null" }
 ```
 
-Compound cursor prevents row loss when multiple events share identical timestamps.
-API response must include a `next_cursor` value.
+```typescript
+if (payload.event_version === 1) {
+  // handle without assigned_to
+} else if (payload.event_version >= 2) {
+  // handle with assigned_to
+}
+```
