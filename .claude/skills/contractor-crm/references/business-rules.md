@@ -39,6 +39,7 @@ active → suspended → pending_deletion → deleted
 - `deleted`: all org data permanently and irreversibly removed by cron
 
 **Org Deletion Cascade Order** (must respect FK constraints):
+
 ```
 automation_jobs → outbox_events → notifications → automation_settings →
 internal_activity_log → growth_feed_items → media → private_feedback →
@@ -68,6 +69,7 @@ customer → archived (manual)
 ```
 
 **Key rules:**
+
 - Phone is the dedup key: `UNIQUE(org_id, phone)`, E.164 format, enforced at write time
 - Phone uniqueness survives soft delete — deleted contacts permanently block their number
 - When new activity arrives with an existing phone: link to existing contact, alert assigned member, never silently merge or duplicate
@@ -79,6 +81,7 @@ customer → archived (manual)
 - Contacts belong to the org, not to individual members — assignment is operational
 
 **Contact Addresses:**
+
 - Separate `contact_addresses` table — no address fields on contacts
 - Max one primary per contact: partial unique index `UNIQUE(contact_id) WHERE is_primary = TRUE AND deleted_at IS NULL`
 - "At least one primary" enforced at application level only
@@ -94,12 +97,14 @@ customer → archived (manual)
 **Special stage flags:** `is_default`, `is_won`, `is_lost` — mutually exclusive on a single row.
 
 Enforced by partial unique indexes (not application logic alone):
+
 - Exactly one `is_default = TRUE` per org (among active stages)
 - Exactly one `is_won = TRUE` per org (among active stages)
 - Exactly one `is_lost = TRUE` per org (among active stages)
 - Unique `position` per org among active stages
 
 **Default seed (created on org creation):**
+
 ```
 1. New Lead        (is_default = true)
 2. Contacted
@@ -111,6 +116,7 @@ Enforced by partial unique indexes (not application logic alone):
 ```
 
 **Rules:**
+
 - A stage cannot be soft-deleted while live opportunities (`deleted_at IS NULL`) reference it — enforced at API layer before setting `deleted_at`
 - Stages are soft-deleted only, never hard-deleted
 - Reordering positions must be transactional
@@ -119,6 +125,7 @@ Enforced by partial unique indexes (not application logic alone):
 ### Opportunities
 
 **Lifecycle:**
+
 ```
 Created in default stage → moves through stages (drag and drop)
 → Reaches Won stage: job created automatically, closed_at set, contact.status → 'customer'
@@ -140,6 +147,7 @@ scheduled → in_progress → completed
 ```
 
 **Critical rules:**
+
 - Jobs are NEVER created manually — always and only from a Won opportunity
 - `opportunity_id` is NOT NULL and UNIQUE — one job per opportunity, ever
 - `UNIQUE(opportunity_id)` is a hard constraint (not partial index) — prevents duplicates from concurrent Won transitions, webhook retries, and automation replays
@@ -191,6 +199,7 @@ draft → sent → viewed → accepted
 ```
 
 **Critical rules:**
+
 - `opportunity_id` is OPTIONAL — quotes can exist without a pipeline opportunity
 - QUOTE ACCEPTANCE DOES NOT AUTO-ADVANCE THE OPPORTUNITY OR CREATE A JOB
   - Acceptance fires `quote.accepted` event → contractor receives notification
@@ -205,11 +214,13 @@ draft → sent → viewed → accepted
 - `deposit_required` boolean + `deposit_amount` numeric (nullable)
 
 **Quote Templates:**
+
 - Applying a template COPIES line items into `quote_line_items` — no FK back to template
 - After creation, the quote is fully independent of the template
 - When a template is soft-deleted, its `quote_template_line_items` are also soft-deleted in the same transaction (application-level, not PostgreSQL cascade)
 
 **Quote Views:**
+
 - Only the first qualifying view triggers the `quote.viewed` event and sets `quotes.viewed_at`
 - Subsequent views are logged in `quote_views` but fire no event
 - Bot filtering and repeat-view throttle (60s from same `ip_hash`) enforced at API layer
@@ -237,6 +248,7 @@ any            → cancelled        (manual by Admin only)
 ```
 
 **Key rules:**
+
 - `job_id`, `opportunity_id`, `quote_id` are all OPTIONAL
 - `payments` table is the authoritative source of truth for all financial balances
 - `amount_paid` and `amount_due` are denormalized convenience values ONLY — never mutate directly, always derive from `SUM(payments.amount)`
@@ -296,12 +308,14 @@ Counter values are never decremented. Always inside same transaction as quote/in
 **Status enum:** `scheduled | completed | cancelled | no_show`
 
 **Key rules:**
+
 - `job_id` is nullable — estimate appointments exist before a job is created
 - `location` defaults from `job.service_address` when `job_id` present — independently editable
 - `assigned_to` scopes Member visibility
 
 **Reminder Reset on Reschedule (Rule 16):**
 When `scheduled_start` is updated:
+
 1. Set `reminder_24h_sent = FALSE` and `reminder_1h_sent = FALSE` in the same update
 2. Cancel existing BullMQ reminder jobs
 3. Re-create BullMQ reminder jobs for the new time
@@ -311,6 +325,32 @@ Failure to reset these flags silently prevents reminders from firing after resch
 ---
 
 ## 9. Reputation (Review Funnel) Rules
+
+### Purpose
+
+Generate positive reviews while intercepting negative feedback privately.
+
+### Smart Review Funnel
+
+After job completion, customer receives:
+
+```
+How was your experience?
+👎 🙁 😐 🙂 🌟
+```
+
+**Positive flow:** Redirected to Google review link
+
+**Negative flow:** Redirected to private feedback form → contractor notified internally
+
+### Features
+
+- Review request tracking
+- Private feedback management
+- Review growth metrics
+- Complaint resolution workflow
+
+> **Note:** Review velocity is the number one compounding growth metric for contractors. This module deserves the same engineering attention as the Inbox.
 
 ### Review Requests
 
@@ -484,6 +524,7 @@ organizations
 ```
 
 **Optional FKs (nullable by design):**
+
 - `quotes.opportunity_id` — quotes can exist without an opportunity
 - `invoices.job_id` — invoices can exist without a job
 - `invoices.opportunity_id` — invoices can exist without an opportunity

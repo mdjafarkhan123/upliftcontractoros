@@ -3,7 +3,7 @@
 	import AppointmentStatusBadge from './AppointmentStatusBadge.svelte';
 	import { addDays, dayKey, formatDayLabel, formatTime, isSameDay } from '$lib/utils/calendar';
 	import type { AppointmentListItem } from '$lib/types/appointments';
-
+	import { SvelteMap } from 'svelte/reactivity';
 	let {
 		anchor,
 		days,
@@ -13,7 +13,7 @@
 	const today = new Date();
 
 	const buckets = $derived.by(() => {
-		const map = new Map<string, AppointmentListItem[]>();
+		const map = new SvelteMap<string, AppointmentListItem[]>();
 		for (let i = 0; i < days; i++) {
 			map.set(dayKey(addDays(anchor, i)), []);
 		}

@@ -31,7 +31,7 @@
 		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	}
 
-	let assignedTo = $state(job.assigned_to ?? '');
+	let assignedTo = $derived(job.assigned_to ?? '');
 	let scheduledStart = $state(toInputValue(job.scheduled_start));
 	let scheduledEnd = $state(toInputValue(job.scheduled_end));
 	let notes = $state(job.notes ?? '');

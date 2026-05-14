@@ -2377,7 +2377,7 @@ export type Database = {
         | "invoice_attachment"
       media_type: "photo" | "pdf" | "attachment"
       member_role: "admin" | "manager" | "member"
-      message_channel: "sms" | "email" | "webchat"
+      message_channel: "sms" | "missed_call" | "email" | "webchat"
       message_direction: "inbound" | "outbound"
       message_status:
         | "sent"
@@ -2597,7 +2597,7 @@ export const Constants = {
       ],
       media_type: ["photo", "pdf", "attachment"],
       member_role: ["admin", "manager", "member"],
-      message_channel: ["sms", "email", "webchat"],
+      message_channel: ["sms", "missed_call", "email", "webchat"],
       message_direction: ["inbound", "outbound"],
       message_status: [
         "sent",

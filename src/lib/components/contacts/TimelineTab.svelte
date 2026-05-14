@@ -3,6 +3,7 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Clock } from '@lucide/svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	type TimelineItem = {
 		id: string;
@@ -21,7 +22,7 @@
 	let errorMsg = $state<string | null>(null);
 
 	async function load(cursor: string | null) {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (cursor) params.set('cursor', cursor);
 		const res = await fetch(`/api/contacts/${contactId}/timeline?${params.toString()}`);
 		if (!res.ok) {

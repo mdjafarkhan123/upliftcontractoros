@@ -29,16 +29,33 @@ automation boundaries, and the edge cases that cause bugs when missed.
 ## Reference Routing
 
 Before writing code for a specific domain, read the relevant reference file in
-`references/`. Read only what the current task requires — not all three.
+`references/`. Read only what the current task requires — not all.
 
-| You are working on...                                                                                                                                                                   | Read this reference               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Entity CRUD, status transitions, lifecycle rules, any domain<br>logic, financial operations, contact dedup, quote/invoice<br>flows, job creation, pipeline stages, soft delete behavior | `references/business-rules.md`    |
-| Permission checks, auth middleware, RLS policies, JWT claims,<br>role templates, /jafar super admin, team member CRUD,<br>member deactivation, navigation rendering                     | `references/permissions-auth.md`  |
-| Event catalog, event types by domain, typed payload<br>contracts, idempotency key patterns, event naming rules,<br>event versioning strategy                                            | `references/automation-events.md` |
-| Outbox infrastructure, transaction boundary law, outbox\_<br>events schema, worker startup & claim loop, pg_notify,<br>exponential backoff, dead-letter ops, Realtime boundaries        | `references/outbox-worker.md`     |
-| BullMQ queue names, worker idempotency implementation,<br>worker checklist, job cancellation, notification dispatch<br>chain, automation settings, webhook security (Twilio/Stripe)     | `references/bullmq-workers.md`    |
-| End-to-end business flows (missed call, opp won, quote<br>accepted, invoice paid, job completed), concurrency patterns<br>(race conditions), contact activity timeline + pagination     | `references/event-flows.md`       |
+| You are working on...                                                                                                                                                                   | Read this reference                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Entity CRUD, status transitions, lifecycle rules, any domain<br>logic, financial operations, contact dedup, quote/invoice<br>flows, job creation, pipeline stages, soft delete behavior | `references/business-rules.md`                   |
+| Permission checks, auth middleware, RLS policies, JWT claims,<br>role templates, /jafar super admin, team member CRUD,<br>member deactivation, navigation rendering                     | `references/permissions-auth.md`                 |
+| Event catalog, event types by domain, typed payload<br>contracts, idempotency key patterns, event naming rules,<br>event versioning strategy                                            | `references/automation-events.md`                |
+| Outbox infrastructure, transaction boundary law, outbox\_<br>events schema, worker startup & claim loop, pg_notify,<br>exponential backoff, dead-letter ops, Realtime boundaries        | `references/outbox-worker.md`                    |
+| BullMQ queue names, worker idempotency implementation,<br>worker checklist, job cancellation, notification dispatch<br>chain, automation settings, webhook security (Twilio/Stripe)     | `references/bullmq-workers.md`                   |
+| End-to-end business flows (missed call, opp won, quote<br>accepted, invoice paid, job completed), concurrency patterns<br>(race conditions), contact activity timeline + pagination     | `references/event-flows.md`                      |
+| Schema Principles & Enum Definitions                                                                                                                                                    | `references/00-schema-principles-enums.md`       |
+| Organizations, onboarding, feature flags, plans                                                                                                                                         | `references/01-org-identity.md`                  |
+| Team members, roles, 40 permission booleans                                                                                                                                             | `references/01-org-identity.md`                  |
+| Automation settings, toggle config, message templates                                                                                                                                   | `references/01-org-identity.md`                  |
+| Contacts, leads, customers, SMS opt-out, tags                                                                                                                                           | `references/02-contacts.md`                      |
+| Contact addresses, contact notes                                                                                                                                                        | `references/02-contacts.md`                      |
+| Pipeline stages, opportunities, deals                                                                                                                                                   | `references/03-pipeline.md`                      |
+| Jobs, service delivery, scope of work                                                                                                                                                   | `references/04-jobs.md`                          |
+| Conversations, inbox, messaging, SMS, Twilio                                                                                                                                            | `references/05-communication.md`                 |
+| Quotes, quote line items, quote templates, quote views                                                                                                                                  | `references/06-revenue-quotes.md`                |
+| Invoices, invoice line items, payments, Stripe                                                                                                                                          | `references/07-revenue-invoices.md`              |
+| Appointments, scheduling, reminders                                                                                                                                                     | `references/08-appointments.md`                  |
+| Review requests, reviews, private feedback                                                                                                                                              | `references/09-reputation.md`                    |
+| Media, file uploads, R2 storage                                                                                                                                                         | `references/10-files-and-media.md`               |
+| Growth feed, activity log, notifications                                                                                                                                                | `references/11-system-automation.md`             |
+| Automation jobs, outbox events, org counters                                                                                                                                            | `references/11-growth-automations-systems.md`    |
+| Any cross-domain query or multi-table join                                                                                                                                              | `references/12-cross-domain-map.md`              |
 
 If the task spans multiple concerns (e.g. "record a payment" involves business rules
 for invoice status transitions AND automation for notification dispatch), read both.
@@ -50,7 +67,7 @@ for invoice status transitions AND automation for notification dispatch), read b
 | Layer              | Technology                                           |
 | ------------------ | ---------------------------------------------------- |
 | Framework          | SvelteKit (CSR — `ssr = false` globally)             |
-| Language           | TypeScript, Svelte 5 Runes                           |
+| Language           | TypeScript, Svelte 5 only                            |
 | Rendering          | Client-side only; data via `+page.ts` → `fetch()`    |
 | API layer          | SvelteKit server routes (`/api/*`)                   |
 | Database           | Supabase PostgreSQL                                  |

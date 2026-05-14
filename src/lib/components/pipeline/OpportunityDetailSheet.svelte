@@ -31,10 +31,10 @@
 		onChanged
 	}: Props = $props();
 
-	let title = $state(opportunity.title);
-	let value = $state(opportunity.value ?? '');
-	let assignedTo = $state(opportunity.assigned_to ?? '');
-	let stageId = $state(opportunity.stage_id);
+	let title = $derived(opportunity.title);
+	let value = $derived(opportunity.value ?? '');
+	let assignedTo = $derived(opportunity.assigned_to ?? '');
+	let stageId = $derived(opportunity.stage_id);
 
 	let saving = $state(false);
 	let stageSaving = $state(false);

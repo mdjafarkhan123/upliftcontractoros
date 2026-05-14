@@ -43,26 +43,26 @@
 		) => Promise<{ ok: boolean; error?: string; field_errors?: Record<string, string> }>;
 	} = $props();
 
-	let contactId = $state(appointment?.contact_id ?? initialContact?.id ?? '');
-	let contactName = $state(appointment?.contact_name ?? initialContact?.full_name ?? '');
+	let contactId = $derived(appointment?.contact_id ?? initialContact?.id ?? '');
+	let contactName = $derived(appointment?.contact_name ?? initialContact?.full_name ?? '');
 	let contactQuery = $state('');
 	let contactResults = $state<ContactOption[]>([]);
 	let contactSearching = $state(false);
 
-	let jobId = $state(appointment?.job_id ?? initialJob?.id ?? '');
-	let jobOptions = $state<JobOption[]>(
+	let jobId = $derived(appointment?.job_id ?? initialJob?.id ?? '');
+	let jobOptions = $derived<JobOption[]>(
 		initialJob ? [initialJob] : appointment?.job_id && appointment.job_title
 			? [{ id: appointment.job_id, title: appointment.job_title, status: 'scheduled' }]
 			: []
 	);
 
-	let type = $state<AppointmentType>(appointment?.type ?? 'estimate');
-	let title = $state(appointment?.title ?? '');
-	let scheduledStart = $state(dateTimeLocalValue(appointment?.scheduled_start ?? null));
-	let scheduledEnd = $state(dateTimeLocalValue(appointment?.scheduled_end ?? null));
-	let location = $state(appointment?.location ?? '');
-	let notes = $state(appointment?.notes ?? '');
-	let assignedTo = $state(appointment?.assigned_to ?? '');
+	let type = $derived<AppointmentType>(appointment?.type ?? 'estimate');
+	let title = $derived(appointment?.title ?? '');
+	let scheduledStart = $derived(dateTimeLocalValue(appointment?.scheduled_start ?? null));
+	let scheduledEnd = $derived(dateTimeLocalValue(appointment?.scheduled_end ?? null));
+	let location = $derived(appointment?.location ?? '');
+	let notes = $derived(appointment?.notes ?? '');
+	let assignedTo = $derived(appointment?.assigned_to ?? '');
 
 	let saving = $state(false);
 	let errorMsg = $state<string | null>(null);

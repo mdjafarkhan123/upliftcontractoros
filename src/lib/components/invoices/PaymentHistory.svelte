@@ -8,7 +8,7 @@
 		defaultCollapsed = true
 	}: { payments: InvoicePaymentRow[]; defaultCollapsed?: boolean } = $props();
 
-	let expanded = $state(!defaultCollapsed);
+	let expanded = $derived(!defaultCollapsed);
 
 	const methodLabels: Record<PaymentMethod, string> = {
 		stripe: 'Stripe',

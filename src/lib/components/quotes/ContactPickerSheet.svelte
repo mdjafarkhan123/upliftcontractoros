@@ -3,6 +3,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import { Loader2, User } from '@lucide/svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	type ContactItem = { id: string; full_name: string; phone: string; email: string | null };
 
@@ -21,7 +22,7 @@
 	async function search() {
 		loading = true;
 		try {
-			const params = new URLSearchParams();
+			const params = new SvelteURLSearchParams();
 			if (query.trim()) params.set('q', query.trim());
 			const res = await fetch(`/api/contacts?${params.toString()}`);
 			if (!res.ok) return;

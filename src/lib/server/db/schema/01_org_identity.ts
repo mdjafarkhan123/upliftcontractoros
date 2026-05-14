@@ -185,6 +185,7 @@ export const automationSettings = pgTable('automation_settings', {
 	review_funnel_enabled: boolean('review_funnel_enabled').notNull().default(true),
 	review_funnel_delay_hours: integer('review_funnel_delay_hours').notNull().default(2),
 	review_funnel_message: text('review_funnel_message').notNull(),
+	google_review_link: text('google_review_link'),
 	appointment_reminder_enabled: boolean('appointment_reminder_enabled').notNull().default(true),
 	appointment_reminder_hours_before: integer('appointment_reminder_hours_before')
 		.notNull()
