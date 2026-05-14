@@ -123,24 +123,31 @@
 }
 
 /* ─── Shimmer animation (SkeletonLoader) ──────────────────────────── */
-@keyframes shimmer {
-	0% {
-		background-position: -200% 0;
-	}
-	100% {
-		background-position: 200% 0;
-	}
-}
-
 .skeleton-shimmer {
+	/* 1. Change to 45deg for a more natural, metallic look */
 	background: linear-gradient(
-		90deg,
-		hsl(var(--muted)) 25%,
-		hsl(var(--accent)) 50%,
-		hsl(var(--muted)) 75%
+		45deg,
+		rgba(240, 240, 240, 1) 25%,
+		rgba(224, 224, 224, 1) 50%,
+		rgba(240, 240, 240, 1) 75%
 	);
 	background-size: 200% 100%;
-	animation: shimmer 1.5s ease-in-out infinite;
+
+	/* 2. Use 'ease-in-out' instead of 'linear' to make it feel less robotic */
+	/* 3. Increased time to 2s for a calmer, more professional feel */
+	animation: shimmer 2s ease-in-out infinite;
+
+	/* Optional: Soften the edges */
+	border-radius: 4px;
+}
+
+@keyframes shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
 }
 
 /* ─── Status dot (used inline next to status text) ───────────────── */
@@ -164,6 +171,50 @@
 }
 .status-dot-draft {
 	background: hsl(var(--status-draft));
+}
+
+/* ─── Jet Engine spool-up (JetEngineButton loading state) ────────── */
+.animate-spool-up {
+	animation: spool-up 1.4s cubic-bezier(0.45, 0, 0.2, 1) forwards,
+		spool-spin 0.45s linear 1.4s infinite;
+	transform-origin: center;
+}
+
+@keyframes spool-up {
+	0% {
+		transform: rotate(0deg);
+		animation-timing-function: cubic-bezier(0.85, 0, 0.95, 0.35);
+	}
+	100% {
+		transform: rotate(900deg);
+	}
+}
+
+@keyframes spool-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Success checkmark "pop" — scale + slight overshoot */
+.animate-pop-in {
+	animation: pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+	transform-origin: center;
+}
+
+@keyframes pop-in {
+	0% {
+		transform: scale(0);
+		opacity: 0;
+	}
+	60% {
+		transform: scale(1.25);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
 }
 
 /* ─── Focus visible global override ──────────────────────────────── */

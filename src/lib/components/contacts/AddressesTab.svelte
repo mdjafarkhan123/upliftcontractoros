@@ -3,6 +3,7 @@
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import AddressForm from './AddressForm.svelte';
 	import { Plus, MapPin, Star, Pencil, Trash2 } from '@lucide/svelte';
@@ -241,7 +242,13 @@
 		{#if errorMsg}<p class="text-sm text-destructive">{errorMsg}</p>{/if}
 		<div class="flex justify-end gap-2">
 			<Button variant="outline" disabled={saving} onclick={() => (editorOpen = false)}>Cancel</Button>
-			<Button disabled={saving} onclick={save}>{saving ? 'Saving…' : 'Save address'}</Button>
+			<JetEngineButton
+				label="Save address"
+				loadingLabel="Saving…"
+				successLabel="Saved"
+				state={saving ? 'loading' : 'idle'}
+				onclick={save}
+			/>
 		</div>
 	</div>
 </BottomSheet>

@@ -37,6 +37,7 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'invoice.paid':
 		case 'quote.viewed':
 		case 'quote.accepted':
+		case 'quote.declined':
 		case 'message.received':
 		case 'review.received':
 		case 'private_feedback.received':

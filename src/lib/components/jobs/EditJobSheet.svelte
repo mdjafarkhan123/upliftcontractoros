@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import type { JobDetail } from '$lib/types/jobs';
@@ -152,9 +153,14 @@
 				<Button variant="outline" class="flex-1" disabled={saving} onclick={() => (open = false)}>
 					Cancel
 				</Button>
-				<Button class="flex-1" disabled={saving} onclick={save}>
-					{saving ? 'Saving…' : 'Save changes'}
-				</Button>
+				<JetEngineButton
+					class="flex-1"
+					label="Save changes"
+					loadingLabel="Saving…"
+					successLabel="Saved"
+					state={saving ? 'loading' : 'idle'}
+					onclick={save}
+				/>
 			</div>
 		</div>
 	</Sheet.Content>

@@ -6,6 +6,5 @@
 import './src/lib/server/workers/outboxWorker';
 import './src/lib/server/workers/automationWorker';
 import './src/lib/server/workers/notificationWorker';
-import './src/lib/server/cron/index';
 
-console.log('[worker] Started — outbox, automation, notification workers + cron active');
+console.log('[worker] Started — outbox, automation, notification workers active');

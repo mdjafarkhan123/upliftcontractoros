@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 
 	let {
 		open = $bindable(false),
@@ -40,9 +41,14 @@
 			<Button variant="outline" disabled={loading} onclick={() => (open = false)}>
 				{cancelLabel}
 			</Button>
-			<Button {variant} disabled={loading} onclick={handleConfirm}>
-				{confirmLabel}
-			</Button>
+			<JetEngineButton
+				{variant}
+				label={confirmLabel}
+				loadingLabel="Working…"
+				successLabel="Done"
+				state={loading ? 'loading' : 'idle'}
+				onclick={handleConfirm}
+			/>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

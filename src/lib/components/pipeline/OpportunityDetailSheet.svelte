@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
@@ -212,9 +213,14 @@
 
 			{#if canEdit}
 				<div class="flex gap-2">
-					<Button class="flex-1" onclick={saveFields} disabled={saving}>
-						{saving ? 'Saving…' : 'Save changes'}
-					</Button>
+					<JetEngineButton
+						class="flex-1"
+						label="Save changes"
+						loadingLabel="Saving…"
+						successLabel="Saved"
+						state={saving ? 'loading' : 'idle'}
+						onclick={saveFields}
+					/>
 				</div>
 
 				{#if !currentStage?.is_won && !currentStage?.is_lost}

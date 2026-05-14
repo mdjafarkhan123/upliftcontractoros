@@ -12,7 +12,7 @@
 	{#each Array.from({ length: lines }, (_, i) => i) as i (i)}
 		<div
 			style:height
-			class={cn('animate-pulse rounded-sm bg-muted', i === lines - 1 && 'w-2/3')}
+			class={cn('skeleton-shimmer rounded-sm bg-muted', i === lines - 1 && 'w-2/3')}
 		></div>
 	{/each}
 </div>

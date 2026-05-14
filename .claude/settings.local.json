@@ -35,7 +35,10 @@
       "Bash(npx svelte-kit *)",
       "Bash(npx prettier *)",
       "Bash(npx tsx -e ' *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(npm i *)",
+      "Bash(mkdir -p \"src/routes/q/[token]/data\")",
+      "Bash(mv \"src/routes/q/[token]/+server.ts\" \"src/routes/q/[token]/data/+server.ts\")"
     ]
   }
 }

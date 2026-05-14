@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Play, CheckCircle2, XCircle } from '@lucide/svelte';
 	import type { JobStatus } from '$lib/types/jobs';
 
@@ -33,29 +33,42 @@
 		<h2 class="text-sm font-semibold text-foreground">Actions</h2>
 		<div class="mt-3 grid gap-2">
 			{#if showStart}
-				<Button class="w-full" disabled={loading} onclick={onStart}>
-					<Play class="h-4 w-4" /> Start job
-				</Button>
+				<JetEngineButton
+					class="w-full"
+					label="Start job"
+					loadingLabel="Starting…"
+					successLabel="Started"
+					state={loading ? 'loading' : 'idle'}
+					onclick={onStart}
+				>
+					{#snippet icon()}<Play class="h-4 w-4" />{/snippet}
+				</JetEngineButton>
 			{/if}
 			{#if showComplete}
-				<Button
+				<JetEngineButton
 					variant="outline"
 					class="w-full border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10"
-					disabled={loading}
+					label="Mark complete"
+					loadingLabel="Saving…"
+					successLabel="Complete"
+					state={loading ? 'loading' : 'idle'}
 					onclick={onComplete}
 				>
-					<CheckCircle2 class="h-4 w-4" /> Mark complete
-				</Button>
+					{#snippet icon()}<CheckCircle2 class="h-4 w-4" />{/snippet}
+				</JetEngineButton>
 			{/if}
 			{#if showCancel}
-				<Button
+				<JetEngineButton
 					variant="outline"
 					class="w-full border-rose-500/40 text-rose-700 hover:bg-rose-500/10"
-					disabled={loading}
+					label="Cancel job"
+					loadingLabel="Cancelling…"
+					successLabel="Cancelled"
+					state={loading ? 'loading' : 'idle'}
 					onclick={onCancel}
 				>
-					<XCircle class="h-4 w-4" /> Cancel job
-				</Button>
+					{#snippet icon()}<XCircle class="h-4 w-4" />{/snippet}
+				</JetEngineButton>
 			{/if}
 		</div>
 	</section>

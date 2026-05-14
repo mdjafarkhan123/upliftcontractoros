@@ -174,6 +174,26 @@ async function handleQuoteViewed(data: EventJobData) {
 		},
 		'quote.viewed'
 	);
+	await automationCancelHooks.quoteViewed(data);
+}
+
+async function handleQuoteDeclined(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'quote.declined',
+			title: 'Quote declined',
+			body: (data.payload.summary as string | undefined) ?? null,
+			resource_type: 'quote',
+			resource_id: data.resource_id,
+			idempotent: true
+		},
+		'quote.declined'
+	);
+	await automationCancelHooks.quoteDeclined(data);
 }
 
 async function handleQuoteAccepted(data: EventJobData) {
@@ -301,6 +321,8 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleQuoteViewed(data);
 			case 'quote.accepted':
 				return handleQuoteAccepted(data);
+			case 'quote.declined':
+				return handleQuoteDeclined(data);
 			case 'message.received':
 				return handleMessageReceived(data);
 			case 'review.received':

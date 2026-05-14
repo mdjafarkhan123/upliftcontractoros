@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -158,7 +159,13 @@
 			<Button variant="outline" type="button" onclick={() => goto('/contacts')} disabled={saving}>
 				Cancel
 			</Button>
-			<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create contact'}</Button>
+			<JetEngineButton
+				type="submit"
+				label="Create contact"
+				loadingLabel="Saving…"
+				successLabel="Created"
+				state={saving ? 'loading' : 'idle'}
+			/>
 		</div>
 	</form>
 </PageWrapper>

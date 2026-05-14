@@ -21,6 +21,7 @@ import {
 	redisConnection
 } from '$lib/server/queue/bullmq';
 import { twilio } from '$lib/server/twilio/client';
+import { sendQuoteEmail } from '$lib/server/email/quoteEmails';
 import { interpolate } from './templates';
 import { env } from '$env/dynamic/private';
 
@@ -292,11 +293,74 @@ async function scheduleQuoteFollowup(
 	});
 }
 
+function publicQuoteUrl(token: string): string {
+	const base = env.APP_URL ?? 'http://localhost:5173';
+	return `${base.replace(/\/$/, '')}/q/${token}`;
+}
+
+async function dispatchInitialQuote(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const { org } = await loadContext(orgId);
+	if (!org) return;
+
+	const contactId = data.payload.contact_id as string | undefined;
+	const rawToken = data.payload.public_token as string | undefined;
+	const totalFormatted = (data.payload.total_formatted as string | undefined) ?? '';
+	const quoteNumberDisplay = (data.payload.quote_number_display as string | undefined) ?? '';
+	const isResend = Boolean(data.payload.is_resend);
+	const hasEmail = Boolean(data.payload.has_email);
+	if (!contactId || !rawToken) return;
+
+	const contact = await loadContact(orgId, contactId);
+	if (!contact) return;
+
+	const url = publicQuoteUrl(rawToken);
+
+	if (!contact.sms_opt_out) {
+		const verb = isResend ? 'updated your quote' : 'sent you a quote';
+		const body = `Hi ${contact.full_name}, ${org.name} ${verb} (${quoteNumberDisplay}, ${totalFormatted}). View it here: ${url}`;
+		try {
+			await sendSms(org.twilio_phone_number, contact.phone, body);
+		} catch (err) {
+			console.error('[automation] quote SMS dispatch failed:', err);
+		}
+	}
+
+	if (hasEmail && contact.email) {
+		try {
+			await sendQuoteEmail({
+				orgName: org.name,
+				contactName: contact.full_name,
+				contactEmail: contact.email,
+				quoteNumber: quoteNumberDisplay,
+				totalFormatted,
+				publicUrl: url,
+				isResend
+			});
+		} catch (err) {
+			console.error('[automation] quote email dispatch failed:', err);
+		}
+	}
+}
+
 async function handleQuoteFollowupSetup(data: EventJobData) {
 	if (!data.org_id) return;
+	// Resends: cancel any existing pending follow-ups first.
+	if (data.payload.is_resend) {
+		await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+	}
+	// Send initial SMS/email synchronously (with internal try/catch — failures
+	// must not block follow-up scheduling).
+	await dispatchInitialQuote(data);
 	const { settings } = await loadContext(data.org_id);
 	if (!settings || !settings.quote_followup_enabled) return;
-	await scheduleQuoteFollowup(data.org_id, data.resource_id, 1, settings.quote_followup_delay_1_hours * 3600_000);
+	await scheduleQuoteFollowup(
+		data.org_id,
+		data.resource_id,
+		1,
+		settings.quote_followup_delay_1_hours * 3600_000
+	);
 }
 
 async function handleQuoteFollowup(job: Job, data: EventJobData) {
@@ -651,6 +715,16 @@ async function handleQuoteAcceptedCancel(data: EventJobData) {
 	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
 }
 
+async function handleQuoteDeclinedCancel(data: EventJobData) {
+	if (!data.org_id) return;
+	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+}
+
+async function handleQuoteViewedCancel(data: EventJobData) {
+	if (!data.org_id) return;
+	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+}
+
 async function handleInvoicePaidCancel(data: EventJobData) {
 	if (!data.org_id) return;
 	await cancelPendingJobs(data.org_id, 'invoice_reminder', data.resource_id);
@@ -699,5 +773,7 @@ automationWorker.on('failed', (job, err) => {
 // invokes these helpers when the corresponding events are dispatched.
 export const automationCancelHooks = {
 	quoteAccepted: handleQuoteAcceptedCancel,
+	quoteDeclined: handleQuoteDeclinedCancel,
+	quoteViewed: handleQuoteViewedCancel,
 	invoicePaid: handleInvoicePaidCancel
 };

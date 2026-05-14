@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Search, X } from '@lucide/svelte';
@@ -217,9 +218,14 @@
 				>
 					Cancel
 				</Button>
-				<Button type="submit" class="flex-1" disabled={submitting}>
-					{submitting ? 'Creating…' : 'Create'}
-				</Button>
+				<JetEngineButton
+					type="submit"
+					class="flex-1"
+					label="Create"
+					loadingLabel="Creating…"
+					successLabel="Created"
+					state={submitting ? 'loading' : 'idle'}
+				/>
 			</div>
 		</form>
 	</Sheet.Content>

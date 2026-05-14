@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Label } from '$lib/components/ui/label';
 
@@ -54,9 +55,14 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" disabled={loading} onclick={cancel}>Cancel</Button>
-			<Button variant="destructive" disabled={loading} onclick={handleConfirm}>
-				{loading ? 'Saving…' : 'Mark as lost'}
-			</Button>
+			<JetEngineButton
+				variant="destructive"
+				label="Mark as lost"
+				loadingLabel="Saving…"
+				successLabel="Saved"
+				state={loading ? 'loading' : 'idle'}
+				onclick={handleConfirm}
+			/>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

@@ -3,6 +3,7 @@
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Plus, Trash2, StickyNote } from '@lucide/svelte';
 
@@ -140,9 +141,14 @@
 			<Button variant="outline" disabled={saving} onclick={() => (composerOpen = false)}>
 				Cancel
 			</Button>
-			<Button disabled={saving || draft.trim().length === 0} onclick={save}>
-				{saving ? 'Saving…' : 'Save note'}
-			</Button>
+			<JetEngineButton
+				label="Save note"
+				loadingLabel="Saving…"
+				successLabel="Saved"
+				state={saving ? 'loading' : 'idle'}
+				disabled={draft.trim().length === 0}
+				onclick={save}
+			/>
 		</div>
 	</div>
 </BottomSheet>
