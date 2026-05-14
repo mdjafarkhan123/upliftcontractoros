@@ -38,9 +38,9 @@ export function formatDateTime(date: Date | string): string {
 }
 
 export function formatQuoteNumber(n: number): string {
-	return `Q-${String(n).padStart(5, '0')}`;
+	return `Q-${String(n).padStart(4, '0')}`;
 }
 
 export function formatInvoiceNumber(n: number): string {
-	return `INV-${String(n).padStart(5, '0')}`;
+	return `INV-${String(n).padStart(4, '0')}`;
 }
