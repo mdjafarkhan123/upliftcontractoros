@@ -6,7 +6,7 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft, Pencil, ImageIcon } from '@lucide/svelte';
+	import { ArrowLeft, Pencil } from '@lucide/svelte';
 	import JobStatusBadge from '$lib/components/jobs/JobStatusBadge.svelte';
 	import JobActionsBar from '$lib/components/jobs/JobActionsBar.svelte';
 	import JobScheduleSection from '$lib/components/jobs/JobScheduleSection.svelte';
@@ -18,6 +18,7 @@
 	import { getMemberContext } from '$lib/context/member';
 	import { jobsStore } from '$lib/stores/jobs.svelte';
 	import type { JobDetail, JobStatus } from '$lib/types/jobs';
+	import MediaGallery from '$lib/components/media/MediaGallery.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -188,11 +189,11 @@
 
 			<JobUpcomingAppointments jobId={job.id} />
 
-			<section class="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
-				<ImageIcon class="mx-auto h-6 w-6 text-muted-foreground" />
-				<p class="mt-2 text-sm font-medium text-foreground">Media</p>
-				<p class="text-xs text-muted-foreground">Photo uploads land here in Chapter 16.</p>
-			</section>
+			<MediaGallery
+				jobId={job.id}
+				canUpload={member().can_upload_files}
+				canDelete={member().can_upload_files}
+			/>
 		</div>
 
 		<EditJobSheet

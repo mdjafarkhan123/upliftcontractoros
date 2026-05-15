@@ -4,6 +4,7 @@ import { db } from '$lib/server/db/client';
 import { outboxEvents, type OutboxEvent } from '$lib/server/db/schema';
 import { env } from '$env/dynamic/private';
 import { automationQueue, notificationQueue, addJob } from '$lib/server/queue/bullmq';
+import { r2DeleteObjects } from '$lib/server/media/r2';
 
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 30_000;
@@ -55,13 +56,28 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 	}
 }
 
+async function handleMediaDeleted(event: OutboxEvent): Promise<void> {
+	const payload = event.payload as {
+		r2_key?: string;
+		thumbnail_key?: string | null;
+		web_key?: string | null;
+	};
+	const keys = [payload.r2_key, payload.thumbnail_key, payload.web_key].filter(
+		(k): k is string => typeof k === 'string' && k.length > 0
+	);
+	if (keys.length === 0) {
+		console.warn(`[outbox] media.deleted event ${event.id} has no R2 keys in payload`);
+		return;
+	}
+	await r2DeleteObjects(keys);
+	console.log(`[outbox] media.deleted: deleted ${keys.length} R2 object(s) for media ${event.resource_id}`);
+}
+
 async function dispatch(event: OutboxEvent): Promise<void> {
 	const targets = routeEvent(event);
 	if (targets.length === 0) {
 		if (event.event_type === 'media.deleted') {
-			console.log(
-				`[outbox] media.deleted event ${event.id} — R2 cleanup handler not yet implemented (Chapter 16)`
-			);
+			await handleMediaDeleted(event);
 			return;
 		}
 		console.warn(`[outbox] no route for event_type=${event.event_type} id=${event.id}`);

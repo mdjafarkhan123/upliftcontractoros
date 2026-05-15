@@ -1,10 +1,17 @@
 <script lang="ts">
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
+	import NotificationPanel from '$lib/components/notifications/NotificationPanel.svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
+
+	$effect(() => {
+		void notificationStore.load();
+	});
 </script>
 
 <svelte:head><title>Notifications</title></svelte:head>
 
 <PageWrapper title="Notifications">
-	<SkeletonLoader lines={6} label="Loading notifications" />
+	<div class="overflow-hidden rounded-xl border border-border bg-card">
+		<NotificationPanel variant="page" />
+	</div>
 </PageWrapper>

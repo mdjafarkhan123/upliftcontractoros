@@ -12,8 +12,10 @@
 	import SendQuoteDialog from '$lib/components/quotes/SendQuoteDialog.svelte';
 	import ApplyTemplateDialog from '$lib/components/quotes/ApplyTemplateDialog.svelte';
 	import DownloadPdfButton from '$lib/components/quotes/DownloadPdfButton.svelte';
+	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
+	import { getMemberContext } from '$lib/context/member';
 	import { Eye, FileText, Save, Send, Trash2, Loader2 } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -21,6 +23,7 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const member = getMemberContext();
 	const quote = $derived(quotesStore.getDetail(data.id));
 	const detailStatus = $derived(quotesStore.getDetailStatus(data.id));
 	const detailError = $derived(quotesStore.getDetailError(data.id));
@@ -319,6 +322,13 @@
 				total={isDraft ? total.toFixed(2) : q.total}
 				deposit_required={q.deposit_required}
 				deposit_amount={q.deposit_amount}
+			/>
+
+			<AttachmentList
+				parentFk={{ quote_id: q.id }}
+				purposeTag="quote_attachment"
+				canUpload={member().can_upload_files}
+				canDelete={member().can_upload_files}
 			/>
 		</div>
 

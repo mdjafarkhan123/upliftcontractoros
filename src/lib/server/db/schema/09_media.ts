@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, integer, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, uuid, text, integer, timestamp, index } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { jobs } from './04_jobs';
@@ -32,10 +32,15 @@ export const media = pgTable('media', {
 	media_type: mediaTypeEnum('media_type').notNull(),
 	mime_type: text('mime_type').notNull(),
 	purpose_tag: mediaPurposeTagEnum('purpose_tag').notNull(),
+	scan_status: text('scan_status').notNull().default('pending'),
+	sha256_hash: text('sha256_hash'),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+	sha256HashIdx: index('idx_media_sha256_hash').on(table.sha256_hash),
+	scanStatusIdx: index('idx_media_scan_status').on(table.scan_status)
+}));
 
 export type Media = InferSelectModel<typeof media>;
 export type NewMedia = InferInsertModel<typeof media>;

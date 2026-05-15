@@ -1,15 +1,10 @@
 <script lang="ts">
-	import { Bell } from '@lucide/svelte';
-	import { goto } from '$app/navigation';
 	import type { Org, OrgMember } from '$lib/types';
 	import UserMenu from './UserMenu.svelte';
 	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
+	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
 
-	let {
-		org,
-		member,
-		unreadCount = 0
-	}: { org: Org; member: OrgMember; unreadCount?: number } = $props();
+	let { org, member }: { org: Org; member: OrgMember } = $props();
 
 	const initials = $derived(
 		org.name
@@ -40,21 +35,7 @@
 
 	<div class="flex items-center gap-1 md:gap-2">
 		<ThemeToggle />
-		<button
-			type="button"
-			onclick={() => goto('/notifications')}
-			class="relative inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			aria-label="Notifications"
-		>
-			<Bell class="h-5 w-5" />
-			{#if unreadCount > 0}
-				<span
-					class="absolute right-1.5 top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground"
-				>
-					{unreadCount > 99 ? '99+' : unreadCount}
-				</span>
-			{/if}
-		</button>
+		<NotificationBell />
 		<UserMenu {member} />
 	</div>
 </header>

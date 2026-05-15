@@ -16,6 +16,9 @@
 	import SetupBanner from '$lib/components/app-shell/SetupBanner.svelte';
 	import Toaster from '$lib/components/shared/Toaster.svelte';
 	import { sessionStore, type AppSessionData } from '$lib/stores/session.svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
+	import { getBrowserSupabase } from '$lib/supabase/browser';
+	import type { NotificationItem } from '$lib/notifications/navigation';
 
 	let { data, children } = $props<{ data: { session: AppSessionData }; children: () => unknown }>();
 
@@ -73,12 +76,50 @@
 		}
 	}
 
+	let notificationsChannel: ReturnType<ReturnType<typeof getBrowserSupabase>['channel']> | null =
+		null;
+
 	onMount(() => {
 		lastFeatureOverridesUpdatedAt = toIso(session.org.feature_overrides_updated_at);
 		pollHandle = setInterval(pollStatus, POLL_MS);
+
+		void notificationStore.load(true);
+		const supabase = getBrowserSupabase();
+		notificationStore.onSubscribed();
+		notificationsChannel = supabase
+			.channel(`notifications:member:${session.member.id}`)
+			.on(
+				'postgres_changes',
+				{
+					event: 'INSERT',
+					schema: 'public',
+					table: 'notifications',
+					filter: `member_id=eq.${session.member.id}`
+				},
+				(payload: { new: NotificationItem }) => {
+					notificationStore.applyRealtimeInsert(payload.new);
+				}
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: 'UPDATE',
+					schema: 'public',
+					table: 'notifications',
+					filter: `member_id=eq.${session.member.id}`
+				},
+				(payload: { new: NotificationItem }) => {
+					notificationStore.applyRealtimeUpdate(payload.new);
+				}
+			)
+			.subscribe();
 	});
 	onDestroy(() => {
 		if (pollHandle) clearInterval(pollHandle);
+		if (notificationsChannel) {
+			void getBrowserSupabase().removeChannel(notificationsChannel);
+			notificationsChannel = null;
+		}
 	});
 
 	const visibleNav = $derived(buildVisibleNav(session.member, session.featureFlags));

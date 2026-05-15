@@ -40,7 +40,10 @@
       "Bash(mkdir -p \"src/routes/q/[token]/data\")",
       "Bash(mv \"src/routes/q/[token]/+server.ts\" \"src/routes/q/[token]/data/+server.ts\")",
       "Skill(contractor-crm)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(cat *)",
+      "Skill(contractor-crm-svelte-ui)",
+      "Skill(contractor-crm-design-reference)"
     ]
   }
 }

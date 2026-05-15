@@ -14,9 +14,11 @@
 	import PaymentLinkDialog from '$lib/components/invoices/PaymentLinkDialog.svelte';
 	import SendInvoiceDialog from '$lib/components/invoices/SendInvoiceDialog.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
+	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { isEffectivelyOverdue } from '$lib/utils/invoices';
+	import { getMemberContext } from '$lib/context/member';
 	import { AlertCircle, Ban, CreditCard, Link as LinkIcon, Save, Send } from '@lucide/svelte';
 	import type { PageData } from './$types';
 	import type { InvoiceDetail, InvoiceLineItemRow } from '$lib/types/invoices';
@@ -24,6 +26,7 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const member = getMemberContext();
 	const invoice = $derived(invoicesStore.getDetail(data.id));
 	const detailStatus = $derived(invoicesStore.getDetailStatus(data.id));
 	const detailError = $derived(invoicesStore.getDetailError(data.id));
@@ -344,6 +347,13 @@
 			{#if !isDraft}
 				<PaymentHistory payments={inv.payments} />
 			{/if}
+
+			<AttachmentList
+				parentFk={{ invoice_id: inv.id }}
+				purposeTag="invoice_attachment"
+				canUpload={member().can_upload_files}
+				canDelete={member().can_upload_files}
+			/>
 		</div>
 
 		<SendInvoiceDialog
