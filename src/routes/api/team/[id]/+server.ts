@@ -1,0 +1,130 @@
+import { json, error } from '@sveltejs/kit';
+import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+import type { RequestHandler } from './$types';
+import { db } from '$lib/server/db/client';
+import { orgMembers } from '$lib/server/db/schema';
+import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
+import { ALL_PERMISSION_KEYS, isKnownPermissionKey } from '$lib/team/permissions-config';
+
+const nameSchema = z.string().min(1, 'Name is required').max(200).trim();
+
+export const GET: RequestHandler = async (event) => {
+	const auth = event.locals.auth;
+	assertOrgActive(auth);
+	if (!auth.member.can_view_team_members) error(403, 'Forbidden');
+
+	const memberId = event.params.id;
+
+	const [member] = await db
+		.select()
+		.from(orgMembers)
+		.where(
+			and(
+				eq(orgMembers.id, memberId),
+				eq(orgMembers.org_id, auth.orgId),
+				isNull(orgMembers.deleted_at)
+			)
+		)
+		.limit(1);
+
+	if (!member) error(404, 'Not found');
+
+	return json({ data: member });
+};
+
+export const PATCH: RequestHandler = async (event) => {
+	const auth = event.locals.auth;
+	assertOrgActive(auth);
+	if (!auth.member.can_edit_team_members) error(403, 'Forbidden');
+
+	const memberId = event.params.id;
+
+	if (memberId === auth.member.id) {
+		return json({ error: 'You cannot edit your own permissions.' }, { status: 403 });
+	}
+
+	const [target] = await db
+		.select({ id: orgMembers.id, role: orgMembers.role })
+		.from(orgMembers)
+		.where(
+			and(
+				eq(orgMembers.id, memberId),
+				eq(orgMembers.org_id, auth.orgId),
+				isNull(orgMembers.deleted_at)
+			)
+		)
+		.limit(1);
+
+	if (!target) error(404, 'Not found');
+
+	if (target.role === 'admin') {
+		return json({ error: "You cannot edit an Admin's permissions." }, { status: 403 });
+	}
+
+	let body: Record<string, unknown>;
+	try {
+		body = (await event.request.json()) as Record<string, unknown>;
+	} catch {
+		return json({ error: 'Invalid JSON.' }, { status: 400 });
+	}
+
+	const updates: Partial<typeof orgMembers.$inferInsert> & { updated_at: Date } = {
+		updated_at: new Date()
+	};
+	const fieldErrors: Record<string, string> = {};
+
+	// Reject any unrecognised keys up front
+	for (const key of Object.keys(body)) {
+		if (key === 'full_name') continue;
+		if (!isKnownPermissionKey(key)) {
+			fieldErrors[key] = 'Unknown field';
+		}
+	}
+
+	// Validate full_name if present
+	if ('full_name' in body) {
+		const result = nameSchema.safeParse(body.full_name);
+		if (!result.success) {
+			fieldErrors.full_name = result.error.issues[0]?.message ?? 'Invalid name';
+		} else {
+			updates.full_name = result.data;
+		}
+	}
+
+	// Validate permission booleans
+	for (const key of ALL_PERMISSION_KEYS) {
+		if (key in body) {
+			if (typeof body[key] !== 'boolean') {
+				fieldErrors[key] = 'Must be true or false';
+			} else {
+				(updates as Record<string, unknown>)[key] = body[key];
+			}
+		}
+	}
+
+	if (Object.keys(fieldErrors).length > 0) {
+		return json({ error: 'Validation failed.', field_errors: fieldErrors }, { status: 400 });
+	}
+
+	// Only updated_at means nothing to change
+	if (Object.keys(updates).length <= 1) {
+		return json({ error: 'No fields to update.' }, { status: 400 });
+	}
+
+	const [updated] = await db
+		.update(orgMembers)
+		.set(updates)
+		.where(
+			and(
+				eq(orgMembers.id, memberId),
+				eq(orgMembers.org_id, auth.orgId),
+				isNull(orgMembers.deleted_at)
+			)
+		)
+		.returning();
+
+	if (!updated) error(404, 'Not found');
+
+	return json({ data: updated });
+};
