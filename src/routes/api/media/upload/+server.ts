@@ -10,8 +10,11 @@ import { checkUploadRateLimit } from '$lib/server/media/rateLimiter';
 import { validateMagicBytes, isAllowedMimeType } from '$lib/server/media/mimeCheck';
 import { processImage } from '$lib/server/media/imageProcessor';
 import { r2Upload, r2DeleteObjects } from '$lib/server/media/r2';
+import { sha256Buffer } from '$lib/utils/hash';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const ORG_LOGO_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ORG_LOGO_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const ALLOWED_PURPOSE_TAGS = [
 	'job_photo',
@@ -19,7 +22,8 @@ const ALLOWED_PURPOSE_TAGS = [
 	'after',
 	'marketing_asset',
 	'quote_attachment',
-	'invoice_attachment'
+	'invoice_attachment',
+	'org_logo'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
 
@@ -61,9 +65,6 @@ export const POST: RequestHandler = async (event) => {
 	if (file.size === 0) {
 		return json({ error: 'File is empty' }, { status: 400 });
 	}
-	if (file.size > MAX_FILE_SIZE) {
-		return json({ error: 'File exceeds 20 MB maximum' }, { status: 400 });
-	}
 
 	const parsed = uploadSchema.safeParse({
 		purpose_tag: formData.get('purpose_tag'),
@@ -76,18 +77,39 @@ export const POST: RequestHandler = async (event) => {
 	}
 	const { purpose_tag, job_id, quote_id, invoice_id } = parsed.data;
 
+	const isOrgLogo = purpose_tag === 'org_logo';
+
+	// Size cap: 5 MB for org_logo, 20 MB otherwise
+	const sizeCap = isOrgLogo ? ORG_LOGO_MAX_FILE_SIZE : MAX_FILE_SIZE;
+	if (file.size > sizeCap) {
+		return json(
+			{ error: isOrgLogo ? 'Logo exceeds 5 MB maximum' : 'File exceeds 20 MB maximum' },
+			{ status: 400 }
+		);
+	}
+
 	// Validate purpose_tag → parent FK requirements
-	if (purpose_tag === 'quote_attachment' && !quote_id) {
-		return json({ error: 'quote_id is required for quote_attachment' }, { status: 422 });
-	}
-	if (purpose_tag === 'invoice_attachment' && !invoice_id) {
-		return json({ error: 'invoice_id is required for invoice_attachment' }, { status: 422 });
-	}
-	if (JOB_PURPOSE_TAGS.includes(purpose_tag) && !job_id) {
-		return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
-	}
-	if (!job_id && !quote_id && !invoice_id) {
-		return json({ error: 'At least one of job_id, quote_id, invoice_id is required' }, { status: 422 });
+	if (isOrgLogo) {
+		// Org logo is org-scoped only; admin-gated and must NOT carry a parent FK.
+		if (auth.member.role !== 'admin') {
+			error(403, 'Forbidden: admin role required to upload org logo');
+		}
+		if (job_id || quote_id || invoice_id) {
+			return json({ error: 'org_logo uploads must not include a parent FK' }, { status: 422 });
+		}
+	} else {
+		if (purpose_tag === 'quote_attachment' && !quote_id) {
+			return json({ error: 'quote_id is required for quote_attachment' }, { status: 422 });
+		}
+		if (purpose_tag === 'invoice_attachment' && !invoice_id) {
+			return json({ error: 'invoice_id is required for invoice_attachment' }, { status: 422 });
+		}
+		if (JOB_PURPOSE_TAGS.includes(purpose_tag) && !job_id) {
+			return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
+		}
+		if (!job_id && !quote_id && !invoice_id) {
+			return json({ error: 'At least one of job_id, quote_id, invoice_id is required' }, { status: 422 });
+		}
 	}
 
 	// Validate parent FK belongs to this org
@@ -125,9 +147,17 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'File type not allowed. Accepted: images (JPEG, PNG, WebP, GIF, HEIC) and PDF.' }, { status: 422 });
 	}
 
+	if (isOrgLogo && !ORG_LOGO_ALLOWED_MIME.has(claimedMime)) {
+		return json({ error: 'Logo must be a JPEG, PNG, or WebP image.' }, { status: 422 });
+	}
+
 	const detectedMime = validateMagicBytes(fileBytes, claimedMime);
 	if (!detectedMime) {
 		return json({ error: 'File content does not match the declared file type' }, { status: 422 });
+	}
+
+	if (isOrgLogo && !ORG_LOGO_ALLOWED_MIME.has(detectedMime)) {
+		return json({ error: 'Logo must be a JPEG, PNG, or WebP image.' }, { status: 422 });
 	}
 
 	const isPdf = detectedMime === 'application/pdf';
@@ -206,7 +236,8 @@ export const POST: RequestHandler = async (event) => {
 				media_type: mediaType,
 				mime_type: storedMime,
 				purpose_tag: purpose_tag,
-				scan_status: 'pending'
+				scan_status: 'pending',
+				sha256_hash: sha256Buffer(fileBytes)
 			})
 			.returning();
 	} catch (dbErr) {

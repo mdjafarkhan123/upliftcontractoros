@@ -1,0 +1,1 @@
+ALTER TYPE "public"."media_purpose_tag" ADD VALUE 'org_logo';

@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { Org, OrgMember } from '$lib/types';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 
 const ORG_SAFE_FIELDS = [
 	'id', 'name', 'slug', 'trade_type', 'status', 'plan', 'logo_url', 'primary_color',
@@ -23,8 +24,11 @@ export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	if (!auth) throw error(401, 'Unauthorized');
 
+	const safeOrg = pickSafeOrg(auth.org);
+	safeOrg.logo_url = await resolveLogoUrl(auth.org.logo_url ?? null);
+
 	return json({
-		org: pickSafeOrg(auth.org),
+		org: safeOrg,
 		member: pickSafeMember(auth.member),
 		featureFlags: auth.featureFlags,
 		limits: auth.limits,

@@ -1,5 +1,5 @@
-import { pgTable, pgEnum, uuid, text, integer, timestamp, index } from 'drizzle-orm/pg-core';
-import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import { pgTable, pgEnum, uuid, text, integer, timestamp, index, check } from 'drizzle-orm/pg-core';
+import { sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { jobs } from './04_jobs';
 import { quotes, invoices } from './06_revenue';
@@ -12,7 +12,8 @@ export const mediaPurposeTagEnum = pgEnum('media_purpose_tag', [
 	'after',
 	'marketing_asset',
 	'quote_attachment',
-	'invoice_attachment'
+	'invoice_attachment',
+	'org_logo'
 ]);
 
 export const media = pgTable('media', {
@@ -33,13 +34,32 @@ export const media = pgTable('media', {
 	mime_type: text('mime_type').notNull(),
 	purpose_tag: mediaPurposeTagEnum('purpose_tag').notNull(),
 	scan_status: text('scan_status').notNull().default('pending'),
-	sha256_hash: text('sha256_hash'),
+	sha256_hash: text('sha256_hash').notNull(),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => ({
 	sha256HashIdx: index('idx_media_sha256_hash').on(table.sha256_hash),
-	scanStatusIdx: index('idx_media_scan_status').on(table.scan_status)
+	scanStatusIdx: index('idx_media_scan_status').on(table.scan_status),
+	exactlyOneParent: check(
+		'media_exactly_one_parent',
+		sql`(
+			(
+				${table.purpose_tag} = 'org_logo'
+				AND ${table.job_id} IS NULL
+				AND ${table.quote_id} IS NULL
+				AND ${table.invoice_id} IS NULL
+			)
+			OR (
+				${table.purpose_tag} <> 'org_logo'
+				AND (
+					(${table.job_id} IS NOT NULL)::int +
+					(${table.quote_id} IS NOT NULL)::int +
+					(${table.invoice_id} IS NOT NULL)::int = 1
+				)
+			)
+		)`
+	)
 }));
 
 export type Media = InferSelectModel<typeof media>;
