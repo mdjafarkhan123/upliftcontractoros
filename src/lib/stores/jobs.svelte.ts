@@ -3,9 +3,12 @@ import type { JobListItem, JobsFilters } from '$lib/types/jobs';
 
 type Status = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
 
+type FilterContext = { contact_id: string; contact_name: string } | null;
+
 type CacheEntry = {
 	items: JobListItem[];
 	nextCursor: string | null;
+	filterContext: FilterContext;
 	fetchedAt: number;
 };
 
@@ -18,13 +21,14 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: JobsFilters): string {
-	return `${f.status}|${f.assignedTo ?? ''}`;
+	return `${f.status}|${f.assignedTo ?? ''}|${f.contactId ?? ''}`;
 }
 
 function buildParams(f: JobsFilters, cursor: string | null): URLSearchParams {
 	const params = new URLSearchParams();
 	if (f.status !== 'all') params.set('status', f.status);
 	if (f.assignedTo) params.set('assigned_to', f.assignedTo);
+	if (f.contactId) params.set('contact_id', f.contactId);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }
@@ -33,10 +37,14 @@ async function fetchPage(
 	f: JobsFilters,
 	cursor: string | null,
 	signal: AbortSignal
-): Promise<{ items: JobListItem[]; next_cursor: string | null }> {
+): Promise<{ items: JobListItem[]; next_cursor: string | null; filter_context: FilterContext }> {
 	const res = await fetch(`/api/jobs?${buildParams(f, cursor).toString()}`, { signal });
 	if (!res.ok) throw new Error('Failed to load jobs');
-	return (await res.json()) as { items: JobListItem[]; next_cursor: string | null };
+	return (await res.json()) as {
+		items: JobListItem[];
+		next_cursor: string | null;
+		filter_context: FilterContext;
+	};
 }
 
 export const jobsStore = {
@@ -45,6 +53,9 @@ export const jobsStore = {
 	},
 	get nextCursor(): string | null {
 		return cache.get(currentKey)?.nextCursor ?? null;
+	},
+	get filterContext(): FilterContext {
+		return cache.get(currentKey)?.filterContext ?? null;
 	},
 	get status() {
 		return status;
@@ -80,6 +91,7 @@ export const jobsStore = {
 			cache.set(key, {
 				items: body.items,
 				nextCursor: body.next_cursor,
+				filterContext: body.filter_context,
 				fetchedAt: Date.now()
 			});
 			status = 'ready';
@@ -103,6 +115,7 @@ export const jobsStore = {
 			cache.set(key, {
 				items: [...cached.items, ...body.items],
 				nextCursor: body.next_cursor,
+				filterContext: cached.filterContext,
 				fetchedAt: Date.now()
 			});
 		} catch {

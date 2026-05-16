@@ -78,10 +78,11 @@
 
 	const optedOut = $derived(contact?.sms_opt_out === true);
 	const isMissedCallChannel = $derived(conversation?.channel === 'missed_call');
+	const isWebchatChannel = $derived(conversation?.channel === 'webchat');
 
 	const composerDisabledReason = $derived.by(() => {
 		if (!canSend) return 'You do not have permission to send messages.';
-		if (optedOut) return 'Contact has opted out of SMS.';
+		if (optedOut && !isWebchatChannel) return 'Contact has opted out of SMS.';
 		if (isMissedCallChannel) return 'Use a regular SMS conversation to reply.';
 		return undefined;
 	});
@@ -200,13 +201,13 @@
 
 			<!-- Composer + banners -->
 			<div class="shrink-0 border-t border-border bg-card/60 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur sm:px-4">
-				{#if optedOut}
+				{#if optedOut && !isWebchatChannel}
 					<div class="mb-2">
 						<OptOutBanner />
 					</div>
 				{/if}
 				<Composer
-					disabled={optedOut || isMissedCallChannel}
+					disabled={(optedOut && !isWebchatChannel) || isMissedCallChannel}
 					disabledReason={composerDisabledReason}
 					canSend={canSend}
 					onSend={handleSend}

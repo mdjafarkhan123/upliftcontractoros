@@ -17,6 +17,7 @@ export type Org = {
 	plan: PlanName;
 	integration_status: Record<string, unknown>;
 	feature_overrides_updated_at: string | null;
+	widget_token: string;
 } & FeatureFlags &
 	OrgLimits;
 

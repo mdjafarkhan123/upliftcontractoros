@@ -1,4 +1,4 @@
-import type { FeatureFlagKey } from '$lib/types';
+import type { FeatureFlagKey, OrgLimits } from '$lib/types';
 
 export type FeatureFlagDef = {
 	key: FeatureFlagKey;
@@ -70,6 +70,11 @@ export const FEATURE_FLAG_GROUPS: FeatureFlagGroup[] = [
 				label: 'Missed call textback',
 				description: 'Auto-reply when a tenant misses an inbound call.',
 				requires: 'twilio'
+			},
+			{
+				key: 'feature_webchat',
+				label: 'Web chat widget',
+				description: 'Embeddable website chat widget with async messaging.'
 			}
 		]
 	},
@@ -179,8 +184,23 @@ export const FEATURE_FLAG_GROUPS: FeatureFlagGroup[] = [
 	}
 ];
 
+// Precomputed key arrays — used by hot paths (dirty tracking, seeding) so
+// they live at module scope and never reallocate per component instance.
+export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = FEATURE_FLAG_GROUPS.flatMap((g) =>
+	g.flags.map((f) => f.key)
+);
+
+export const LIMIT_KEYS: readonly (keyof OrgLimits)[] = [
+	'max_team_members',
+	'max_monthly_sms',
+	'max_bulk_sms_per_day',
+	'max_ai_requests_per_month',
+	'max_storage_gb',
+	'max_automation_workflows'
+];
+
 export type LimitDef = {
-	key: keyof import('$lib/types').OrgLimits;
+	key: keyof OrgLimits;
 	label: string;
 	description: string;
 	unit: string;

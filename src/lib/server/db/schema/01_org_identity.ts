@@ -1,4 +1,5 @@
 import { pgTable, pgEnum, uuid, text, boolean, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 export interface IntegrationStatus {
@@ -62,6 +63,10 @@ export const organizations = pgTable('organizations', {
 	feature_api_access: boolean('feature_api_access').notNull().default(false),
 	feature_webhooks: boolean('feature_webhooks').notNull().default(false),
 	feature_client_portal: boolean('feature_client_portal').notNull().default(false),
+	feature_webchat: boolean('feature_webchat').notNull().default(false),
+
+	// Widget token: generated once, immutable, used to identify the org from the public widget
+	widget_token: uuid('widget_token').notNull().default(sql`gen_random_uuid()`).unique(),
 
 	max_team_members: integer('max_team_members').notNull().default(3),
 	max_monthly_sms: integer('max_monthly_sms').notNull().default(500),

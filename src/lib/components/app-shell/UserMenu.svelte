@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { User, Settings, LogOut, ChevronDown } from '@lucide/svelte';
+	import { UserCircle, Building2, Settings, LogOut, ChevronDown } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import type { OrgMember } from '$lib/types';
@@ -42,14 +42,25 @@
 			<p class="truncate text-xs text-muted-foreground">{member.email}</p>
 		</div>
 		<DropdownMenu.Separator />
-		<DropdownMenu.Item onSelect={() => goto('/profile')}>
-			<User class="h-4 w-4" />
-			Profile
-		</DropdownMenu.Item>
-		<DropdownMenu.Item onSelect={() => goto('/settings')}>
-			<Settings class="h-4 w-4" />
-			Settings
-		</DropdownMenu.Item>
+		<DropdownMenu.Group>
+			<DropdownMenu.Label
+				class="px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+			>
+				Settings
+			</DropdownMenu.Label>
+			<DropdownMenu.Item onSelect={() => goto('/settings/account')}>
+				<UserCircle class="h-4 w-4" />
+				Account
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={() => goto('/settings/org')}>
+				<Building2 class="h-4 w-4" />
+				Business
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={() => goto('/settings')}>
+				<Settings class="h-4 w-4" />
+				Settings
+			</DropdownMenu.Item>
+		</DropdownMenu.Group>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item variant="destructive" onSelect={logout}>
 			<LogOut class="h-4 w-4" />

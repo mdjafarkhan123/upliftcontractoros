@@ -21,7 +21,7 @@
 			count: counts.opportunities,
 			icon: GitBranch
 		},
-		{ label: 'Jobs', href: `/jobs?contact=${contactId}`, count: counts.jobs, icon: Briefcase },
+		{ label: 'Jobs', href: `/jobs?contact_id=${contactId}`, count: counts.jobs, icon: Briefcase },
 		{ label: 'Quotes', href: `/quotes?contact=${contactId}`, count: counts.quotes, icon: FileText },
 		{
 			label: 'Invoices',

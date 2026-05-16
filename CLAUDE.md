@@ -10,40 +10,52 @@ Read this file completely before starting any task.
 Domain-specific reference skills live in `.claude/skills/`.
 Load them when relevant — do not load all at once.
 
-| Working on                                                 | Load skill                          |
-| ---------------------------------------------------------- | ----------------------------------- |
-| Entity CRUD, status transitions, lifecycle rules,          | `contractor-crm`                    |
-| financial operations, contact dedup, quote/invoice flows,  | → `references/business-rules.md`    |
-| job creation, pipeline stages, soft delete, relationships  |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Permission checks, auth middleware, RLS policies, JWT,     | `contractor-crm`                    |
-| role templates, /jafar, team member CRUD, member           | → `references/permissions-auth.md`  |
-| deactivation, navigation rendering                         |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| hooks.server.ts, event.locals.auth, /api/session,          | `contractor-crm`                    |
-| feature flags, plan quotas, integration_status, feature    | → `references/auth-session.md`      |
-| guards, status poll, setup banner                          |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Outbox events, BullMQ workers, automation sequences,       | `contractor-crm`                    |
-| Realtime, notification dispatch, idempotency keys,         | → `references/automation-events.md` |
-| webhook handlers (Twilio, Stripe), event emission          |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Any .svelte UI, styling, design, colours, layout           | `contractor-crm-design-reference`   |
-| ---------------------------------------------------------- | ------------------                  |
-| Any .svelte file, \*.svelte.ts, +page.ts, +layout,         | `contractor-crm-svelte-ui`          |
-| Shadcn Svelte, navigation, Realtime in UI, client auth     |                                     |
-| guard, cache stores in $lib/stores/                        |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Any tabbed/filtered list page (contacts, jobs, invoices,   | `contractor-crm-svelte-ui`          |
-| quotes, appointments, etc.) — per-key cache, SWR, empty    | → `references/list-stores.md`       |
-| state, no skeleton flash on tab switch                     |                                     |
+### Core Business & Architecture (`contractor-crm`)
 
-The `contractor-crm` skill covers business rules, permission matrix,
-transaction patterns, and automation architecture. Its SKILL.md has
-universal rules; read only the specific reference file for your task.
-Do not reconstruct business rules from memory — always consult the skill.
+| Working on...                                     | Reference File                                |
+| ------------------------------------------------- | --------------------------------------------- |
+| **Universal Rules** & Transaction Patterns        | `references/business-rules.md`                |
+| **Permissions**, Auth Middleware, RLS, /jafar     | `references/permissions-auth.md`              |
+| **Auth Session**, hooks.server.ts, feature flags  | `references/auth-session.md`                  |
+| **Automation Events** catalog & payload contracts | `references/automation-events.md`             |
+| **Outbox Infrastructure** & worker claim loops    | `references/outbox-worker.md`                 |
+| **BullMQ Workers**, idempotency, Twilio/Stripe    | `references/bullmq-workers.md`                |
+| **Event Flows** (missed call, opp won, payment)   | `references/event-flows.md`                   |
+| **Schema Principles** & Enum Definitions          | `references/00-schema-principles-enums.md`    |
+| **Org Identity**, onboarding, plan quotas         | `references/01-org-identity.md`               |
+| **Contacts**, leads, customers, SMS opt-out       | `references/02-contacts.md`                   |
+| **Pipeline** stages, opportunities, deals         | `references/03-pipeline.md`                   |
+| **Jobs**, service delivery, scope of work         | `references/04-jobs.md`                       |
+| **Communication**, inbox, messaging, Twilio       | `references/05-communication.md`              |
+| **Quotes**, quote items, templates                | `references/06-revenue-quotes.md`             |
+| **Invoices**, invoice items, payments, Stripe     | `references/07-revenue-invoices.md`           |
+| **Appointments**, scheduling, reminders           | `references/08.appoinments.md`                |
+| **Reputation**, reviews, feedback                 | `references/09.reputation.md`                 |
+| **Files & Media**, R2 uploads                     | `references/10-files-and-media.md`            |
+| **Systems & Automations**, activity logs          | `references/11-growth-automations-systems.md` |
+| **Cross-Domain Map**, multi-table queries         | `references/12-cross-domain-map.md`           |
 
-**Never assume schema structure from memory. Always read the relevant skill file first.**
+### UI Design & Aesthetics (`contractor-crm-design-reference`)
+
+| Working on...                                   | Reference File                        |
+| ----------------------------------------------- | ------------------------------------- |
+| **Color System**, CSS variables, app.css        | `references/color-system.md`          |
+| **Component Aesthetics**, cards, depth, buttons | `references/component-aesthetics.md`  |
+| **Layout Patterns**, sidebar, sticky headers    | `references/layout-patterns.md`       |
+| **Typography & Motion**, fonts, transitions     | `references/typography-and-motion.md` |
+
+### Svelte & Frontend Patterns (`contractor-crm-svelte-ui`)
+
+| Working on...                                    | Reference File                       |
+| ------------------------------------------------ | ------------------------------------ |
+| **Runes & Reactivity**, $state, $props, $derived | `references/runes-and-reactivity.md` |
+| **Data Patterns**, forms, Realtime, mutations    | `references/data-patterns.md`        |
+| **Shadcn Svelte** primitives & Tailwind usage    | `references/shadcn-svelte.md`        |
+| **List Stores**, caching, SWR, pagination        | `references/list-stores.md`          |
+| **Navigation & Auth**, guards, permission checks | `references/navigation-and-auth.md`  |
+| **Shared Components**, Toasts, Skeletons         | `references/shared-components.md`    |
+
+The `contractor-crm` skill covers business rules and architecture. Its SKILL.md has universal rules; read only the specific reference file for your task. **Never assume schema structure from memory. Always read the relevant skill file first.**
 
 ---
 

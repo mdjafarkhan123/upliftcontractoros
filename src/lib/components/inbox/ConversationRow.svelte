@@ -16,7 +16,11 @@
 	);
 
 	const channelTint = $derived(
-		c.channel === 'missed_call' ? 'text-amber-500' : 'text-primary'
+		c.channel === 'missed_call'
+			? 'text-amber-500'
+			: c.channel === 'webchat'
+				? 'text-emerald-500'
+				: 'text-primary'
 	);
 
 	const initials = $derived(

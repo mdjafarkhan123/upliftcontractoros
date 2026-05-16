@@ -42,6 +42,16 @@
 		--input: 215 28% 17%;
 		--ring: 147 41% 56%; /* #5fbd92 — brand light focus ring */
 
+		/* Button surfaces & edges — gradient/border shades for raised buttons */
+		--primary-deep: 150 57% 27%; /* gradient end for primary button */
+		--primary-edge: 150 57% 22%; /* 1px border under primary button */
+		--destructive-deep: 0 72% 44%; /* gradient end for destructive button */
+		--destructive-edge: 0 72% 38%; /* 1px border under destructive button */
+		--surface-raised: 215 28% 16%; /* secondary button fill */
+		--surface-raised-hover: 215 28% 19%; /* secondary button hover fill */
+		--surface-raised-border: 215 28% 22%; /* secondary button border */
+		--surface-raised-border-hover: 215 28% 28%; /* secondary button hover border */
+
 		/* Radius */
 		--radius: 0.5rem;
 
@@ -85,6 +95,16 @@
 		--border: 214 32% 91%;
 		--input: 214 32% 91%;
 		--ring: 150 57% 31%;
+
+		/* Button surfaces & edges — light mode */
+		--primary-deep: 150 57% 27%;
+		--primary-edge: 150 57% 22%;
+		--destructive-deep: 0 72% 44%;
+		--destructive-edge: 0 72% 38%;
+		--surface-raised: 210 40% 96%;
+		--surface-raised-hover: 210 40% 92%;
+		--surface-raised-border: 214 32% 85%;
+		--surface-raised-border-hover: 214 32% 78%;
 	}
 
 	* {

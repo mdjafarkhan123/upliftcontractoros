@@ -122,6 +122,52 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 	if (!contact) return json({ error: 'Contact not found.' }, { status: 404 });
 
+	// Webchat channel — no Twilio, just insert outbound message and emit message.sent
+	if (conv.channel === 'webchat') {
+		const result = await db.transaction(async (tx) => {
+			const [inserted] = await tx
+				.insert(messages)
+				.values({
+					org_id: auth.orgId,
+					conversation_id: conv.id,
+					direction: 'outbound',
+					channel: 'webchat',
+					body: parsed.body,
+					is_internal_note: false,
+					status: 'sent',
+					sent_by: auth.member.id,
+					sent_at: new Date()
+				})
+				.returning();
+
+			await tx
+				.update(conversations)
+				.set({ last_message_at: new Date(), updated_at: new Date() })
+				.where(eq(conversations.id, conv.id));
+
+			await tx.insert(outboxEvents).values({
+				org_id: auth.orgId,
+				event_type: 'message.sent',
+				resource_type: 'message',
+				resource_id: inserted.id,
+				payload: {
+					message_id: inserted.id,
+					conversation_id: conv.id,
+					contact_id: contact.id,
+					org_id: auth.orgId,
+					channel: 'webchat',
+					body: parsed.body,
+					sent_by: auth.member.id
+				},
+				idempotency_key: `message.sent:${inserted.id}`
+			});
+
+			return inserted;
+		});
+
+		return json({ data: { message: result } }, { status: 201 });
+	}
+
 	// Internal notes — never touch Twilio, never emit message.sent, excluded from unread
 	if (parsed.is_internal_note) {
 		const [inserted] = await db

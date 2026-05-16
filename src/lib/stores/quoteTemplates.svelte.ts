@@ -8,6 +8,13 @@ let error = $state<string | null>(null);
 let fetchedAt = 0;
 const TTL_MS = 60_000;
 
+async function fetchList(): Promise<QuoteTemplateListItem[]> {
+	const res = await fetch('/api/quote-templates');
+	if (!res.ok) throw new Error('Failed to load templates');
+	const body = (await res.json()) as { items: QuoteTemplateListItem[] };
+	return body.items;
+}
+
 export const quoteTemplatesStore = {
 	get items() {
 		return items;
@@ -24,16 +31,28 @@ export const quoteTemplatesStore = {
 		status = items.length === 0 ? 'loading' : 'ready';
 		error = null;
 		try {
-			const res = await fetch('/api/quote-templates');
-			if (!res.ok) throw new Error('Failed to load templates');
-			const body = (await res.json()) as { items: QuoteTemplateListItem[] };
-			items = body.items;
+			items = await fetchList();
 			fetchedAt = Date.now();
 			status = 'ready';
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load templates';
 			if (items.length === 0) status = 'error';
 		}
+	},
+
+	async refetch(): Promise<void> {
+		try {
+			items = await fetchList();
+			fetchedAt = Date.now();
+			status = 'ready';
+			error = null;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load templates';
+		}
+	},
+
+	removeLocal(id: string): void {
+		items = items.filter((t) => t.id !== id);
 	},
 
 	invalidate(): void {

@@ -1,7 +1,7 @@
 ---
 name: contractor-crm-design-reference
 description: >
-  Premium SaaS UI design system for the Contractor Growth OS — colors, typography,
+  Modern,Premium, High End SaaS UI design system for the Contractor Growth OS — colors, typography,
   component aesthetics, motion, and layout patterns. Load this skill whenever you
   are working on ANY visual aspect of the UI: styling components, writing Tailwind
   classes, updating app.css, building page layouts, designing cards or lists,
@@ -14,22 +14,22 @@ description: >
 
 # Design Reference — Contractor Growth OS
 
-> Target aesthetic: **Linear · Vercel · Resend** — dark-first, crisp, information-dense, premium.
+> Target aesthetic: **Modern, Permium, High-End like: Supabase, Vercel etc** — Dark first then light mode, crisp, information-dense, premium, high end.
 > Stack: Svelte 5 · SvelteKit · shadcn-svelte · Tailwind CSS
 > Mode: **Dark-first**. Light mode is secondary. Base all designs on the dark palette.
-> Never use raw hex values or hardcoded colours — always use the semantic tokens defined here.
+> Never use raw hex values or hardcoded colours but if needs be then you can use but add that value as varibale with proper naming in 'app.css' — always use the semantic tokens defined.
 
 ---
 
 ## Reference Files — Read Before Writing
 
-| Task | Read first |
-|---|---|
-| Setting up `app.css`, color tokens, CSS variables | `references/color-system.md` |
-| Typography — Geist font, scale, hierarchy | `references/typography-and-motion.md` |
-| Motion, transitions, skeleton shimmer, animations | `references/typography-and-motion.md` |
-| Card depth, surface layers, dialog blur, badge styles | `references/component-aesthetics.md` |
-| Desktop sidebar, sticky headers, command palette, page grids | `references/layout-patterns.md` |
+| Task                                                         | Read first                            |
+| ------------------------------------------------------------ | ------------------------------------- |
+| Setting up `app.css`, color tokens, CSS variables            | `references/color-system.md`          |
+| Typography — Geist font, scale, hierarchy                    | `references/typography-and-motion.md` |
+| Motion, transitions, skeleton shimmer, animations            | `references/typography-and-motion.md` |
+| Card depth, surface layers, dialog blur, badge styles        | `references/component-aesthetics.md`  |
+| Desktop sidebar, sticky headers, command palette, page grids | `references/layout-patterns.md`       |
 
 When in doubt, read `references/color-system.md` first — every other file depends on it.
 

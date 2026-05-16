@@ -7,7 +7,7 @@
 	import QuoteListItem from '$lib/components/quotes/QuoteListItem.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import type { QuotesGroup, QuotesStatusChip } from '$lib/types/quotes';
-	import { FileText, Plus } from '@lucide/svelte';
+	import { FileText, LayoutTemplate, Plus } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 
 	let group = $state<QuotesGroup>('all');
@@ -38,6 +38,9 @@
 
 <PageWrapper title="Quotes" subtitle="Drafts, sent, viewed, accepted">
 	{#snippet actions()}
+		<Button variant="outline" onclick={() => goto('/quotes/templates')}>
+			<LayoutTemplate class="mr-1 h-4 w-4" />Templates
+		</Button>
 		<Button onclick={() => goto('/quotes/new')}>
 			<Plus class="mr-1 h-4 w-4" />New quote
 		</Button>

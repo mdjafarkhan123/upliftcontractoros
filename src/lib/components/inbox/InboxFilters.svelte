@@ -22,5 +22,6 @@
 		<Tabs.Trigger value="unread">Unread</Tabs.Trigger>
 		<Tabs.Trigger value="sms">SMS</Tabs.Trigger>
 		<Tabs.Trigger value="missed_calls">Missed Calls</Tabs.Trigger>
+		<Tabs.Trigger value="webchat">Web Chat</Tabs.Trigger>
 	</Tabs.List>
 </Tabs.Root>

@@ -82,11 +82,21 @@ export type QuoteTemplateListItem = {
 	name: string;
 	description: string | null;
 	line_item_count: number;
+	estimated_subtotal: string;
 	created_at: string;
+	updated_at: string;
+	created_by_name: string | null;
 };
 
 export type QuoteTemplateDetail = QuoteTemplateListItem & {
 	line_items: QuoteLineItemRow[];
+};
+
+export type QuoteTemplateLineDraft = {
+	client_id: string;
+	description: string;
+	quantity: string;
+	unit_price: string;
 };
 
 export type PublicQuoteView = {

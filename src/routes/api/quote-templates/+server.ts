@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { quoteTemplateLineItems, quoteTemplates } from '$lib/server/db/schema';
+import { orgMembers, quoteTemplateLineItems, quoteTemplates } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canManageTemplates, canViewTemplates } from '$lib/server/quotes/permissions';
 import { createTemplateSchema } from '$lib/server/quotes/schemas';
@@ -19,16 +19,22 @@ export const GET: RequestHandler = async (event) => {
 			name: quoteTemplates.name,
 			description: quoteTemplates.description,
 			created_at: quoteTemplates.created_at,
-			line_item_count: sql<number>`(SELECT COUNT(*)::int FROM quote_template_line_items WHERE template_id = ${quoteTemplates.id} AND deleted_at IS NULL)`
+			updated_at: quoteTemplates.updated_at,
+			created_by_name: orgMembers.full_name,
+			line_item_count: sql<number>`(SELECT COUNT(*)::int FROM quote_template_line_items WHERE template_id = ${quoteTemplates.id} AND deleted_at IS NULL)`,
+			estimated_subtotal: sql<string>`COALESCE((SELECT SUM(total)::numeric(12,2) FROM quote_template_line_items WHERE template_id = ${quoteTemplates.id} AND deleted_at IS NULL), 0)::text`
 		})
 		.from(quoteTemplates)
-		.where(
-			and(eq(quoteTemplates.org_id, auth.orgId), isNull(quoteTemplates.deleted_at))
-		)
-		.orderBy(desc(quoteTemplates.created_at));
+		.leftJoin(orgMembers, eq(orgMembers.id, quoteTemplates.created_by))
+		.where(and(eq(quoteTemplates.org_id, auth.orgId), isNull(quoteTemplates.deleted_at)))
+		.orderBy(desc(quoteTemplates.updated_at));
 
 	return json({
-		items: rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }))
+		items: rows.map((r) => ({
+			...r,
+			created_at: r.created_at.toISOString(),
+			updated_at: r.updated_at.toISOString()
+		}))
 	});
 };
 

@@ -75,12 +75,14 @@
 		if (filter === 'unread') return 'All caught up';
 		if (filter === 'sms') return 'No SMS conversations yet';
 		if (filter === 'missed_calls') return 'No missed calls';
+		if (filter === 'webchat') return 'No web chat conversations yet';
 		return 'No conversations yet';
 	});
 
 	const emptyDescription = $derived.by(() => {
 		if (search.trim()) return 'Try a different name.';
 		if (filter === 'unread') return 'You have no unread messages.';
+		if (filter === 'webchat') return 'Web chat conversations from your website will appear here.';
 		return 'New conversations will appear here as customers reach out.';
 	});
 </script>

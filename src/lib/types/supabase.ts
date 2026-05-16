@@ -448,6 +448,8 @@ export type Database = {
         Row: {
           assigned_to: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
+          closed_at: string | null
+          closed_reason: string | null
           contact_id: string
           created_at: string
           deleted_at: string | null
@@ -463,6 +465,8 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
+          closed_at?: string | null
+          closed_reason?: string | null
           contact_id: string
           created_at?: string
           deleted_at?: string | null
@@ -478,6 +482,8 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           channel?: Database["public"]["Enums"]["conversation_channel"]
+          closed_at?: string | null
+          closed_reason?: string | null
           contact_id?: string
           created_at?: string
           deleted_at?: string | null
@@ -899,6 +905,8 @@ export type Database = {
           purpose_tag: Database["public"]["Enums"]["media_purpose_tag"]
           quote_id: string | null
           r2_key: string
+          scan_status: string
+          sha256_hash: string
           thumbnail_key: string | null
           updated_at: string
           uploaded_by: string | null
@@ -918,6 +926,8 @@ export type Database = {
           purpose_tag: Database["public"]["Enums"]["media_purpose_tag"]
           quote_id?: string | null
           r2_key: string
+          scan_status?: string
+          sha256_hash: string
           thumbnail_key?: string | null
           updated_at?: string
           uploaded_by?: string | null
@@ -937,6 +947,8 @@ export type Database = {
           purpose_tag?: Database["public"]["Enums"]["media_purpose_tag"]
           quote_id?: string | null
           r2_key?: string
+          scan_status?: string
+          sha256_hash?: string
           thumbnail_key?: string | null
           updated_at?: string
           uploaded_by?: string | null
@@ -1418,6 +1430,7 @@ export type Database = {
           feature_stripe_payments: boolean
           feature_team_management: boolean
           feature_two_way_sms: boolean
+          feature_webchat: boolean
           feature_webhooks: boolean
           id: string
           integration_status: Json
@@ -1445,6 +1458,7 @@ export type Database = {
           trade_type: string
           twilio_phone_number: string
           updated_at: string
+          widget_token: string
           zip: string | null
         }
         Insert: {
@@ -1475,6 +1489,7 @@ export type Database = {
           feature_stripe_payments?: boolean
           feature_team_management?: boolean
           feature_two_way_sms?: boolean
+          feature_webchat?: boolean
           feature_webhooks?: boolean
           id?: string
           integration_status?: Json
@@ -1502,6 +1517,7 @@ export type Database = {
           trade_type: string
           twilio_phone_number: string
           updated_at?: string
+          widget_token?: string
           zip?: string | null
         }
         Update: {
@@ -1532,6 +1548,7 @@ export type Database = {
           feature_stripe_payments?: boolean
           feature_team_management?: boolean
           feature_two_way_sms?: boolean
+          feature_webchat?: boolean
           feature_webhooks?: boolean
           id?: string
           integration_status?: Json
@@ -1559,6 +1576,7 @@ export type Database = {
           trade_type?: string
           twilio_phone_number?: string
           updated_at?: string
+          widget_token?: string
           zip?: string | null
         }
         Relationships: [
@@ -2311,6 +2329,111 @@ export type Database = {
           },
         ]
       }
+      webchat_sessions: {
+        Row: {
+          contact_id: string
+          conversation_id: string
+          created_at: string
+          id: string
+          last_active_at: string
+          org_id: string
+          session_token: string
+          user_agent_hash: string | null
+          visitor_ip_hash: string | null
+        }
+        Insert: {
+          contact_id: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          last_active_at?: string
+          org_id: string
+          session_token?: string
+          user_agent_hash?: string | null
+          visitor_ip_hash?: string | null
+        }
+        Update: {
+          contact_id?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          last_active_at?: string
+          org_id?: string
+          session_token?: string
+          user_agent_hash?: string | null
+          visitor_ip_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_sessions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webchat_widgets: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          domain_allowlist: string[]
+          id: string
+          intro_message: string | null
+          is_active: boolean
+          offline_message: string | null
+          org_id: string
+          updated_at: string
+          webchat_mode: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          domain_allowlist?: string[]
+          id?: string
+          intro_message?: string | null
+          is_active?: boolean
+          offline_message?: string | null
+          org_id: string
+          updated_at?: string
+          webchat_mode?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          domain_allowlist?: string[]
+          id?: string
+          intro_message?: string | null
+          is_active?: boolean
+          offline_message?: string | null
+          org_id?: string
+          updated_at?: string
+          webchat_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_widgets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2375,6 +2498,7 @@ export type Database = {
         | "marketing_asset"
         | "quote_attachment"
         | "invoice_attachment"
+        | "org_logo"
       media_type: "photo" | "pdf" | "attachment"
       member_role: "admin" | "manager" | "member"
       message_channel: "sms" | "missed_call" | "email" | "webchat"
@@ -2594,6 +2718,7 @@ export const Constants = {
         "marketing_asset",
         "quote_attachment",
         "invoice_attachment",
+        "org_logo",
       ],
       media_type: ["photo", "pdf", "attachment"],
       member_role: ["admin", "manager", "member"],

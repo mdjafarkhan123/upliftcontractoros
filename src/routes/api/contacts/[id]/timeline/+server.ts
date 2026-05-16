@@ -1,19 +1,34 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull, desc, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contactNotes, orgMembers, contacts } from '$lib/server/db/schema';
+import { contacts } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-
-const PAGE_SIZE = 25;
+import {
+	fetchTimelineRows,
+	TIMELINE_PAGE_SIZE
+} from '$lib/server/timeline/buildQuery';
+import { mapRowToEntry } from '$lib/server/timeline/registry';
+import {
+	decodeCursor,
+	encodeCursor,
+	type RawTimelineRow,
+	type TimelineEntry
+} from '$lib/server/timeline/types';
 
 /**
- * Timeline returns chronologically ordered events for a contact.
+ * Contact activity timeline.
  *
- * Chapter 5 ships a single source (`contact_notes`) but the response shape and
- * compound cursor `(created_at, source_table, id)` are forward-compatible with
- * additional sources (messages, opportunities, quote events, etc.) which will
- * be unioned in later chapters.
+ * Server-side flow:
+ *   1. union query across all 11+ sources (one branch per discrete event,
+ *      so a quote can emit up to 4 rows over its lifecycle)
+ *   2. order by (effective_at desc, source_table desc, row_id desc)
+ *   3. overfetch TIMELINE_FETCH_LIMIT (+ 1 lookahead in SQL)
+ *   4. map each raw row through the timeline registry → TimelineEntry
+ *   5. slice to TIMELINE_PAGE_SIZE
+ *
+ * The client renders icon_key / tone / description / link verbatim.
+ * It must NOT re-derive business semantics from the `type` field.
  */
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -33,65 +48,41 @@ export const GET: RequestHandler = async (event) => {
 		.limit(1);
 	if (!exists) error(404, 'Contact not found');
 
-	const cursor = event.url.searchParams.get('cursor');
-	// cursor: "<iso>|<source_table>|<id>"
-	const conditions: SQL[] = [
-		eq(contactNotes.org_id, auth.orgId),
-		eq(contactNotes.contact_id, event.params.id),
-		isNull(contactNotes.deleted_at)
-	];
-
-	if (cursor) {
-		const [createdAt, source, id] = cursor.split('|');
-		if (createdAt && id) {
-			// Compound ordering: (created_at DESC, source_table ASC, id DESC).
-			// Single-source today; preserved for forward compatibility.
-			const clause = or(
-				lt(contactNotes.created_at, new Date(createdAt)),
-				and(
-					eq(contactNotes.created_at, new Date(createdAt)),
-					sql`'contact_notes' > ${source ?? ''}`
-				),
-				and(
-					eq(contactNotes.created_at, new Date(createdAt)),
-					sql`'contact_notes' = ${source ?? 'contact_notes'}`,
-					lt(contactNotes.id, id)
-				)
-			);
-			if (clause) conditions.push(clause);
-		}
+	const cursorParam = event.url.searchParams.get('cursor');
+	let cursor = null;
+	if (cursorParam) {
+		cursor = decodeCursor(cursorParam);
+		// Malformed cursors must fail loud — silently dropping the cursor would
+		// re-serve the first page and produce confusing duplicate entries.
+		if (!cursor) error(400, 'Invalid cursor');
 	}
 
-	const rows = await db
-		.select({
-			id: contactNotes.id,
-			content: contactNotes.content,
-			author_id: contactNotes.author_id,
-			author_name: orgMembers.full_name,
-			created_at: contactNotes.created_at
-		})
-		.from(contactNotes)
-		.leftJoin(orgMembers, eq(orgMembers.id, contactNotes.author_id))
-		.where(and(...conditions))
-		.orderBy(desc(contactNotes.created_at), desc(contactNotes.id))
-		.limit(PAGE_SIZE + 1);
+	const { rows, hasMore } = await fetchTimelineRows({
+		orgId: auth.orgId,
+		contactId: event.params.id,
+		cursor,
+		includePrivateFeedback: auth.member.can_view_negative_feedback === true
+	});
 
-	const hasMore = rows.length > PAGE_SIZE;
-	const items = (hasMore ? rows.slice(0, PAGE_SIZE) : rows).map((r) => ({
-		id: r.id,
-		source_table: 'contact_notes' as const,
-		type: 'note' as const,
-		created_at: r.created_at,
-		data: {
-			content: r.content,
-			author_id: r.author_id,
-			author_name: r.author_name
-		}
-	}));
+	const items: TimelineEntry[] = [];
+	let lastRawRow: RawTimelineRow | null = null;
+	for (const row of rows) {
+		if (items.length >= TIMELINE_PAGE_SIZE) break;
+		const entry = mapRowToEntry(row);
+		if (!entry) continue;
+		items.push(entry);
+		lastRawRow = row;
+	}
 
-	const last = items[items.length - 1];
-	const nextCursor =
-		hasMore && last ? `${last.created_at.toISOString()}|${last.source_table}|${last.id}` : null;
+	const filledPage = items.length >= TIMELINE_PAGE_SIZE;
+	const next_cursor =
+		filledPage && lastRawRow && (hasMore || rows.length > items.length)
+			? encodeCursor({
+					effective_at: lastRawRow.effective_at.toISOString(),
+					source_table: lastRawRow.source_table,
+					row_id: lastRawRow.row_id
+				})
+			: null;
 
-	return json({ items, next_cursor: nextCursor });
+	return json({ items, next_cursor });
 };

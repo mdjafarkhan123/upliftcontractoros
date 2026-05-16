@@ -1,11 +1,22 @@
 import { redirect } from '@sveltejs/kit';
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, RequestEvent } from '@sveltejs/kit';
 import { createServerClient } from '$lib/server/auth/supabase';
 import { getJafarSession } from '$lib/server/auth/jafarSession';
-import { loadAuthContext } from '$lib/server/auth/loadAuthContext';
+import { loadAuthContext, type AuthContext } from '$lib/server/auth/loadAuthContext';
+import {
+	applyCorsHeaders,
+	buildCorsHeaders,
+	resolveAllowedOrigin
+} from '$lib/server/webchat/cors';
 
-const PUBLIC_PREFIXES = ['/auth', '/jafar', '/q/', '/api/admin', '/api/webhooks', '/api/jafar'];
+const PUBLIC_PREFIXES = ['/auth', '/jafar', '/q/', '/api/admin', '/api/webhooks', '/api/jafar', '/api/webchat'];
 const PUBLIC_EXACT = new Set<string>(['/jafar']);
+
+// Routes that remain accessible to authenticated users while their org is suspended.
+// Includes the suspended page itself, session reads (so the layout can hydrate),
+// and future-safe billing recovery routes. Logout already lives under /auth/* (public).
+const SUSPENDED_ALLOWED_APP_PATHS = ['/suspended', '/billing'];
+const SUSPENDED_ALLOWED_API_PATHS = ['/api/session', '/api/billing'];
 
 function isPublicPath(pathname: string): boolean {
 	if (PUBLIC_EXACT.has(pathname)) return true;
@@ -13,8 +24,49 @@ function isPublicPath(pathname: string): boolean {
 	return false;
 }
 
+function matchesPrefix(pathname: string, prefixes: string[]): boolean {
+	for (const p of prefixes) {
+		if (pathname === p || pathname.startsWith(p + '/')) return true;
+	}
+	return false;
+}
+
+function logSuspendedBlock(
+	event: RequestEvent,
+	auth: AuthContext,
+	reason: 'org_suspended'
+): void {
+	console.warn(
+		JSON.stringify({
+			request_id: crypto.randomUUID(),
+			org_id: auth.orgId,
+			member_id: auth.member.id,
+			route: event.url.pathname,
+			reason
+		})
+	);
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+	console.log('[hooks]', event.request.method, pathname);
+
+	// 0. CORS for /api/webchat/* — widget is embedded on third-party origins.
+	// Source of truth is each widget's domain_allowlist (via validateOrigin).
+	// Per-route handlers still enforce validateOrigin against the specific widget;
+	// this only governs browser-level CORS headers (preflight + reflected Origin).
+	if (pathname.startsWith('/api/webchat')) {
+		const origin = event.request.headers.get('origin');
+		const allowedOrigin = await resolveAllowedOrigin(origin);
+		console.log('[webchat cors]', { method: event.request.method, pathname, origin, allowedOrigin });
+
+		if (event.request.method === 'OPTIONS') {
+			return new Response(null, { status: 204, headers: buildCorsHeaders(allowedOrigin) });
+		}
+
+		const response = await resolve(event);
+		return applyCorsHeaders(response, allowedOrigin);
+	}
 
 	// 1. Always attach supabase client + safeSession for downstream use
 	const supabase = createServerClient(event);
@@ -34,7 +86,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 	if (pathname.startsWith('/api/admin')) {
 		if (!getJafarSession(event)) {
-			return new Response(JSON.stringify({ message: 'Unauthorized.' }), {
+			return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
 				status: 401,
 				headers: { 'content-type': 'application/json' }
 			});
@@ -50,14 +102,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// /change-password is special: needs auth loaded, but doesn't enforce password_changed
 		if (pathname === '/change-password') {
 			if (!auth) throw redirect(302, '/auth/login');
-			if (auth.orgStatus === 'suspended') throw redirect(302, '/auth/suspended');
+			if (auth.orgStatus === 'suspended') {
+				logSuspendedBlock(event, auth, 'org_suspended');
+				throw redirect(302, '/suspended');
+			}
 			if (auth.supabaseUser.app_metadata.password_changed) throw redirect(302, '/dashboard');
 		} else {
 			// App routes (everything not /api/*, not public)
 			const isAppRoute = !pathname.startsWith('/api/');
 			if (isAppRoute) {
 				if (!auth) throw redirect(302, '/auth/login');
-				if (auth.orgStatus === 'suspended') throw redirect(302, '/auth/suspended');
+				if (
+					auth.orgStatus === 'suspended' &&
+					!matchesPrefix(pathname, SUSPENDED_ALLOWED_APP_PATHS)
+				) {
+					logSuspendedBlock(event, auth, 'org_suspended');
+					throw redirect(302, '/suspended');
+				}
 				if (!auth.supabaseUser.app_metadata.password_changed) {
 					throw redirect(302, '/change-password');
 				}
@@ -65,16 +126,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 			} else {
 				// /api/* (non-public) — require auth but return 401 instead of redirect
 				if (!auth) {
-					return new Response(JSON.stringify({ message: 'Unauthorized.' }), {
+					return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
 						status: 401,
 						headers: { 'content-type': 'application/json' }
 					});
 				}
-				if (auth.orgStatus === 'suspended') {
-					return new Response(JSON.stringify({ message: 'Organization suspended.' }), {
-						status: 403,
-						headers: { 'content-type': 'application/json' }
-					});
+				if (
+					auth.orgStatus === 'suspended' &&
+					!matchesPrefix(pathname, SUSPENDED_ALLOWED_API_PATHS)
+				) {
+					logSuspendedBlock(event, auth, 'org_suspended');
+					return new Response(
+						JSON.stringify({
+							error: 'Organization access is suspended.',
+							code: 'ORG_SUSPENDED'
+						}),
+						{ status: 403, headers: { 'content-type': 'application/json' } }
+					);
 				}
 			}
 		}

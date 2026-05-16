@@ -25,7 +25,8 @@ export const featureFlagsSchema = z.object({
 	feature_custom_branding: z.boolean(),
 	feature_api_access: z.boolean(),
 	feature_webhooks: z.boolean(),
-	feature_client_portal: z.boolean()
+	feature_client_portal: z.boolean(),
+	feature_webchat: z.boolean()
 }) satisfies z.ZodType<FeatureFlags>;
 
 const limit = z.number().int().min(0).max(1_000_000);
@@ -74,7 +75,8 @@ const STARTER: PlanTemplate = {
 		feature_custom_branding: false,
 		feature_api_access: false,
 		feature_webhooks: false,
-		feature_client_portal: false
+		feature_client_portal: false,
+		feature_webchat: false
 	},
 	limits: {
 		max_team_members: 3,
@@ -111,7 +113,8 @@ const GROWTH: PlanTemplate = {
 		feature_custom_branding: false,
 		feature_api_access: false,
 		feature_webhooks: false,
-		feature_client_portal: true
+		feature_client_portal: true,
+		feature_webchat: false
 	},
 	limits: {
 		max_team_members: 10,
@@ -148,7 +151,8 @@ const ELITE: PlanTemplate = {
 		feature_custom_branding: true,
 		feature_api_access: true,
 		feature_webhooks: true,
-		feature_client_portal: true
+		feature_client_portal: true,
+		feature_webchat: true
 	},
 	limits: {
 		max_team_members: 50,

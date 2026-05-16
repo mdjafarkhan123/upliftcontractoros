@@ -102,6 +102,101 @@
 	let saved = $state(false);
 	let copied = $state<string | null>(null);
 
+	// ── Webchat widget config ────────────────────────────────────────────────
+	interface WidgetConfig {
+		id?: string;
+		display_name: string;
+		intro_message: string;
+		offline_message: string;
+		webchat_mode: 'instant' | 'asynchronous';
+		domain_allowlist: string[];
+		is_active: boolean;
+	}
+	let webchatWidget = $state<WidgetConfig | null>(null);
+	let webchatToken = $state<string | null>(null);
+	let webchatLoading = $state(false);
+	let webchatSaving = $state(false);
+	let webchatError = $state('');
+	let webchatSaved = $state(false);
+	let newDomain = $state('');
+
+	async function loadWebchatWidget(id: string) {
+		webchatLoading = true;
+		webchatError = '';
+		try {
+			const res = await fetch(`/api/admin/orgs/${id}/webchat-widget`);
+			if (!res.ok) throw new Error('Failed to load widget config');
+			const body = (await res.json()) as { data: { widget: WidgetConfig | null; widget_token: string } };
+			webchatToken = body.data.widget_token;
+			webchatWidget = body.data.widget ?? {
+				display_name: '',
+				intro_message: "We'll text you back — no robocalls, just a real person from our team.",
+				offline_message:
+					"We're currently on site helping customers. Leave your details and we'll reply as soon as possible.",
+				webchat_mode: 'asynchronous',
+				domain_allowlist: [],
+				is_active: true
+			};
+		} catch (e) {
+			webchatError = e instanceof Error ? e.message : 'Failed to load';
+		} finally {
+			webchatLoading = false;
+		}
+	}
+
+	async function saveWebchatWidget() {
+		if (!webchatWidget || webchatSaving) return;
+		webchatSaving = true;
+		webchatError = '';
+		webchatSaved = false;
+		try {
+			const res = await fetch(`/api/admin/orgs/${orgId}/webchat-widget`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(webchatWidget)
+			});
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new Error(body.error ?? 'Save failed');
+			}
+			webchatSaved = true;
+			setTimeout(() => { webchatSaved = false; }, 3000);
+		} catch (e) {
+			webchatError = e instanceof Error ? e.message : 'Save failed';
+		} finally {
+			webchatSaving = false;
+		}
+	}
+
+	function addDomain() {
+		if (!webchatWidget || !newDomain.trim()) return;
+		const domain = newDomain.trim();
+		if (!webchatWidget.domain_allowlist.includes(domain)) {
+			webchatWidget.domain_allowlist = [...webchatWidget.domain_allowlist, domain];
+		}
+		newDomain = '';
+	}
+
+	function removeDomain(d: string) {
+		if (!webchatWidget) return;
+		webchatWidget.domain_allowlist = webchatWidget.domain_allowlist.filter((x) => x !== d);
+	}
+
+	function buildEmbedSnippet(token: string): string {
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		const open = '<' + 'script';
+		const close = '<' + '/script>';
+		return `${open}\n  src="${origin}/webchat-widget.js"\n  data-widget-token="${token}"\n  defer\n>${close}`;
+	}
+	const embedSnippet = $derived(webchatToken ? buildEmbedSnippet(webchatToken) : '');
+
+	// Load webchat config when org is ready and webchat feature is enabled
+	$effect(() => {
+		if (org && org.feature_webchat && orgId) {
+			void loadWebchatWidget(orgId);
+		}
+	});
+
 	const statusStyles: Record<Org['status'], string> = {
 		active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
 		suspended: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
@@ -512,6 +607,201 @@
 				</header>
 				<div class="px-5 py-5">
 					<LimitsEditor bind:limits />
+				</div>
+			</section>
+		{/if}
+
+		<!-- Webchat widget config (shown only when feature_webchat is enabled) -->
+		{#if org.feature_webchat}
+			<section
+				class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+			>
+				<header class="border-b border-slate-800/80 px-5 py-4">
+					<h2 class="text-base font-semibold text-white">Web Chat Widget</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						Configure the embeddable chat widget for this org's website.
+					</p>
+				</header>
+
+				<div class="px-5 py-5 space-y-5">
+					{#if webchatLoading}
+						<p class="text-sm text-slate-400">Loading widget configuration…</p>
+					{:else if webchatWidget}
+						<!-- Mode selector -->
+						<div class="space-y-2">
+							<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Chat mode
+							</label>
+							<div class="flex gap-3">
+								{#each [{ value: 'asynchronous', label: 'Asynchronous', hint: 'Visitors leave details, team replies later' }, { value: 'instant', label: 'Instant', hint: 'Implies team is ready to respond quickly' }] as mode (mode.value)}
+									<button
+										type="button"
+										onclick={() => { if (webchatWidget) webchatWidget.webchat_mode = mode.value as 'instant' | 'asynchronous'; }}
+										class="flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer flex-1
+											{webchatWidget.webchat_mode === mode.value
+												? 'border-indigo-500/50 bg-indigo-500/10 text-white'
+												: 'border-slate-700 bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'}"
+									>
+										<span class="text-sm font-semibold">{mode.label}</span>
+										<span class="text-[11px] opacity-70">{mode.hint}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+
+						<!-- Active toggle -->
+						<div class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+							<div>
+								<p class="text-sm font-semibold text-white">Widget active</p>
+								<p class="text-[11px] text-slate-500">When disabled, the widget will not appear on any website.</p>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={webchatWidget.is_active}
+								onclick={() => { if (webchatWidget) webchatWidget.is_active = !webchatWidget.is_active; }}
+								class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
+									{webchatWidget.is_active ? 'bg-indigo-600' : 'bg-slate-700'}"
+							>
+								<span
+									class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
+										{webchatWidget.is_active ? 'translate-x-5' : 'translate-x-0'}"
+								></span>
+							</button>
+						</div>
+
+						<!-- Intro message -->
+						<div class="space-y-1.5">
+							<label for="wc-intro" class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Intro message
+							</label>
+							<textarea
+								id="wc-intro"
+								rows={3}
+								bind:value={webchatWidget.intro_message}
+								class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
+							></textarea>
+							<p class="text-[11px] text-slate-500 italic">Preview: "{webchatWidget.intro_message}"</p>
+						</div>
+
+						<!-- Offline message -->
+						<div class="space-y-1.5">
+							<label for="wc-offline" class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Offline message
+							</label>
+							<textarea
+								id="wc-offline"
+								rows={3}
+								bind:value={webchatWidget.offline_message}
+								class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
+							></textarea>
+							<p class="text-[11px] text-slate-500 italic">Preview: "{webchatWidget.offline_message}"</p>
+						</div>
+
+						<!-- Domain allowlist -->
+						<div class="space-y-2">
+							<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Domain allowlist
+							</label>
+							<p class="text-[11px] text-slate-500">
+								Leave empty to allow all origins. Add full origins like <code class="font-mono text-slate-400">https://example.com</code>.
+							</p>
+							<div class="flex gap-2">
+								<input
+									type="url"
+									bind:value={newDomain}
+									placeholder="https://example.com"
+									onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDomain(); } }}
+									class="flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
+								/>
+								<button
+									type="button"
+									onclick={addDomain}
+									class="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-colors cursor-pointer"
+								>
+									Add
+								</button>
+							</div>
+							{#if webchatWidget.domain_allowlist.length > 0}
+								<ul class="space-y-1.5">
+									{#each webchatWidget.domain_allowlist as domain (domain)}
+										<li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+											<code class="font-mono text-xs text-slate-300">{domain}</code>
+											<button
+												type="button"
+												onclick={() => removeDomain(domain)}
+												class="text-[11px] font-semibold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+											>
+												Remove
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<p class="text-[11px] text-slate-500">No domains added — all origins permitted.</p>
+							{/if}
+						</div>
+
+						<!-- Widget token (immutable) -->
+						<div class="space-y-1.5">
+							<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Widget token
+							</label>
+							<p class="text-[11px] text-slate-500">Generated once. Immutable. Never editable.</p>
+							<div class="flex items-center gap-2">
+								<code class="flex-1 truncate font-mono text-xs text-slate-300 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+									{webchatToken ?? '—'}
+								</code>
+								{#if webchatToken}
+									<button
+										type="button"
+										onclick={() => copyValue(webchatToken!, 'wc-token')}
+										class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
+									>
+										{copied === 'wc-token' ? 'Copied' : 'Copy'}
+									</button>
+								{/if}
+							</div>
+						</div>
+
+						<!-- Embed snippet -->
+						<div class="space-y-1.5">
+							<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								Embed snippet
+							</label>
+							<p class="text-[11px] text-slate-500">
+								Paste this into the <code class="font-mono text-slate-400">&lt;head&gt;</code> of the contractor's website.
+							</p>
+							<div class="relative">
+								<pre class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-xs text-emerald-300 leading-relaxed">{embedSnippet}</pre>
+								<button
+									type="button"
+									onclick={() => copyValue(embedSnippet, 'snippet')}
+									class="absolute right-2 top-2 rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
+								>
+									{copied === 'snippet' ? 'Copied' : 'Copy'}
+								</button>
+							</div>
+						</div>
+
+						{#if webchatError}
+							<p class="text-sm text-red-400">{webchatError}</p>
+						{/if}
+						{#if webchatSaved}
+							<p class="text-sm text-emerald-400">Widget configuration saved.</p>
+						{/if}
+
+						<div class="flex justify-end">
+							<button
+								type="button"
+								onclick={saveWebchatWidget}
+								disabled={webchatSaving}
+								class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
+							>
+								{webchatSaving ? 'Saving…' : 'Save widget config'}
+							</button>
+						</div>
+					{/if}
 				</div>
 			</section>
 		{/if}

@@ -17,6 +17,7 @@ export const GET: RequestHandler = async (event) => {
 	const url = event.url;
 	const statusFilter = url.searchParams.get('status');
 	const assignedToFilter = url.searchParams.get('assigned_to');
+	const contactIdFilter = url.searchParams.get('contact_id');
 	const cursor = url.searchParams.get('cursor');
 
 	const conditions: SQL[] = [eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)];
@@ -27,6 +28,10 @@ export const GET: RequestHandler = async (event) => {
 
 	if (assignedToFilter) {
 		conditions.push(eq(jobs.assigned_to, assignedToFilter));
+	}
+
+	if (contactIdFilter) {
+		conditions.push(eq(jobs.contact_id, contactIdFilter));
 	}
 
 	if (!auth.member.can_view_full_pipeline) {
@@ -45,7 +50,7 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
-	const rows = await db
+	const rowsPromise = db
 		.select({
 			id: jobs.id,
 			title: jobs.title,
@@ -65,11 +70,33 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(jobs.created_at), desc(jobs.id))
 		.limit(PAGE_SIZE + 1);
 
+	const filterContextPromise =
+		contactIdFilter && !cursor
+			? db
+					.select({ id: contacts.id, full_name: contacts.full_name })
+					.from(contacts)
+					.where(
+						and(
+							eq(contacts.id, contactIdFilter),
+							eq(contacts.org_id, auth.orgId),
+							isNull(contacts.deleted_at)
+						)
+					)
+					.limit(1)
+			: Promise.resolve(null);
+
+	const [rows, contactRow] = await Promise.all([rowsPromise, filterContextPromise]);
+
 	const hasMore = rows.length > PAGE_SIZE;
 	const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
 	const last = items[items.length - 1];
 	const nextCursor =
 		hasMore && last ? `${last.created_at.toISOString()}|${last.id}` : null;
 
-	return json({ items, next_cursor: nextCursor });
+	const filterContext =
+		contactIdFilter && contactRow && contactRow[0]
+			? { contact_id: contactRow[0].id, contact_name: contactRow[0].full_name }
+			: null;
+
+	return json({ items, next_cursor: nextCursor, filter_context: filterContext });
 };

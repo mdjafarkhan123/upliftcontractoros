@@ -35,6 +35,8 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(eq(conversations.channel, 'sms'));
 	} else if (filter === 'missed_calls') {
 		conditions.push(eq(conversations.channel, 'missed_call'));
+	} else if (filter === 'webchat') {
+		conditions.push(eq(conversations.channel, 'webchat'));
 	}
 
 	if (searchRaw.length > 0) {

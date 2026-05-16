@@ -120,6 +120,15 @@ export type {
 export { mediaTypeEnum, mediaPurposeTagEnum, media } from './09_media';
 export type { Media, NewMedia } from './09_media';
 
+// Domain 11 — Webchat
+export { webchatWidgets, webchatSessions } from './11_webchat';
+export type {
+	WebchatWidget,
+	NewWebchatWidget,
+	WebchatSession,
+	NewWebchatSession
+} from './11_webchat';
+
 // Domain 10 — Growth, Automation & System
 export {
 	growthFeedTypeEnum,

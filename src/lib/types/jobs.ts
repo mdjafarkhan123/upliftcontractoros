@@ -49,4 +49,5 @@ export type JobsFilterStatus = 'all' | 'scheduled' | 'in_progress' | 'completed'
 export type JobsFilters = {
 	status: JobsFilterStatus;
 	assignedTo: string | null;
+	contactId: string | null;
 };

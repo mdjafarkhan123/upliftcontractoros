@@ -62,7 +62,7 @@
 			};
 
 			if (body.status === 'suspended') {
-				goto('/auth/suspended');
+				goto('/suspended');
 				return;
 			}
 
@@ -82,6 +82,9 @@
 	onMount(() => {
 		lastFeatureOverridesUpdatedAt = toIso(session.org.feature_overrides_updated_at);
 		pollHandle = setInterval(pollStatus, POLL_MS);
+
+		// Skip CRM-side data + realtime entirely while suspended.
+		if (session.org.status === 'suspended') return;
 
 		void notificationStore.load(true);
 		const supabase = getBrowserSupabase();
@@ -125,24 +128,32 @@
 	const visibleNav = $derived(buildVisibleNav(session.member, session.featureFlags));
 	const split = $derived(splitForMobile(visibleNav));
 	const showSetupBanner = $derived(!session.org.is_setup_complete && !setupBannerDismissed);
+	const isSuspended = $derived(session.org.status === 'suspended');
 </script>
 
-<div class="flex min-h-screen flex-col bg-background">
-	<AppHeader org={session.org} member={session.member} />
-	{#if showSetupBanner}
-		<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
-	{/if}
-	<div class="flex flex-1 md:gap-0">
-		<DesktopSidebar items={visibleNav} member={session.member} />
-		<main class="flex-1 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
-			{@render children()}
-		</main>
+{#if isSuspended}
+	<div class="min-h-screen bg-background">
+		{@render children()}
+		<Toaster />
 	</div>
-	<BottomNav
-		primary={split.primary}
-		hasSecondary={split.secondary.length > 0}
-		onMoreClick={() => (moreOpen = true)}
-	/>
-	<MoreSheet bind:open={moreOpen} items={split.secondary} member={session.member} />
-	<Toaster />
-</div>
+{:else}
+	<div class="flex min-h-screen flex-col bg-background">
+		<AppHeader org={session.org} member={session.member} />
+		{#if showSetupBanner}
+			<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
+		{/if}
+		<div class="flex flex-1 md:gap-0">
+			<DesktopSidebar items={visibleNav} member={session.member} />
+			<main class="flex-1 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
+				{@render children()}
+			</main>
+		</div>
+		<BottomNav
+			primary={split.primary}
+			hasSecondary={split.secondary.length > 0}
+			onMoreClick={() => (moreOpen = true)}
+		/>
+		<MoreSheet bind:open={moreOpen} items={split.secondary} member={session.member} />
+		<Toaster />
+	</div>
+{/if}

@@ -26,24 +26,28 @@
 	} = $props();
 
 	const variantClasses: Record<Variant, string> = {
-		default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-		destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-		outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-		secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-		ghost: 'hover:bg-accent hover:text-accent-foreground',
+		default:
+			'bg-gradient-to-b from-primary to-[hsl(var(--primary-deep))] text-primary-foreground border border-[hsl(var(--primary-edge))] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.12),0_1px_2px_0_hsl(0_0%_0%/0.4)] hover:shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.15),0_2px_8px_-1px_hsl(var(--primary)/0.45)] active:scale-[0.98] active:shadow-[inset_0_1px_2px_0_hsl(0_0%_0%/0.2)]',
+		destructive:
+			'bg-gradient-to-b from-destructive to-[hsl(var(--destructive-deep))] text-destructive-foreground border border-[hsl(var(--destructive-edge))] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.12),0_1px_2px_0_hsl(0_0%_0%/0.4)] hover:shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.15),0_2px_8px_-1px_hsl(var(--destructive)/0.45)] active:scale-[0.98] active:shadow-[inset_0_1px_2px_0_hsl(0_0%_0%/0.2)]',
+		outline:
+			'bg-transparent border border-border/60 text-foreground hover:bg-accent/50 hover:border-border active:scale-[0.98]',
+		secondary:
+			'bg-[hsl(var(--surface-raised))] text-secondary-foreground border border-[hsl(var(--surface-raised-border))] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.04)] hover:bg-[hsl(var(--surface-raised-hover))] hover:border-[hsl(var(--surface-raised-border-hover))] active:scale-[0.98]',
+		ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
 		link: 'text-primary underline-offset-4 hover:underline'
 	};
 
 	const sizeClasses: Record<Size, string> = {
-		default: 'h-11 px-4 py-2 text-sm',
-		sm: 'h-9 rounded-md px-3 text-xs',
-		lg: 'h-12 rounded-md px-8 text-base',
-		icon: 'h-11 w-11'
+		default: 'h-9 px-3.5 text-sm',
+		sm: 'h-8 px-3 text-xs',
+		lg: 'h-10 px-5 text-sm',
+		icon: 'h-9 w-9'
 	};
 
 	const baseClasses = $derived(
 		cn(
-			'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+			'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium leading-none tracking-tight ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 cursor-pointer select-none',
 			variantClasses[variant],
 			sizeClasses[size],
 			className

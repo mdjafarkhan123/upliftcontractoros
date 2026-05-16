@@ -21,9 +21,9 @@ export function canDeleteQuote(member: OrgMember): boolean {
 }
 
 export function canViewTemplates(member: OrgMember): boolean {
-	return member.can_view_all_quotes;
+	return member.can_create_quotes || member.can_edit_quotes;
 }
 
 export function canManageTemplates(member: OrgMember): boolean {
-	return member.can_create_quotes;
+	return member.can_edit_quotes;
 }

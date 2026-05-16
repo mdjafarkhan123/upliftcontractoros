@@ -2,7 +2,10 @@ import {
 	S3Client,
 	PutObjectCommand,
 	DeleteObjectsCommand,
-	GetObjectCommand
+	GetObjectCommand,
+	ListObjectsV2Command,
+	type ListObjectsV2CommandOutput,
+	type _Object
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '$env/dynamic/private';
@@ -57,6 +60,39 @@ export async function r2DeleteObjects(keys: string[]): Promise<void> {
 			}
 		})
 	);
+}
+
+export async function r2DeleteByPrefix(prefix: string): Promise<number> {
+	const client = r2Client();
+	const Bucket = bucket();
+	let continuationToken: string | undefined = undefined;
+	let deletedCount = 0;
+	do {
+		const listed: ListObjectsV2CommandOutput = await client.send(
+			new ListObjectsV2Command({
+				Bucket,
+				Prefix: prefix,
+				ContinuationToken: continuationToken
+			})
+		);
+		const keys = (listed.Contents ?? [])
+			.map((o: _Object) => o.Key)
+			.filter((k): k is string => typeof k === 'string' && k.length > 0);
+		if (keys.length > 0) {
+			for (let i = 0; i < keys.length; i += 1000) {
+				const batch = keys.slice(i, i + 1000);
+				await client.send(
+					new DeleteObjectsCommand({
+						Bucket,
+						Delete: { Objects: batch.map((Key: string) => ({ Key })), Quiet: true }
+					})
+				);
+				deletedCount += batch.length;
+			}
+		}
+		continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+	} while (continuationToken);
+	return deletedCount;
 }
 
 export async function r2Presign(key: string, expiresInSeconds = 3600): Promise<string> {

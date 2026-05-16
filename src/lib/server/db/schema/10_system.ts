@@ -57,6 +57,8 @@ export const growthFeedItems = pgTable('growth_feed_items', {
 	body: text('body').notNull(),
 	media_url: text('media_url'),
 	is_monthly_summary: boolean('is_monthly_summary').notNull().default(false),
+	summary_month: integer('summary_month'),
+	summary_year: integer('summary_year'),
 	published_at: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()

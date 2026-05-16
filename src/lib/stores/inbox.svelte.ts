@@ -15,7 +15,7 @@ export type MessageStatus =
 	| 'bounced';
 export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat';
 
-export type InboxFilter = 'all' | 'unread' | 'sms' | 'missed_calls';
+export type InboxFilter = 'all' | 'unread' | 'sms' | 'missed_calls' | 'webchat';
 
 export type ConversationListItem = {
 	id: string;

@@ -43,7 +43,13 @@
       "Bash(npm ls *)",
       "Bash(cat *)",
       "Skill(contractor-crm-svelte-ui)",
-      "Skill(contractor-crm-design-reference)"
+      "Skill(contractor-crm-design-reference)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\messages\")",
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\restore\")",
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\stream\")"
     ]
   }
 }

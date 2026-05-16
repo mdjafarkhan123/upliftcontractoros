@@ -25,7 +25,7 @@
 	let items: Item[] = $derived([
 		{
 			href: '/settings/org',
-			label: 'Organization',
+			label: 'Business',
 			description: 'Business name, address, branding',
 			icon: Building2,
 			adminOnly: true,

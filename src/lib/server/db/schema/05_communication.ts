@@ -48,6 +48,8 @@ export const conversations = pgTable('conversations', {
 		.array()
 		.notNull()
 		.default(sql`'{}'`),
+	closed_at: timestamp('closed_at', { withTimezone: true }),
+	closed_reason: text('closed_reason'),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
