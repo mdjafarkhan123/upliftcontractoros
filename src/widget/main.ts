@@ -48,8 +48,10 @@ interface SessionState {
 
 	let session: SessionState | null = null;
 	let open = false;
-	let sseSource: EventSource | null = null;
-	let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let pollTimer: ReturnType<typeof setTimeout> | null = null;
+	let pollInFlight = false;
+
+	const POLL_INTERVAL_MS = 3000;
 
 	function loadCursor(): string | null {
 		try {
@@ -582,8 +584,8 @@ input, textarea { font: inherit; }
 			btnEl.setAttribute('data-open', String(open));
 			btnEl.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 		}
-		// SSE lifecycle is bound to session existence (see init/startSession),
-		// not panel visibility. Minimizing must NOT drop realtime sync.
+		// Poll lifecycle is bound to session existence (see init/startSession),
+		// not panel visibility. Minimizing must NOT drop sync.
 	}
 
 	// ── Bootstrap ───────────────────────────────────────────────────────────
@@ -598,12 +600,12 @@ input, textarea { font: inherit; }
 				const res = await restoreSession(parsed.session_id, parsed.session_token);
 				if (res) {
 					session = res;
-					// Seed cursor from restored history so SSE resumes from the
+					// Seed cursor from restored history so polling resumes from the
 					// newest message we already have, not "now".
 					for (const m of res.messages) saveCursor(m.created_at);
 					mount(session.config);
 					renderThread();
-					startSSE();
+					startPolling();
 					return;
 				}
 			} catch { /* invalid */ }
@@ -730,7 +732,7 @@ input, textarea { font: inherit; }
 			clearCursor();
 
 			renderThread();
-			startSSE();
+			startPolling();
 			return null;
 		} catch {
 			return 'Network error. Please try again.';
@@ -785,42 +787,67 @@ input, textarea { font: inherit; }
 		if (row) row.remove();
 	}
 
-	function startSSE() {
+	// Short-poll the messages endpoint every 3s for new contractor (outbound)
+	// messages. Replaces the prior SSE stream, which was unreliable on Vercel
+	// serverless (10s function timeout, response buffering). Cursor in
+	// localStorage guarantees no gap across reloads, tab switches, or network
+	// blips.
+	function startPolling() {
 		if (!session) return;
-		stopSSE();
-		// Resume from persisted cursor — guarantees no message gap across the
-		// 60s max-lifetime cycle, the 3s reconnect window, or a tab reload.
-		const since = loadCursor();
-		const params = new URLSearchParams({ token: session.session_token });
-		if (since) params.set('since', since);
-		const url = `${BASE}/api/webchat/session/${session.session_id}/stream?${params}`;
-		sseSource = new EventSource(url);
-		sseSource.onmessage = (e) => {
-			try {
-				const msg = JSON.parse(e.data) as WidgetMessage;
-				if (!session) return;
-				// Advance + persist cursor first so a render error can't
-				// cause us to re-deliver the same message on next reconnect.
-				saveCursor(msg.created_at);
-				if (session.messages.some((m) => m.id === msg.id)) return;
-				// SSE only pushes contractor (outbound) messages → render 'in'.
-				const incoming: WidgetMessage = { ...msg, direction: 'outbound' };
-				session.messages.push(incoming);
-				appendMessage(incoming, 'in');
-			} catch { /* ignore */ }
-		};
-		sseSource.onerror = () => {
-			stopSSE();
-			// Reconnect whenever a session exists — independent of panel state.
-			sseReconnectTimer = setTimeout(() => {
-				if (session) startSSE();
-			}, 3000);
-		};
+		stopPolling();
+		void pollOnce();
 	}
 
-	function stopSSE() {
-		if (sseSource) { sseSource.close(); sseSource = null; }
-		if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
+	function stopPolling() {
+		if (pollTimer) {
+			clearTimeout(pollTimer);
+			pollTimer = null;
+		}
+	}
+
+	function schedulePoll() {
+		stopPolling();
+		pollTimer = setTimeout(() => {
+			void pollOnce();
+		}, POLL_INTERVAL_MS);
+	}
+
+	async function pollOnce() {
+		if (!session || pollInFlight) {
+			schedulePoll();
+			return;
+		}
+		pollInFlight = true;
+		try {
+			const since = loadCursor();
+			const params = new URLSearchParams({});
+			if (since) params.set('since', since);
+			const url = `${BASE}/api/webchat/session/${session.session_id}/messages${
+				params.toString() ? `?${params}` : ''
+			}`;
+			const res = await fetch(url, {
+				headers: { Authorization: `Bearer ${session.session_token}` }
+			});
+			if (res.ok) {
+				const json = (await res.json()) as {
+					data?: { messages: Array<{ id: string; body: string; created_at: string; sent_at: string }> };
+				};
+				const rows = json.data?.messages ?? [];
+				for (const row of rows) {
+					if (!session) break;
+					saveCursor(row.created_at);
+					if (session.messages.some((m) => m.id === row.id)) continue;
+					const incoming: WidgetMessage = { ...row, direction: 'outbound' };
+					session.messages.push(incoming);
+					appendMessage(incoming, 'in');
+				}
+			}
+		} catch {
+			/* network blip — next tick will retry */
+		} finally {
+			pollInFlight = false;
+			if (session) schedulePoll();
+		}
 	}
 
 	if (document.readyState === 'loading') {

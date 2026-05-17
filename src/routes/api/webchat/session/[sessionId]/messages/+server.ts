@@ -6,7 +6,7 @@
  * Sessions expire after 30 days of inactivity.
  */
 import { json } from '@sveltejs/kit';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
@@ -18,7 +18,7 @@ import {
 	webchatWidgets
 } from '$lib/server/db/schema';
 import { validateOrigin } from '$lib/server/webchat/validateOrigin';
-import { checkMessageRateLimit } from '$lib/server/webchat/rateLimit';
+import { checkMessageRateLimit, checkPollRateLimit } from '$lib/server/webchat/rateLimit';
 import { sanitizeMessageBody } from '$lib/server/webchat/sanitize';
 
 const STALE_DAYS = 30;
@@ -26,6 +26,94 @@ const STALE_DAYS = 30;
 const bodySchema = z.object({
 	body: z.string().min(1, 'Message is required').max(2000, 'Message too long')
 });
+
+const POLL_PAGE_SIZE = 50;
+
+/**
+ * GET /api/webchat/session/[sessionId]/messages?since=<ISO>
+ * Public — Bearer session_token. Returns outbound (contractor → visitor)
+ * messages newer than `since`, in chronological order. Used by the widget's
+ * 3-second polling loop in place of SSE (which is unreliable on Vercel
+ * serverless). Internal notes are excluded.
+ */
+export const GET: RequestHandler = async ({ request, params, url }) => {
+	const sessionId = params.sessionId;
+
+	const authHeader = request.headers.get('authorization');
+	const sessionToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+	if (!sessionToken) return json({ error: 'Unauthorized' }, { status: 401 });
+
+	const rateCheck = checkPollRateLimit(sessionToken);
+	if (!rateCheck.ok) {
+		return json(
+			{ error: 'Too many requests.' },
+			{ status: 429, headers: { 'Retry-After': String(rateCheck.retryAfter) } }
+		);
+	}
+
+	const [session] = await db
+		.select()
+		.from(webchatSessions)
+		.where(
+			and(
+				eq(webchatSessions.id, sessionId),
+				eq(webchatSessions.session_token, sessionToken)
+			)
+		)
+		.limit(1);
+
+	if (!session) return json({ error: 'Session not found' }, { status: 404 });
+
+	const staleThreshold = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+	if (session.last_active_at < staleThreshold) {
+		return json({ error: 'Session expired' }, { status: 410 });
+	}
+
+	const [widget] = await db
+		.select()
+		.from(webchatWidgets)
+		.where(eq(webchatWidgets.org_id, session.org_id))
+		.limit(1);
+
+	if (!widget || !validateOrigin(request, widget.domain_allowlist)) {
+		return json({ error: 'Origin not permitted' }, { status: 403 });
+	}
+
+	const sinceParam = url.searchParams.get('since');
+	const parsedSince = sinceParam ? new Date(sinceParam) : null;
+	const since =
+		parsedSince && !Number.isNaN(parsedSince.getTime()) ? parsedSince : new Date(0);
+
+	const rows = await db
+		.select({
+			id: messages.id,
+			body: messages.body,
+			sent_at: messages.sent_at,
+			created_at: messages.created_at
+		})
+		.from(messages)
+		.where(
+			and(
+				eq(messages.conversation_id, session.conversation_id),
+				eq(messages.direction, 'outbound'),
+				eq(messages.is_internal_note, false),
+				gt(messages.created_at, since)
+			)
+		)
+		.orderBy(asc(messages.created_at))
+		.limit(POLL_PAGE_SIZE);
+
+	return json({
+		data: {
+			messages: rows.map((r) => ({
+				id: r.id,
+				body: r.body ?? '',
+				created_at: r.created_at.toISOString(),
+				sent_at: r.sent_at?.toISOString() ?? r.created_at.toISOString()
+			}))
+		}
+	});
+};
 
 export const POST: RequestHandler = async ({ request, params }) => {
 	const sessionId = params.sessionId;

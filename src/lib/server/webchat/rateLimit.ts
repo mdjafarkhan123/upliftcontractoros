@@ -7,7 +7,7 @@
  *   session_start   — 10 req / hour / IP hash
  *   session_message — 60 req / hour / session_token
  *   session_restore — 30 req / hour / session_token
- *   session_stream  — 5 concurrent connections / session_token
+ *   session_poll    — 1500 req / hour / session_token  (≈ one every 2.4s)
  */
 
 interface Bucket {
@@ -63,24 +63,8 @@ export function checkRestoreRateLimit(sessionToken: string): { ok: boolean; retr
 	return { ok, retryAfter: ok ? 0 : retryAfter(key) };
 }
 
-// Concurrent SSE connection tracking (not rate-limit window, just active count)
-const activeSseConnections = new Map<string, number>();
-
-export function canOpenSSE(sessionToken: string): boolean {
-	const current = activeSseConnections.get(sessionToken) ?? 0;
-	return current < 5;
-}
-
-export function incrementSSE(sessionToken: string): void {
-	activeSseConnections.set(sessionToken, (activeSseConnections.get(sessionToken) ?? 0) + 1);
-}
-
-export function decrementSSE(sessionToken: string): void {
-	const current = activeSseConnections.get(sessionToken) ?? 1;
-	const next = current - 1;
-	if (next <= 0) {
-		activeSseConnections.delete(sessionToken);
-	} else {
-		activeSseConnections.set(sessionToken, next);
-	}
+export function checkPollRateLimit(sessionToken: string): { ok: boolean; retryAfter: number } {
+	const key = `poll:${sessionToken}`;
+	const ok = check(key, 1500, HOUR_MS);
+	return { ok, retryAfter: ok ? 0 : retryAfter(key) };
 }
