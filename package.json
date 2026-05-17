@@ -13,7 +13,8 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"db:types": "npx supabase gen types typescript --project-id wqodecwlynshdujaphaz > src/lib/types/supabase.ts",
-		"build:widget": "vite build --config vite.config.widget.ts"
+		"build:widget": "vite build --config vite.config.widget.ts",
+		"worker": "tsx worker.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -67,6 +68,7 @@
 		"stripe": "^22.1.1",
 		"svelte-dnd-action": "^0.9.69",
 		"tailwind-merge": "^3.6.0",
+		"tsx": "^4.22.0",
 		"twilio": "^6.0.2",
 		"zod": "^4.4.3"
 	}
