@@ -3,6 +3,10 @@
  * Never imported by SvelteKit — runs as a separate Node.js process.
  */
 
+// MUST be set before any import that pulls in $lib/server/db/client,
+// otherwise the serverless config will be picked instead of the worker config.
+process.env.WORKER_RUNTIME = 'true';
+
 import './src/lib/server/workers/outboxWorker';
 import './src/lib/server/workers/automationWorker';
 import './src/lib/server/workers/notificationWorker';

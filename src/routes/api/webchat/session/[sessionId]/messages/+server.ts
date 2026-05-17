@@ -20,6 +20,9 @@ import {
 import { validateOrigin } from '$lib/server/webchat/validateOrigin';
 import { checkMessageRateLimit, checkPollRateLimit } from '$lib/server/webchat/rateLimit';
 import { sanitizeMessageBody } from '$lib/server/webchat/sanitize';
+import { createLogger } from '$lib/server/log';
+
+const log = createLogger('webchat.message.insert');
 
 const STALE_DAYS = 30;
 
@@ -185,55 +188,87 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	}
 
 	const now = new Date();
-
-	const result = await db.transaction(async (tx) => {
-		const [inserted] = await tx
-			.insert(messages)
-			.values({
-				org_id: session.org_id,
-				conversation_id: session.conversation_id,
-				direction: 'inbound',
-				channel: 'webchat',
-				body: sanitized,
-				is_internal_note: false,
-				status: 'received',
-				sent_by: null,
-				sent_at: now
-			})
-			.returning();
-
-		await tx
-			.update(conversations)
-			.set({
-				unread_count: sql`${conversations.unread_count} + 1`,
-				last_message_at: now,
-				updated_at: now
-			})
-			.where(eq(conversations.id, session.conversation_id));
-
-		await tx
-			.update(webchatSessions)
-			.set({ last_active_at: now })
-			.where(eq(webchatSessions.id, session.id));
-
-		await tx.insert(outboxEvents).values({
-			org_id: session.org_id,
-			event_type: 'message.received',
-			resource_type: 'message',
-			resource_id: inserted.id,
-			payload: {
-				message_id: inserted.id,
-				conversation_id: session.conversation_id,
-				contact_id: session.contact_id,
-				org_id: session.org_id,
-				channel: 'webchat',
-				body: sanitized
-			},
-			idempotency_key: `message.received:${inserted.id}`
-		});
-
-		return inserted;
+	const txStart = Date.now();
+	log.info({
+		phase: 'tx_begin',
+		conversation_id: session.conversation_id,
+		org_id: session.org_id,
+		direction: 'inbound'
 	});
+
+	let result;
+	try {
+		result = await db.transaction(async (tx) => {
+			const [inserted] = await tx
+				.insert(messages)
+				.values({
+					org_id: session.org_id,
+					conversation_id: session.conversation_id,
+					direction: 'inbound',
+					channel: 'webchat',
+					body: sanitized,
+					is_internal_note: false,
+					status: 'received',
+					sent_by: null,
+					sent_at: now
+				})
+				.returning();
+
+			log.info({
+				phase: 'insert_ok',
+				message_id: inserted.id,
+				conversation_id: session.conversation_id
+			});
+
+			await tx
+				.update(conversations)
+				.set({
+					unread_count: sql`${conversations.unread_count} + 1`,
+					last_message_at: now,
+					updated_at: now
+				})
+				.where(eq(conversations.id, session.conversation_id));
+
+			await tx
+				.update(webchatSessions)
+				.set({ last_active_at: now })
+				.where(eq(webchatSessions.id, session.id));
+
+			await tx.insert(outboxEvents).values({
+				org_id: session.org_id,
+				event_type: 'message.received',
+				resource_type: 'message',
+				resource_id: inserted.id,
+				payload: {
+					message_id: inserted.id,
+					conversation_id: session.conversation_id,
+					contact_id: session.contact_id,
+					org_id: session.org_id,
+					channel: 'webchat',
+					body: sanitized
+				},
+				idempotency_key: `message.received:${inserted.id}`
+			});
+
+			return inserted;
+		});
+		log.info({
+			phase: 'commit_ok',
+			message_id: result.id,
+			conversation_id: session.conversation_id,
+			ms: Date.now() - txStart
+		});
+	} catch (e) {
+		log.error({
+			phase: 'tx_error',
+			conversation_id: session.conversation_id,
+			org_id: session.org_id,
+			ms: Date.now() - txStart,
+			error: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined
+		});
+		return json({ error: 'Failed to persist message' }, { status: 500 });
+	}
 
 	return json(
 		{

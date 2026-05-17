@@ -13,6 +13,9 @@ import {
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { twilio } from '$lib/server/twilio/client';
 import { isReleasedPhone } from '$lib/utils/phone';
+import { createLogger } from '$lib/server/log';
+
+const log = createLogger('inbox.message.insert');
 
 const PAGE_SIZE = 50;
 
@@ -124,48 +127,82 @@ export const POST: RequestHandler = async (event) => {
 
 	// Webchat channel — no Twilio, just insert outbound message and emit message.sent
 	if (conv.channel === 'webchat') {
-		const result = await db.transaction(async (tx) => {
-			const [inserted] = await tx
-				.insert(messages)
-				.values({
-					org_id: auth.orgId,
-					conversation_id: conv.id,
-					direction: 'outbound',
-					channel: 'webchat',
-					body: parsed.body,
-					is_internal_note: false,
-					status: 'sent',
-					sent_by: auth.member.id,
-					sent_at: new Date()
-				})
-				.returning();
-
-			await tx
-				.update(conversations)
-				.set({ last_message_at: new Date(), updated_at: new Date() })
-				.where(eq(conversations.id, conv.id));
-
-			await tx.insert(outboxEvents).values({
-				org_id: auth.orgId,
-				event_type: 'message.sent',
-				resource_type: 'message',
-				resource_id: inserted.id,
-				payload: {
-					message_id: inserted.id,
-					conversation_id: conv.id,
-					contact_id: contact.id,
-					org_id: auth.orgId,
-					channel: 'webchat',
-					body: parsed.body,
-					sent_by: auth.member.id
-				},
-				idempotency_key: `message.sent:${inserted.id}`
-			});
-
-			return inserted;
+		const txStart = Date.now();
+		log.info({
+			phase: 'tx_begin',
+			channel: 'webchat',
+			conversation_id: conv.id,
+			org_id: auth.orgId,
+			sent_by: auth.member.id
 		});
+		try {
+			const result = await db.transaction(async (tx) => {
+				const [inserted] = await tx
+					.insert(messages)
+					.values({
+						org_id: auth.orgId,
+						conversation_id: conv.id,
+						direction: 'outbound',
+						channel: 'webchat',
+						body: parsed.body,
+						is_internal_note: false,
+						status: 'sent',
+						sent_by: auth.member.id,
+						sent_at: new Date()
+					})
+					.returning();
 
-		return json({ data: { message: result } }, { status: 201 });
+				log.info({
+					phase: 'insert_ok',
+					channel: 'webchat',
+					message_id: inserted.id,
+					conversation_id: conv.id
+				});
+
+				await tx
+					.update(conversations)
+					.set({ last_message_at: new Date(), updated_at: new Date() })
+					.where(eq(conversations.id, conv.id));
+
+				await tx.insert(outboxEvents).values({
+					org_id: auth.orgId,
+					event_type: 'message.sent',
+					resource_type: 'message',
+					resource_id: inserted.id,
+					payload: {
+						message_id: inserted.id,
+						conversation_id: conv.id,
+						contact_id: contact.id,
+						org_id: auth.orgId,
+						channel: 'webchat',
+						body: parsed.body,
+						sent_by: auth.member.id
+					},
+					idempotency_key: `message.sent:${inserted.id}`
+				});
+
+				return inserted;
+			});
+			log.info({
+				phase: 'commit_ok',
+				channel: 'webchat',
+				message_id: result.id,
+				conversation_id: conv.id,
+				ms: Date.now() - txStart
+			});
+			return json({ data: { message: result } }, { status: 201 });
+		} catch (e) {
+			log.error({
+				phase: 'tx_error',
+				channel: 'webchat',
+				conversation_id: conv.id,
+				org_id: auth.orgId,
+				ms: Date.now() - txStart,
+				error: e instanceof Error ? e.message : String(e),
+				stack: e instanceof Error ? e.stack : undefined
+			});
+			return json({ error: 'Failed to send message.' }, { status: 500 });
+		}
 	}
 
 	// Internal notes — never touch Twilio, never emit message.sent, excluded from unread
@@ -222,6 +259,15 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: msg }, { status: 502 });
 	}
 
+	const txStart = Date.now();
+	log.info({
+		phase: 'tx_begin',
+		channel: 'sms',
+		conversation_id: conv.id,
+		org_id: auth.orgId,
+		sent_by: auth.member.id,
+		twilio_message_sid: twilioSid
+	});
 	try {
 		const result = await db.transaction(async (tx) => {
 			const [inserted] = await tx
@@ -239,6 +285,14 @@ export const POST: RequestHandler = async (event) => {
 					sent_at: new Date()
 				})
 				.returning();
+
+			log.info({
+				phase: 'insert_ok',
+				channel: 'sms',
+				message_id: inserted.id,
+				conversation_id: conv.id,
+				twilio_message_sid: twilioSid
+			});
 
 			await tx
 				.update(conversations)
@@ -266,8 +320,25 @@ export const POST: RequestHandler = async (event) => {
 			return inserted;
 		});
 
+		log.info({
+			phase: 'commit_ok',
+			channel: 'sms',
+			message_id: result.id,
+			conversation_id: conv.id,
+			ms: Date.now() - txStart
+		});
 		return json({ data: { message: result } }, { status: 201 });
 	} catch (e) {
+		log.error({
+			phase: 'tx_error',
+			channel: 'sms',
+			conversation_id: conv.id,
+			org_id: auth.orgId,
+			ms: Date.now() - txStart,
+			twilio_message_sid: twilioSid,
+			error: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined
+		});
 		console.error('[outbound sms] db write failed after twilio send', e);
 		// Twilio already sent. Persist a best-effort row so the message isn't lost.
 		try {
