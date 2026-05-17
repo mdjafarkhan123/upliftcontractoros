@@ -81,18 +81,20 @@ export const GET: RequestHandler = async ({ request, params }) => {
 
 	if (!org) return json({ error: 'Organization not found' }, { status: 404 });
 
-	// Load last 50 outbound (contractor) messages — never expose internal notes
+	// Load last 50 messages in BOTH directions so the visitor sees their
+	// own history on widget reload. Internal notes are still excluded.
 	const msgs = await db
 		.select({
 			id: messages.id,
 			body: messages.body,
-			sent_at: messages.sent_at
+			direction: messages.direction,
+			sent_at: messages.sent_at,
+			created_at: messages.created_at
 		})
 		.from(messages)
 		.where(
 			and(
 				eq(messages.conversation_id, session.conversation_id),
-				eq(messages.direction, 'outbound'),
 				eq(messages.is_internal_note, false)
 			)
 		)
@@ -120,7 +122,9 @@ export const GET: RequestHandler = async ({ request, params }) => {
 			messages: msgs.map((m) => ({
 				id: m.id,
 				body: m.body ?? '',
-				sent_at: m.sent_at?.toISOString() ?? new Date().toISOString()
+				direction: m.direction,
+				created_at: m.created_at.toISOString(),
+				sent_at: m.sent_at?.toISOString() ?? m.created_at.toISOString()
 			}))
 		}
 	});

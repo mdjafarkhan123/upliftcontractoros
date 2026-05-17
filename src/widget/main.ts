@@ -16,7 +16,15 @@ interface WidgetConfig {
 interface WidgetMessage {
 	id: string;
 	body: string;
+	// Authoritative for ordering and cursor advancement. Always present
+	// for server-persisted messages; optimistic visitor messages set this
+	// to "now" until the POST confirms.
+	created_at: string;
+	// Display-only timestamp. Falls back to created_at when null.
 	sent_at: string;
+	// 'outbound' = contractor → render as 'in' (incoming bubble)
+	// 'inbound'  = visitor    → render as 'out' (outgoing bubble)
+	direction: 'inbound' | 'outbound';
 }
 
 interface SessionState {
@@ -36,11 +44,33 @@ interface SessionState {
 
 	const BASE = scriptEl?.src ? new URL(scriptEl.src).origin : window.location.origin;
 	const SESSION_KEY = `wc_session_${widgetToken}`;
+	const CURSOR_KEY = `wc_cursor_${widgetToken}`;
 
 	let session: SessionState | null = null;
 	let open = false;
 	let sseSource: EventSource | null = null;
 	let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function loadCursor(): string | null {
+		try {
+			return localStorage.getItem(CURSOR_KEY);
+		} catch {
+			return null;
+		}
+	}
+
+	function saveCursor(iso: string) {
+		try {
+			const prev = loadCursor();
+			if (!prev || iso > prev) localStorage.setItem(CURSOR_KEY, iso);
+		} catch { /* ignore */ }
+	}
+
+	function clearCursor() {
+		try {
+			localStorage.removeItem(CURSOR_KEY);
+		} catch { /* ignore */ }
+	}
 
 	let shadow: ShadowRoot | null = null;
 	let panelEl: HTMLDivElement | null = null;
@@ -467,7 +497,7 @@ input, textarea { font: inherit; }
 		}
 
 		for (const msg of session.messages) {
-			appendMessage(msg, 'in');
+			appendMessage(msg, msg.direction === 'inbound' ? 'out' : 'in');
 		}
 
 		if (composerEl) composerEl.remove();
@@ -552,8 +582,8 @@ input, textarea { font: inherit; }
 			btnEl.setAttribute('data-open', String(open));
 			btnEl.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 		}
-		if (open && session) startSSE();
-		else stopSSE();
+		// SSE lifecycle is bound to session existence (see init/startSession),
+		// not panel visibility. Minimizing must NOT drop realtime sync.
 	}
 
 	// ── Bootstrap ───────────────────────────────────────────────────────────
@@ -568,12 +598,17 @@ input, textarea { font: inherit; }
 				const res = await restoreSession(parsed.session_id, parsed.session_token);
 				if (res) {
 					session = res;
+					// Seed cursor from restored history so SSE resumes from the
+					// newest message we already have, not "now".
+					for (const m of res.messages) saveCursor(m.created_at);
 					mount(session.config);
 					renderThread();
+					startSSE();
 					return;
 				}
 			} catch { /* invalid */ }
 			localStorage.removeItem(SESSION_KEY);
+			clearCursor();
 		}
 
 		const cfg = await fetchWidgetConfig();
@@ -620,7 +655,13 @@ input, textarea { font: inherit; }
 					intro_message: string;
 					offline_message: string;
 					webchat_mode: 'instant' | 'asynchronous';
-					messages: WidgetMessage[];
+					messages: Array<{
+						id: string;
+						body: string;
+						direction: 'inbound' | 'outbound';
+						created_at: string;
+						sent_at: string;
+					}>;
 				};
 			};
 			if (!json.data) return null;
@@ -685,6 +726,8 @@ input, textarea { font: inherit; }
 				SESSION_KEY,
 				JSON.stringify({ session_id: session.session_id, session_token: session.session_token })
 			);
+			// Fresh session — clear any stale cursor from a prior session
+			clearCursor();
 
 			renderThread();
 			startSSE();
@@ -702,10 +745,13 @@ input, textarea { font: inherit; }
 		textarea.style.height = 'auto';
 		btn.disabled = true;
 
+		const nowIso = new Date().toISOString();
 		const optimisticMsg: WidgetMessage = {
 			id: `opt-${Date.now()}`,
 			body,
-			sent_at: new Date().toISOString()
+			created_at: nowIso,
+			sent_at: nowIso,
+			direction: 'inbound'
 		};
 		session.messages.push(optimisticMsg);
 		appendMessage(optimisticMsg, 'out');
@@ -742,21 +788,32 @@ input, textarea { font: inherit; }
 	function startSSE() {
 		if (!session) return;
 		stopSSE();
-		const url = `${BASE}/api/webchat/session/${session.session_id}/stream?token=${session.session_token}`;
+		// Resume from persisted cursor — guarantees no message gap across the
+		// 60s max-lifetime cycle, the 3s reconnect window, or a tab reload.
+		const since = loadCursor();
+		const params = new URLSearchParams({ token: session.session_token });
+		if (since) params.set('since', since);
+		const url = `${BASE}/api/webchat/session/${session.session_id}/stream?${params}`;
 		sseSource = new EventSource(url);
 		sseSource.onmessage = (e) => {
 			try {
 				const msg = JSON.parse(e.data) as WidgetMessage;
 				if (!session) return;
+				// Advance + persist cursor first so a render error can't
+				// cause us to re-deliver the same message on next reconnect.
+				saveCursor(msg.created_at);
 				if (session.messages.some((m) => m.id === msg.id)) return;
-				session.messages.push(msg);
-				appendMessage(msg, 'in');
+				// SSE only pushes contractor (outbound) messages → render 'in'.
+				const incoming: WidgetMessage = { ...msg, direction: 'outbound' };
+				session.messages.push(incoming);
+				appendMessage(incoming, 'in');
 			} catch { /* ignore */ }
 		};
 		sseSource.onerror = () => {
 			stopSSE();
+			// Reconnect whenever a session exists — independent of panel state.
 			sseReconnectTimer = setTimeout(() => {
-				if (open && session) startSSE();
+				if (session) startSSE();
 			}, 3000);
 		};
 	}

@@ -9,7 +9,7 @@
  *   - Closes after 60s max lifetime; widget auto-reconnects
  *   - Rate limit: 5 concurrent SSE connections per session_token
  */
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { messages, webchatSessions, webchatWidgets } from '$lib/server/db/schema';
@@ -60,8 +60,14 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 
 	incrementSSE(sessionToken);
 
-	// Track last sent message to avoid re-delivering
-	let lastSeenAt = new Date();
+	// Resume cursor from client. Widget persists the latest delivered
+	// message's created_at in localStorage and sends it on every (re)connect
+	// as ?since=<ISO>. Brand-new connections (no since) default to "now" so
+	// we don't replay history that the widget already restored.
+	const sinceParam = url.searchParams.get('since');
+	const parsedSince = sinceParam ? new Date(sinceParam) : null;
+	let lastSeenAt =
+		parsedSince && !Number.isNaN(parsedSince.getTime()) ? parsedSince : new Date();
 
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -100,7 +106,8 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 						.select({
 							id: messages.id,
 							body: messages.body,
-							sent_at: messages.sent_at
+							sent_at: messages.sent_at,
+							created_at: messages.created_at
 						})
 						.from(messages)
 						.where(
@@ -111,25 +118,21 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 								gt(messages.created_at, lastSeenAt)
 							)
 						)
-						.orderBy(desc(messages.created_at))
-						.limit(20);
+						.orderBy(asc(messages.created_at))
+						.limit(50);
 
 					if (rows.length > 0) {
-						// Update cursor to newest message seen
-						const newest = rows.reduce(
-							(max, r) => (r.sent_at && r.sent_at > max ? r.sent_at : max),
-							lastSeenAt
-						);
-						lastSeenAt = newest;
-
-						// Send in chronological order (oldest first)
-						for (const row of rows.reverse()) {
+						// Send in chronological order; advance cursor strictly on
+						// created_at — the same column used by the WHERE filter.
+						for (const row of rows) {
 							const payload = JSON.stringify({
 								id: row.id,
 								body: row.body ?? '',
-								sent_at: row.sent_at?.toISOString() ?? new Date().toISOString()
+								created_at: row.created_at.toISOString(),
+								sent_at: row.sent_at?.toISOString() ?? row.created_at.toISOString()
 							});
 							send(`data: ${payload}\n\n`);
+							if (row.created_at > lastSeenAt) lastSeenAt = row.created_at;
 						}
 					}
 				} catch {
