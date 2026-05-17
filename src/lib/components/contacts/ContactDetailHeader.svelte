@@ -2,7 +2,7 @@
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
-	import { ArrowLeft, Trash2, Phone, Mail } from '@lucide/svelte';
+	import { ArrowLeft, Trash2, Phone, Mail, Pencil } from '@lucide/svelte';
 
 	let {
 		full_name,
@@ -10,8 +10,10 @@
 		email,
 		status,
 		assignee_name,
+		canEdit,
 		canDelete,
 		onBack,
+		onEdit,
 		onDelete
 	}: {
 		full_name: string;
@@ -19,8 +21,10 @@
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		assignee_name?: string | null;
+		canEdit: boolean;
 		canDelete: boolean;
 		onBack: () => void;
+		onEdit: () => void;
 		onDelete: () => void;
 	} = $props();
 
@@ -48,11 +52,18 @@
 		>
 			<ArrowLeft class="h-4 w-4" /> Back
 		</button>
-		{#if canDelete}
-			<Button variant="ghost" size="icon" aria-label="Delete contact" onclick={onDelete}>
-				<Trash2 class="h-5 w-5 text-destructive" />
-			</Button>
-		{/if}
+		<div class="flex items-center gap-1">
+			{#if canEdit}
+				<Button variant="ghost" size="icon" aria-label="Edit contact" onclick={onEdit}>
+					<Pencil class="h-5 w-5 text-muted-foreground" />
+				</Button>
+			{/if}
+			{#if canDelete}
+				<Button variant="ghost" size="icon" aria-label="Delete contact" onclick={onDelete}>
+					<Trash2 class="h-5 w-5 text-destructive" />
+				</Button>
+			{/if}
+		</div>
 	</div>
 
 	<div class="flex items-start gap-4">

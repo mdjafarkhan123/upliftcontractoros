@@ -16,6 +16,7 @@ import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twil
 import { detectOptKeyword } from '$lib/server/twilio/optOut';
 import { sendSms } from '$lib/server/twilio/sendSms';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
+import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -297,9 +298,16 @@ export const POST: RequestHandler = async ({ request }) => {
 				return new Response('Internal error', { status: 500 });
 			}
 
+			if (processed) {
+				// Inbound digit reply was persisted — bump last_contacted_at best-effort.
+				void touchContactLastContacted(org.id, existingContact!.id);
+			}
+
 			if (processed && replyMessage && !existingContact!.sms_opt_out) {
 				try {
 					await sendSms(org.twilio_phone_number, existingContact!.phone, replyMessage);
+					// Outbound auto-reply also counts as contact made.
+					void touchContactLastContacted(org.id, existingContact!.id);
 				} catch (e) {
 					console.error('[twilio sms webhook] review reply SMS send failed', e);
 				}
@@ -309,6 +317,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// No active review request → fall through to normal inbound handling.
 	}
 	// Normal inbound path — wrap business mutations + outbox in one transaction
+	let touchedContactId: string | null = null;
 	try {
 		await db.transaction(async (tx) => {
 			let contactId: string;
@@ -487,6 +496,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				},
 				idempotency_key: `message.received:${insertedMsg.id}`
 			});
+
+			touchedContactId = contactId;
 		});
 	} catch (e) {
 		// Unique violation on twilio_message_sid → another concurrent webhook delivery
@@ -498,6 +509,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		console.error('[twilio sms webhook] transaction failed', e);
 		// Return 500 so Twilio retries
 		return new Response('Internal error', { status: 500 });
+	}
+
+	// Best-effort: bump contacts.last_contacted_at after a successful inbound SMS.
+	// Never fails the webhook response.
+	if (touchedContactId) {
+		void touchContactLastContacted(org.id, touchedContactId);
 	}
 
 	return twiml();

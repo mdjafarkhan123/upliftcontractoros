@@ -8,6 +8,7 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ContactDetailHeader from '$lib/components/contacts/ContactDetailHeader.svelte';
+	import ContactOperationalPanel from '$lib/components/contacts/ContactOperationalPanel.svelte';
 	import SmsOptOutBanner from '$lib/components/contacts/SmsOptOutBanner.svelte';
 	import TimelineTab from '$lib/components/contacts/TimelineTab.svelte';
 	import NotesTab from '$lib/components/contacts/NotesTab.svelte';
@@ -124,11 +125,13 @@
 				email={detail.contact.email}
 				status={detail.contact.status}
 				assignee_name={assigneeName}
+				{canEdit}
 				{canDelete}
 				onBack={() => {
 					if (page.url.search) goto('/contacts');
 					else history.back();
 				}}
+				onEdit={() => goto(`/contacts/${detail!.contact.id}/edit`)}
 				onDelete={() => {
 					deleteError = null;
 					deleteBlockCounts = null;
@@ -142,6 +145,13 @@
 					opted_out_at={detail.contact.sms_opt_out_at}
 				/>
 			{/if}
+
+			<ContactOperationalPanel
+				last_contacted_at={detail.contact.last_contacted_at}
+				next_follow_up_at={detail.contact.next_follow_up_at}
+				converted_at={detail.contact.converted_at}
+				preferred_contact_method={detail.contact.preferred_contact_method}
+			/>
 
 			<Tabs.Root bind:value={activeTab}>
 				<Tabs.List>

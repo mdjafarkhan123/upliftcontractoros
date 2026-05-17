@@ -14,6 +14,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { twilio } from '$lib/server/twilio/client';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
+import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 
 const log = createLogger('inbox.message.insert');
 
@@ -282,6 +283,9 @@ export const POST: RequestHandler = async (event) => {
 
 			return inserted;
 		});
+		// Best-effort: bump contacts.last_contacted_at after a successful outbound SMS.
+		// Failures inside touchContactLastContacted are logged and swallowed.
+		void touchContactLastContacted(auth.orgId, contact.id);
 		return json({ data: { message: result } }, { status: 201 });
 	} catch (e) {
 		log.error({
@@ -312,6 +316,7 @@ export const POST: RequestHandler = async (event) => {
 					sent_at: new Date()
 				})
 				.returning();
+			void touchContactLastContacted(auth.orgId, contact.id);
 			return json({ data: { message: salvage } }, { status: 201 });
 		} catch {
 			return json({ error: 'Message sent but failed to persist.' }, { status: 500 });

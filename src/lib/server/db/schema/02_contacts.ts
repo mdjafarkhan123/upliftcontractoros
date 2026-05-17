@@ -5,6 +5,15 @@ import { organizations, orgMembers } from './01_org_identity';
 
 export const contactStatusEnum = pgEnum('contact_status', ['lead', 'customer', 'archived']);
 
+export const PREFERRED_CONTACT_METHODS = [
+	'sms',
+	'call',
+	'email',
+	'whatsapp',
+	'messenger'
+] as const;
+export type PreferredContactMethod = (typeof PREFERRED_CONTACT_METHODS)[number];
+
 export const addressLabelEnum = pgEnum('address_label', [
 	'billing',
 	'service',
@@ -41,6 +50,11 @@ export const contacts = pgTable('contacts', {
 	sms_opted_in_at: timestamp('sms_opted_in_at', { withTimezone: true }),
 	lead_source: leadSourceTypeEnum('lead_source').notNull().default('manual'),
 	notes: text('notes'),
+	last_contacted_at: timestamp('last_contacted_at', { withTimezone: true }),
+	next_follow_up_at: timestamp('next_follow_up_at', { withTimezone: true }),
+	converted_at: timestamp('converted_at', { withTimezone: true }),
+	preferred_contact_method: text('preferred_contact_method'),
+	email_opt_in: boolean('email_opt_in').notNull().default(false),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()

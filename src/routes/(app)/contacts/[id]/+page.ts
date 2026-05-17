@@ -18,6 +18,11 @@ export type ContactDetailResponse = {
 		sms_opted_in_at: string | null;
 		notes: string | null;
 		tags: string[];
+		last_contacted_at: string | null;
+		next_follow_up_at: string | null;
+		converted_at: string | null;
+		preferred_contact_method: 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger' | null;
+		email_opt_in: boolean;
 		created_at: string;
 		updated_at: string;
 	};

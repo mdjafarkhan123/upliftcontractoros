@@ -10,6 +10,7 @@ import {
 } from '$lib/server/db/schema';
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
+import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -59,6 +60,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		.limit(1);
 	if (existingMsg) return twiml();
 
+	let touchedContactId: string | null = null;
 	try {
 		await db.transaction(async (tx) => {
 			let contactId: string;
@@ -217,6 +219,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				},
 				idempotency_key: `call.missed:${callSid}`
 			});
+
+			touchedContactId = contactId;
 		});
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : '';
@@ -225,6 +229,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		console.error('[twilio voice webhook] transaction failed', e);
 		return new Response('Internal error', { status: 500 });
+	}
+
+	// Best-effort: bump contacts.last_contacted_at after a successful missed call.
+	if (touchedContactId) {
+		void touchContactLastContacted(org.id, touchedContactId);
 	}
 
 	return twiml();

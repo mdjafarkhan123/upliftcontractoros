@@ -58,8 +58,13 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const parsed = updateContactSchema.safeParse(body);
 	if (!parsed.success) {
+		const issue = parsed.error.issues[0];
+		const isUnknownKey = issue?.code === 'unrecognized_keys';
 		return json(
-			{ error: parsed.error.issues[0]?.message ?? 'Invalid input', code: 'VALIDATION_ERROR' },
+			{
+				error: issue?.message ?? 'Invalid input',
+				code: isUnknownKey ? 'UNKNOWN_FIELD' : 'VALIDATION_ERROR'
+			},
 			{ status: 422 }
 		);
 	}
@@ -80,6 +85,22 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (!existing) error(404, 'Contact not found');
 
+	// Optimistic concurrency — client must send the updated_at it read.
+	if (updates.updated_at !== undefined) {
+		const clientStamp = new Date(updates.updated_at).getTime();
+		const serverStamp = existing.updated_at.getTime();
+		if (clientStamp !== serverStamp) {
+			return json(
+				{
+					error: 'This contact was changed by someone else. Reload and try again.',
+					code: 'STALE_UPDATE',
+					current_updated_at: existing.updated_at.toISOString()
+				},
+				{ status: 409 }
+			);
+		}
+	}
+
 	const next: Record<string, unknown> = { updated_at: new Date() };
 
 	if (updates.full_name !== undefined) next.full_name = updates.full_name;
@@ -88,6 +109,25 @@ export const PATCH: RequestHandler = async (event) => {
 	if (updates.status !== undefined) next.status = updates.status;
 	if (updates.notes !== undefined) next.notes = updates.notes;
 	if (updates.tags !== undefined) next.tags = updates.tags;
+	if (updates.next_follow_up_at !== undefined) {
+		next.next_follow_up_at = updates.next_follow_up_at
+			? new Date(updates.next_follow_up_at)
+			: null;
+	}
+	if (updates.preferred_contact_method !== undefined) {
+		next.preferred_contact_method = updates.preferred_contact_method;
+	}
+	if (updates.email_opt_in !== undefined) next.email_opt_in = updates.email_opt_in;
+
+	// Auto-set converted_at on the lead → customer transition. Never cleared
+	// when reverting to lead; preserved as historical first-conversion timestamp.
+	if (
+		updates.status === 'customer' &&
+		existing.status === 'lead' &&
+		existing.converted_at === null
+	) {
+		next.converted_at = new Date();
+	}
 
 	if (updates.assigned_to !== undefined) {
 		if (updates.assigned_to === null) {
