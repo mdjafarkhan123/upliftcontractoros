@@ -1,7 +1,7 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import type { RequestEvent } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 export function createServerClient(event: RequestEvent) {
 	const url = env.SUPABASE_URL;

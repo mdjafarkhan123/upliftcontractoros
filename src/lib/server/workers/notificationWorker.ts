@@ -9,7 +9,7 @@ import {
 } from '$lib/server/db/schema';
 import { NOTIFICATION_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { automationCancelHooks } from './automationWorker';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 type EventJobData = {
 	outbox_event_id: string;

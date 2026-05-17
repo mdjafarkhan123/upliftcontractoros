@@ -1,5 +1,5 @@
 import Twilio from 'twilio';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 let _client: ReturnType<typeof Twilio> | null = null;
 

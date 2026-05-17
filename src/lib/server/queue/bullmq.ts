@@ -1,6 +1,6 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 let _connection: Redis | null = null;
 

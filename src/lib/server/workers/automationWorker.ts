@@ -23,7 +23,7 @@ import {
 import { twilio } from '$lib/server/twilio/client';
 import { sendQuoteEmail } from '$lib/server/email/quoteEmails';
 import { interpolate } from './templates';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 type EventJobData = {
 	outbox_event_id: string;

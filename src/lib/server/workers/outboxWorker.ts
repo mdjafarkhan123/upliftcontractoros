@@ -2,7 +2,7 @@ import postgres from 'postgres';
 import { sql, and, eq, lte, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { outboxEvents, type OutboxEvent } from '$lib/server/db/schema';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 import { automationQueue, notificationQueue, addJob } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
 

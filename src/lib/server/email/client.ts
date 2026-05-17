@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 
 let _client: Resend | null = null;
 

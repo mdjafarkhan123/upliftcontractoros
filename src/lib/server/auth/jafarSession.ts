@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import type { RequestEvent } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+const env = process.env;
 import { dev } from '$app/environment';
 
 const COOKIE_NAME = 'jafar_session';
