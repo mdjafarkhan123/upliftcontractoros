@@ -5,8 +5,150 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		%sveltekit.head%
+		<style>
+			/*
+			 * Critical first-paint loader.
+			 * Inlined so it renders before JS downloads, hydration runs, or auth resolves.
+			 * Animations limited to opacity + transform for GPU friendliness.
+			 * Component overlay (AppLoader.svelte) reuses these classes via --overlay modifier.
+			 */
+			.app-loader {
+				position: fixed;
+				inset: 0;
+				z-index: 9999;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				background: #0f1115;
+				color: #e5e7eb;
+				font-family:
+					-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+					Cantarell, sans-serif;
+				opacity: 1;
+				transition: opacity 220ms ease;
+				will-change: opacity;
+			}
+			.app-loader--overlay {
+				background: rgba(15, 17, 21, 0.78);
+			}
+			.app-loader--hidden {
+				opacity: 0;
+				pointer-events: none;
+			}
+			.app-loader__mark {
+				position: relative;
+				width: 64px;
+				height: 64px;
+			}
+			.app-loader__ring {
+				position: absolute;
+				inset: 0;
+				border-radius: 50%;
+				border: 2px solid rgba(255, 255, 255, 0.08);
+				border-top-color: #3b82f6;
+				animation: app-loader-spin 1.2s linear infinite;
+				will-change: transform;
+			}
+			.app-loader__pulse {
+				position: absolute;
+				inset: 18px;
+				border-radius: 50%;
+				background: #3b82f6;
+				opacity: 0.55;
+				animation: app-loader-pulse 1.6s ease-in-out infinite;
+				will-change: transform, opacity;
+			}
+			.app-loader__label {
+				margin-top: 22px;
+				font-size: 13px;
+				letter-spacing: 0.02em;
+				color: rgba(229, 231, 235, 0.7);
+			}
+			.app-loader__bar {
+				position: absolute;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				height: 2px;
+				overflow: hidden;
+				background: rgba(255, 255, 255, 0.04);
+			}
+			.app-loader__bar-fill {
+				position: absolute;
+				top: 0;
+				left: 0;
+				height: 100%;
+				width: 28%;
+				background: linear-gradient(
+					90deg,
+					rgba(59, 130, 246, 0) 0%,
+					rgba(59, 130, 246, 0.9) 50%,
+					rgba(59, 130, 246, 0) 100%
+				);
+				transform: translateX(-100%);
+				animation: app-loader-bar 1.4s ease-in-out infinite;
+				will-change: transform;
+			}
+			@keyframes app-loader-spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+			@keyframes app-loader-pulse {
+				0%,
+				100% {
+					transform: scale(0.82);
+					opacity: 0.3;
+				}
+				50% {
+					transform: scale(1);
+					opacity: 0.65;
+				}
+			}
+			@keyframes app-loader-bar {
+				0% {
+					transform: translateX(-100%);
+				}
+				100% {
+					transform: translateX(450%);
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.app-loader__ring,
+				.app-loader__pulse,
+				.app-loader__bar-fill {
+					animation: none;
+				}
+				.app-loader__ring {
+					border-top-color: rgba(59, 130, 246, 0.55);
+				}
+				.app-loader__pulse {
+					opacity: 0.45;
+				}
+				.app-loader__bar-fill {
+					transform: translateX(0);
+					width: 18%;
+				}
+			}
+		</style>
 	</head>
 	<body data-sveltekit-preload-data="hover">
+		<div
+			id="app-loader-initial"
+			class="app-loader"
+			role="status"
+			aria-busy="true"
+			aria-live="polite"
+			aria-label="Loading ContractorOS"
+		>
+			<div class="app-loader__mark">
+				<div class="app-loader__ring"></div>
+				<div class="app-loader__pulse"></div>
+			</div>
+			<div class="app-loader__label">Loading ContractorOS…</div>
+			<div class="app-loader__bar"><div class="app-loader__bar-fill"></div></div>
+		</div>
 		<div>%sveltekit.body%</div>
 	</body>
 </html>
