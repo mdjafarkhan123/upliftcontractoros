@@ -68,17 +68,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return applyCorsHeaders(response, allowedOrigin);
 	}
 
-	// 1. Always attach supabase client + safeSession for downstream use
+	// 1. Always attach supabase client for downstream use (auth routes need it).
+	// No auth calls here — public paths don't need them, non-public paths do their
+	// own single getUser() below (validates the JWT) and feed it to loadAuthContext.
 	const supabase = createServerClient(event);
 	event.locals.supabase = supabase;
-
-	const { data: { session } } = await supabase.auth.getSession();
-	if (session) {
-		const { data: { user } } = await supabase.auth.getUser();
-		event.locals.safeSession = user ? session : null;
-	} else {
-		event.locals.safeSession = null;
-	}
 
 	// 2. /jafar route protection (separate session system)
 	if (pathname.startsWith('/jafar') && pathname !== '/jafar') {
@@ -96,7 +90,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// 3. Contractor auth context — skip for public routes and webhooks
 	event.locals.auth = null;
 	if (!isPublicPath(pathname)) {
-		const auth = await loadAuthContext(event);
+		// Single getUser() call — validates the JWT against Supabase Auth.
+		// getSession() is intentionally NOT called: it returns unverified data and
+		// is unsafe on its own per Supabase docs, so pairing the two is wasted RTT.
+		const { data: { user } } = await supabase.auth.getUser();
+		const auth = user ? await loadAuthContext(user) : null;
 		event.locals.auth = auth;
 
 		// /change-password is special: needs auth loaded, but doesn't enforce password_changed

@@ -189,12 +189,6 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
 	const now = new Date();
 	const txStart = Date.now();
-	log.info({
-		phase: 'tx_begin',
-		conversation_id: session.conversation_id,
-		org_id: session.org_id,
-		direction: 'inbound'
-	});
 
 	let result;
 	try {
@@ -213,12 +207,6 @@ export const POST: RequestHandler = async ({ request, params }) => {
 					sent_at: now
 				})
 				.returning();
-
-			log.info({
-				phase: 'insert_ok',
-				message_id: inserted.id,
-				conversation_id: session.conversation_id
-			});
 
 			await tx
 				.update(conversations)
@@ -251,12 +239,6 @@ export const POST: RequestHandler = async ({ request, params }) => {
 			});
 
 			return inserted;
-		});
-		log.info({
-			phase: 'commit_ok',
-			message_id: result.id,
-			conversation_id: session.conversation_id,
-			ms: Date.now() - txStart
 		});
 	} catch (e) {
 		log.error({

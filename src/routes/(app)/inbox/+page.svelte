@@ -64,11 +64,7 @@
 					inboxStore.applyRealtimeMessageInsert(payload.new);
 				}
 			)
-			.subscribe((status, err) => {
-				if (status !== 'SUBSCRIBED') {
-					console.warn('[realtime inbox:list]', status, err);
-				}
-			});
+			.subscribe();
 		return () => {
 			void supabase.removeChannel(channel);
 		};

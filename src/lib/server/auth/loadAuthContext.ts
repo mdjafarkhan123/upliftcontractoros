@@ -1,10 +1,8 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import type { RequestEvent } from '@sveltejs/kit';
 import type { User } from '@supabase/supabase-js';
 import { db } from '$lib/server/db/client';
 import { orgMembers, organizations } from '$lib/server/db/schema';
 import type { Org, OrgMember, FeatureFlags, OrgLimits, IntegrationStatus, FeatureFlagKey, LimitKey } from '$lib/types';
-import { createServerClient } from './supabase';
 
 export type AuthContext = {
 	supabaseUser: User;
@@ -46,15 +44,7 @@ function pickLimits(org: Org): OrgLimits {
 	return out;
 }
 
-export async function loadAuthContext(event: RequestEvent): Promise<AuthContext | null> {
-	const supabase = createServerClient(event);
-
-	const { data: { session } } = await supabase.auth.getSession();
-	if (!session) return null;
-
-	const { data: { user }, error } = await supabase.auth.getUser();
-	if (error || !user) return null;
-
+export async function loadAuthContext(user: User): Promise<AuthContext | null> {
 	const [row] = await db
 		.select({ member: orgMembers, org: organizations })
 		.from(orgMembers)

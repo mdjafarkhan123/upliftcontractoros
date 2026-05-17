@@ -128,13 +128,6 @@ export const POST: RequestHandler = async (event) => {
 	// Webchat channel — no Twilio, just insert outbound message and emit message.sent
 	if (conv.channel === 'webchat') {
 		const txStart = Date.now();
-		log.info({
-			phase: 'tx_begin',
-			channel: 'webchat',
-			conversation_id: conv.id,
-			org_id: auth.orgId,
-			sent_by: auth.member.id
-		});
 		try {
 			const result = await db.transaction(async (tx) => {
 				const [inserted] = await tx
@@ -151,13 +144,6 @@ export const POST: RequestHandler = async (event) => {
 						sent_at: new Date()
 					})
 					.returning();
-
-				log.info({
-					phase: 'insert_ok',
-					channel: 'webchat',
-					message_id: inserted.id,
-					conversation_id: conv.id
-				});
 
 				await tx
 					.update(conversations)
@@ -182,13 +168,6 @@ export const POST: RequestHandler = async (event) => {
 				});
 
 				return inserted;
-			});
-			log.info({
-				phase: 'commit_ok',
-				channel: 'webchat',
-				message_id: result.id,
-				conversation_id: conv.id,
-				ms: Date.now() - txStart
 			});
 			return json({ data: { message: result } }, { status: 201 });
 		} catch (e) {
@@ -260,14 +239,6 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const txStart = Date.now();
-	log.info({
-		phase: 'tx_begin',
-		channel: 'sms',
-		conversation_id: conv.id,
-		org_id: auth.orgId,
-		sent_by: auth.member.id,
-		twilio_message_sid: twilioSid
-	});
 	try {
 		const result = await db.transaction(async (tx) => {
 			const [inserted] = await tx
@@ -285,14 +256,6 @@ export const POST: RequestHandler = async (event) => {
 					sent_at: new Date()
 				})
 				.returning();
-
-			log.info({
-				phase: 'insert_ok',
-				channel: 'sms',
-				message_id: inserted.id,
-				conversation_id: conv.id,
-				twilio_message_sid: twilioSid
-			});
 
 			await tx
 				.update(conversations)
@@ -318,14 +281,6 @@ export const POST: RequestHandler = async (event) => {
 			});
 
 			return inserted;
-		});
-
-		log.info({
-			phase: 'commit_ok',
-			channel: 'sms',
-			message_id: result.id,
-			conversation_id: conv.id,
-			ms: Date.now() - txStart
 		});
 		return json({ data: { message: result } }, { status: 201 });
 	} catch (e) {
