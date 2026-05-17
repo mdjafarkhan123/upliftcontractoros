@@ -111,8 +111,6 @@
 								autocomplete="one-time-code"
 								placeholder="123 456"
 								maxlength="6"
-								pattern="[0-9]*"
-								required
 								class="flex h-11 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5 text-sm tracking-[0.4em] font-mono text-white placeholder:text-slate-500 placeholder:tracking-normal placeholder:font-sans focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500/60 focus:bg-slate-950 transition-all duration-150"
 							/>
 							<p class="text-xs text-slate-500 leading-relaxed pt-0.5">

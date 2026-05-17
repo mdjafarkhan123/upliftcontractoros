@@ -1,6 +1,4 @@
 import { fail, redirect } from '@sveltejs/kit';
-import bcrypt from 'bcryptjs';
-import { verify } from 'otplib';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import { setJafarSession } from '$lib/server/auth/jafarSession';
@@ -20,21 +18,13 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const email = String(formData.get('email') ?? '').trim();
 		const password = String(formData.get('password') ?? '');
-		const totp = String(formData.get('totp') ?? '').trim();
 
 		const configuredEmail = getRequiredEnv('SUPER_ADMIN_EMAIL');
-		const passwordHash = getRequiredEnv('SUPER_ADMIN_PASSWORD_HASH');
-		const totpSecret = getRequiredEnv('SUPER_ADMIN_TOTP_SECRET');
+		const configuredPassword = getRequiredEnv('SUPER_ADMIN_PASSWORD');
 
-		const invalid = () => fail(401, { errorMessage: 'Invalid credentials.' });
-
-		if (email !== configuredEmail) return invalid();
-
-		const passwordOk = await bcrypt.compare(password, passwordHash);
-		if (!passwordOk) return invalid();
-
-		const totpResult = await verify({ token: totp, secret: totpSecret });
-		if (!totpResult.valid) return invalid();
+		if (email !== configuredEmail || password !== configuredPassword) {
+			return fail(401, { errorMessage: 'Invalid credentials.' });
+		}
 
 		setJafarSession(event);
 		throw redirect(303, '/jafar/dashboard');
