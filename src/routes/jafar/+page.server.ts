@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
-import { authenticator } from 'otplib';
+import { verify } from 'otplib';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import { setJafarSession } from '$lib/server/auth/jafarSession';
@@ -33,8 +33,8 @@ export const actions: Actions = {
 		const passwordOk = await bcrypt.compare(password, passwordHash);
 		if (!passwordOk) return invalid();
 
-		const totpOk = authenticator.verify({ token: totp, secret: totpSecret });
-		if (!totpOk) return invalid();
+		const totpResult = await verify({ token: totp, secret: totpSecret });
+		if (!totpResult.valid) return invalid();
 
 		setJafarSession(event);
 		throw redirect(303, '/jafar/dashboard');
