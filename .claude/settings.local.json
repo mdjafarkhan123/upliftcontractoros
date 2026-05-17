@@ -49,7 +49,10 @@
       "Bash(git commit -m ' *)",
       "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\messages\")",
       "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\restore\")",
-      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\stream\")"
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\api\\\\webchat\\\\session\\\\[sessionId]\\\\stream\")",
+      "Bash(grep -rh 'from '\\\\''$lib\\\\|from '\\\\''\\\\./\\\\|from '\\\\''\\\\.\\\\./' src/lib/server/workers src/lib/server/cron src/lib/server/queue)",
+      "Bash(grep -rh 'from '\\\\''$lib' src/lib/server/workers/automationWorker.ts src/lib/server/workers/outboxWorker.ts src/lib/server/workers/notificationWorker.ts)",
+      "Bash(grep -oE '\\\\$lib/[^'\\\\''\"]+')"
     ]
   }
 }

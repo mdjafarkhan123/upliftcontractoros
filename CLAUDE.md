@@ -146,6 +146,37 @@ drizzle.config.ts             ← Points to schema/index.ts and DATABASE_URL
 
 ---
 
+## Deployment — Vercel + Railway
+
+- **Vercel** serves the SvelteKit app (routes, API, static assets including `static/webchat-widget.js`).
+- **Railway** runs the standalone worker (`worker.ts`) on the free tier — build minutes are scarce.
+- Railway's **Watch Paths** are configured to redeploy ONLY when worker-relevant code changes. Current watch list:
+  ```
+  worker.ts
+  src/lib/server/workers/**
+  src/lib/server/cron/**
+  src/lib/server/queue/**
+  src/lib/server/db/**
+  src/lib/server/email/**
+  src/lib/server/media/**
+  src/lib/server/r2/**
+  src/lib/server/twilio/**
+  src/lib/server/org/**
+  src/lib/server/log.ts
+  package.json
+  package-lock.json
+  tsconfig.json
+  drizzle.config.ts
+  nixpacks.toml
+  railway.json
+  railway.toml
+  Dockerfile
+  ```
+- **IMPORTANT:** If you add a new `$lib/server/...` import inside any worker, cron job, or queue module, you MUST add that path to Railway's Watch Paths — otherwise the worker will run against stale code. Flag this to the user whenever such an import is introduced.
+- UI-only, route-only, widget-only, and business-logic-only changes (contacts, pipeline, quotes, jobs, invoices, etc. — anything NOT imported by workers) should never trigger a Railway rebuild.
+
+---
+
 ## Non-Negotiable Rules
 
 These rules are never overridden by a prompt. If a task conflicts with any of these, stop and flag it.

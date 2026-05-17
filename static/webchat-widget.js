@@ -1,37 +1,197 @@
-(function(){(function(){let e=document.currentScript,t=e?.getAttribute(`data-widget-token`);if(!t){console.warn(`[WebChat] Missing data-widget-token attribute.`);return}let n=e?.src?new URL(e.src).origin:window.location.origin,r=`wc_session_${t}`,i=null,a=!1,o=null,s=null;function c(e){let t=`wc-styles`;if(document.getElementById(t))return;let n=document.createElement(`style`);n.id=t,n.textContent=`
-:root { --wc-primary: ${e}; }
-#wc-root *, #wc-root *::before, #wc-root *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-#wc-btn { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--wc-primary); border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.28); display: flex; align-items: center; justify-content: center; z-index: 999998; transition: transform .15s ease, box-shadow .15s ease; }
-#wc-btn:hover { transform: scale(1.07); box-shadow: 0 6px 20px rgba(0,0,0,.36); }
-#wc-btn svg { width: 26px; height: 26px; fill: #fff; }
-#wc-panel { position: fixed; bottom: 92px; right: 24px; width: 320px; height: 480px; background: #18181b; border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,.48); display: flex; flex-direction: column; z-index: 999997; overflow: hidden; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
-#wc-panel.wc-open { opacity: 1; transform: translateY(0); pointer-events: all; }
-@media (max-width: 400px) { #wc-panel { right: 0; bottom: 0; left: 0; width: 100%; height: 100%; border-radius: 0; } }
-#wc-header { background: var(--wc-primary); padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
-#wc-logo { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.2); flex-shrink: 0; }
-#wc-logo-placeholder { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.25); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-#wc-org-name { font-size: 14px; font-weight: 600; color: #fff; flex: 1; }
-#wc-close { background: none; border: none; cursor: pointer; color: rgba(255,255,255,.8); display: flex; align-items: center; padding: 2px; border-radius: 4px; }
-#wc-close:hover { color: #fff; }
-#wc-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-#wc-form { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-#wc-form p { font-size: 13px; color: #a1a1aa; line-height: 1.5; }
-.wc-input { width: 100%; padding: 10px 12px; background: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; font-size: 14px; outline: none; transition: border-color .15s; }
-.wc-input:focus { border-color: var(--wc-primary); }
-.wc-input::placeholder { color: #71717a; }
-.wc-submit { width: 100%; padding: 10px; background: var(--wc-primary); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
-.wc-submit:hover { opacity: .9; }
-.wc-submit:disabled { opacity: .55; cursor: not-allowed; }
-.wc-error { font-size: 12px; color: #f87171; }
-.wc-mode-hint { font-size: 12px; color: #71717a; text-align: center; padding: 8px 16px 0; }
-.wc-msg { max-width: 80%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
-.wc-msg-in { align-self: flex-start; background: #27272a; color: #f4f4f5; border-bottom-left-radius: 4px; }
-.wc-msg-out { align-self: flex-end; background: var(--wc-primary); color: #fff; border-bottom-right-radius: 4px; }
-.wc-msg-time { font-size: 10px; opacity: .55; margin-top: 3px; display: block; }
-#wc-composer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #27272a; background: #18181b; }
-#wc-input { flex: 1; padding: 9px 11px; background: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; font-size: 13px; outline: none; resize: none; }
-#wc-input:focus { border-color: var(--wc-primary); }
-#wc-send { padding: 0 14px; background: var(--wc-primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: opacity .15s; }
-#wc-send:hover { opacity: .9; }
-#wc-send:disabled { opacity: .5; cursor: not-allowed; }
-`,document.head.appendChild(n)}let l=null,u=null,d=null;function f(){let e=document.createElement(`div`);return e.id=`wc-root`,document.body.appendChild(e),e}function p(e){return d=document.createElement(`button`),d.id=`wc-btn`,d.setAttribute(`aria-label`,`Open chat`),d.innerHTML=`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`,d.style.background=e,d.addEventListener(`click`,b),d}function m(e){l=document.createElement(`div`),l.id=`wc-panel`;let t=document.createElement(`div`);if(t.id=`wc-header`,e.logo_url){let n=document.createElement(`img`);n.id=`wc-logo`,n.src=e.logo_url,n.alt=e.org_name,t.appendChild(n)}else{let e=document.createElement(`div`);e.id=`wc-logo-placeholder`,e.innerHTML=`<svg width="16" height="16" fill="rgba(255,255,255,.7)" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>`,t.appendChild(e)}let n=document.createElement(`span`);n.id=`wc-org-name`,n.textContent=e.org_name,t.appendChild(n);let r=document.createElement(`button`);return r.id=`wc-close`,r.setAttribute(`aria-label`,`Close chat`),r.innerHTML=`<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>`,r.addEventListener(`click`,b),t.appendChild(r),l.appendChild(t),u=document.createElement(`div`),u.id=`wc-body`,l.appendChild(u),l}function h(e){let t=document.createElement(`div`);t.id=`wc-form`;let n=document.createElement(`p`);n.textContent=e.intro_message,t.appendChild(n);let r=document.createElement(`input`);r.className=`wc-input`,r.type=`text`,r.placeholder=`Your name *`,r.autocomplete=`name`,t.appendChild(r);let i=document.createElement(`input`);i.className=`wc-input`,i.type=`tel`,i.placeholder=`Your phone number *`,i.autocomplete=`tel`,t.appendChild(i);let a=document.createElement(`span`);a.className=`wc-error`,a.textContent=``,t.appendChild(a);let o=document.createElement(`button`);o.className=`wc-submit`,o.textContent=e.webchat_mode===`instant`?`Chat with our team`:`Send message`,t.appendChild(o);let s=document.createElement(`p`);return s.className=`wc-mode-hint`,s.textContent=e.webchat_mode===`instant`?`Chat with our team`:e.offline_message,t.appendChild(s),o.addEventListener(`click`,async()=>{let t=r.value.trim(),n=i.value.trim();if(!t||!n){a.textContent=`Please enter your name and phone number.`;return}a.textContent=``,o.disabled=!0,o.textContent=`Starting…`;let s=await w(t,n,e);s&&(a.textContent=s,o.disabled=!1,o.textContent=e.webchat_mode===`instant`?`Chat with our team`:`Send message`)}),t}function g(){if(!u||!i)return;u.innerHTML=``;for(let e of i.messages)_(e,`in`);let e=document.createElement(`div`);e.id=`wc-composer`;let t=document.createElement(`textarea`);t.id=`wc-input`,t.placeholder=`Type a message…`,t.rows=1,e.appendChild(t);let n=document.createElement(`button`);n.id=`wc-send`,n.textContent=`Send`,e.appendChild(n),l&&l.appendChild(e),n.addEventListener(`click`,()=>T(t,n)),t.addEventListener(`keydown`,e=>{e.key===`Enter`&&!e.shiftKey&&(e.preventDefault(),T(t,n))}),v()}function _(e,t){if(!u)return;let n=document.createElement(`div`);n.className=`wc-msg wc-msg-${t}`;let r=document.createElement(`span`);r.textContent=e.body,n.appendChild(r);let i=document.createElement(`span`);i.className=`wc-msg-time`,i.textContent=y(e.sent_at),n.appendChild(i),u.appendChild(n),v()}function v(){u&&(u.scrollTop=u.scrollHeight)}function y(e){try{return new Date(e).toLocaleTimeString([],{hour:`2-digit`,minute:`2-digit`})}catch{return``}}function b(){a=!a,l&&l.classList.toggle(`wc-open`,a),a&&i?D():O()}async function x(e){let t=localStorage.getItem(r);if(t){try{let n=JSON.parse(t),r=await C(n.session_id,n.session_token);if(r){i=r,c(i.config.primary_color||`#6366f1`),e.appendChild(p(i.config.primary_color||`#6366f1`)),e.appendChild(m(i.config));return}}catch{}localStorage.removeItem(r)}let n=await S();n&&(c(n.primary_color||`#6366f1`),e.appendChild(p(n.primary_color||`#6366f1`)),e.appendChild(m(n)),u&&u.appendChild(h(n)))}async function S(){try{let e=await fetch(`${n}/api/webchat/config?token=${t}`);return e.ok?(await e.json()).data??null:null}catch{return null}}async function C(e,t){try{let r=await fetch(`${n}/api/webchat/session/${e}/restore`,{headers:{Authorization:`Bearer ${t}`}});if(!r.ok)return null;let i=await r.json();return i.data?{session_id:e,session_token:t,config:{org_name:i.data.org_name,logo_url:i.data.logo_url,primary_color:i.data.primary_color,intro_message:i.data.intro_message,offline_message:i.data.offline_message,webchat_mode:i.data.webchat_mode},messages:i.data.messages}:null}catch{return null}}async function w(e,a,o){try{let o=await fetch(`${n}/api/webchat/session/start`,{method:`POST`,headers:{"Content-Type":`application/json`},body:JSON.stringify({widget_token:t,name:e,phone:a})}),s=await o.json();return!o.ok||!s.data?o.status===429?`Too many requests. Please try again in a moment.`:s.error??`Failed to start session. Please try again.`:(i={session_id:s.data.session_id,session_token:s.data.session_token,config:{org_name:s.data.org_name,logo_url:s.data.logo_url,primary_color:s.data.primary_color,intro_message:s.data.intro_message,offline_message:s.data.offline_message,webchat_mode:s.data.webchat_mode},messages:[]},localStorage.setItem(r,JSON.stringify({session_id:i.session_id,session_token:i.session_token})),u&&(u.innerHTML=``),g(),D(),null)}catch{return`Network error. Please try again.`}}async function T(e,t){if(!i)return;let r=e.value.trim();if(!r)return;e.value=``,t.disabled=!0;let a={id:`opt-${Date.now()}`,body:r,sent_at:new Date().toISOString()};i.messages.push(a),_(a,`out`);try{(await fetch(`${n}/api/webchat/session/${i.session_id}/messages`,{method:`POST`,headers:{"Content-Type":`application/json`,Authorization:`Bearer ${i.session_token}`},body:JSON.stringify({body:r})})).ok||(E(a.id),e.value=r)}catch{E(a.id),e.value=r}finally{t.disabled=!1}}function E(e){if(i&&(i.messages=i.messages.filter(t=>t.id!==e),u)){u.querySelectorAll(`.wc-msg`).forEach(e=>e.remove());for(let e of i.messages)_(e,`out`)}}function D(){if(!i)return;O();let e=`${n}/api/webchat/session/${i.session_id}/stream?token=${i.session_token}`;o=new EventSource(e),o.onmessage=e=>{try{let t=JSON.parse(e.data);if(!i||i.messages.some(e=>e.id===t.id))return;i.messages.push(t),_(t,`in`)}catch{}},o.onerror=()=>{O(),s=setTimeout(()=>{a&&i&&D()},3e3)}}function O(){o&&=(o.close(),null),s&&=(clearTimeout(s),null)}document.readyState===`loading`?document.addEventListener(`DOMContentLoaded`,()=>{x(f())}):x(f())})()})();
+(function(){(function(){let e=document.currentScript,t=e?.getAttribute(`data-widget-token`);if(!t){console.warn(`[WebChat] Missing data-widget-token attribute.`);return}let n=e?.src?new URL(e.src).origin:window.location.origin,r=`wc_session_${t}`,i=null,a=!1,o=null,s=null,c=null,l=null,u=null,d=null,f=null;function p(e){return`
+:host, .wc-host { all: initial; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+button { font: inherit; cursor: pointer; }
+input, textarea { font: inherit; }
+
+.wc-launcher {
+	position: fixed; bottom: 24px; right: 24px;
+	width: 60px; height: 60px; border-radius: 50%;
+	background: linear-gradient(135deg, ${e} 0%, ${h(e,-18)} 100%);
+	border: none;
+	box-shadow: 0 10px 30px ${m(e,.35)}, 0 4px 10px rgba(15, 23, 42, 0.12);
+	display: flex; align-items: center; justify-content: center;
+	z-index: 2147483646;
+	transition: transform .22s cubic-bezier(.2,.9,.3,1.4), box-shadow .22s ease;
+	color: #fff;
+}
+.wc-launcher:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 14px 36px ${m(e,.45)}, 0 6px 14px rgba(15, 23, 42, 0.18); }
+.wc-launcher:active { transform: translateY(0) scale(.98); }
+.wc-launcher .wc-icon { width: 28px; height: 28px; transition: opacity .18s, transform .22s; }
+.wc-launcher .wc-icon-close { position: absolute; opacity: 0; transform: rotate(-45deg) scale(.6); }
+.wc-launcher[data-open="true"] .wc-icon-chat { opacity: 0; transform: rotate(45deg) scale(.6); }
+.wc-launcher[data-open="true"] .wc-icon-close { opacity: 1; transform: rotate(0) scale(1); }
+
+.wc-panel {
+	position: fixed; bottom: 100px; right: 24px;
+	width: 380px; max-width: calc(100vw - 32px);
+	height: 600px; max-height: calc(100vh - 130px);
+	background: #ffffff;
+	border-radius: 20px;
+	box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18), 0 12px 30px rgba(15, 23, 42, 0.10), 0 0 0 1px rgba(15, 23, 42, 0.04);
+	display: flex; flex-direction: column;
+	z-index: 2147483645;
+	overflow: hidden;
+	opacity: 0;
+	transform: translateY(16px) scale(.98);
+	transform-origin: bottom right;
+	pointer-events: none;
+	transition: opacity .22s ease, transform .26s cubic-bezier(.2,.9,.3,1.2);
+}
+.wc-panel[data-open="true"] { opacity: 1; transform: translateY(0) scale(1); pointer-events: all; }
+
+@media (max-width: 480px) {
+	.wc-panel { right: 12px; left: 12px; bottom: 92px; width: auto; max-width: none; height: calc(100vh - 110px); border-radius: 18px; }
+	.wc-launcher { bottom: 18px; right: 18px; width: 56px; height: 56px; }
+}
+
+.wc-header {
+	position: relative;
+	padding: 22px 20px 22px;
+	background: linear-gradient(135deg, ${e} 0%, ${h(e,-22)} 100%);
+	color: #fff;
+	display: flex; align-items: center; gap: 12px;
+	flex-shrink: 0;
+}
+.wc-header::after {
+	content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 24px;
+	background: linear-gradient(to bottom, ${m(e,0)} 0%, ${m(e,0)} 100%);
+	pointer-events: none;
+}
+.wc-logo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.22); flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.wc-logo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.wc-header-text { flex: 1; min-width: 0; }
+.wc-org-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.wc-org-status { font-size: 12px; opacity: .85; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+.wc-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(74, 222, 128, .25); }
+.wc-close {
+	background: rgba(255,255,255,.16);
+	border: none; color: #fff;
+	width: 32px; height: 32px; border-radius: 10px;
+	display: flex; align-items: center; justify-content: center;
+	transition: background .15s;
+}
+.wc-close:hover { background: rgba(255,255,255,.28); }
+
+.wc-body {
+	flex: 1; overflow-y: auto; overflow-x: hidden;
+	padding: 20px 18px 12px;
+	display: flex; flex-direction: column; gap: 10px;
+	background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+	scroll-behavior: smooth;
+}
+.wc-body::-webkit-scrollbar { width: 6px; }
+.wc-body::-webkit-scrollbar-track { background: transparent; }
+.wc-body::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .12); border-radius: 999px; }
+.wc-body::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, .22); }
+
+.wc-form { padding: 24px 22px 22px; display: flex; flex-direction: column; gap: 14px; background: #ffffff; }
+.wc-form-intro { font-size: 14px; color: #475569; line-height: 1.55; }
+.wc-field { display: flex; flex-direction: column; gap: 6px; }
+.wc-label { font-size: 12px; font-weight: 500; color: #475569; letter-spacing: .01em; }
+.wc-label::after { content: ' *'; color: ${e}; }
+.wc-input {
+	width: 100%; padding: 12px 14px;
+	background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+	color: #0f172a; font-size: 14px;
+	outline: none;
+	transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.wc-input::placeholder { color: #94a3b8; }
+.wc-input:hover { border-color: #cbd5e1; }
+.wc-input:focus { border-color: ${e}; background: #fff; box-shadow: 0 0 0 4px ${m(e,.12)}; }
+
+.wc-submit {
+	width: 100%; padding: 13px;
+	background: linear-gradient(135deg, ${e} 0%, ${h(e,-18)} 100%);
+	color: #fff; border: none; border-radius: 12px;
+	font-size: 14px; font-weight: 600; letter-spacing: .01em;
+	display: flex; align-items: center; justify-content: center; gap: 8px;
+	box-shadow: 0 6px 16px ${m(e,.32)};
+	transition: transform .15s, box-shadow .15s, opacity .15s;
+}
+.wc-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 20px ${m(e,.42)}; }
+.wc-submit:active { transform: translateY(0); }
+.wc-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: 0 4px 10px ${m(e,.22)}; }
+
+.wc-error { font-size: 12.5px; color: #dc2626; padding: 6px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; display: none; }
+.wc-error.wc-visible { display: block; }
+.wc-mode-hint { font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; padding-top: 4px; }
+
+.wc-msg-row { display: flex; max-width: 100%; animation: wcSlideIn .26s cubic-bezier(.2,.9,.3,1.2); }
+.wc-msg-row.wc-in { justify-content: flex-start; }
+.wc-msg-row.wc-out { justify-content: flex-end; }
+.wc-msg {
+	max-width: 82%;
+	padding: 10px 14px;
+	font-size: 14px; line-height: 1.45; word-wrap: break-word; overflow-wrap: break-word;
+	position: relative;
+}
+.wc-msg-in .wc-msg {
+	background: #f1f5f9; color: #0f172a;
+	border-radius: 16px 16px 16px 4px;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.wc-msg-out .wc-msg {
+	background: linear-gradient(135deg, ${e} 0%, ${h(e,-12)} 100%);
+	color: #fff;
+	border-radius: 16px 16px 4px 16px;
+	box-shadow: 0 2px 6px ${m(e,.25)};
+}
+.wc-msg-time { font-size: 10.5px; opacity: .65; display: block; margin-top: 4px; letter-spacing: .02em; }
+
+@keyframes wcSlideIn {
+	from { opacity: 0; transform: translateY(8px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.wc-intro-bubble {
+	margin-bottom: 8px;
+	padding: 14px 16px;
+	background: #f1f5f9;
+	border-radius: 16px 16px 16px 4px;
+	font-size: 14px; line-height: 1.5; color: #0f172a;
+	align-self: flex-start;
+	max-width: 88%;
+}
+
+.wc-composer {
+	display: flex; align-items: flex-end; gap: 8px;
+	padding: 12px 14px 14px;
+	background: #ffffff;
+	border-top: 1px solid #e2e8f0;
+	flex-shrink: 0;
+}
+.wc-textarea {
+	flex: 1; padding: 11px 14px;
+	background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px;
+	color: #0f172a; font-size: 14px; line-height: 1.4;
+	resize: none; outline: none;
+	max-height: 120px; min-height: 42px;
+	transition: border-color .15s, background .15s, box-shadow .15s;
+	font-family: inherit;
+}
+.wc-textarea::placeholder { color: #94a3b8; }
+.wc-textarea:focus { border-color: ${e}; background: #fff; box-shadow: 0 0 0 4px ${m(e,.12)}; }
+.wc-send {
+	width: 42px; height: 42px; flex-shrink: 0;
+	background: linear-gradient(135deg, ${e} 0%, ${h(e,-18)} 100%);
+	color: #fff; border: none; border-radius: 12px;
+	display: flex; align-items: center; justify-content: center;
+	box-shadow: 0 4px 10px ${m(e,.28)};
+	transition: transform .15s, box-shadow .15s, opacity .15s;
+}
+.wc-send:hover { transform: translateY(-1px); box-shadow: 0 6px 14px ${m(e,.38)}; }
+.wc-send:active { transform: translateY(0); }
+.wc-send:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.wc-send svg { width: 18px; height: 18px; }
+
+.wc-branding {
+	text-align: center; padding: 8px 0 10px;
+	font-size: 11px; color: #94a3b8; background: #ffffff;
+	border-top: 1px solid #f1f5f9;
+	flex-shrink: 0;
+}
+.wc-branding a { color: #64748b; text-decoration: none; font-weight: 500; }
+.wc-branding a:hover { color: ${e}; }
+`}function m(e,t){let n=e.replace(`#`,``),r=n.length===3?n.split(``).map(e=>e+e).join(``):n,i=parseInt(r.substring(0,2),16),a=parseInt(r.substring(2,4),16),o=parseInt(r.substring(4,6),16);return isNaN(i)||isNaN(a)||isNaN(o)?`rgba(99, 102, 241, ${t})`:`rgba(${i}, ${a}, ${o}, ${t})`}function h(e,t){let n=e.replace(`#`,``),r=n.length===3?n.split(``).map(e=>e+e).join(``):n,i=parseInt(r.substring(0,2),16),a=parseInt(r.substring(2,4),16),o=parseInt(r.substring(4,6),16);return isNaN(i)||isNaN(a)||isNaN(o)?e:(i=Math.max(0,Math.min(255,Math.round(i+i*t/100))),a=Math.max(0,Math.min(255,Math.round(a+a*t/100))),o=Math.max(0,Math.min(255,Math.round(o+o*t/100))),`#${i.toString(16).padStart(2,`0`)}${a.toString(16).padStart(2,`0`)}${o.toString(16).padStart(2,`0`)}`)}let g=`<svg viewBox="0 0 24 24" width="20" height="20" fill="rgba(255,255,255,.95)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 5a3 3 0 1 1-3 3 3 3 0 0 1 3-3zm0 13a7 7 0 0 1-5.6-2.8c0-1.86 3.73-2.88 5.6-2.88s5.6 1 5.6 2.88A7 7 0 0 1 12 20z"/></svg>`;function _(){let e=document.createElement(`div`);return e.id=`contractor-os-webchat`,e.style.cssText=`all: initial; position: fixed; width: 0; height: 0; z-index: 2147483646;`,document.body.appendChild(e),e.attachShadow({mode:`open`})}function v(){let e=document.createElement(`button`);return e.className=`wc-launcher`,e.setAttribute(`aria-label`,`Open chat`),e.setAttribute(`type`,`button`),e.innerHTML=`<svg class="wc-icon wc-icon-chat" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="wc-icon wc-icon-close" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,e.addEventListener(`click`,T),e}function y(e){let t=document.createElement(`div`);t.className=`wc-panel`,t.setAttribute(`role`,`dialog`),t.setAttribute(`aria-label`,`${e.org_name} chat`);let n=document.createElement(`div`);if(n.className=`wc-header`,e.logo_url){let t=document.createElement(`img`);t.className=`wc-logo`,t.src=e.logo_url,t.alt=e.org_name,t.addEventListener(`error`,()=>{let e=document.createElement(`div`);e.className=`wc-logo-placeholder`,e.innerHTML=g,t.replaceWith(e)}),n.appendChild(t)}else{let e=document.createElement(`div`);e.className=`wc-logo-placeholder`,e.innerHTML=g,n.appendChild(e)}let r=document.createElement(`div`);r.className=`wc-header-text`;let i=document.createElement(`span`);i.className=`wc-org-name`,i.textContent=e.org_name,r.appendChild(i);let a=document.createElement(`span`);a.className=`wc-org-status`,a.innerHTML=`<span class="wc-status-dot"></span><span>${e.webchat_mode===`instant`?`We reply in minutes`:`We reply by text`}</span>`,r.appendChild(a),n.appendChild(r);let o=document.createElement(`button`);o.className=`wc-close`,o.setAttribute(`aria-label`,`Close chat`),o.setAttribute(`type`,`button`),o.innerHTML=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,o.addEventListener(`click`,T),n.appendChild(o),t.appendChild(n);let s=document.createElement(`div`);s.className=`wc-body`,t.appendChild(s),u=s;let c=document.createElement(`div`);return c.className=`wc-branding`,c.innerHTML=`Powered by <a href="https://contractorgrowth.app" target="_blank" rel="noopener">Contractor Growth OS</a>`,t.appendChild(c),t}function b(e){let t=document.createElement(`div`);t.className=`wc-form`;let n=document.createElement(`p`);n.className=`wc-form-intro`,n.textContent=e.intro_message||`Hi! Send us a message and we'll get back to you shortly.`,t.appendChild(n);let r=document.createElement(`div`);r.className=`wc-field`;let i=document.createElement(`label`);i.className=`wc-label`,i.textContent=`Your name`;let a=document.createElement(`input`);a.className=`wc-input`,a.type=`text`,a.placeholder=`Jane Smith`,a.autocomplete=`name`,r.append(i,a),t.appendChild(r);let o=document.createElement(`div`);o.className=`wc-field`;let s=document.createElement(`label`);s.className=`wc-label`,s.textContent=`Phone number`;let c=document.createElement(`input`);c.className=`wc-input`,c.type=`tel`,c.placeholder=`(555) 123-4567`,c.autocomplete=`tel`,o.append(s,c),t.appendChild(o);let l=document.createElement(`div`);l.className=`wc-error`,t.appendChild(l);let u=document.createElement(`button`);u.className=`wc-submit`,u.type=`button`;let d=e.webchat_mode===`instant`?`Start chat`:`Send message`;if(u.textContent=d,t.appendChild(u),e.webchat_mode===`asynchronous`&&e.offline_message){let n=document.createElement(`p`);n.className=`wc-mode-hint`,n.textContent=e.offline_message,t.appendChild(n)}let f=e=>{l.textContent=e,l.classList.add(`wc-visible`)},p=()=>l.classList.remove(`wc-visible`);return u.addEventListener(`click`,async()=>{let t=a.value.trim(),n=c.value.trim();if(!t||!n){f(`Please enter your name and phone number.`);return}p(),u.disabled=!0,u.textContent=`Starting…`;let r=await A(t,n,e);r&&(f(r),u.disabled=!1,u.textContent=d)}),[a,c].forEach(e=>{e.addEventListener(`keydown`,e=>{e.key===`Enter`&&(e.preventDefault(),u.click())})}),t}function x(){if(!u||!i||!l)return;if(u.innerHTML=``,i.config.intro_message){let e=document.createElement(`div`);e.className=`wc-intro-bubble`,e.textContent=i.config.intro_message,u.appendChild(e)}for(let e of i.messages)S(e,`in`);f&&f.remove(),f=document.createElement(`div`),f.className=`wc-composer`;let e=document.createElement(`textarea`);e.className=`wc-textarea`,e.placeholder=`Type your message…`,e.rows=1,f.appendChild(e);let t=document.createElement(`button`);t.className=`wc-send`,t.setAttribute(`aria-label`,`Send message`),t.setAttribute(`type`,`button`),t.innerHTML=`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,f.appendChild(t);let n=l.querySelector(`.wc-branding`);n?l.insertBefore(f,n):l.appendChild(f);let r=()=>j(e,t);t.addEventListener(`click`,r),e.addEventListener(`keydown`,e=>{e.key===`Enter`&&!e.shiftKey&&(e.preventDefault(),r())}),e.addEventListener(`input`,()=>{e.style.height=`auto`,e.style.height=Math.min(e.scrollHeight,120)+`px`}),C(),setTimeout(()=>e.focus(),100)}function S(e,t){if(!u)return;let n=document.createElement(`div`);n.className=`wc-msg-row wc-${t}`,n.dataset.msgId=e.id;let r=document.createElement(`div`);r.className=`wc-msg`;let i=document.createElement(`span`);i.textContent=e.body,r.appendChild(i);let a=document.createElement(`span`);a.className=`wc-msg-time`,a.textContent=w(e.sent_at),r.appendChild(a),n.appendChild(r),u.appendChild(n),C()}function C(){u&&requestAnimationFrame(()=>{u.scrollTop=u.scrollHeight})}function w(e){try{return new Date(e).toLocaleTimeString([],{hour:`numeric`,minute:`2-digit`})}catch{return``}}function T(){a=!a,l&&l.setAttribute(`data-open`,String(a)),d&&(d.setAttribute(`data-open`,String(a)),d.setAttribute(`aria-label`,a?`Close chat`:`Open chat`)),a&&i?N():P()}async function E(){c=_();let e=localStorage.getItem(r);if(e){try{let t=JSON.parse(e),n=await k(t.session_id,t.session_token);if(n){i=n,D(i.config),x();return}}catch{}localStorage.removeItem(r)}let t=await O();t&&(D(t),u&&u.appendChild(b(t)))}function D(e){if(!c)return;let t=e.primary_color||`#6366f1`,n=document.createElement(`style`);n.textContent=p(t),c.appendChild(n),d=v(),l=y(e),c.appendChild(d),c.appendChild(l)}async function O(){try{let e=await fetch(`${n}/api/webchat/config?token=${t}`);return e.ok?(await e.json()).data??null:null}catch{return null}}async function k(e,t){try{let r=await fetch(`${n}/api/webchat/session/${e}/restore`,{headers:{Authorization:`Bearer ${t}`}});if(!r.ok)return null;let i=await r.json();return i.data?{session_id:e,session_token:t,config:{org_name:i.data.org_name,logo_url:i.data.logo_url,primary_color:i.data.primary_color,intro_message:i.data.intro_message,offline_message:i.data.offline_message,webchat_mode:i.data.webchat_mode},messages:i.data.messages}:null}catch{return null}}async function A(e,a,o){try{let o=await fetch(`${n}/api/webchat/session/start`,{method:`POST`,headers:{"Content-Type":`application/json`},body:JSON.stringify({widget_token:t,name:e,phone:a})}),s=await o.json();return!o.ok||!s.data?o.status===429?`Too many requests. Please try again in a moment.`:s.error??`Failed to start chat. Please try again.`:(i={session_id:s.data.session_id,session_token:s.data.session_token,config:{org_name:s.data.org_name,logo_url:s.data.logo_url,primary_color:s.data.primary_color,intro_message:s.data.intro_message,offline_message:s.data.offline_message,webchat_mode:s.data.webchat_mode},messages:[]},localStorage.setItem(r,JSON.stringify({session_id:i.session_id,session_token:i.session_token})),x(),N(),null)}catch{return`Network error. Please try again.`}}async function j(e,t){if(!i)return;let r=e.value.trim();if(!r)return;e.value=``,e.style.height=`auto`,t.disabled=!0;let a={id:`opt-${Date.now()}`,body:r,sent_at:new Date().toISOString()};i.messages.push(a),S(a,`out`);try{(await fetch(`${n}/api/webchat/session/${i.session_id}/messages`,{method:`POST`,headers:{"Content-Type":`application/json`,Authorization:`Bearer ${i.session_token}`},body:JSON.stringify({body:r})})).ok||(M(a.id),e.value=r)}catch{M(a.id),e.value=r}finally{t.disabled=!1,e.focus()}}function M(e){if(!i||!u)return;i.messages=i.messages.filter(t=>t.id!==e);let t=u.querySelector(`.wc-msg-row[data-msg-id="${e}"]`);t&&t.remove()}function N(){if(!i)return;P();let e=`${n}/api/webchat/session/${i.session_id}/stream?token=${i.session_token}`;o=new EventSource(e),o.onmessage=e=>{try{let t=JSON.parse(e.data);if(!i||i.messages.some(e=>e.id===t.id))return;i.messages.push(t),S(t,`in`)}catch{}},o.onerror=()=>{P(),s=setTimeout(()=>{a&&i&&N()},3e3)}}function P(){o&&=(o.close(),null),s&&=(clearTimeout(s),null)}document.readyState===`loading`?document.addEventListener(`DOMContentLoaded`,()=>{E()}):E()})()})();
