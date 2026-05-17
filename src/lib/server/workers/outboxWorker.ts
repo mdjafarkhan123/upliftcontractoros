@@ -73,15 +73,21 @@ async function handleMediaDeleted(event: OutboxEvent): Promise<void> {
 	console.log(`[outbox] media.deleted: deleted ${keys.length} R2 object(s) for media ${event.resource_id}`);
 }
 
-async function dispatch(event: OutboxEvent): Promise<void> {
+type DispatchResult =
+	| { status: 'routed' }
+	| { status: 'unrouted'; reason: string };
+
+async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
+	if (event.event_type === 'media.deleted') {
+		await handleMediaDeleted(event);
+		return { status: 'routed' };
+	}
 	const targets = routeEvent(event);
 	if (targets.length === 0) {
-		if (event.event_type === 'media.deleted') {
-			await handleMediaDeleted(event);
-			return;
-		}
-		console.warn(`[outbox] no route for event_type=${event.event_type} id=${event.id}`);
-		return;
+		return {
+			status: 'unrouted',
+			reason: `no route for event_type=${event.event_type}`
+		};
 	}
 	const data = {
 		outbox_event_id: event.id,
@@ -95,6 +101,7 @@ async function dispatch(event: OutboxEvent): Promise<void> {
 		const queue = target.queue === 'automation' ? automationQueue() : notificationQueue();
 		await addJob(queue, target.jobName, data);
 	}
+	return { status: 'routed' };
 }
 
 async function processBatch(): Promise<number> {
@@ -109,15 +116,30 @@ async function processBatch(): Promise<number> {
 		const events = rows as unknown as OutboxEvent[];
 		if (events.length === 0) return 0;
 
-		const succeededIds: string[] = [];
+		const routedIds: string[] = [];
 		for (const event of events) {
 			try {
 				await tx
 					.update(outboxEvents)
 					.set({ status: 'processing', updated_at: new Date() })
 					.where(eq(outboxEvents.id, event.id));
-				await dispatch(event);
-				succeededIds.push(event.id);
+				const result = await dispatch(event);
+				if (result.status === 'routed') {
+					routedIds.push(event.id);
+				} else {
+					console.warn(
+						`[outbox] unrouted event_type=${event.event_type} id=${event.id} — marking processed (no retry)`
+					);
+					await tx
+						.update(outboxEvents)
+						.set({
+							status: 'processed',
+							processed_at: new Date(),
+							last_error: result.reason,
+							updated_at: new Date()
+						})
+						.where(eq(outboxEvents.id, event.id));
+				}
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
 				const nextAttempt = event.attempts + 1;
@@ -138,11 +160,11 @@ async function processBatch(): Promise<number> {
 			}
 		}
 
-		if (succeededIds.length > 0) {
+		if (routedIds.length > 0) {
 			await tx
 				.update(outboxEvents)
 				.set({ status: 'processed', processed_at: new Date(), updated_at: new Date() })
-				.where(and(eq(outboxEvents.status, 'processing'), inArray(outboxEvents.id, succeededIds)));
+				.where(and(eq(outboxEvents.status, 'processing'), inArray(outboxEvents.id, routedIds)));
 		}
 
 		return events.length;

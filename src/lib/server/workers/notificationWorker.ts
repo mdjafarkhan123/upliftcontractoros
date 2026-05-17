@@ -1,5 +1,5 @@
 import { Worker, type Job } from 'bullmq';
-import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	conversations,
@@ -98,9 +98,14 @@ async function dispatchNotification(
 		resource_id: spec.resource_id,
 		idempotency_key: spec.idempotent ? `${eventType}:${spec.resource_id}:${m.id}` : null
 	}));
-	await db.insert(notifications).values(rows).onConflictDoNothing({
-		target: notifications.idempotency_key
-	});
+	if (spec.idempotent) {
+		await db.insert(notifications).values(rows).onConflictDoNothing({
+			target: notifications.idempotency_key,
+			targetWhere: sql`idempotency_key IS NOT NULL`
+		});
+	} else {
+		await db.insert(notifications).values(rows);
+	}
 }
 
 async function handleOpportunityWon(data: EventJobData) {
