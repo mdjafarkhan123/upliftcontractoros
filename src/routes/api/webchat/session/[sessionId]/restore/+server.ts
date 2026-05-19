@@ -95,6 +95,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 		.where(
 			and(
 				eq(messages.conversation_id, session.conversation_id),
+				eq(messages.channel, 'webchat'),
 				eq(messages.is_internal_note, false)
 			)
 		)

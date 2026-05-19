@@ -100,6 +100,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 			and(
 				eq(messages.conversation_id, session.conversation_id),
 				eq(messages.direction, 'outbound'),
+				eq(messages.channel, 'webchat'),
 				eq(messages.is_internal_note, false),
 				gt(messages.created_at, since)
 			)

@@ -69,7 +69,8 @@
       "Bash(curl -sS http://localhost:5174/ -o response.html -w \"HTTP %{http_code}\\\\n\")",
       "Bash(curl -sSL http://localhost:5174/ -o response.html -w \"HTTP %{http_code}\\\\n\")",
       "Bash(git restore *)",
-      "Bash(git clean *)"
+      "Bash(git clean *)",
+      "Bash(git diff *)"
     ]
   }
 }
