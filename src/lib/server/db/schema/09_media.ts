@@ -3,6 +3,7 @@ import { sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { jobs } from './04_jobs';
 import { quotes, invoices } from './06_revenue';
+import { messages } from './05_communication';
 
 export const mediaTypeEnum = pgEnum('media_type', ['photo', 'pdf', 'attachment']);
 
@@ -25,6 +26,7 @@ export const media = pgTable('media', {
 	job_id: uuid('job_id').references(() => jobs.id),
 	quote_id: uuid('quote_id').references(() => quotes.id),
 	invoice_id: uuid('invoice_id').references(() => invoices.id),
+	message_id: uuid('message_id').references(() => messages.id),
 	r2_key: text('r2_key').notNull(),
 	thumbnail_key: text('thumbnail_key'),
 	web_key: text('web_key'),
@@ -49,13 +51,15 @@ export const media = pgTable('media', {
 				AND ${table.job_id} IS NULL
 				AND ${table.quote_id} IS NULL
 				AND ${table.invoice_id} IS NULL
+				AND ${table.message_id} IS NULL
 			)
 			OR (
 				${table.purpose_tag} <> 'org_logo'
 				AND (
 					(${table.job_id} IS NOT NULL)::int +
 					(${table.quote_id} IS NOT NULL)::int +
-					(${table.invoice_id} IS NOT NULL)::int = 1
+					(${table.invoice_id} IS NOT NULL)::int +
+					(${table.message_id} IS NOT NULL)::int = 1
 				)
 			)
 		)`

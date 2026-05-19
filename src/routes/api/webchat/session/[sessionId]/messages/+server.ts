@@ -6,17 +6,18 @@
  * Sessions expire after 30 days of inactivity.
  */
 import { json } from '@sveltejs/kit';
-import { and, asc, eq, gt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
-	conversations,
+	inboundCommunicationEvents,
 	messages,
 	outboxEvents,
 	webchatSessions,
 	webchatWidgets
 } from '$lib/server/db/schema';
+import { recordInboundMessage } from '$lib/server/conversations';
 import { validateOrigin } from '$lib/server/webchat/validateOrigin';
 import { checkMessageRateLimit, checkPollRateLimit } from '$lib/server/webchat/rateLimit';
 import { sanitizeMessageBody } from '$lib/server/webchat/sanitize';
@@ -193,34 +194,28 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	let result;
 	try {
 		result = await db.transaction(async (tx) => {
-			const [inserted] = await tx
-				.insert(messages)
-				.values({
-					org_id: session.org_id,
-					conversation_id: session.conversation_id,
-					direction: 'inbound',
-					channel: 'webchat',
-					body: sanitized,
-					is_internal_note: false,
-					status: 'received',
-					sent_by: null,
-					sent_at: now
-				})
-				.returning();
-
-			await tx
-				.update(conversations)
-				.set({
-					unread_count: sql`${conversations.unread_count} + 1`,
-					last_message_at: now,
-					updated_at: now
-				})
-				.where(eq(conversations.id, session.conversation_id));
+			const inserted = await recordInboundMessage(tx, {
+				orgId: session.org_id,
+				conversationId: session.conversation_id,
+				channel: 'webchat',
+				body: sanitized,
+				source: 'webchat',
+				sentAt: now
+			});
 
 			await tx
 				.update(webchatSessions)
 				.set({ last_active_at: now })
 				.where(eq(webchatSessions.id, session.id));
+
+			await tx.insert(inboundCommunicationEvents).values({
+				org_id: session.org_id,
+				provider: 'webchat',
+				provider_event_id: inserted.id,
+				event_type: 'webchat',
+				raw_payload: { body: sanitized, session_id: session.id },
+				processed_at: now
+			});
 
 			await tx.insert(outboxEvents).values({
 				org_id: session.org_id,

@@ -42,12 +42,12 @@ active → suspended → pending_deletion → deleted
 
 ```
 automation_jobs → outbox_events → notifications → automation_settings →
-internal_activity_log → growth_feed_items → media → private_feedback →
-reviews → review_requests → payments → invoice_line_items → invoices →
-quote_views → quote_line_items → quotes → quote_template_line_items →
-quote_templates → messages → conversations → appointments → jobs →
-opportunities → pipeline_stages → contact_notes → contact_addresses →
-contacts → org_members → org_counters → organizations
+org_email_settings → internal_activity_log → growth_feed_items → media →
+private_feedback → reviews → review_requests → payments →
+invoice_line_items → invoices → quote_views → quote_line_items → quotes →
+quote_template_line_items → quote_templates → messages → conversations →
+appointments → jobs → opportunities → pipeline_stages → contact_notes →
+contact_addresses → contacts → org_members → org_counters → organizations
 ```
 
 Before initiating the cascade, all pending outbox events for the org must be set to
@@ -167,9 +167,12 @@ scheduled → in_progress → completed
 **Status enum:** `open | closed | archived`
 
 - One active conversation per contact per channel — enforced by partial unique index: `UNIQUE(contact_id, channel) WHERE deleted_at IS NULL AND status = 'open'`
+- **Unified email architecture**: One open email conversation per contact. Append all emails chronologically. Do not create separate conversations per subject.
 - `last_message_at` updated on every new message (inbox sort key)
+- `last_inbound_email_at` and `last_outbound_email_at` track email-specific activity.
 - `unread_count` increments on inbound, resets to 0 when team member opens conversation
 - `unread_count` is denormalized — reconcile by counting `messages WHERE direction = 'inbound' AND read_at IS NULL` if drift detected
+- `reply_alias`: opaque random tokens only (e.g. 'r_8random'). Used for inbound email routing.
 - `tags` is `text[]`
 - When contact opts out of SMS: conversation remains visible, UI shows opt-out banner, send button disabled. Conversation is NOT automatically closed
 
@@ -179,11 +182,15 @@ scheduled → in_progress → completed
 **Direction enum:** `inbound | outbound`
 **Status enum:** `sent | delivered | failed | received | queued | bounced`
 
-- `queued` and `bounced` reserved for future email channel — no v1 logic uses them
+- `queued` and `bounced` used by the email channel for pending and rejected sends.
 - `body` is nullable — missed call channel entries have no body
 - `is_internal_note = true` messages are never sent externally
 - `sent_by` is NULL for inbound messages and automation-sent messages
 - `twilio_message_sid` has a partial unique index (WHERE NOT NULL) — prevents duplicate webhook processing
+- **Inbound email routing priority**:
+  1. Match `reply_alias` from inbound To: address.
+  2. Match `email_in_reply_to` header (RFC 2822 Message‑ID).
+  3. Fallback to contact lookup by `email_from_address`.
 - Messages are never deleted — immutable communication record
 
 ---
@@ -390,13 +397,15 @@ pending → sent → responded
 
 - Database stores metadata only — actual files in Cloudflare R2
 - On upload: Sharp processes server-side → three R2 objects (original, thumbnail 300px, web 1200px) → one `media` row
-- CHECK constraint: at least one parent FK must be set: `job_id IS NOT NULL OR quote_id IS NOT NULL OR invoice_id IS NOT NULL`
+- CHECK constraint: most media must have at least one parent FK: `job_id | quote_id | invoice_id | message_id`
+- Standalone assets (`org_logo`, `avatar`, `marketing_asset`) can have all parent FKs set to NULL.
 - `purpose_tag = 'quote_attachment'` requires `quote_id` to be set
 - `purpose_tag = 'invoice_attachment'` requires `invoice_id` to be set
+- `purpose_tag = 'email_attachment'` requires `message_id` to be set
 - `purpose_tag = 'marketing_asset'` makes file available to agency for GBP/social
 - On soft delete: R2 objects deleted by outbox worker post-commit side effect; media row retained for audit
 - `media_type` enum: `photo | pdf | attachment`
-- `purpose_tag` enum: `job_photo | before | after | marketing_asset | quote_attachment | invoice_attachment`
+- `purpose_tag` enum: `job_photo | before | after | marketing_asset | quote_attachment | invoice_attachment | email_attachment | avatar | org_logo`
 
 ---
 
@@ -490,6 +499,7 @@ pending → sent → responded
 organizations
 ├── org_members             (one-to-many)
 ├── automation_settings     (one-to-one)
+├── org_email_settings      (one-to-one)
 ├── org_counters            (one-to-one)
 ├── pipeline_stages         (one-to-many)
 ├── quote_templates         (one-to-many)
@@ -507,6 +517,7 @@ organizations
 │   │           └── private_feedback  (one-to-one)
 │   ├── conversations       (one-to-many)
 │   │   └── messages        (one-to-many)
+│   │       └── media       (one-to-many, email_attachment)
 │   ├── quotes              (one-to-many)
 │   │   ├── quote_line_items (one-to-many)
 │   │   ├── quote_views      (one-to-many)
@@ -530,7 +541,7 @@ organizations
 - `invoices.opportunity_id` — invoices can exist without an opportunity
 - `invoices.quote_id` — invoices can exist without originating from a quote
 - `appointments.job_id` — estimate appointments exist before a job
-- `media.job_id / quote_id / invoice_id` — at least one must be set (CHECK constraint)
+- `media.job_id / quote_id / invoice_id / message_id` — at least one must be set (CHECK constraint), unless standalone asset
 - `outbox_events.org_id` — null for platform-level events
 
 **Assignment FKs (all reference `org_members.id`, all nullable, all preserved on deactivation):**

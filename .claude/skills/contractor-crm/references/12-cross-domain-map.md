@@ -17,6 +17,7 @@ building Drizzle relations, or verifying which tables connect.
 | `organizations`       | `feature_flags_updated_by` | `org_members.id`   | YES      | Audit trail |
 | `org_members`         | `org_id`                   | `organizations.id` | NO       | Tenant FK   |
 | `automation_settings` | `org_id`                   | `organizations.id` | NO       | One-to-one  |
+| `org_email_settings`  | `org_id`                   | `organizations.id` | NO       | One-to-one  |
 
 ### Domain 2 — Contacts
 
@@ -51,14 +52,15 @@ building Drizzle relations, or verifying which tables connect.
 
 ### Domain 5 — Communication
 
-| Source Table    | Column            | References         | Nullable | Notes                     |
-| --------------- | ----------------- | ------------------ | -------- | ------------------------- |
-| `conversations` | `org_id`          | `organizations.id` | NO       | Tenant FK                 |
-| `conversations` | `contact_id`      | `contacts.id`      | NO       |                           |
-| `conversations` | `assigned_to`     | `org_members.id`   | YES      | Preserved on deactivation |
-| `messages`      | `org_id`          | `organizations.id` | NO       | Tenant FK                 |
-| `messages`      | `conversation_id` | `conversations.id` | NO       |                           |
-| `messages`      | `sent_by`         | `org_members.id`   | YES      | NULL for automation-sent  |
+| Source Table                   | Column            | References         | Nullable | Notes                     |
+| ------------------------------ | ----------------- | ------------------ | -------- | ------------------------- |
+| `conversations`                | `org_id`          | `organizations.id` | NO       | Tenant FK                 |
+| `conversations`                | `contact_id`      | `contacts.id`      | NO       |                           |
+| `conversations`                | `assigned_to`     | `org_members.id`   | YES      | Preserved on deactivation |
+| `messages`                     | `org_id`          | `organizations.id` | NO       | Tenant FK                 |
+| `messages`                     | `conversation_id` | `conversations.id` | NO       |                           |
+| `messages`                     | `sent_by`         | `org_members.id`   | YES      | NULL for automation-sent  |
+| `inbound_communication_events` | `org_id`          | `organizations.id` | NO       | Tenant FK                 |
 
 ### Domain 6 — Revenue: Quotes
 
@@ -130,6 +132,7 @@ building Drizzle relations, or verifying which tables connect.
 | `media`      | `job_id`      | `jobs.id`          | YES      | CHECK: at least one parent set |
 | `media`      | `quote_id`    | `quotes.id`        | YES      | CHECK: at least one parent set |
 | `media`      | `invoice_id`  | `invoices.id`      | YES      | CHECK: at least one parent set |
+| `media`      | `message_id`  | `messages.id`      | YES      | CHECK: at least one parent set |
 
 ### Domain 11 — System
 
@@ -151,7 +154,8 @@ Which domains reference which. Read "→" as "has FK into".
 
 ```
 organizations (root — everything depends on this)
-  └→ org_members (referenced by nearly every domain via assigned_to, author_id, etc.)
+  ├→ org_members (referenced by nearly every domain via assigned_to, author_id, etc.)
+  └→ org_email_settings
 
 contacts → organizations, org_members
 contact_addresses → contacts
@@ -175,7 +179,7 @@ review_requests → jobs, contacts, org_members
 reviews → jobs, contacts, review_requests
 private_feedback → jobs, contacts, review_requests, org_members
 
-media → jobs, quotes, invoices, org_members
+media → jobs, quotes, invoices, messages, org_members
 
 notifications → org_members
 ```
@@ -197,7 +201,9 @@ webhook retries, and automation replays:
 | `payments`        | `UNIQUE(stripe_payment_intent_id)`         | Partial (WHERE NOT NULL)           |
 | `messages`        | `UNIQUE(twilio_message_sid)`               | Partial (WHERE NOT NULL)           |
 | `outbox_events`   | `UNIQUE(idempotency_key)`                  | Hard (no WHERE)                    |
-| `conversations`   | `UNIQUE(contact_id, channel)`              | Partial (WHERE open + not deleted) |
+| `conversations`   | `UNIQUE(org_id, reply_alias)`              | Partial (WHERE NOT NULL)           |
+| `org_email_settings`| `UNIQUE(org_id)`                         | Hard (no WHERE)                    |
+| `org_email_settings`| `UNIQUE(reply_domain)`                   | Partial (WHERE NOT NULL)           |
 | `pipeline_stages` | `UNIQUE(org_id)` WHERE is_won/lost/default | Partial (one each)                 |
 | `org_members`     | `UNIQUE(supabase_user_id)`                 | Hard (no WHERE)                    |
 | `org_members`     | `UNIQUE(org_id, email)`                    | Partial (WHERE not deleted)        |

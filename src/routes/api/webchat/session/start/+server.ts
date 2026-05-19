@@ -182,7 +182,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		// Find open webchat conversation or create one
+		// Find open conversation or create one. Channel-agnostic — the inbox is
+		// unified across channels.
 		const [existingConv] = await tx
 			.select()
 			.from(conversations)
@@ -190,7 +191,6 @@ export const POST: RequestHandler = async ({ request }) => {
 				and(
 					eq(conversations.org_id, org.id),
 					eq(conversations.contact_id, contact.id),
-					eq(conversations.channel, 'webchat'),
 					eq(conversations.status, 'open'),
 					isNull(conversations.deleted_at)
 				)
@@ -208,7 +208,6 @@ export const POST: RequestHandler = async ({ request }) => {
 				.values({
 					org_id: org.id,
 					contact_id: contact.id,
-					channel: 'webchat',
 					status: 'open'
 				})
 				.returning();

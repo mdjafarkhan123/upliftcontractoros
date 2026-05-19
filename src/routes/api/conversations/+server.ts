@@ -1,11 +1,49 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, ilike, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNull, type SQL, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contacts, conversations, orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 
 const PAGE_SIZE = 30;
+
+const STATUS_FILTERS = ['open', 'snoozed', 'closed'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number] | 'all';
+
+function parseStatus(value: string | null): StatusFilter {
+	if (value && (STATUS_FILTERS as readonly string[]).includes(value)) {
+		return value as StatusFilter;
+	}
+	return 'open';
+}
+
+// Sort key: (unread_inbound, last_inbound_at, last_message_at, id) — all DESC, NULLS LAST.
+// Cursor encodes the same tuple so pagination is stable across the composite order.
+type Cursor = {
+	u: 0 | 1;
+	inboundAt: string | null;
+	lastMsgAt: string | null;
+	id: string;
+};
+
+function parseCursor(raw: string | null): Cursor | null {
+	if (!raw) return null;
+	const parts = raw.split('|');
+	if (parts.length !== 4) return null;
+	const [u, inboundAt, lastMsgAt, id] = parts;
+	if (u !== '0' && u !== '1') return null;
+	if (!id) return null;
+	return {
+		u: u === '1' ? 1 : 0,
+		inboundAt: inboundAt || null,
+		lastMsgAt: lastMsgAt || null,
+		id
+	};
+}
+
+function encodeCursor(c: Cursor): string {
+	return `${c.u}|${c.inboundAt ?? ''}|${c.lastMsgAt ?? ''}|${c.id}`;
+}
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -16,27 +54,35 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	const url = event.url;
-	const filter = url.searchParams.get('filter') ?? 'all';
+	const status = parseStatus(url.searchParams.get('status'));
+	const assignee = url.searchParams.get('assignee');
+	const unread = url.searchParams.get('unread') === '1';
 	const searchRaw = (url.searchParams.get('q') ?? '').trim();
-	const cursor = url.searchParams.get('cursor');
+	const cursor = parseCursor(url.searchParams.get('cursor'));
+
+	const unreadInboundExpr = sql<number>`(CASE WHEN ${conversations.unread_count} > 0 AND ${conversations.last_message_direction} = 'inbound' THEN 1 ELSE 0 END)`;
 
 	const conditions: SQL[] = [
 		eq(conversations.org_id, auth.orgId),
 		isNull(conversations.deleted_at)
 	];
 
-	if (!auth.member.can_view_all_conversations) {
-		conditions.push(eq(conversations.assigned_to, auth.member.id));
+	if (status !== 'all') {
+		conditions.push(eq(conversations.status, status));
 	}
 
-	if (filter === 'unread') {
+	if (!auth.member.can_view_all_conversations) {
+		conditions.push(eq(conversations.assigned_to, auth.member.id));
+	} else if (assignee === 'me') {
+		conditions.push(eq(conversations.assigned_to, auth.member.id));
+	} else if (assignee === 'unassigned') {
+		conditions.push(isNull(conversations.assigned_to));
+	} else if (assignee && assignee !== 'all') {
+		conditions.push(eq(conversations.assigned_to, assignee));
+	}
+
+	if (unread) {
 		conditions.push(sql`${conversations.unread_count} > 0`);
-	} else if (filter === 'sms') {
-		conditions.push(eq(conversations.channel, 'sms'));
-	} else if (filter === 'missed_calls') {
-		conditions.push(eq(conversations.channel, 'missed_call'));
-	} else if (filter === 'webchat') {
-		conditions.push(eq(conversations.channel, 'webchat'));
 	}
 
 	if (searchRaw.length > 0) {
@@ -44,15 +90,23 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	if (cursor) {
-		const [lastMsgAt, id] = cursor.split('|');
-		if (lastMsgAt && id) {
-			conditions.push(
-				or(
-					lt(conversations.last_message_at, new Date(lastMsgAt)),
-					and(eq(conversations.last_message_at, new Date(lastMsgAt)), lt(conversations.id, id))
-				) as SQL
-			);
-		}
+		// Strict lex compare of (u, last_inbound_at, last_message_at, id) under DESC NULLS LAST.
+		// COALESCE to a far-past sentinel so NULL ranks last while staying comparable.
+		const SENTINEL = '-infinity';
+		const cUnread = cursor.u;
+		const cInbound = cursor.inboundAt ?? SENTINEL;
+		const cLastMsg = cursor.lastMsgAt ?? SENTINEL;
+		const cId = cursor.id;
+		const inboundCoalesced = sql`COALESCE(${conversations.last_inbound_at}, '-infinity'::timestamptz)`;
+		const lastMsgCoalesced = sql`COALESCE(${conversations.last_message_at}, '-infinity'::timestamptz)`;
+		conditions.push(
+			sql`(
+				${unreadInboundExpr} < ${cUnread}
+				OR (${unreadInboundExpr} = ${cUnread} AND ${inboundCoalesced} < ${cInbound}::timestamptz)
+				OR (${unreadInboundExpr} = ${cUnread} AND ${inboundCoalesced} = ${cInbound}::timestamptz AND ${lastMsgCoalesced} < ${cLastMsg}::timestamptz)
+				OR (${unreadInboundExpr} = ${cUnread} AND ${inboundCoalesced} = ${cInbound}::timestamptz AND ${lastMsgCoalesced} = ${cLastMsg}::timestamptz AND ${conversations.id} < ${cId}::uuid)
+			)`
+		);
 	}
 
 	const rows = await db
@@ -62,42 +116,46 @@ export const GET: RequestHandler = async (event) => {
 			contact_name: contacts.full_name,
 			contact_phone: contacts.phone,
 			contact_sms_opt_out: contacts.sms_opt_out,
-			channel: conversations.channel,
 			status: conversations.status,
 			assigned_to: conversations.assigned_to,
 			assignee_name: orgMembers.full_name,
 			last_message_at: conversations.last_message_at,
+			last_inbound_at: conversations.last_inbound_at,
+			last_message_preview: conversations.last_message_preview,
+			last_message_channel: conversations.last_message_channel,
+			last_message_direction: conversations.last_message_direction,
 			unread_count: conversations.unread_count,
+			snoozed_until: conversations.snoozed_until,
 			created_at: conversations.created_at,
-			last_message_body: sql<string | null>`(
-				select m.body from messages m
-				where m.conversation_id = ${conversations.id}
-				  and m.is_internal_note = false
-				order by m.created_at desc, m.id desc
-				limit 1
-			)`,
-			last_message_direction: sql<'inbound' | 'outbound' | null>`(
-				select m.direction from messages m
-				where m.conversation_id = ${conversations.id}
-				  and m.is_internal_note = false
-				order by m.created_at desc, m.id desc
-				limit 1
-			)`
+			unread_inbound: unreadInboundExpr
 		})
 		.from(conversations)
 		.innerJoin(contacts, eq(contacts.id, conversations.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, conversations.assigned_to))
 		.where(and(...conditions))
-		.orderBy(desc(conversations.last_message_at), desc(conversations.id))
+		.orderBy(
+			sql`${unreadInboundExpr} DESC`,
+			sql`${conversations.last_inbound_at} DESC NULLS LAST`,
+			sql`${conversations.last_message_at} DESC NULLS LAST`,
+			sql`${conversations.id} DESC`
+		)
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-	const last = items[items.length - 1];
+	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const last = sliced[sliced.length - 1];
 	const nextCursor =
-		hasMore && last && last.last_message_at
-			? `${last.last_message_at.toISOString()}|${last.id}`
+		hasMore && last
+			? encodeCursor({
+					u: last.unread_inbound === 1 ? 1 : 0,
+					inboundAt: last.last_inbound_at ? last.last_inbound_at.toISOString() : null,
+					lastMsgAt: last.last_message_at ? last.last_message_at.toISOString() : null,
+					id: last.id
+				})
 			: null;
+
+	// Strip the helper column from the API response.
+	const items = sliced.map(({ unread_inbound: _u, ...rest }) => rest);
 
 	return json({ data: { items, next_cursor: nextCursor } });
 };

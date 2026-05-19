@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, MoreHorizontal, Info, X } from '@lucide/svelte';
+	import { ArrowLeft, Info, X, MessageSquare } from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
@@ -10,36 +11,44 @@
 	import Composer from '$lib/components/inbox/Composer.svelte';
 	import ContactContextPanel from '$lib/components/inbox/ContactContextPanel.svelte';
 	import OptOutBanner from '$lib/components/inbox/OptOutBanner.svelte';
+	import ConversationActions from '$lib/components/inbox/ConversationActions.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { inboxStore, type ThreadMessage } from '$lib/stores/inbox.svelte';
+	import {
+		inboxStore,
+		type SnoozePreset,
+		type ThreadMessage,
+		type OutboundChannel
+	} from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getBrowserSupabase } from '$lib/supabase/browser';
-	import { MessageSquare } from '@lucide/svelte';
 
 	let { data } = $props<{ data: { conversationId: string } }>();
 
 	const member = getMemberContext();
 	const canSend = $derived(member().can_send_messages);
+	const canViewTeam = $derived(member().can_view_team_members);
 
 	let mobileContextOpen = $state(false);
+	let assignees = $state<Array<{ id: string; full_name: string }>>([]);
 
 	$effect(() => {
 		const id = data.conversationId;
 		void inboxStore.loadThread(id);
 	});
 
-	// Mark read whenever a thread becomes ready
 	$effect(() => {
 		const id = data.conversationId;
-		const status = inboxStore.threadStatus(id);
+		const threadStatus = inboxStore.threadStatus(id);
 		const entry = inboxStore.getThread(id);
-		if (status === 'ready' && entry?.conversation && entry.conversation.unread_count > 0) {
+		if (
+			threadStatus === 'ready' &&
+			entry?.conversation &&
+			entry.conversation.unread_count > 0
+		) {
 			void inboxStore.markRead(id);
 		}
 	});
 
-	// Page-scoped Realtime subscription for this conversation. Reconciles
-	// directly into the store cache — never wipes and refetches.
 	$effect(() => {
 		const id = data.conversationId;
 		const supabase = getBrowserSupabase();
@@ -63,8 +72,20 @@
 		};
 	});
 
+	onMount(async () => {
+		if (!canViewTeam) return;
+		try {
+			const res = await fetch('/api/team');
+			if (!res.ok) return;
+			const body = (await res.json()) as { data: Array<{ id: string; full_name: string }> };
+			assignees = body.data;
+		} catch {
+			// silent — assignment menu just won't show team list
+		}
+	});
+
 	const entry = $derived(inboxStore.getThread(data.conversationId));
-	const status = $derived(inboxStore.threadStatus(data.conversationId));
+	const threadStatus = $derived(inboxStore.threadStatus(data.conversationId));
 	const errorMsg = $derived(inboxStore.threadError(data.conversationId));
 
 	const conversation = $derived(entry?.conversation ?? null);
@@ -73,24 +94,30 @@
 	const messages = $derived(entry?.messages ?? []);
 	const nextCursor = $derived(entry?.nextCursor ?? null);
 
-	const showSkeleton = $derived(status === 'loading' && messages.length === 0);
-	const showError = $derived(status === 'error' && messages.length === 0);
+	const showSkeleton = $derived(threadStatus === 'loading' && messages.length === 0);
+	const showError = $derived(threadStatus === 'error' && messages.length === 0);
 
 	const optedOut = $derived(contact?.sms_opt_out === true);
-	const isMissedCallChannel = $derived(conversation?.channel === 'missed_call');
-	const isWebchatChannel = $derived(conversation?.channel === 'webchat');
+	const isClosed = $derived(conversation?.status === 'closed');
 
-	const composerDisabledReason = $derived.by(() => {
-		if (!canSend) return 'You do not have permission to send messages.';
-		if (optedOut && !isWebchatChannel) return 'Contact has opted out of SMS.';
-		if (isMissedCallChannel) return 'Use a regular SMS conversation to reply.';
-		return undefined;
+	const availableChannels = $derived<OutboundChannel[]>(conversation?.available_channels ?? []);
+	const suggestedChannel = $derived(conversation?.suggested_channel ?? null);
+
+	const emailSubjectDefault = $derived.by(() => {
+		const lastEmail = [...messages]
+			.reverse()
+			.find((m) => m.channel === 'email' && m.email_subject);
+		if (lastEmail?.email_subject) {
+			return lastEmail.email_subject.startsWith('Re:')
+				? lastEmail.email_subject
+				: `Re: ${lastEmail.email_subject}`;
+		}
+		return conversation?.subject ?? '';
 	});
 
-	// Anchor a "scroll to bottom" effect when messages change.
 	let scrollEl: HTMLDivElement | null = $state(null);
 	$effect(() => {
-		void messages.length; // dependency
+		void messages.length;
 		if (scrollEl) {
 			scrollEl.scrollTop = scrollEl.scrollHeight;
 		}
@@ -102,7 +129,6 @@
 		loadingMore = true;
 		const prevHeight = scrollEl?.scrollHeight ?? 0;
 		await inboxStore.loadMoreThreadMessages(data.conversationId);
-		// Preserve scroll anchor after prepending older messages
 		queueMicrotask(() => {
 			if (scrollEl) {
 				const next = scrollEl.scrollHeight;
@@ -112,13 +138,45 @@
 		loadingMore = false;
 	}
 
-	async function handleSend(body: string, isInternalNote: boolean) {
+	async function handleSend(
+		body: string,
+		opts: { isInternalNote: boolean; channel?: OutboundChannel; emailSubject?: string }
+	) {
 		const result = await inboxStore.sendMessage(data.conversationId, body, {
-			isInternalNote
+			isInternalNote: opts.isInternalNote,
+			channel: opts.channel,
+			emailSubject: opts.emailSubject
 		});
 		if (!result.ok) {
 			toast.error('Message not sent', { description: result.error });
 		}
+	}
+
+	async function handleSnooze(preset: SnoozePreset) {
+		const result = await inboxStore.snooze(data.conversationId, preset);
+		if (!result.ok) toast.error('Snooze failed', { description: result.error });
+		else toast.success('Conversation snoozed');
+	}
+
+	async function handleUnsnooze() {
+		const result = await inboxStore.unsnooze(data.conversationId);
+		if (!result.ok) toast.error('Unsnooze failed', { description: result.error });
+	}
+
+	async function handleClose() {
+		const result = await inboxStore.setStatus(data.conversationId, 'closed');
+		if (!result.ok) toast.error('Close failed', { description: result.error });
+		else toast.success('Conversation closed');
+	}
+
+	async function handleReopen() {
+		const result = await inboxStore.setStatus(data.conversationId, 'open');
+		if (!result.ok) toast.error('Reopen failed', { description: result.error });
+	}
+
+	async function handleAssign(memberId: string | null, name: string | null) {
+		const result = await inboxStore.setAssignee(data.conversationId, memberId, name);
+		if (!result.ok) toast.error('Assignment failed', { description: result.error });
 	}
 </script>
 
@@ -146,18 +204,27 @@
 				<div class="truncate text-xs text-muted-foreground">{contact.phone}</div>
 			{/if}
 		</div>
+
+		<div class="hidden lg:flex">
+			<ConversationActions
+				{conversation}
+				canManage={canSend}
+				{assignees}
+				currentMemberId={member().id}
+				onSnooze={handleSnooze}
+				onUnsnooze={handleUnsnooze}
+				onClose={handleClose}
+				onReopen={handleReopen}
+				onAssign={handleAssign}
+			/>
+		</div>
+
 		<button
 			class="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent/40 lg:hidden"
 			onclick={() => (mobileContextOpen = true)}
 			aria-label="View contact details"
 		>
 			<Info class="h-5 w-5" />
-		</button>
-		<button
-			class="hidden lg:inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/40"
-			aria-label="More actions"
-		>
-			<MoreHorizontal class="h-5 w-5" />
 		</button>
 	</header>
 
@@ -200,16 +267,21 @@
 			{/if}
 
 			<!-- Composer + banners -->
-			<div class="shrink-0 border-t border-border bg-card/60 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur sm:px-4">
-				{#if optedOut && !isWebchatChannel}
+			<div
+				class="shrink-0 border-t border-border bg-card/60 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur sm:px-4"
+			>
+				{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
 					<div class="mb-2">
 						<OptOutBanner />
 					</div>
 				{/if}
 				<Composer
-					disabled={(optedOut && !isWebchatChannel) || isMissedCallChannel}
-					disabledReason={composerDisabledReason}
+					availableChannels={availableChannels}
+					suggestedChannel={suggestedChannel}
+					emailSubjectDefault={emailSubjectDefault}
 					canSend={canSend}
+					smsOptOut={optedOut}
+					isClosed={isClosed}
 					onSend={handleSend}
 				/>
 			</div>
@@ -237,6 +309,19 @@
 				<X class="h-4 w-4" />
 			</button>
 		</div>
-		<ContactContextPanel {contact} {context} />
+		<div class="space-y-4">
+			<ConversationActions
+				{conversation}
+				canManage={canSend}
+				{assignees}
+				currentMemberId={member().id}
+				onSnooze={handleSnooze}
+				onUnsnooze={handleUnsnooze}
+				onClose={handleClose}
+				onReopen={handleReopen}
+				onAssign={handleAssign}
+			/>
+			<ContactContextPanel {contact} {context} />
+		</div>
 	</Sheet.Content>
 </Sheet.Root>

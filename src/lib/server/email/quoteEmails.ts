@@ -1,4 +1,5 @@
-import { defaultFromAddress, sendEmail } from './client';
+import { sendEmail, type SendEmailResult } from './client';
+import { contractorFromAddress } from './senderAddresses';
 
 function escapeHtml(s: string): string {
 	return s
@@ -10,7 +11,7 @@ function escapeHtml(s: string): string {
 }
 
 export type QuoteEmailVars = {
-	orgName: string;
+	org: { name: string; slug: string; email_sender_local: string | null };
 	contactName: string;
 	contactEmail: string;
 	quoteNumber: string;
@@ -25,7 +26,7 @@ function quoteHtml(v: QuoteEmailVars): string {
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f6f7f9;margin:0;padding:24px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
     <tr><td style="padding:32px 28px 8px;">
-      <p style="margin:0;color:#6b7280;font-size:13px;">${escapeHtml(v.orgName)}</p>
+      <p style="margin:0;color:#6b7280;font-size:13px;">${escapeHtml(v.org.name)}</p>
       <h1 style="margin:8px 0 0;font-size:22px;color:#0f172a;">${escapeHtml(greeting)}</h1>
     </td></tr>
     <tr><td style="padding:16px 28px 8px;color:#334155;font-size:15px;line-height:1.5;">
@@ -49,7 +50,7 @@ function quoteText(v: QuoteEmailVars): string {
 
 Hi ${v.contactName},
 
-${v.orgName} has ${v.isResend ? 'updated your quote' : 'sent you a quote'}.
+${v.org.name} has ${v.isResend ? 'updated your quote' : 'sent you a quote'}.
 
 Quote ${v.quoteNumber} — ${v.totalFormatted}
 
@@ -58,15 +59,16 @@ ${v.publicUrl}
 `;
 }
 
-export async function sendQuoteEmail(vars: QuoteEmailVars): Promise<{ id: string | null }> {
+export async function sendQuoteEmail(vars: QuoteEmailVars): Promise<SendEmailResult> {
 	const subject = vars.isResend
-		? `Updated quote ${vars.quoteNumber} from ${vars.orgName}`
-		: `Your quote ${vars.quoteNumber} from ${vars.orgName}`;
+		? `Updated quote ${vars.quoteNumber} from ${vars.org.name}`
+		: `Your quote ${vars.quoteNumber} from ${vars.org.name}`;
 	return sendEmail({
 		to: vars.contactEmail,
-		from: defaultFromAddress(vars.orgName),
+		from: contractorFromAddress(vars.org),
 		subject,
 		html: quoteHtml(vars),
-		text: quoteText(vars)
+		text: quoteText(vars),
+		tags: [{ name: 'channel', value: 'quote' }]
 	});
 }

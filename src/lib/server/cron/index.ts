@@ -17,6 +17,7 @@ import { runNotificationPurge } from './notificationPurge';
 import { runOrgLifecycleAdvance } from './orgLifecycleAdvance';
 import { runMonthlyGrowthSummary } from './monthlyGrowthSummary';
 import { runWebchatSessionCleanup } from './webchatSessionCleanup';
+import { runUnsnoozeConversations } from './unsnoozeConversations';
 
 const log = createLogger('cron');
 
@@ -84,7 +85,8 @@ const JOBS: CronSpec[] = [
 	{ name: 'quote-expiry-sweep', schedule: '30 2 * * *', run: runQuoteExpirySweep },
 	{ name: 'notification-purge', schedule: '0 3 * * *', run: runNotificationPurge },
 	{ name: 'monthly-growth-summary', schedule: '0 6 1 * *', run: runMonthlyGrowthSummary },
-	{ name: 'webchat-session-cleanup', schedule: '0 4 * * *', run: runWebchatSessionCleanup }
+	{ name: 'webchat-session-cleanup', schedule: '0 4 * * *', run: runWebchatSessionCleanup },
+	{ name: 'unsnooze-conversations', schedule: '*/5 * * * *', run: runUnsnoozeConversations }
 ];
 
 let registered = false;

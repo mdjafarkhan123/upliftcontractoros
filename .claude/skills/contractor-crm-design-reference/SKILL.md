@@ -15,7 +15,7 @@ description: >
 # Design Reference — Contractor Growth OS
 
 > Target aesthetic: **Modern, Permium, High-End like: Supabase, Vercel etc** — Dark first then light mode, crisp, information-dense, premium, high end.
-> Stack: Svelte 5 · SvelteKit · shadcn-svelte · Tailwind CSS
+> Stack: Svelte 5 · SvelteKit · shadcn-svelte · Tailwind CSS and custom css where need
 > Mode: **Dark-first**. Light mode is secondary. Base all designs on the dark palette.
 > Never use raw hex values or hardcoded colours but if needs be then you can use but add that value as varibale with proper naming in 'app.css' — always use the semantic tokens defined.
 
@@ -37,11 +37,22 @@ When in doubt, read `references/color-system.md` first — every other file depe
 
 ## Design Philosophy (always apply)
 
-### The 3 Rules of Premium SaaS UI
+### The 4 Rules of Premium SaaS UI
 
 1. **Hierarchy through contrast, not size alone** — small text on a muted surface beats large text on a flat one. Use `text-muted-foreground` liberally for secondary info.
 2. **Surfaces have depth** — page → card → popover each sit on a visibly different layer. Never render content on a flat, uniform background.
 3. **Motion signals state, not decoration** — every transition communicates something (hover = interactive, fade = loading, slide = appeared). No gratuitous animation.
+4. Clean whitespace-heavy layouts
+   Soft neutral backgrounds
+   Minimal borders
+   Large rounded corners
+   Calm professional feel
+   Modern startup/SaaS dashboard style
+   Elegant typography hierarchy
+   Subtle shadows only
+   Smooth spacing rhythm
+   Lightweight UI, not dense enterprise UI
+   Premium but simple
 
 ### What "Premium" Looks Like in Practice
 

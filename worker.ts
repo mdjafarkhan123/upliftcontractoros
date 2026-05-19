@@ -10,8 +10,9 @@ process.env.WORKER_RUNTIME = 'true';
 import './src/lib/server/workers/outboxWorker';
 import './src/lib/server/workers/automationWorker';
 import './src/lib/server/workers/notificationWorker';
+import './src/lib/server/workers/emailWorker';
 import { registerCronJobs } from './src/lib/server/cron';
 
 registerCronJobs();
 
-console.log('[worker] Started — outbox, automation, notification workers + cron active');
+console.log('[worker] Started — outbox, automation, notification, email workers + cron active');

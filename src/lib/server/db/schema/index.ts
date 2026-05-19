@@ -48,19 +48,21 @@ export type { Job, NewJob } from './04_jobs';
 
 // Domain 5 — Communication
 export {
-	conversationChannelEnum,
 	conversationStatusEnum,
 	messageChannelEnum,
 	messageDirectionEnum,
 	messageStatusEnum,
 	conversations,
-	messages
+	messages,
+	inboundCommunicationEvents
 } from './05_communication';
 export type {
 	Conversation,
 	NewConversation,
 	Message,
-	NewMessage
+	NewMessage,
+	InboundCommunicationEvent,
+	NewInboundCommunicationEvent
 } from './05_communication';
 
 // Domain 6 — Revenue

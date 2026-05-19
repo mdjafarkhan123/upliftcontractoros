@@ -1,12 +1,11 @@
 import { Worker, type Job } from 'bullmq';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	appointments,
 	automationJobs,
 	automationSettings,
 	contacts,
-	conversations,
 	invoices,
 	messages,
 	organizations,
@@ -14,6 +13,7 @@ import {
 	reviewRequests,
 	type AutomationJob
 } from '$lib/server/db/schema';
+import { touchConversationOnMessage } from '$lib/server/conversations/touchConversationOnMessage';
 import {
 	AUTOMATION_QUEUE,
 	addJob,
@@ -206,55 +206,28 @@ async function handleMissedCallTextback(data: EventJobData) {
 		});
 		const sid = await sendSms(org.twilio_phone_number, contact.phone, body);
 
-		// Merge into existing open SMS conversation if one exists, else flip channel.
-		const [openSms] = await db
-			.select()
-			.from(conversations)
-			.where(
-				and(
-					eq(conversations.org_id, data.org_id),
-					eq(conversations.contact_id, contact.id),
-					eq(conversations.channel, 'sms'),
-					eq(conversations.status, 'open'),
-					isNull(conversations.deleted_at)
-				)
-			);
-
-		if (openSms) {
-			await db.transaction(async (tx) => {
-				await tx
-					.update(conversations)
-					.set({ status: 'closed', updated_at: new Date() })
-					.where(eq(conversations.id, missedCallConversationId));
-				await tx.insert(messages).values({
-					org_id: data.org_id!,
-					conversation_id: openSms.id,
-					direction: 'outbound',
-					channel: 'sms',
-					body,
-					status: 'sent',
-					twilio_message_sid: sid,
-					sent_at: new Date()
-				});
+		// Unified inbox: the missed-call conversation IS the customer thread.
+		// Append the outbound SMS reply directly and bump conversation metadata.
+		await db.transaction(async (tx) => {
+			await tx.insert(messages).values({
+				org_id: data.org_id!,
+				conversation_id: missedCallConversationId,
+				direction: 'outbound',
+				channel: 'sms',
+				body,
+				status: 'sent',
+				twilio_message_sid: sid,
+				sent_at: new Date(),
+				source: 'automation'
 			});
-		} else {
-			await db.transaction(async (tx) => {
-				await tx
-					.update(conversations)
-					.set({ channel: 'sms', updated_at: new Date() })
-					.where(eq(conversations.id, missedCallConversationId));
-				await tx.insert(messages).values({
-					org_id: data.org_id!,
-					conversation_id: missedCallConversationId,
-					direction: 'outbound',
-					channel: 'sms',
-					body,
-					status: 'sent',
-					twilio_message_sid: sid,
-					sent_at: new Date()
-				});
+			await touchConversationOnMessage(tx, {
+				conversation_id: missedCallConversationId,
+				channel: 'sms',
+				direction: 'outbound',
+				body,
+				is_internal_note: false
 			});
-		}
+		});
 
 		await markJobCompleted(automationJob.id);
 	} catch (err) {
@@ -330,7 +303,11 @@ async function dispatchInitialQuote(data: EventJobData) {
 	if (hasEmail && contact.email) {
 		try {
 			await sendQuoteEmail({
-				orgName: org.name,
+				org: {
+					name: org.name,
+					slug: org.slug,
+					email_sender_local: org.email_sender_local
+				},
 				contactName: contact.full_name,
 				contactEmail: contact.email,
 				quoteNumber: quoteNumberDisplay,

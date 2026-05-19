@@ -1,11 +1,21 @@
 <script lang="ts">
-	import { PhoneMissed, Check, AlertCircle, Loader2, StickyNote } from '@lucide/svelte';
+	import {
+		PhoneMissed,
+		Check,
+		AlertCircle,
+		Loader2,
+		StickyNote,
+		MessageSquare,
+		Globe
+	} from '@lucide/svelte';
 	import type { ThreadMessage } from '$lib/stores/inbox.svelte';
+	import EmailMessageCard from './EmailMessageCard.svelte';
 	import { cn } from '$lib/utils/cn';
 
 	let { message: m }: { message: ThreadMessage } = $props();
 
 	const isMissedCall = $derived(m.channel === 'missed_call');
+	const isEmail = $derived(m.channel === 'email');
 	const isInbound = $derived(m.direction === 'inbound');
 	const isInternal = $derived(m.is_internal_note);
 
@@ -41,6 +51,8 @@
 			<div class="mt-1 text-right text-[10px] text-muted-foreground">{timestamp}</div>
 		</div>
 	</div>
+{:else if isEmail}
+	<EmailMessageCard message={m} />
 {:else}
 	<div class={cn('flex', isInbound ? 'justify-start' : 'justify-end')}>
 		<div
@@ -60,11 +72,16 @@
 					isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70'
 				)}
 			>
+				{#if m.channel === 'webchat'}
+					<Globe class="h-3 w-3 opacity-70" aria-label="Webchat" />
+				{:else}
+					<MessageSquare class="h-3 w-3 opacity-70" aria-label="SMS" />
+				{/if}
 				<span>{timestamp}</span>
 				{#if !isInbound}
-					{#if m.status === 'sending'}
+					{#if m.status === 'queued' || m.status === 'sending'}
 						<Loader2 class="h-3 w-3 animate-spin" />
-					{:else if m.status === 'failed'}
+					{:else if m.status === 'failed' || m.status === 'bounced' || m.status === 'undeliverable'}
 						<AlertCircle class="h-3 w-3 text-destructive" />
 					{:else}
 						<Check class="h-3 w-3" />

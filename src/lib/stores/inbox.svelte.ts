@@ -2,8 +2,7 @@ import { SvelteMap } from 'svelte/reactivity';
 
 // ───── Types ───────────────────────────────────────────────────────────────
 
-export type ConversationChannel = 'sms' | 'missed_call' | 'email' | 'webchat';
-export type ConversationStatus = 'open' | 'closed' | 'archived';
+export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat';
 export type MessageDirection = 'inbound' | 'outbound';
 export type MessageStatus =
 	| 'sending'
@@ -12,10 +11,13 @@ export type MessageStatus =
 	| 'failed'
 	| 'received'
 	| 'queued'
-	| 'bounced';
-export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat';
+	| 'bounced'
+	| 'undeliverable';
 
-export type InboxFilter = 'all' | 'unread' | 'sms' | 'missed_calls' | 'webchat';
+export type ConversationStatus = 'open' | 'closed' | 'snoozed';
+export type StatusFilter = ConversationStatus | 'all';
+export type AssigneeFilter = 'all' | 'me' | 'unassigned' | string;
+export type SnoozePreset = '1h' | '3h' | 'tomorrow_9am' | 'next_week';
 
 export type ConversationListItem = {
 	id: string;
@@ -23,15 +25,17 @@ export type ConversationListItem = {
 	contact_name: string;
 	contact_phone: string;
 	contact_sms_opt_out: boolean;
-	channel: ConversationChannel;
 	status: ConversationStatus;
 	assigned_to: string | null;
 	assignee_name: string | null;
 	last_message_at: string | null;
-	unread_count: number;
-	created_at: string;
-	last_message_body: string | null;
+	last_inbound_at: string | null;
+	last_message_preview: string | null;
+	last_message_channel: MessageChannel | null;
 	last_message_direction: MessageDirection | null;
+	unread_count: number;
+	snoozed_until: string | null;
+	created_at: string;
 };
 
 export type ThreadMessage = {
@@ -45,25 +49,43 @@ export type ThreadMessage = {
 	media_urls: string[] | null;
 	status: MessageStatus;
 	twilio_message_sid: string | null;
+	reply_to_message_id: string | null;
+	failure_reason: string | null;
+	failed_at: string | null;
+	source: string | null;
+	email_subject: string | null;
+	email_from_address: string | null;
+	opened_at: string | null;
+	delivered_at: string | null;
 	sent_by: string | null;
 	sent_at: string | null;
 	read_at: string | null;
 	created_at: string;
 	updated_at: string;
-	// Local-only flag for optimistic messages that haven't been confirmed
 	_optimistic_key?: string;
 };
+
+export type OutboundChannel = 'sms' | 'email' | 'webchat';
 
 export type ConversationDetail = {
 	id: string;
 	org_id: string;
 	contact_id: string;
-	channel: ConversationChannel;
 	status: ConversationStatus;
+	subject: string | null;
 	assigned_to: string | null;
 	assignee_name: string | null;
 	last_message_at: string | null;
+	last_message_preview: string | null;
+	last_message_channel: MessageChannel | null;
+	last_message_direction: MessageDirection | null;
 	unread_count: number;
+	snoozed_until: string | null;
+	closed_at: string | null;
+	closed_reason: string | null;
+	tags: string[];
+	suggested_channel: OutboundChannel | null;
+	available_channels: OutboundChannel[];
 	created_at: string;
 	updated_at: string;
 };
@@ -84,7 +106,9 @@ export type ThreadContext = {
 };
 
 export type InboxFilters = {
-	filter: InboxFilter;
+	status: StatusFilter;
+	assignee: AssigneeFilter;
+	unread: boolean;
 	q: string;
 };
 
@@ -108,6 +132,7 @@ type ThreadEntry = {
 
 const LIST_TTL_MS = 30_000;
 const THREAD_TTL_MS = 30_000;
+const PREVIEW_LIMIT = 140;
 
 // ───── List cache ──────────────────────────────────────────────────────────
 
@@ -118,12 +143,14 @@ let listError = $state<string | null>(null);
 let listController: AbortController | null = null;
 
 function buildListKey(f: InboxFilters): string {
-	return `${f.filter}|${f.q.trim()}`;
+	return `${f.status}|${f.assignee}|${f.unread ? '1' : '0'}|${f.q.trim()}`;
 }
 
 function buildListParams(f: InboxFilters, cursor: string | null): URLSearchParams {
 	const p = new URLSearchParams();
-	if (f.filter !== 'all') p.set('filter', f.filter);
+	if (f.status !== 'open') p.set('status', f.status);
+	if (f.assignee !== 'all') p.set('assignee', f.assignee);
+	if (f.unread) p.set('unread', '1');
 	if (f.q.trim()) p.set('q', f.q.trim());
 	if (cursor) p.set('cursor', cursor);
 	return p;
@@ -136,7 +163,9 @@ async function fetchList(
 ): Promise<{ items: ConversationListItem[]; next_cursor: string | null }> {
 	const res = await fetch(`/api/conversations?${buildListParams(f, cursor)}`, { signal });
 	if (!res.ok) throw new Error('Failed to load conversations');
-	const body = (await res.json()) as { data: { items: ConversationListItem[]; next_cursor: string | null } };
+	const body = (await res.json()) as {
+		data: { items: ConversationListItem[]; next_cursor: string | null };
+	};
 	return body.data;
 }
 
@@ -153,7 +182,9 @@ async function fetchThreadDetail(
 ): Promise<{ conversation: ConversationDetail; contact: ContactSummary; context: ThreadContext }> {
 	const res = await fetch(`/api/conversations/${id}`, { signal });
 	if (!res.ok) throw new Error('Failed to load conversation');
-	const body = (await res.json()) as { data: { conversation: ConversationDetail; contact: ContactSummary; context: ThreadContext } };
+	const body = (await res.json()) as {
+		data: { conversation: ConversationDetail; contact: ContactSummary; context: ThreadContext };
+	};
 	return body.data;
 }
 
@@ -167,13 +198,52 @@ async function fetchThreadMessages(
 		: `/api/conversations/${id}/messages`;
 	const res = await fetch(url, { signal });
 	if (!res.ok) throw new Error('Failed to load messages');
-	const body = (await res.json()) as { data: { items: ThreadMessage[]; next_cursor: string | null } };
+	const body = (await res.json()) as {
+		data: { items: ThreadMessage[]; next_cursor: string | null };
+	};
 	return body.data;
 }
 
-// ───── Reconcilers (shared between mutations and Realtime) ────────────────
+// ───── Reconcilers ─────────────────────────────────────────────────────────
 
-function patchListEntriesForMessage(
+function previewFor(channel: MessageChannel, body: string | null): string {
+	if (channel === 'missed_call') return 'Missed phone call';
+	if (!body) return '';
+	const trimmed = body.trim();
+	return trimmed.length > PREVIEW_LIMIT ? trimmed.slice(0, PREVIEW_LIMIT) : trimmed;
+}
+
+function unreadInboundRank(c: ConversationListItem): 0 | 1 {
+	return c.unread_count > 0 && c.last_message_direction === 'inbound' ? 1 : 0;
+}
+
+// Match server ORDER BY: unread_inbound DESC, last_inbound_at DESC NULLS LAST,
+// last_message_at DESC NULLS LAST, id DESC.
+function sortInboxList(a: ConversationListItem, b: ConversationListItem): number {
+	const ua = unreadInboundRank(a);
+	const ub = unreadInboundRank(b);
+	if (ua !== ub) return ub - ua;
+
+	const ai = a.last_inbound_at;
+	const bi = b.last_inbound_at;
+	if (ai !== bi) {
+		if (!ai) return 1;
+		if (!bi) return -1;
+		return ai < bi ? 1 : -1;
+	}
+
+	const am = a.last_message_at;
+	const bm = b.last_message_at;
+	if (am !== bm) {
+		if (!am) return 1;
+		if (!bm) return -1;
+		return am < bm ? 1 : -1;
+	}
+
+	return a.id < b.id ? 1 : -1;
+}
+
+function patchListEntries(
 	conversationId: string,
 	mutate: (item: ConversationListItem) => ConversationListItem
 ): void {
@@ -182,13 +252,7 @@ function patchListEntriesForMessage(
 		if (idx < 0) continue;
 		const next = entry.items.slice();
 		next[idx] = mutate(next[idx]);
-		// Re-sort by last_message_at desc — the patched conversation likely moved up
-		next.sort((a, b) => {
-			const at = a.last_message_at ?? '';
-			const bt = b.last_message_at ?? '';
-			if (at === bt) return a.id < b.id ? 1 : -1;
-			return at < bt ? 1 : -1;
-		});
+		next.sort(sortInboxList);
 		listCache.set(k, { ...entry, items: next });
 	}
 }
@@ -197,8 +261,6 @@ function applyMessageToThread(conversationId: string, msg: ThreadMessage): void 
 	const entry = threadCache.get(conversationId);
 	if (!entry) return;
 
-	// Dedupe: same id, OR same twilio_message_sid, OR optimistic placeholder
-	// matching this id/sid (replace it in-place)
 	let replaced = false;
 	const messages = entry.messages.map((m) => {
 		if (m.id === msg.id) {
@@ -218,7 +280,6 @@ function applyMessageToThread(conversationId: string, msg: ThreadMessage): void 
 
 	if (!replaced) messages.push(msg);
 
-	// Keep chronological order (oldest first)
 	messages.sort((a, b) => {
 		if (a.created_at === b.created_at) return a.id < b.id ? -1 : 1;
 		return a.created_at < b.created_at ? -1 : 1;
@@ -238,7 +299,6 @@ function applyConversationPatch(
 			conversation: { ...entry.conversation, ...patch }
 		});
 	}
-
 	for (const [k, le] of listCache) {
 		const idx = le.items.findIndex((c) => c.id === conversationId);
 		if (idx < 0) continue;
@@ -251,7 +311,6 @@ function applyConversationPatch(
 // ───── Public store API ────────────────────────────────────────────────────
 
 export const inboxStore = {
-	// ── List ─────────────────────────────────────────────────────────────
 	get items(): ConversationListItem[] {
 		return listCache.get(currentListKey)?.items ?? [];
 	},
@@ -310,11 +369,10 @@ export const inboxStore = {
 				fetchedAt: Date.now()
 			});
 		} catch {
-			// swallow — user can retry
+			// swallow
 		}
 	},
 
-	// ── Thread ───────────────────────────────────────────────────────────
 	getThread(conversationId: string): ThreadEntry | undefined {
 		return threadCache.get(conversationId);
 	},
@@ -345,7 +403,6 @@ export const inboxStore = {
 				fetchThreadDetail(conversationId, controller.signal),
 				fetchThreadMessages(conversationId, null, controller.signal)
 			]);
-			// Preserve optimistic messages that haven't been confirmed by the server yet
 			const existingOptimistic = (cached?.messages ?? []).filter((m) => m._optimistic_key);
 			const merged = [...msgs.items];
 			for (const opt of existingOptimistic) {
@@ -397,28 +454,41 @@ export const inboxStore = {
 		}
 	},
 
-	// ── Mutations ────────────────────────────────────────────────────────
 	async sendMessage(
 		conversationId: string,
 		body: string,
-		opts: { isInternalNote?: boolean } = {}
+		opts: {
+			isInternalNote?: boolean;
+			channel?: OutboundChannel;
+			emailSubject?: string;
+		} = {}
 	): Promise<{ ok: true; message: ThreadMessage } | { ok: false; error: string }> {
 		const isInternal = opts.isInternalNote === true;
 		const entry = threadCache.get(conversationId);
 		const optimisticKey = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		const nowIso = new Date().toISOString();
+		const optimisticChannel: MessageChannel =
+			opts.channel ?? entry?.conversation?.suggested_channel ?? entry?.conversation?.last_message_channel ?? 'sms';
 
 		const optimistic: ThreadMessage = {
 			id: optimisticKey,
 			org_id: entry?.conversation?.org_id ?? '',
 			conversation_id: conversationId,
 			direction: 'outbound',
-			channel: 'sms',
+			channel: optimisticChannel,
 			body,
 			is_internal_note: isInternal,
 			media_urls: null,
 			status: 'sending',
 			twilio_message_sid: null,
+			reply_to_message_id: null,
+			failure_reason: null,
+			failed_at: null,
+			source: 'api',
+			email_subject: opts.emailSubject ?? null,
+			email_from_address: null,
+			opened_at: null,
+			delivered_at: null,
 			sent_by: null,
 			sent_at: null,
 			read_at: null,
@@ -435,17 +505,19 @@ export const inboxStore = {
 		}
 
 		try {
+			const payload: Record<string, unknown> = { body, is_internal_note: isInternal };
+			if (opts.channel) payload.channel = opts.channel;
+			if (opts.emailSubject) payload.email_subject = opts.emailSubject;
 			const res = await fetch(`/api/conversations/${conversationId}/messages`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ body, is_internal_note: isInternal })
+				body: JSON.stringify(payload)
 			});
 			const json = (await res.json().catch(() => ({}))) as {
 				data?: { message: ThreadMessage };
 				error?: string;
 			};
 			if (!res.ok || !json.data) {
-				// Remove optimistic on failure
 				const cur = threadCache.get(conversationId);
 				if (cur) {
 					threadCache.set(conversationId, {
@@ -455,7 +527,7 @@ export const inboxStore = {
 				}
 				return { ok: false, error: json.error ?? 'Failed to send message' };
 			}
-			// Replace optimistic in place with confirmed
+
 			const cur = threadCache.get(conversationId);
 			if (cur) {
 				const messages = cur.messages.map((m) =>
@@ -463,16 +535,21 @@ export const inboxStore = {
 				);
 				threadCache.set(conversationId, { ...cur, messages });
 			}
-			// Bump conversation last_message_at + previews in list cache
+
 			if (!isInternal) {
-				patchListEntriesForMessage(conversationId, (c) => ({
+				const confirmed = json.data.message;
+				patchListEntries(conversationId, (c) => ({
 					...c,
-					last_message_at: json.data!.message.created_at,
-					last_message_body: json.data!.message.body,
+					last_message_at: confirmed.created_at,
+					last_message_preview: previewFor(confirmed.channel, confirmed.body),
+					last_message_channel: confirmed.channel,
 					last_message_direction: 'outbound'
 				}));
 				applyConversationPatch(conversationId, {
-					last_message_at: json.data!.message.created_at
+					last_message_at: confirmed.created_at,
+					last_message_preview: previewFor(confirmed.channel, confirmed.body),
+					last_message_channel: confirmed.channel,
+					last_message_direction: 'outbound'
 				});
 			}
 			return { ok: true, message: json.data.message };
@@ -489,19 +566,19 @@ export const inboxStore = {
 	},
 
 	async markRead(conversationId: string): Promise<void> {
-		// Optimistic local zeroing
 		applyConversationPatch(conversationId, { unread_count: 0 });
-		patchListEntriesForMessage(conversationId, (c) => ({ ...c, unread_count: 0 }));
+		patchListEntries(conversationId, (c) => ({ ...c, unread_count: 0 }));
 		try {
 			await fetch(`/api/conversations/${conversationId}/read`, { method: 'PATCH' });
 		} catch {
-			// silent — next load will sync correct value
+			// silent
 		}
 	},
 
 	async setStatus(
 		conversationId: string,
-		status: ConversationStatus
+		status: 'open' | 'closed',
+		reason?: string
 	): Promise<{ ok: true } | { ok: false; error: string }> {
 		const before = threadCache.get(conversationId)?.conversation?.status;
 		applyConversationPatch(conversationId, { status });
@@ -509,7 +586,7 @@ export const inboxStore = {
 			const res = await fetch(`/api/conversations/${conversationId}/status`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ status })
+				body: JSON.stringify({ status, reason })
 			});
 			if (!res.ok) {
 				if (before) applyConversationPatch(conversationId, { status: before });
@@ -519,6 +596,49 @@ export const inboxStore = {
 			return { ok: true };
 		} catch (e) {
 			if (before) applyConversationPatch(conversationId, { status: before });
+			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+		}
+	},
+
+	async snooze(
+		conversationId: string,
+		preset: SnoozePreset
+	): Promise<{ ok: true } | { ok: false; error: string }> {
+		try {
+			const res = await fetch(`/api/conversations/${conversationId}/snooze`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ preset })
+			});
+			const json = (await res.json().catch(() => ({}))) as {
+				data?: { conversation: ConversationDetail };
+				error?: string;
+			};
+			if (!res.ok || !json.data) {
+				return { ok: false, error: json.error ?? 'Failed to snooze' };
+			}
+			applyConversationPatch(conversationId, {
+				status: 'snoozed',
+				snoozed_until: json.data.conversation.snoozed_until
+			});
+			return { ok: true };
+		} catch (e) {
+			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+		}
+	},
+
+	async unsnooze(conversationId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+		try {
+			const res = await fetch(`/api/conversations/${conversationId}/snooze`, {
+				method: 'DELETE'
+			});
+			if (!res.ok) {
+				const json = (await res.json().catch(() => ({}))) as { error?: string };
+				return { ok: false, error: json.error ?? 'Failed to unsnooze' };
+			}
+			applyConversationPatch(conversationId, { status: 'open', snoozed_until: null });
+			return { ok: true };
+		} catch (e) {
 			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
 		}
 	},
@@ -558,31 +678,38 @@ export const inboxStore = {
 		}
 	},
 
-	// ── Realtime reconciliation ──────────────────────────────────────────
 	applyRealtimeMessageInsert(msg: ThreadMessage): void {
 		applyMessageToThread(msg.conversation_id, msg);
 
-		// Update list preview + unread count
 		const isInbound = msg.direction === 'inbound';
-		patchListEntriesForMessage(msg.conversation_id, (c) => ({
+		const isInternal = msg.is_internal_note;
+		const newPreview = previewFor(msg.channel, msg.body);
+
+		patchListEntries(msg.conversation_id, (c) => ({
 			...c,
 			last_message_at: msg.created_at,
-			last_message_body: msg.is_internal_note ? c.last_message_body : msg.body,
-			last_message_direction: msg.is_internal_note ? c.last_message_direction : msg.direction,
-			unread_count: isInbound && !msg.is_internal_note ? c.unread_count + 1 : c.unread_count
+			last_inbound_at:
+				isInbound && !isInternal ? msg.created_at : c.last_inbound_at,
+			last_message_preview: isInternal ? c.last_message_preview : newPreview,
+			last_message_channel: isInternal ? c.last_message_channel : msg.channel,
+			last_message_direction: isInternal ? c.last_message_direction : msg.direction,
+			unread_count: isInbound && !isInternal ? c.unread_count + 1 : c.unread_count
 		}));
+
+		const currentDetail = threadCache.get(msg.conversation_id)?.conversation;
+		const nextUnread =
+			isInbound && !isInternal ? (currentDetail?.unread_count ?? 0) + 1 : currentDetail?.unread_count;
 		applyConversationPatch(msg.conversation_id, {
 			last_message_at: msg.created_at,
-			...(isInbound && !msg.is_internal_note
-				? {
-						unread_count:
-							(threadCache.get(msg.conversation_id)?.conversation?.unread_count ?? 0) + 1
-					}
-				: {})
+			last_message_preview: isInternal ? currentDetail?.last_message_preview ?? null : newPreview,
+			last_message_channel: isInternal ? currentDetail?.last_message_channel ?? null : msg.channel,
+			last_message_direction: isInternal
+				? currentDetail?.last_message_direction ?? null
+				: msg.direction,
+			...(nextUnread !== undefined ? { unread_count: nextUnread } : {})
 		});
 	},
 
-	// ── Lifecycle ────────────────────────────────────────────────────────
 	invalidate(): void {
 		listCache.clear();
 		threadCache.clear();

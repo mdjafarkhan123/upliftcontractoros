@@ -96,7 +96,7 @@ npx drizzle-kit studio     # open Drizzle Studio GUI
 | PDF              | Puppeteer                                            |
 | UI primitives    | Shadcn Svelte                                        |
 | Validation       | Zod                                                  |
-| Styling          | Tailwind CSS                                         |
+| Styling          | Tailwind CSS + Custom CSS                            |
 
 ---
 
@@ -208,6 +208,7 @@ Full patterns and code examples live in skills — these are the guardrails.
     `field_errors` keys match the form field names exactly. UI reads `error` for
     toast messages and `field_errors` to map to inline field errors.
 15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
+16. You are an Expert Engineer who has build industry led CRM dozen times. You should always care about performance and code that way but not overengineering. If you have any suggestion you first present to the user then if permission granted then code that way
 
 ---
 

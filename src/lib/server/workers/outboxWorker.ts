@@ -3,14 +3,14 @@ import { sql, and, eq, lte, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { outboxEvents, type OutboxEvent } from '$lib/server/db/schema';
 const env = process.env;
-import { automationQueue, notificationQueue, addJob } from '$lib/server/queue/bullmq';
+import { automationQueue, notificationQueue, emailQueue, addJob } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
 
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 30_000;
 const OUTBOX_CHANNEL = 'outbox_channel';
 
-type QueueTarget = { queue: 'automation' | 'notification'; jobName: string };
+type QueueTarget = { queue: 'automation' | 'notification' | 'email'; jobName: string };
 
 function routeEvent(event: OutboxEvent): QueueTarget[] {
 	switch (event.event_type) {
@@ -51,6 +51,8 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [{ queue: 'notification', jobName: event.event_type }];
 		case 'media.deleted':
 			return [];
+		case 'email.send.requested':
+			return [{ queue: 'email', jobName: 'email.send.requested' }];
 		default:
 			return [];
 	}
@@ -98,7 +100,12 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 		payload: event.payload
 	};
 	for (const target of targets) {
-		const queue = target.queue === 'automation' ? automationQueue() : notificationQueue();
+		const queue =
+			target.queue === 'automation'
+				? automationQueue()
+				: target.queue === 'notification'
+					? notificationQueue()
+					: emailQueue();
 		await addJob(queue, target.jobName, data);
 	}
 	return { status: 'routed' };

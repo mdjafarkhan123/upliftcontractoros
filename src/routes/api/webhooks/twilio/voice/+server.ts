@@ -1,9 +1,9 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
-	conversations,
+	inboundCommunicationEvents,
 	messages,
 	organizations,
 	outboxEvents
@@ -11,6 +11,10 @@ import {
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
+import {
+	findOrCreateOpenConversation,
+	recordInboundMessage
+} from '$lib/server/conversations';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -59,6 +63,19 @@ export const POST: RequestHandler = async ({ request }) => {
 		.where(eq(messages.twilio_message_sid, callSid))
 		.limit(1);
 	if (existingMsg) return twiml();
+
+	// Audit raw payload (best-effort).
+	void db
+		.insert(inboundCommunicationEvents)
+		.values({
+			org_id: org.id,
+			provider: 'twilio',
+			provider_event_id: callSid,
+			event_type: 'missed_call',
+			raw_payload: params,
+			processed_at: new Date()
+		})
+		.catch(() => undefined);
 
 	let touchedContactId: string | null = null;
 	try {
@@ -130,76 +147,20 @@ export const POST: RequestHandler = async ({ request }) => {
 				});
 			}
 
-			// Find or create open missed_call conversation
-			let [conv] = await tx
-				.select()
-				.from(conversations)
-				.where(
-					and(
-						eq(conversations.org_id, org.id),
-						eq(conversations.contact_id, contactId),
-						eq(conversations.channel, 'missed_call'),
-						eq(conversations.status, 'open'),
-						isNull(conversations.deleted_at)
-					)
-				)
-				.limit(1);
+			const { conversation: conv } = await findOrCreateOpenConversation(tx, {
+				orgId: org.id,
+				contactId,
+				createdChannel: 'missed_call'
+			});
 
-			let convCreated = false;
-			if (!conv) {
-				const [created] = await tx
-					.insert(conversations)
-					.values({
-						org_id: org.id,
-						contact_id: contactId,
-						channel: 'missed_call',
-						status: 'open',
-						last_message_at: new Date(),
-						unread_count: 0
-					})
-					.returning();
-				conv = created;
-				convCreated = true;
-			}
-
-			const [insertedMsg] = await tx
-				.insert(messages)
-				.values({
-					org_id: org.id,
-					conversation_id: conv.id,
-					direction: 'inbound',
-					channel: 'missed_call',
-					body: null,
-					status: 'received',
-					twilio_message_sid: callSid,
-					sent_at: new Date()
-				})
-				.returning();
-
-			await tx
-				.update(conversations)
-				.set({
-					last_message_at: new Date(),
-					unread_count: (conv.unread_count ?? 0) + 1,
-					updated_at: new Date()
-				})
-				.where(eq(conversations.id, conv.id));
-
-			if (convCreated) {
-				await tx.insert(outboxEvents).values({
-					org_id: org.id,
-					event_type: 'conversation.created',
-					resource_type: 'conversation',
-					resource_id: conv.id,
-					payload: {
-						conversation_id: conv.id,
-						org_id: org.id,
-						contact_id: contactId,
-						channel: 'missed_call'
-					},
-					idempotency_key: `conversation.created:${conv.id}`
-				});
-			}
+			const insertedMsg = await recordInboundMessage(tx, {
+				orgId: org.id,
+				conversationId: conv.id,
+				channel: 'missed_call',
+				body: 'Missed phone call',
+				twilioMessageSid: callSid,
+				source: 'webhook'
+			});
 
 			await tx.insert(outboxEvents).values({
 				org_id: org.id,
@@ -231,7 +192,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		return new Response('Internal error', { status: 500 });
 	}
 
-	// Best-effort: bump contacts.last_contacted_at after a successful missed call.
 	if (touchedContactId) {
 		void touchContactLastContacted(org.id, touchedContactId);
 	}

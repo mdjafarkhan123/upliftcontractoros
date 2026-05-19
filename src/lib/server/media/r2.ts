@@ -34,6 +34,17 @@ function bucket(): string {
 	return b;
 }
 
+export async function r2Get(key: string): Promise<Buffer> {
+	const res = await r2Client().send(
+		new GetObjectCommand({ Bucket: bucket(), Key: key })
+	);
+	if (!res.Body) throw new Error(`R2 object ${key} has no body`);
+	const chunks: Uint8Array[] = [];
+	// @ts-expect-error -- Body is a Node Readable stream in this runtime
+	for await (const chunk of res.Body) chunks.push(chunk);
+	return Buffer.concat(chunks);
+}
+
 export async function r2Upload(
 	key: string,
 	body: Buffer,

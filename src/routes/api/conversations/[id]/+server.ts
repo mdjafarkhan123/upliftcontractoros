@@ -12,6 +12,7 @@ import {
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
+import { computeChannelHints, hasActiveWebchatSession } from '$lib/server/conversations';
 
 function canAccess(
 	conv: { assigned_to: string | null },
@@ -103,9 +104,17 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(invoices.updated_at))
 		.limit(1);
 
+	const hasWebchat = await hasActiveWebchatSession(row.conversation.id);
+	const channelHints = computeChannelHints(row.conversation, row.contact, hasWebchat);
+
 	return json({
 		data: {
-			conversation: { ...row.conversation, assignee_name: row.assignee_name },
+			conversation: {
+				...row.conversation,
+				assignee_name: row.assignee_name,
+				suggested_channel: channelHints.suggested,
+				available_channels: channelHints.available
+			},
 			contact: row.contact,
 			context: {
 				pipeline_stage: latestOpp?.stage_name ?? null,

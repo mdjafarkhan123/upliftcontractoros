@@ -68,6 +68,10 @@ export const organizations = pgTable('organizations', {
 	// Widget token: generated once, immutable, used to identify the org from the public widget
 	widget_token: uuid('widget_token').notNull().default(sql`gen_random_uuid()`).unique(),
 
+	// Local-part for contractor outbound email on the shared apex (e.g. "acme-roofing"
+	// → acme-roofing@<EMAIL_APEX_DOMAIN>). Backfilled from slug at migration time.
+	email_sender_local: text('email_sender_local'),
+
 	max_team_members: integer('max_team_members').notNull().default(3),
 	max_monthly_sms: integer('max_monthly_sms').notNull().default(500),
 	max_bulk_sms_per_day: integer('max_bulk_sms_per_day').notNull().default(50),

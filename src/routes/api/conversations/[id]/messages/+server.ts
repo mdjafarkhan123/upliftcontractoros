@@ -1,33 +1,53 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, eq, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, isNotNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
 	conversations,
+	media,
 	messages,
 	organizations,
-	outboxEvents
+	outboxEvents,
+	webchatSessions
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { twilio } from '$lib/server/twilio/client';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
+import { recordOutboundMessage, type OutboundChannel } from '$lib/server/conversations';
+import { ensureReplyAlias } from '$lib/server/email/replyAlias';
 
 const log = createLogger('inbox.message.insert');
 
 const PAGE_SIZE = 50;
+const MAX_ATTACHMENT_BYTES_TOTAL = 20 * 1024 * 1024;
+
+const attachmentSchema = z.object({
+	filename: z.string().min(1).max(255),
+	r2_key: z.string().min(1).max(500),
+	mime_type: z.string().min(1).max(127),
+	size_bytes: z.number().int().nonnegative().max(MAX_ATTACHMENT_BYTES_TOTAL),
+	sha256: z.string().regex(/^[a-f0-9]{64}$/i)
+});
 
 const sendSchema = z.object({
-	body: z.string().min(1, 'Message body is required').max(1600, 'Message too long'),
-	is_internal_note: z.boolean().optional().default(false)
+	body: z.string().min(1, 'Message body is required').max(10_000, 'Message too long'),
+	channel: z.enum(['sms', 'webchat', 'email']).optional(),
+	email_subject: z.string().trim().max(255).optional(),
+	is_internal_note: z.boolean().optional().default(false),
+	attachments: z.array(attachmentSchema).max(10).optional()
 });
 
 function canAccess(
 	conv: { assigned_to: string | null },
-	member: { id: string; can_view_all_conversations: boolean; can_view_assigned_conversations: boolean }
+	member: {
+		id: string;
+		can_view_all_conversations: boolean;
+		can_view_assigned_conversations: boolean;
+	}
 ): boolean {
 	if (member.can_view_all_conversations) return true;
 	if (member.can_view_assigned_conversations && conv.assigned_to === member.id) return true;
@@ -77,6 +97,19 @@ export const GET: RequestHandler = async (event) => {
 	return json({ data: { items, next_cursor: nextCursor } });
 };
 
+async function resolveOutboundChannel(
+	conversationId: string,
+	requested: OutboundChannel | undefined
+): Promise<OutboundChannel> {
+	if (requested) return requested;
+	const [session] = await db
+		.select({ id: webchatSessions.id })
+		.from(webchatSessions)
+		.where(eq(webchatSessions.conversation_id, conversationId))
+		.limit(1);
+	return session ? 'webchat' : 'sms';
+}
+
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
@@ -85,7 +118,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const conversationId = event.params.id;
-	let parsed;
+	let parsed: z.infer<typeof sendSchema>;
 	try {
 		const body = await event.request.json();
 		const result = sendSchema.safeParse(body);
@@ -126,30 +159,174 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 	if (!contact) return json({ error: 'Contact not found.' }, { status: 404 });
 
-	// Webchat channel — no Twilio, just insert outbound message and emit message.sent
-	if (conv.channel === 'webchat') {
+	// Internal notes — no transport, no outbox emit.
+	if (parsed.is_internal_note) {
+		const inheritedChannel = conv.last_message_channel ?? 'sms';
+		const inserted = await recordOutboundMessage(db, {
+			orgId: auth.orgId,
+			conversationId: conv.id,
+			channel: inheritedChannel,
+			body: parsed.body,
+			sentBy: auth.member.id,
+			isInternalNote: true,
+			source: 'api'
+		});
+		return json({ data: { message: inserted } }, { status: 201 });
+	}
+
+	const outboundChannel = await resolveOutboundChannel(conv.id, parsed.channel);
+
+	// ── Email branch (async via outbox → email worker) ───────────────────────
+	if (outboundChannel === 'email') {
+		if (!contact.email) {
+			return json(
+				{ error: 'Contact does not have an email address.', field_errors: { channel: 'No email on file' } },
+				{ status: 400 }
+			);
+		}
+
+		// Find newest email in the thread for subject + threading headers.
+		const [lastEmail] = await db
+			.select({
+				id: messages.id,
+				email_subject: messages.email_subject,
+				email_provider_message_id: messages.email_provider_message_id,
+				email_references: messages.email_references
+			})
+			.from(messages)
+			.where(
+				and(
+					eq(messages.conversation_id, conv.id),
+					eq(messages.channel, 'email'),
+					isNotNull(messages.email_provider_message_id)
+				)
+			)
+			.orderBy(desc(messages.created_at))
+			.limit(1);
+
+		let subject = parsed.email_subject?.trim() ?? '';
+		if (!subject) {
+			if (lastEmail?.email_subject) {
+				subject = lastEmail.email_subject.startsWith('Re:')
+					? lastEmail.email_subject
+					: `Re: ${lastEmail.email_subject}`;
+			} else if (conv.subject) {
+				subject = conv.subject;
+			} else {
+				return json(
+					{
+						error: 'A subject is required for the first email.',
+						field_errors: { email_subject: 'Subject is required' }
+					},
+					{ status: 400 }
+				);
+			}
+		}
+
+		const inReplyTo = lastEmail?.email_provider_message_id ?? null;
+		const references = lastEmail
+			? [lastEmail.email_references, lastEmail.email_provider_message_id]
+					.filter(Boolean)
+					.join(' ')
+					.trim() || null
+			: null;
+
+		// Reserve an opaque reply alias before the tx so the worker has it ready.
+		await ensureReplyAlias(auth.orgId, conv.id);
+
+		// Cap total attachment bytes early.
+		const totalBytes = (parsed.attachments ?? []).reduce((s, a) => s + a.size_bytes, 0);
+		if (totalBytes > MAX_ATTACHMENT_BYTES_TOTAL) {
+			return json(
+				{
+					error: 'Attachments exceed the 20 MB limit.',
+					field_errors: { attachments: 'Total attachment size too large' }
+				},
+				{ status: 400 }
+			);
+		}
+
 		const txStart = Date.now();
 		try {
 			const result = await db.transaction(async (tx) => {
-				const [inserted] = await tx
-					.insert(messages)
-					.values({
-						org_id: auth.orgId,
-						conversation_id: conv.id,
-						direction: 'outbound',
-						channel: 'webchat',
-						body: parsed.body,
-						is_internal_note: false,
-						status: 'sent',
-						sent_by: auth.member.id,
-						sent_at: new Date()
-					})
-					.returning();
+				const inserted = await recordOutboundMessage(tx, {
+					orgId: auth.orgId,
+					conversationId: conv.id,
+					channel: 'email',
+					body: parsed.body,
+					sentBy: auth.member.id,
+					status: 'queued',
+					source: 'api',
+					emailMeta: {
+						email_subject: subject,
+						email_to_addresses: [contact.email!],
+						email_in_reply_to: inReplyTo ?? undefined,
+						email_references: references ?? undefined
+					}
+				});
 
-				await tx
-					.update(conversations)
-					.set({ last_message_at: new Date(), updated_at: new Date() })
-					.where(eq(conversations.id, conv.id));
+				if (parsed.attachments && parsed.attachments.length > 0) {
+					await tx.insert(media).values(
+						parsed.attachments.map((a) => ({
+							org_id: auth.orgId,
+							uploaded_by: auth.member.id,
+							message_id: inserted.id,
+							r2_key: a.r2_key,
+							original_filename: a.filename,
+							file_size_bytes: a.size_bytes,
+							media_type: 'attachment' as const,
+							mime_type: a.mime_type,
+							purpose_tag: 'quote_attachment' as const, // reused enum value; revisit when we add an 'email_attachment' tag
+							scan_status: 'pending',
+							sha256_hash: a.sha256
+						}))
+					);
+				}
+
+				await tx.insert(outboxEvents).values({
+					org_id: auth.orgId,
+					event_type: 'email.send.requested',
+					resource_type: 'message',
+					resource_id: inserted.id,
+					payload: {
+						message_id: inserted.id,
+						conversation_id: conv.id,
+						contact_id: contact.id,
+						org_id: auth.orgId
+					},
+					idempotency_key: `email.send.requested:${inserted.id}`
+				});
+
+				return inserted;
+			});
+			void touchContactLastContacted(auth.orgId, contact.id);
+			return json({ data: { message: result } }, { status: 201 });
+		} catch (e) {
+			log.error({
+				phase: 'tx_error',
+				channel: 'email',
+				conversation_id: conv.id,
+				org_id: auth.orgId,
+				ms: Date.now() - txStart,
+				error: e instanceof Error ? e.message : String(e)
+			});
+			return json({ error: 'Failed to queue email.' }, { status: 500 });
+		}
+	}
+
+	// ── Webchat branch ───────────────────────────────────────────────────────
+	if (outboundChannel === 'webchat') {
+		const txStart = Date.now();
+		try {
+			const result = await db.transaction(async (tx) => {
+				const inserted = await recordOutboundMessage(tx, {
+					orgId: auth.orgId,
+					conversationId: conv.id,
+					channel: 'webchat',
+					body: parsed.body,
+					sentBy: auth.member.id,
+					source: 'api'
+				});
 
 				await tx.insert(outboxEvents).values({
 					org_id: auth.orgId,
@@ -185,30 +362,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	// Internal notes — never touch Twilio, never emit message.sent, excluded from unread
-	if (parsed.is_internal_note) {
-		const [inserted] = await db
-			.insert(messages)
-			.values({
-				org_id: auth.orgId,
-				conversation_id: conv.id,
-				direction: 'outbound',
-				channel: 'sms',
-				body: parsed.body,
-				is_internal_note: true,
-				status: 'sent',
-				sent_by: auth.member.id,
-				sent_at: new Date()
-			})
-			.returning();
-		await db
-			.update(conversations)
-			.set({ last_message_at: new Date(), updated_at: new Date() })
-			.where(eq(conversations.id, conv.id));
-		return json({ data: { message: inserted } }, { status: 201 });
-	}
-
-	// Outbound SMS path
+	// ── SMS branch ───────────────────────────────────────────────────────────
 	if (contact.sms_opt_out) {
 		return json({ error: 'Contact has opted out of SMS.' }, { status: 400 });
 	}
@@ -242,26 +396,15 @@ export const POST: RequestHandler = async (event) => {
 	const txStart = Date.now();
 	try {
 		const result = await db.transaction(async (tx) => {
-			const [inserted] = await tx
-				.insert(messages)
-				.values({
-					org_id: auth.orgId,
-					conversation_id: conv.id,
-					direction: 'outbound',
-					channel: 'sms',
-					body: parsed.body,
-					is_internal_note: false,
-					status: 'sent',
-					twilio_message_sid: twilioSid,
-					sent_by: auth.member.id,
-					sent_at: new Date()
-				})
-				.returning();
-
-			await tx
-				.update(conversations)
-				.set({ last_message_at: new Date(), updated_at: new Date() })
-				.where(eq(conversations.id, conv.id));
+			const inserted = await recordOutboundMessage(tx, {
+				orgId: auth.orgId,
+				conversationId: conv.id,
+				channel: 'sms',
+				body: parsed.body,
+				sentBy: auth.member.id,
+				twilioMessageSid: twilioSid,
+				source: 'api'
+			});
 
 			await tx.insert(outboxEvents).values({
 				org_id: auth.orgId,
@@ -283,8 +426,6 @@ export const POST: RequestHandler = async (event) => {
 
 			return inserted;
 		});
-		// Best-effort: bump contacts.last_contacted_at after a successful outbound SMS.
-		// Failures inside touchContactLastContacted are logged and swallowed.
 		void touchContactLastContacted(auth.orgId, contact.id);
 		return json({ data: { message: result } }, { status: 201 });
 	} catch (e) {
@@ -299,23 +440,16 @@ export const POST: RequestHandler = async (event) => {
 			stack: e instanceof Error ? e.stack : undefined
 		});
 		console.error('[outbound sms] db write failed after twilio send', e);
-		// Twilio already sent. Persist a best-effort row so the message isn't lost.
 		try {
-			const [salvage] = await db
-				.insert(messages)
-				.values({
-					org_id: auth.orgId,
-					conversation_id: conv.id,
-					direction: 'outbound',
-					channel: 'sms',
-					body: parsed.body,
-					is_internal_note: false,
-					status: 'sent',
-					twilio_message_sid: twilioSid,
-					sent_by: auth.member.id,
-					sent_at: new Date()
-				})
-				.returning();
+			const salvage = await recordOutboundMessage(db, {
+				orgId: auth.orgId,
+				conversationId: conv.id,
+				channel: 'sms',
+				body: parsed.body,
+				sentBy: auth.member.id,
+				twilioMessageSid: twilioSid,
+				source: 'api'
+			});
 			void touchContactLastContacted(auth.orgId, contact.id);
 			return json({ data: { message: salvage } }, { status: 201 });
 		} catch {
@@ -323,4 +457,3 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 };
-

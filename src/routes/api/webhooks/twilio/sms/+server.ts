@@ -4,7 +4,7 @@ import { db } from '$lib/server/db/client';
 import {
 	automationSettings,
 	contacts,
-	conversations,
+	inboundCommunicationEvents,
 	messages,
 	organizations,
 	outboxEvents,
@@ -17,6 +17,10 @@ import { detectOptKeyword } from '$lib/server/twilio/optOut';
 import { sendSms } from '$lib/server/twilio/sendSms';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
+import {
+	findOrCreateOpenConversation,
+	recordInboundMessage
+} from '$lib/server/conversations';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -64,6 +68,19 @@ export const POST: RequestHandler = async ({ request }) => {
 		.where(eq(organizations.twilio_phone_number, toRaw))
 		.limit(1);
 	if (!org) return twiml();
+
+	// Audit raw payload (best-effort — never blocks webhook).
+	void db
+		.insert(inboundCommunicationEvents)
+		.values({
+			org_id: org.id,
+			provider: 'twilio',
+			provider_event_id: sid,
+			event_type: 'sms',
+			raw_payload: params,
+			processed_at: new Date()
+		})
+		.catch(() => undefined);
 
 	const optKeyword = detectOptKeyword(body);
 
@@ -123,7 +140,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			try {
 				await db.transaction(async (tx) => {
-					// Lock + recheck for idempotency (concurrent webhook delivery).
 					const [locked] = await tx
 						.select()
 						.from(reviewRequests)
@@ -141,73 +157,19 @@ export const POST: RequestHandler = async ({ request }) => {
 						})
 						.where(eq(reviewRequests.id, locked.id));
 
-					// Find or create the open SMS conversation so the digit reply
-					// is preserved in the transcript.
-					let [conv] = await tx
-						.select()
-						.from(conversations)
-						.where(
-							and(
-								eq(conversations.org_id, org.id),
-								eq(conversations.contact_id, existingContact!.id),
-								eq(conversations.channel, 'sms'),
-								eq(conversations.status, 'open'),
-								isNull(conversations.deleted_at)
-							)
-						)
-						.limit(1);
-					let convCreated = false;
-					if (!conv) {
-						const [created] = await tx
-							.insert(conversations)
-							.values({
-								org_id: org.id,
-								contact_id: existingContact!.id,
-								channel: 'sms',
-								status: 'open',
-								last_message_at: new Date(),
-								unread_count: 0
-							})
-							.returning();
-						conv = created;
-						convCreated = true;
-					}
-					const [insertedMsg] = await tx
-						.insert(messages)
-						.values({
-							org_id: org.id,
-							conversation_id: conv.id,
-							direction: 'inbound',
-							channel: 'sms',
-							body,
-							status: 'received',
-							twilio_message_sid: sid,
-							sent_at: new Date()
-						})
-						.returning();
-					await tx
-						.update(conversations)
-						.set({
-							last_message_at: new Date(),
-							unread_count: (conv.unread_count ?? 0) + 1,
-							updated_at: new Date()
-						})
-						.where(eq(conversations.id, conv.id));
-					if (convCreated) {
-						await tx.insert(outboxEvents).values({
-							org_id: org.id,
-							event_type: 'conversation.created',
-							resource_type: 'conversation',
-							resource_id: conv.id,
-							payload: {
-								conversation_id: conv.id,
-								org_id: org.id,
-								contact_id: existingContact!.id,
-								channel: 'sms'
-							},
-							idempotency_key: `conversation.created:${conv.id}`
-						});
-					}
+					const { conversation: conv } = await findOrCreateOpenConversation(tx, {
+						orgId: org.id,
+						contactId: existingContact!.id,
+						createdChannel: 'sms'
+					});
+					const insertedMsg = await recordInboundMessage(tx, {
+						orgId: org.id,
+						conversationId: conv.id,
+						channel: 'sms',
+						body,
+						twilioMessageSid: sid,
+						source: 'webhook'
+					});
 					await tx.insert(outboxEvents).values({
 						org_id: org.id,
 						event_type: 'message.received',
@@ -292,21 +254,18 @@ export const POST: RequestHandler = async ({ request }) => {
 				});
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : '';
-				// Concurrent duplicate — another delivery already won the race.
 				if (/unique|duplicate/i.test(msg)) return twiml();
 				console.error('[twilio sms webhook] review reply transaction failed', e);
 				return new Response('Internal error', { status: 500 });
 			}
 
 			if (processed) {
-				// Inbound digit reply was persisted — bump last_contacted_at best-effort.
 				void touchContactLastContacted(org.id, existingContact!.id);
 			}
 
 			if (processed && replyMessage && !existingContact!.sms_opt_out) {
 				try {
 					await sendSms(org.twilio_phone_number, existingContact!.phone, replyMessage);
-					// Outbound auto-reply also counts as contact made.
 					void touchContactLastContacted(org.id, existingContact!.id);
 				} catch (e) {
 					console.error('[twilio sms webhook] review reply SMS send failed', e);
@@ -314,8 +273,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 			return twiml();
 		}
-		// No active review request → fall through to normal inbound handling.
 	}
+
 	// Normal inbound path — wrap business mutations + outbox in one transaction
 	let touchedContactId: string | null = null;
 	try {
@@ -406,78 +365,20 @@ export const POST: RequestHandler = async ({ request }) => {
 				});
 			}
 
-			// Find or create open SMS conversation. Unique index
-			// idx_conversations_open_contact_channel guarantees at most one open
-			// per (contact_id, channel).
-			let [conv] = await tx
-				.select()
-				.from(conversations)
-				.where(
-					and(
-						eq(conversations.org_id, org.id),
-						eq(conversations.contact_id, contactId),
-						eq(conversations.channel, 'sms'),
-						eq(conversations.status, 'open'),
-						isNull(conversations.deleted_at)
-					)
-				)
-				.limit(1);
+			const { conversation: conv } = await findOrCreateOpenConversation(tx, {
+				orgId: org.id,
+				contactId,
+				createdChannel: 'sms'
+			});
 
-			let convCreated = false;
-			if (!conv) {
-				const [created] = await tx
-					.insert(conversations)
-					.values({
-						org_id: org.id,
-						contact_id: contactId,
-						channel: 'sms',
-						status: 'open',
-						last_message_at: new Date(),
-						unread_count: 0
-					})
-					.returning();
-				conv = created;
-				convCreated = true;
-			}
-
-			const [insertedMsg] = await tx
-				.insert(messages)
-				.values({
-					org_id: org.id,
-					conversation_id: conv.id,
-					direction: 'inbound',
-					channel: 'sms',
-					body,
-					status: 'received',
-					twilio_message_sid: sid,
-					sent_at: new Date()
-				})
-				.returning();
-
-			await tx
-				.update(conversations)
-				.set({
-					last_message_at: new Date(),
-					unread_count: (conv.unread_count ?? 0) + 1,
-					updated_at: new Date()
-				})
-				.where(eq(conversations.id, conv.id));
-
-			if (convCreated) {
-				await tx.insert(outboxEvents).values({
-					org_id: org.id,
-					event_type: 'conversation.created',
-					resource_type: 'conversation',
-					resource_id: conv.id,
-					payload: {
-						conversation_id: conv.id,
-						org_id: org.id,
-						contact_id: contactId,
-						channel: 'sms'
-					},
-					idempotency_key: `conversation.created:${conv.id}`
-				});
-			}
+			const insertedMsg = await recordInboundMessage(tx, {
+				orgId: org.id,
+				conversationId: conv.id,
+				channel: 'sms',
+				body,
+				twilioMessageSid: sid,
+				source: 'webhook'
+			});
 
 			await tx.insert(outboxEvents).values({
 				org_id: org.id,
@@ -500,19 +401,14 @@ export const POST: RequestHandler = async ({ request }) => {
 			touchedContactId = contactId;
 		});
 	} catch (e) {
-		// Unique violation on twilio_message_sid → another concurrent webhook delivery
-		// of the same SID already won the race. Treat as success.
 		const msg = e instanceof Error ? e.message : '';
 		if (/unique|duplicate/i.test(msg) && /twilio_message_sid|sid/i.test(msg)) {
 			return twiml();
 		}
 		console.error('[twilio sms webhook] transaction failed', e);
-		// Return 500 so Twilio retries
 		return new Response('Internal error', { status: 500 });
 	}
 
-	// Best-effort: bump contacts.last_contacted_at after a successful inbound SMS.
-	// Never fails the webhook response.
 	if (touchedContactId) {
 		void touchContactLastContacted(org.id, touchedContactId);
 	}

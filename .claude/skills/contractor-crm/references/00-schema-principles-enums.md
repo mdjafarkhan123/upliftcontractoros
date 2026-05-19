@@ -71,6 +71,10 @@ validation, or UI select options — use these exact values, in this exact order
 ```sql
 CREATE TYPE org_status AS ENUM ('active', 'suspended', 'pending_deletion', 'deleted');
 CREATE TYPE member_role AS ENUM ('admin', 'manager', 'member');
+
+CREATE TYPE email_domain_status AS ENUM (
+  'pending', 'verified', 'failed', 'dns_mismatch'
+);
 ```
 
 ### Contacts
@@ -96,19 +100,26 @@ CREATE TYPE job_status AS ENUM ('scheduled', 'in_progress', 'completed', 'cancel
 ### Communication
 
 ```sql
-CREATE TYPE conversation_channel AS ENUM ('sms', 'missed_call', 'email', 'webchat');
+-- conversation_channel enum REMOVED in inbox v2. Channel now lives only on messages.
+-- Conversations are transport-agnostic operational threads.
 
--- Messages within a conversation — does NOT include missed_call
-CREATE TYPE message_channel AS ENUM ('sms', 'email', 'webchat');
+-- Messages within a conversation — includes missed_call (rendered as system row in UI).
+CREATE TYPE message_channel AS ENUM ('sms', 'missed_call', 'email', 'webchat');
 
-CREATE TYPE conversation_status AS ENUM ('open', 'closed', 'archived');
+-- 'archived' removed; use 'closed' for finished threads.
+CREATE TYPE conversation_status AS ENUM ('open', 'closed', 'snoozed');
+
 CREATE TYPE message_direction AS ENUM ('inbound', 'outbound');
 
--- queued and bounced reserved for future email channel
+-- queued and bounced used by email channel
 CREATE TYPE message_status AS ENUM (
   'sent', 'delivered', 'failed', 'received', 'queued', 'bounced'
 );
 ```
+
+Internal notes are NOT a channel — they are represented by the
+`messages.is_internal_note` boolean. Notes inherit the conversation's most
+recent channel for storage continuity only.
 
 ### Revenue — Quotes
 
@@ -156,7 +167,8 @@ CREATE TYPE review_request_status AS ENUM (
 ```sql
 CREATE TYPE media_purpose_tag AS ENUM (
   'job_photo', 'before', 'after', 'marketing_asset',
-  'quote_attachment', 'invoice_attachment'
+  'quote_attachment', 'invoice_attachment',
+  'email_attachment', 'avatar', 'org_logo'
 );
 
 CREATE TYPE media_type AS ENUM ('photo', 'pdf', 'attachment');
