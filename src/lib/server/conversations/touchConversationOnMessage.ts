@@ -84,7 +84,7 @@ export async function touchConversationOnMessage(
 				CASE
 					WHEN ${conversations.first_response_at} IS NULL
 					 AND ${conversations.last_inbound_at} IS NOT NULL
-					THEN ${now}
+					THEN ${now.toISOString()}::timestamptz
 					ELSE ${conversations.first_response_at}
 				END
 			`,

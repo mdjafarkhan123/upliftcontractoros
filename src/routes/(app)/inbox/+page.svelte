@@ -17,7 +17,7 @@
 		type AssigneeFilter,
 		type ThreadMessage
 	} from '$lib/stores/inbox.svelte';
-	import { getBrowserSupabase } from '$lib/supabase/browser';
+	import { getBrowserSupabase, realtimeAuthReady } from '$lib/supabase/browser';
 
 	let {
 		data
@@ -79,35 +79,43 @@
 	onMount(() => {
 		if (!canView) return;
 		const supabase = getBrowserSupabase();
-		const channel = supabase
-			.channel(`inbox:org:${member().org_id}`)
-			.on(
-				'postgres_changes',
-				{
-					event: 'INSERT',
-					schema: 'public',
-					table: 'messages',
-					filter: `org_id=eq.${member().org_id}`
-				},
-				(payload: { new: ThreadMessage }) => {
-					inboxStore.applyRealtimeMessageInsert(payload.new);
-				}
-			)
-			.on(
-				'postgres_changes',
-				{
-					event: 'UPDATE',
-					schema: 'public',
-					table: 'messages',
-					filter: `org_id=eq.${member().org_id}`
-				},
-				(payload: { new: ThreadMessage }) => {
-					inboxStore.applyRealtimeMessageUpdate(payload.new);
-				}
-			)
-			.subscribe();
+		let cancelled = false;
+		let channel: ReturnType<typeof supabase.channel> | null = null;
+		void realtimeAuthReady().then(() => {
+			if (cancelled) return;
+			channel = supabase
+				.channel(`inbox:org:${member().org_id}`)
+				.on(
+					'postgres_changes',
+					{
+						event: 'INSERT',
+						schema: 'public',
+						table: 'messages',
+						filter: `org_id=eq.${member().org_id}`
+					},
+					(payload: { new: ThreadMessage }) => {
+						console.log('[realtime:inbox] INSERT', payload.new);
+						inboxStore.applyRealtimeMessageInsert(payload.new);
+					}
+				)
+				.on(
+					'postgres_changes',
+					{
+						event: 'UPDATE',
+						schema: 'public',
+						table: 'messages',
+						filter: `org_id=eq.${member().org_id}`
+					},
+					(payload: { new: ThreadMessage }) => {
+						console.log('[realtime:inbox] UPDATE', payload.new);
+						inboxStore.applyRealtimeMessageUpdate(payload.new);
+					}
+				)
+				.subscribe((status, err) => console.log('[realtime:inbox] status', status, err));
+		});
 		return () => {
-			void supabase.removeChannel(channel);
+			cancelled = true;
+			if (channel) void supabase.removeChannel(channel);
 		};
 	});
 
