@@ -293,6 +293,70 @@ async function handleCallMissed(data: EventJobData) {
 	);
 }
 
+async function handleMessageDeliveryFailed(data: EventJobData) {
+	if (!data.org_id) return;
+	const payload = data.payload as {
+		message_id?: string;
+		conversation_id?: string;
+		channel?: 'sms' | 'email' | 'webchat' | 'missed_call';
+		status?: 'failed' | 'bounced' | 'undeliverable';
+		is_terminal?: boolean;
+		failure_reason?: string | null;
+		sent_by?: string | null;
+	};
+
+	const channel = payload.channel ?? 'sms';
+	const status = payload.status ?? 'failed';
+	const conversationId = payload.conversation_id ?? data.resource_id;
+
+	let recipients: { id: string }[] = [];
+	if (payload.sent_by) {
+		const [sender] = await db
+			.select({ id: orgMembers.id })
+			.from(orgMembers)
+			.where(
+				and(
+					eq(orgMembers.id, payload.sent_by),
+					eq(orgMembers.org_id, data.org_id),
+					eq(orgMembers.is_active, true),
+					isNull(orgMembers.deleted_at)
+				)
+			)
+			.limit(1);
+		if (sender) recipients = [sender];
+	}
+	if (recipients.length === 0) {
+		recipients = await adminManagerMembers(data.org_id);
+	}
+
+	const title =
+		channel === 'email'
+			? status === 'bounced'
+				? 'Email bounced'
+				: status === 'undeliverable'
+					? 'Email undeliverable'
+					: 'Email failed to send'
+			: status === 'undeliverable'
+				? 'SMS undeliverable'
+				: 'SMS failed to send';
+
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'message.delivery_failed',
+			title,
+			body: payload.failure_reason ?? null,
+			resource_type: 'conversation',
+			resource_id: conversationId,
+			// Idempotent per outbox event: retries emit a new event (new outbox id)
+			// and therefore a new notification — exactly what we want.
+			idempotent: true
+		},
+		`message.delivery_failed:${data.outbox_event_id}`
+	);
+}
+
 async function handleContactSmsOptedIn(data: EventJobData) {
 	if (!data.org_id) return;
 	const recipients = await adminManagerMembers(data.org_id);
@@ -330,6 +394,8 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleQuoteDeclined(data);
 			case 'message.received':
 				return handleMessageReceived(data);
+			case 'message.delivery_failed':
+				return handleMessageDeliveryFailed(data);
 			case 'review.received':
 				return handleReviewReceived(data);
 			case 'private_feedback.received':

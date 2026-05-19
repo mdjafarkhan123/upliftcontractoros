@@ -6,6 +6,8 @@ export {
 } from './findOrCreateOpenConversation';
 export { recordInboundMessage, type RecordInboundMessageInput } from './recordInboundMessage';
 export { recordOutboundMessage, type RecordOutboundMessageInput } from './recordOutboundMessage';
+export { queueAutomationSms, type QueueAutomationSmsInput } from './queueAutomationSms';
+export { queueAutomationEmail, type QueueAutomationEmailInput } from './queueAutomationEmail';
 export {
 	computeChannelHints,
 	hasActiveWebchatSession,

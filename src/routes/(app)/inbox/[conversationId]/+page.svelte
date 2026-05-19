@@ -66,6 +66,18 @@
 					inboxStore.applyRealtimeMessageInsert(payload.new);
 				}
 			)
+			.on(
+				'postgres_changes',
+				{
+					event: 'UPDATE',
+					schema: 'public',
+					table: 'messages',
+					filter: `conversation_id=eq.${id}`
+				},
+				(payload: { new: ThreadMessage }) => {
+					inboxStore.applyRealtimeMessageUpdate(payload.new);
+				}
+			)
 			.subscribe();
 		return () => {
 			void supabase.removeChannel(channel);
@@ -261,7 +273,7 @@
 						</div>
 					{/if}
 					{#each messages as m (m.id)}
-						<MessageBubble message={m} />
+						<MessageBubble message={m} canRetry={canSend} />
 					{/each}
 				</div>
 			{/if}

@@ -13,7 +13,6 @@ import {
 	webchatSessions
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import { twilio } from '$lib/server/twilio/client';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
@@ -362,7 +361,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	// ── SMS branch ───────────────────────────────────────────────────────────
+	// ── SMS branch (async via outbox → SMS worker) ──────────────────────────
 	if (contact.sms_opt_out) {
 		return json({ error: 'Contact has opted out of SMS.' }, { status: 400 });
 	}
@@ -379,20 +378,6 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Organization is not configured for SMS.' }, { status: 400 });
 	}
 
-	let twilioSid: string;
-	try {
-		const sent = await twilio().messages.create({
-			from: org.twilio_phone_number,
-			to: contact.phone,
-			body: parsed.body
-		});
-		twilioSid = sent.sid;
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : 'Failed to send SMS';
-		console.error('[outbound sms] twilio error', e);
-		return json({ error: msg }, { status: 502 });
-	}
-
 	const txStart = Date.now();
 	try {
 		const result = await db.transaction(async (tx) => {
@@ -402,26 +387,22 @@ export const POST: RequestHandler = async (event) => {
 				channel: 'sms',
 				body: parsed.body,
 				sentBy: auth.member.id,
-				twilioMessageSid: twilioSid,
+				status: 'queued',
 				source: 'api'
 			});
 
 			await tx.insert(outboxEvents).values({
 				org_id: auth.orgId,
-				event_type: 'message.sent',
+				event_type: 'sms.send.requested',
 				resource_type: 'message',
 				resource_id: inserted.id,
 				payload: {
 					message_id: inserted.id,
 					conversation_id: conv.id,
 					contact_id: contact.id,
-					org_id: auth.orgId,
-					channel: 'sms',
-					body: parsed.body,
-					twilio_message_sid: twilioSid,
-					sent_by: auth.member.id
+					org_id: auth.orgId
 				},
-				idempotency_key: `message.sent:${inserted.id}`
+				idempotency_key: `sms.send.requested:${inserted.id}`
 			});
 
 			return inserted;
@@ -435,25 +416,9 @@ export const POST: RequestHandler = async (event) => {
 			conversation_id: conv.id,
 			org_id: auth.orgId,
 			ms: Date.now() - txStart,
-			twilio_message_sid: twilioSid,
 			error: e instanceof Error ? e.message : String(e),
 			stack: e instanceof Error ? e.stack : undefined
 		});
-		console.error('[outbound sms] db write failed after twilio send', e);
-		try {
-			const salvage = await recordOutboundMessage(db, {
-				orgId: auth.orgId,
-				conversationId: conv.id,
-				channel: 'sms',
-				body: parsed.body,
-				sentBy: auth.member.id,
-				twilioMessageSid: twilioSid,
-				source: 'api'
-			});
-			void touchContactLastContacted(auth.orgId, contact.id);
-			return json({ data: { message: salvage } }, { status: 201 });
-		} catch {
-			return json({ error: 'Message sent but failed to persist.' }, { status: 500 });
-		}
+		return json({ error: 'Failed to queue SMS.' }, { status: 500 });
 	}
 };

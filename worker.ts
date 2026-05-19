@@ -11,8 +11,9 @@ import './src/lib/server/workers/outboxWorker';
 import './src/lib/server/workers/automationWorker';
 import './src/lib/server/workers/notificationWorker';
 import './src/lib/server/workers/emailWorker';
+import './src/lib/server/workers/smsWorker';
 import { registerCronJobs } from './src/lib/server/cron';
 
 registerCronJobs();
 
-console.log('[worker] Started — outbox, automation, notification, email workers + cron active');
+console.log('[worker] Started — outbox, automation, notification, email, sms workers + cron active');

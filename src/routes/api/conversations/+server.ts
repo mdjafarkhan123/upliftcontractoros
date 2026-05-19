@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, ilike, isNull, type SQL, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, conversations, orgMembers } from '$lib/server/db/schema';
+import { contacts, conversations, messages, orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 
 const PAGE_SIZE = 30;
@@ -61,6 +61,14 @@ export const GET: RequestHandler = async (event) => {
 	const cursor = parseCursor(url.searchParams.get('cursor'));
 
 	const unreadInboundExpr = sql<number>`(CASE WHEN ${conversations.unread_count} > 0 AND ${conversations.last_message_direction} = 'inbound' THEN 1 ELSE 0 END)`;
+
+	const hasDeliveryFailureExpr = sql<boolean>`EXISTS (
+		SELECT 1 FROM ${messages} m
+		WHERE m.conversation_id = ${conversations.id}
+			AND m.direction = 'outbound'
+			AND m.is_internal_note = false
+			AND m.status IN ('failed', 'bounced', 'undeliverable')
+	)`;
 
 	const conditions: SQL[] = [
 		eq(conversations.org_id, auth.orgId),
@@ -127,6 +135,7 @@ export const GET: RequestHandler = async (event) => {
 			unread_count: conversations.unread_count,
 			snoozed_until: conversations.snoozed_until,
 			created_at: conversations.created_at,
+			has_delivery_failure: hasDeliveryFailureExpr,
 			unread_inbound: unreadInboundExpr
 		})
 		.from(conversations)

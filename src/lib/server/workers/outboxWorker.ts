@@ -3,14 +3,14 @@ import { sql, and, eq, lte, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { outboxEvents, type OutboxEvent } from '$lib/server/db/schema';
 const env = process.env;
-import { automationQueue, notificationQueue, emailQueue, addJob } from '$lib/server/queue/bullmq';
+import { automationQueue, notificationQueue, emailQueue, smsQueue, addJob } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
 
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 30_000;
 const OUTBOX_CHANNEL = 'outbox_channel';
 
-type QueueTarget = { queue: 'automation' | 'notification' | 'email'; jobName: string };
+type QueueTarget = { queue: 'automation' | 'notification' | 'email' | 'sms'; jobName: string };
 
 function routeEvent(event: OutboxEvent): QueueTarget[] {
 	switch (event.event_type) {
@@ -44,6 +44,7 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'quote.accepted':
 		case 'quote.declined':
 		case 'message.received':
+		case 'message.delivery_failed':
 		case 'review.received':
 		case 'private_feedback.received':
 		case 'negative_feedback':
@@ -53,6 +54,8 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [];
 		case 'email.send.requested':
 			return [{ queue: 'email', jobName: 'email.send.requested' }];
+		case 'sms.send.requested':
+			return [{ queue: 'sms', jobName: 'sms.send.requested' }];
 		default:
 			return [];
 	}
@@ -105,7 +108,9 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 				? automationQueue()
 				: target.queue === 'notification'
 					? notificationQueue()
-					: emailQueue();
+					: target.queue === 'email'
+						? emailQueue()
+						: smsQueue();
 		await addJob(queue, target.jobName, data);
 	}
 	return { status: 'routed' };

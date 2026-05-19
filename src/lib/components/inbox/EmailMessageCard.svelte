@@ -8,12 +8,36 @@
 		Eye,
 		Send,
 		Clock,
-		Ban
+		Ban,
+		RotateCcw,
+		Sparkles
 	} from '@lucide/svelte';
 	import type { ThreadMessage } from '$lib/stores/inbox.svelte';
+	import { inboxStore } from '$lib/stores/inbox.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
 	import { cn } from '$lib/utils/cn';
 
-	let { message: m }: { message: ThreadMessage } = $props();
+	let { message: m, canRetry = false }: { message: ThreadMessage; canRetry?: boolean } = $props();
+
+	const isRetryable = $derived(
+		m.direction === 'outbound' && !m.is_internal_note && m.status === 'failed' && canRetry
+	);
+	const isAutomated = $derived(
+		m.direction === 'outbound' &&
+			!m.is_internal_note &&
+			typeof m.source === 'string' &&
+			m.source.startsWith('automation.')
+	);
+
+	let retrying = $state(false);
+
+	async function onRetry() {
+		if (retrying || m._optimistic_key) return;
+		retrying = true;
+		const res = await inboxStore.retryMessage(m.conversation_id, m.id);
+		retrying = false;
+		if (!res.ok) toast.error(res.error);
+	}
 
 	const isInbound = $derived(m.direction === 'inbound');
 
@@ -73,6 +97,7 @@
 	const isDestructive = $derived(
 		m.status === 'failed' || m.status === 'bounced' || m.status === 'undeliverable'
 	);
+	const isTerminalFailure = $derived(m.status === 'bounced' || m.status === 'undeliverable');
 </script>
 
 <div class="px-1">
@@ -83,7 +108,8 @@
 				? 'border-l-4 border-l-blue-500/60 border-border'
 				: 'border-l-4 border-l-primary/70 border-border',
 			isPending && 'opacity-70',
-			isDestructive && 'border-destructive/40'
+			isDestructive && !isTerminalFailure && 'border-destructive/40 border-l-destructive/60',
+			isTerminalFailure && 'border-destructive/60 border-l-destructive bg-destructive/[0.03]'
 		)}
 	>
 		<div class="flex items-start gap-3 border-b border-border/60 px-4 py-2.5">
@@ -94,11 +120,21 @@
 			</div>
 			<div class="min-w-0 flex-1">
 				<div class="flex items-center justify-between gap-2">
-					<span
-						class="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-					>
-						{isInbound ? 'Inbound email' : 'Sent email'}
-					</span>
+					<div class="flex min-w-0 items-center gap-2">
+						<span
+							class="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+						>
+							{isInbound ? 'Inbound email' : 'Sent email'}
+						</span>
+						{#if isAutomated}
+							<span
+								class="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
+							>
+								<Sparkles class="h-2.5 w-2.5" />
+								Automated
+							</span>
+						{/if}
+					</div>
 					<span class="shrink-0 text-[11px] text-muted-foreground">{timestamp}</span>
 				</div>
 				{#if m.email_subject}
@@ -120,9 +156,27 @@
 					<display.icon class={cn('h-3 w-3', display.spin && 'animate-spin')} />
 					<span>{display.label}</span>
 				</div>
-				{#if isDestructive && m.failure_reason}
-					<div class="mt-1 text-right text-[10px] text-destructive/80">
-						{m.failure_reason}
+				{#if isDestructive}
+					<div class="mt-1 flex items-center justify-end gap-2 text-[10px] text-destructive/80">
+						{#if m.failure_reason}
+							<span class="max-w-[260px] truncate">{m.failure_reason}</span>
+						{/if}
+						{#if isRetryable}
+							<button
+								type="button"
+								onclick={onRetry}
+								disabled={retrying}
+								class="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-1.5 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60 min-h-[28px]"
+							>
+								{#if retrying}
+									<Loader2 class="h-3 w-3 animate-spin" />
+									<span>Retrying…</span>
+								{:else}
+									<RotateCcw class="h-3 w-3" />
+									<span>Retry</span>
+								{/if}
+							</button>
+						{/if}
 					</div>
 				{/if}
 			{/if}

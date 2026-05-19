@@ -6,7 +6,8 @@
 		MessageCircle,
 		Clock,
 		Lock,
-		StickyNote
+		StickyNote,
+		AlertCircle
 	} from '@lucide/svelte';
 	import type { ConversationListItem, MessageChannel } from '$lib/stores/inbox.svelte';
 	import { cn } from '$lib/utils/cn';
@@ -47,6 +48,7 @@
 	const hasUnread = $derived(c.unread_count > 0);
 	const isSnoozed = $derived(c.status === 'snoozed');
 	const isClosed = $derived(c.status === 'closed');
+	const hasFailure = $derived(c.has_delivery_failure === true && !isClosed);
 
 	const previewText = $derived.by(() => {
 		if (c.last_message_preview && c.last_message_preview.trim().length > 0) {
@@ -93,6 +95,7 @@
 		'hover:border-border hover:bg-accent/40 active:bg-accent/60',
 		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
 		hasUnread && !isClosed && 'border-primary/30',
+		hasFailure && 'border-destructive/40 bg-destructive/[0.03]',
 		isClosed && 'opacity-70'
 	)}
 >
@@ -143,8 +146,16 @@
 			{/if}
 		</div>
 
-		{#if isSnoozed || isClosed || c.assignee_name}
+		{#if hasFailure || isSnoozed || isClosed || c.assignee_name}
 			<div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+				{#if hasFailure}
+					<span
+						class="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive"
+					>
+						<AlertCircle class="h-3 w-3" />
+						Delivery failed
+					</span>
+				{/if}
 				{#if isSnoozed}
 					<span
 						class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-amber-600 dark:text-amber-400"

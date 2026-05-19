@@ -35,6 +35,7 @@ export type ConversationListItem = {
 	last_message_direction: MessageDirection | null;
 	unread_count: number;
 	snoozed_until: string | null;
+	has_delivery_failure: boolean;
 	created_at: string;
 };
 
@@ -81,6 +82,7 @@ export type ConversationDetail = {
 	last_message_direction: MessageDirection | null;
 	unread_count: number;
 	snoozed_until: string | null;
+	has_delivery_failure: boolean;
 	closed_at: string | null;
 	closed_reason: string | null;
 	tags: string[];
@@ -674,6 +676,108 @@ export const inboxStore = {
 				assigned_to: beforeId,
 				assignee_name: beforeName
 			});
+			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+		}
+	},
+
+	applyRealtimeMessageUpdate(msg: ThreadMessage): void {
+		// Status / delivery state changes from Twilio + Resend webhooks land here.
+		const entry = threadCache.get(msg.conversation_id);
+		if (entry) {
+			const idx = entry.messages.findIndex(
+				(m) =>
+					m.id === msg.id ||
+					(!!msg.twilio_message_sid &&
+						!!m.twilio_message_sid &&
+						m.twilio_message_sid === msg.twilio_message_sid)
+			);
+			if (idx >= 0) {
+				const next = entry.messages.slice();
+				next[idx] = { ...next[idx], ...msg };
+				threadCache.set(msg.conversation_id, { ...entry, messages: next });
+			}
+		}
+
+		// Maintain has_delivery_failure on list rows + thread detail. The full
+		// truth lives in the EXISTS subquery on /api/conversations; this is an
+		// optimistic patch for instant UX, reconciled on the next list refetch.
+		if (msg.direction !== 'outbound' || msg.is_internal_note) return;
+		const isFailureStatus =
+			msg.status === 'failed' || msg.status === 'bounced' || msg.status === 'undeliverable';
+		const isResolvedStatus =
+			msg.status === 'queued' ||
+			msg.status === 'sending' ||
+			msg.status === 'sent' ||
+			msg.status === 'delivered';
+		if (!isFailureStatus && !isResolvedStatus) return;
+		const nextFlag = isFailureStatus;
+		patchListEntries(msg.conversation_id, (c) =>
+			c.has_delivery_failure === nextFlag ? c : { ...c, has_delivery_failure: nextFlag }
+		);
+		applyConversationPatch(msg.conversation_id, { has_delivery_failure: nextFlag });
+	},
+
+	async retryMessage(
+		conversationId: string,
+		messageId: string
+	): Promise<{ ok: true; message: ThreadMessage } | { ok: false; error: string }> {
+		const entry = threadCache.get(conversationId);
+		const before = entry?.messages.find((m) => m.id === messageId);
+		if (entry && before) {
+			const next = entry.messages.map((m) =>
+				m.id === messageId
+					? { ...m, status: 'queued' as MessageStatus, failure_reason: null, failed_at: null }
+					: m
+			);
+			threadCache.set(conversationId, { ...entry, messages: next });
+		}
+		// Optimistically clear list-level + detail-level failure flag — the EXISTS
+		// subquery on the next list refetch is the source of truth.
+		patchListEntries(conversationId, (c) =>
+			c.has_delivery_failure ? { ...c, has_delivery_failure: false } : c
+		);
+		applyConversationPatch(conversationId, { has_delivery_failure: false });
+		try {
+			const res = await fetch(
+				`/api/conversations/${conversationId}/messages/${messageId}/retry`,
+				{ method: 'POST' }
+			);
+			const body = (await res.json().catch(() => ({}))) as {
+				data?: { message: ThreadMessage };
+				error?: string;
+			};
+			if (!res.ok || !body.data) {
+				if (entry && before) {
+					const cur = threadCache.get(conversationId);
+					if (cur) {
+						const reverted = cur.messages.map((m) => (m.id === messageId ? before : m));
+						threadCache.set(conversationId, { ...cur, messages: reverted });
+					}
+					patchListEntries(conversationId, (c) =>
+						c.has_delivery_failure ? c : { ...c, has_delivery_failure: true }
+					);
+					applyConversationPatch(conversationId, { has_delivery_failure: true });
+				}
+				return { ok: false, error: body.error ?? 'Failed to retry message' };
+			}
+			const cur = threadCache.get(conversationId);
+			if (cur) {
+				const merged = cur.messages.map((m) => (m.id === messageId ? body.data!.message : m));
+				threadCache.set(conversationId, { ...cur, messages: merged });
+			}
+			return { ok: true, message: body.data.message };
+		} catch (e) {
+			if (entry && before) {
+				const cur = threadCache.get(conversationId);
+				if (cur) {
+					const reverted = cur.messages.map((m) => (m.id === messageId ? before : m));
+					threadCache.set(conversationId, { ...cur, messages: reverted });
+				}
+				patchListEntries(conversationId, (c) =>
+					c.has_delivery_failure ? c : { ...c, has_delivery_failure: true }
+				);
+				applyConversationPatch(conversationId, { has_delivery_failure: true });
+			}
 			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
 		}
 	},

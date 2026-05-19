@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
 	conversations,
 	invoices,
+	messages,
 	opportunities,
 	orgMembers,
 	pipelineStages,
@@ -28,11 +29,20 @@ export const GET: RequestHandler = async (event) => {
 	assertOrgActive(auth);
 
 	const id = event.params.id;
+	const hasDeliveryFailureExpr = sql<boolean>`EXISTS (
+		SELECT 1 FROM ${messages} m
+		WHERE m.conversation_id = ${conversations.id}
+			AND m.direction = 'outbound'
+			AND m.is_internal_note = false
+			AND m.status IN ('failed', 'bounced', 'undeliverable')
+	)`;
+
 	const [row] = await db
 		.select({
 			conversation: conversations,
 			contact: contacts,
-			assignee_name: orgMembers.full_name
+			assignee_name: orgMembers.full_name,
+			has_delivery_failure: hasDeliveryFailureExpr
 		})
 		.from(conversations)
 		.innerJoin(contacts, eq(contacts.id, conversations.contact_id))
@@ -112,6 +122,7 @@ export const GET: RequestHandler = async (event) => {
 			conversation: {
 				...row.conversation,
 				assignee_name: row.assignee_name,
+				has_delivery_failure: row.has_delivery_failure,
 				suggested_channel: channelHints.suggested,
 				available_channels: channelHints.available
 			},

@@ -15,10 +15,12 @@ export function redisConnection(): Redis {
 export const AUTOMATION_QUEUE = 'automation';
 export const NOTIFICATION_QUEUE = 'notification';
 export const EMAIL_QUEUE = 'email';
+export const SMS_QUEUE = 'sms';
 
 let _automationQueue: Queue | null = null;
 let _notificationQueue: Queue | null = null;
 let _emailQueue: Queue | null = null;
+let _smsQueue: Queue | null = null;
 
 export function automationQueue(): Queue {
 	if (_automationQueue) return _automationQueue;
@@ -36,6 +38,12 @@ export function emailQueue(): Queue {
 	if (_emailQueue) return _emailQueue;
 	_emailQueue = new Queue(EMAIL_QUEUE, { connection: redisConnection() });
 	return _emailQueue;
+}
+
+export function smsQueue(): Queue {
+	if (_smsQueue) return _smsQueue;
+	_smsQueue = new Queue(SMS_QUEUE, { connection: redisConnection() });
+	return _smsQueue;
 }
 
 export const DEFAULT_JOB_OPTIONS: JobsOptions = {

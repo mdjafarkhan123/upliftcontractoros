@@ -19,7 +19,7 @@ type ContactLike = {
 type ConvLike = Pick<Conversation, 'id' | 'last_message_channel'>;
 
 function emailConfigured(): boolean {
-	return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+	return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_APEX_DOMAIN);
 }
 
 export async function hasActiveWebchatSession(conversationId: string): Promise<boolean> {

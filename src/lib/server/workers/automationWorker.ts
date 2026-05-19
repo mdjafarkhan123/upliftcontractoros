@@ -7,21 +7,19 @@ import {
 	automationSettings,
 	contacts,
 	invoices,
-	messages,
 	organizations,
 	quotes,
 	reviewRequests,
 	type AutomationJob
 } from '$lib/server/db/schema';
-import { touchConversationOnMessage } from '$lib/server/conversations/touchConversationOnMessage';
+import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
+import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
 import {
 	AUTOMATION_QUEUE,
 	addJob,
 	automationQueue,
 	redisConnection
 } from '$lib/server/queue/bullmq';
-import { twilio } from '$lib/server/twilio/client';
-import { sendQuoteEmail } from '$lib/server/email/quoteEmails';
 import { interpolate } from './templates';
 const env = process.env;
 
@@ -49,15 +47,6 @@ async function loadContact(orgId: string, contactId: string) {
 		.from(contacts)
 		.where(and(eq(contacts.id, contactId), eq(contacts.org_id, orgId), isNull(contacts.deleted_at)));
 	return contact ?? null;
-}
-
-async function sendSms(
-	orgPhone: string,
-	contactPhone: string,
-	body: string
-): Promise<string | null> {
-	const res = await twilio().messages.create({ from: orgPhone, to: contactPhone, body });
-	return res.sid ?? null;
 }
 
 async function insertAutomationJob(
@@ -168,7 +157,12 @@ async function handleSpeedToLead(data: EventJobData) {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		await sendSms(org.twilio_phone_number, contact.phone, body);
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: 'automation.speed_to_lead'
+		});
 		await markJobCompleted(automationJob.id);
 	} catch (err) {
 		await markJobFailed(automationJob.id, err);
@@ -204,29 +198,15 @@ async function handleMissedCallTextback(data: EventJobData) {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		const sid = await sendSms(org.twilio_phone_number, contact.phone, body);
 
 		// Unified inbox: the missed-call conversation IS the customer thread.
-		// Append the outbound SMS reply directly and bump conversation metadata.
-		await db.transaction(async (tx) => {
-			await tx.insert(messages).values({
-				org_id: data.org_id!,
-				conversation_id: missedCallConversationId,
-				direction: 'outbound',
-				channel: 'sms',
-				body,
-				status: 'sent',
-				twilio_message_sid: sid,
-				sent_at: new Date(),
-				source: 'automation'
-			});
-			await touchConversationOnMessage(tx, {
-				conversation_id: missedCallConversationId,
-				channel: 'sms',
-				direction: 'outbound',
-				body,
-				is_internal_note: false
-			});
+		// Queue the outbound SMS on that conversation; smsWorker drives delivery.
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: 'automation.missed_call_textback',
+			conversationId: missedCallConversationId
 		});
 
 		await markJobCompleted(automationJob.id);
@@ -294,26 +274,36 @@ async function dispatchInitialQuote(data: EventJobData) {
 		const verb = isResend ? 'updated your quote' : 'sent you a quote';
 		const body = `Hi ${contact.full_name}, ${org.name} ${verb} (${quoteNumberDisplay}, ${totalFormatted}). View it here: ${url}`;
 		try {
-			await sendSms(org.twilio_phone_number, contact.phone, body);
+			await queueAutomationSms(db, {
+				orgId,
+				contactId: contact.id,
+				body,
+				source: 'automation.quote_initial'
+			});
 		} catch (err) {
-			console.error('[automation] quote SMS dispatch failed:', err);
+			console.error('[automation] quote SMS queue failed:', err);
 		}
 	}
 
 	if (hasEmail && contact.email) {
 		try {
-			await sendQuoteEmail({
-				org: {
-					name: org.name,
-					slug: org.slug,
-					email_sender_local: org.email_sender_local
-				},
-				contactName: contact.full_name,
+			const verb = isResend ? 'updated your quote' : 'sent you a quote';
+			const subject = isResend
+				? `Updated quote ${quoteNumberDisplay} from ${org.name}`
+				: `Your quote ${quoteNumberDisplay} from ${org.name}`;
+			const body = `Hi ${contact.full_name},
+
+${org.name} has ${verb} (${quoteNumberDisplay}, ${totalFormatted}).
+
+View your quote:
+${url}`;
+			await queueAutomationEmail(db, {
+				orgId,
+				contactId: contact.id,
 				contactEmail: contact.email,
-				quoteNumber: quoteNumberDisplay,
-				totalFormatted,
-				publicUrl: url,
-				isResend
+				subject,
+				body,
+				source: 'automation.quote_initial'
 			});
 		} catch (err) {
 			console.error('[automation] quote email dispatch failed:', err);
@@ -377,7 +367,12 @@ async function handleQuoteFollowup(job: Job, data: EventJobData) {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		await sendSms(org.twilio_phone_number, contact.phone, body);
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: `automation.quote_followup_${followupNumber}`
+		});
 		if (automationJobRow) await markJobCompleted(automationJobRow.id);
 
 		if (followupNumber === 1) {
@@ -455,7 +450,12 @@ async function handleInvoiceReminder(job: Job, data: EventJobData) {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		await sendSms(org.twilio_phone_number, contact.phone, body);
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: 'automation.invoice_reminder'
+		});
 		if (automationJobRow) await markJobCompleted(automationJobRow.id);
 	} catch (err) {
 		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
@@ -537,7 +537,12 @@ async function handleReviewRequest(job: Job, data: EventJobData) {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		await sendSms(org.twilio_phone_number, contact.phone, body);
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: 'automation.review_request'
+		});
 		if (automationJobRow) await markJobCompleted(automationJobRow.id);
 	} catch (err) {
 		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
@@ -670,7 +675,12 @@ async function handleAppointmentReminder(
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
-		await sendSms(org.twilio_phone_number, contact.phone, body);
+		await queueAutomationSms(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			body,
+			source: `automation.appointment_reminder_${variant}`
+		});
 		await db
 			.update(appointments)
 			.set({

@@ -1,49 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { and, eq } from 'drizzle-orm';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '$lib/server/db/client';
 import {
 	inboundCommunicationEvents,
-	messages
+	messages,
+	outboxEvents
 } from '$lib/server/db/schema';
 import { createLogger } from '$lib/server/log';
+import { verifySvix } from '$lib/server/email/svixVerify';
 
 const log = createLogger('email.webhook.resend');
 const env = process.env;
-
-const MAX_TIMESTAMP_SKEW_SECONDS = 5 * 60;
-
-function verifySvixSignature(
-	rawBody: string,
-	headers: Headers,
-	secret: string
-): boolean {
-	const id = headers.get('svix-id');
-	const timestamp = headers.get('svix-timestamp');
-	const signature = headers.get('svix-signature');
-	if (!id || !timestamp || !signature) return false;
-
-	const tsNum = Number(timestamp);
-	if (!Number.isFinite(tsNum)) return false;
-	if (Math.abs(Math.floor(Date.now() / 1000) - tsNum) > MAX_TIMESTAMP_SKEW_SECONDS) {
-		return false;
-	}
-
-	const secretBytes = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
-	const signed = `${id}.${timestamp}.${rawBody}`;
-	const expected = createHmac('sha256', secretBytes).update(signed).digest('base64');
-
-	// Header carries one or more `v1,<sig>` entries separated by spaces.
-	for (const part of signature.split(' ')) {
-		const [, sig] = part.split(',');
-		if (!sig) continue;
-		const a = Buffer.from(sig, 'utf8');
-		const b = Buffer.from(expected, 'utf8');
-		if (a.length === b.length && timingSafeEqual(a, b)) return true;
-	}
-	return false;
-}
 
 type ResendEvent = {
 	type: string;
@@ -73,25 +41,6 @@ async function findMessageByProviderId(providerMessageId: string) {
 	return row ?? null;
 }
 
-async function recordAudit(
-	orgId: string,
-	svixId: string,
-	eventType: string,
-	payload: unknown
-) {
-	await db
-		.insert(inboundCommunicationEvents)
-		.values({
-			org_id: orgId,
-			provider: 'resend',
-			provider_event_id: svixId,
-			event_type: eventType,
-			raw_payload: payload as object,
-			processed_at: new Date()
-		})
-		.onConflictDoNothing();
-}
-
 async function alreadyProcessed(svixId: string): Promise<boolean> {
 	const [row] = await db
 		.select({ id: inboundCommunicationEvents.id })
@@ -105,6 +54,12 @@ async function alreadyProcessed(svixId: string): Promise<boolean> {
 		.limit(1);
 	return Boolean(row);
 }
+
+type FailureTransition = {
+	nextStatus: 'failed' | 'bounced' | 'undeliverable';
+	failureReason: string;
+	isTerminal: boolean;
+};
 
 async function applyEvent(event: ResendEvent, svixId: string): Promise<void> {
 	const providerId = event.data?.email_id;
@@ -120,75 +75,79 @@ async function applyEvent(event: ResendEvent, svixId: string): Promise<void> {
 	}
 
 	const now = new Date();
+	const wasAlreadyFailure =
+		msg.status === 'failed' || msg.status === 'bounced' || msg.status === 'undeliverable';
+	let failure: FailureTransition | null = null;
+	let messageUpdate: Record<string, unknown> | null = null;
+
 	switch (event.type) {
 		case 'email.sent':
 			// We already set 'sent' when the worker accepted the Resend response.
 			break;
 
 		case 'email.delivered':
+			// Forward-only: never overwrite a terminal failure state with 'delivered'.
 			if (msg.status === 'sent' || msg.status === 'sending' || msg.status === 'queued') {
-				await db
-					.update(messages)
-					.set({ status: 'delivered', delivered_at: now, updated_at: now })
-					.where(eq(messages.id, msg.id));
+				messageUpdate = { status: 'delivered', delivered_at: now, updated_at: now };
 			}
 			break;
 
 		case 'email.opened':
+			// Opens can land after a failure event; record the open timestamp but do
+			// not change status away from a failure/terminal state.
 			if (!msg.opened_at) {
-				await db
-					.update(messages)
-					.set({ opened_at: now, updated_at: now })
-					.where(eq(messages.id, msg.id));
+				messageUpdate = { opened_at: now, updated_at: now };
 			}
 			break;
 
 		case 'email.bounced': {
-			const isPermanent = event.data?.bounce?.type?.toLowerCase().includes('permanent');
-			await db
-				.update(messages)
-				.set({
+			if (!wasAlreadyFailure) {
+				const isPermanent = event.data?.bounce?.type?.toLowerCase().includes('permanent');
+				const failureReason = event.data?.bounce?.message ?? 'Bounced';
+				messageUpdate = {
 					status: 'bounced',
 					bounced_at: now,
+					failed_at: now,
 					bounce_type: isPermanent ? 'hard' : 'soft',
-					failure_reason: event.data?.bounce?.message ?? 'Bounced',
+					failure_reason: failureReason,
 					updated_at: now
-				})
-				.where(eq(messages.id, msg.id));
+				};
+				failure = { nextStatus: 'bounced', failureReason, isTerminal: true };
+			}
 			break;
 		}
 
 		case 'email.complained':
-			await db
-				.update(messages)
-				.set({
+			if (!wasAlreadyFailure) {
+				const failureReason = 'Recipient marked as spam';
+				messageUpdate = {
 					status: 'undeliverable',
-					failure_reason: 'Recipient marked as spam',
+					failed_at: now,
+					failure_reason: failureReason,
 					updated_at: now
-				})
-				.where(eq(messages.id, msg.id));
+				};
+				failure = { nextStatus: 'undeliverable', failureReason, isTerminal: true };
+			}
 			break;
 
 		case 'email.failed':
-			await db
-				.update(messages)
-				.set({
+			if (!wasAlreadyFailure) {
+				const failureReason = event.data?.reason ?? 'Provider reported failure';
+				messageUpdate = {
 					status: 'failed',
-					failure_reason: event.data?.reason ?? 'Provider reported failure',
+					failure_reason: failureReason,
 					failed_at: now,
 					updated_at: now
-				})
-				.where(eq(messages.id, msg.id));
+				};
+				failure = { nextStatus: 'failed', failureReason, isTerminal: false };
+			}
 			break;
 
 		case 'email.delivery_delayed':
-			await db
-				.update(messages)
-				.set({
-					failure_reason: event.data?.reason ?? 'Delivery delayed',
-					updated_at: now
-				})
-				.where(eq(messages.id, msg.id));
+			messageUpdate = {
+				failure_reason: event.data?.reason ?? 'Delivery delayed',
+				updated_at: now
+			};
 			break;
 
 		case 'email.clicked':
@@ -199,7 +158,44 @@ async function applyEvent(event: ResendEvent, svixId: string): Promise<void> {
 			log.info({ phase: 'unhandled_event', type: event.type });
 	}
 
-	await recordAudit(msg.org_id, svixId, event.type, event);
+	await db.transaction(async (tx) => {
+		if (messageUpdate) {
+			await tx.update(messages).set(messageUpdate).where(eq(messages.id, msg.id));
+		}
+
+		if (failure) {
+			await tx.insert(outboxEvents).values({
+				org_id: msg.org_id,
+				event_type: 'message.delivery_failed',
+				resource_type: 'message',
+				resource_id: msg.id,
+				payload: {
+					message_id: msg.id,
+					conversation_id: msg.conversation_id,
+					channel: msg.channel,
+					status: failure.nextStatus,
+					is_terminal: failure.isTerminal,
+					failure_reason: failure.failureReason,
+					sent_by: msg.sent_by,
+					failed_at: now.toISOString()
+				},
+				idempotency_key: `message.delivery_failed:${msg.id}:${now.getTime()}`
+			});
+		}
+
+		await tx
+			.insert(inboundCommunicationEvents)
+			.values({
+				org_id: msg.org_id,
+				provider: 'resend',
+				provider_event_id: svixId,
+				event_type: event.type,
+				raw_payload: event as object,
+				processed_at: new Date()
+			})
+			.onConflictDoNothing();
+	});
+
 }
 
 export const POST: RequestHandler = async (event) => {
@@ -210,13 +206,12 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const rawBody = await event.request.text();
-	if (!verifySvixSignature(rawBody, event.request.headers, secret)) {
-		log.warn({ phase: 'invalid_signature' });
+	const verified = verifySvix(rawBody, event.request.headers, secret);
+	if (!verified.ok) {
+		log.warn({ phase: 'invalid_signature', reason: verified.reason });
 		return json({ error: 'Invalid signature.' }, { status: 401 });
 	}
-
-	const svixId = event.request.headers.get('svix-id');
-	if (!svixId) return json({ error: 'Missing svix-id.' }, { status: 400 });
+	const svixId = verified.svixId;
 
 	if (await alreadyProcessed(svixId)) {
 		return new Response(null, { status: 204 });

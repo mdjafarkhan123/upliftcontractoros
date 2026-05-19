@@ -93,6 +93,18 @@
 					inboxStore.applyRealtimeMessageInsert(payload.new);
 				}
 			)
+			.on(
+				'postgres_changes',
+				{
+					event: 'UPDATE',
+					schema: 'public',
+					table: 'messages',
+					filter: `org_id=eq.${member().org_id}`
+				},
+				(payload: { new: ThreadMessage }) => {
+					inboxStore.applyRealtimeMessageUpdate(payload.new);
+				}
+			)
 			.subscribe();
 		return () => {
 			void supabase.removeChannel(channel);

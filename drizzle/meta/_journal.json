@@ -99,6 +99,13 @@
       "when": 1779112233862,
       "tag": "0013_outbound_email",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1779158800000,
+      "tag": "0014_message_attachment_purpose",
+      "breakpoints": true
     }
   ]
 }
