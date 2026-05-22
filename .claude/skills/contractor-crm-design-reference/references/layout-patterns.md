@@ -13,6 +13,17 @@ The app has **two navigation modes**:
 
 ```svelte
 <!-- src/routes/(app)/+layout.svelte — Shell structure -->
+<script lang="ts">
+  function navItemClass(active: boolean): string {
+    return cn(
+      'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-150',
+      active
+        ? 'bg-primary/10 text-primary font-medium'
+        : 'text-muted-foreground font-normal hover:bg-accent hover:text-foreground'
+    );
+  }
+</script>
+
 <div class="min-h-screen bg-background">
 
   <!-- Desktop sidebar (hidden on mobile) -->
@@ -21,35 +32,89 @@ The app has **two navigation modes**:
     fixed inset-y-0 left-0 z-50
     w-[var(--sidebar-width)]
     flex-col
-    border-r border-border/50 bg-card/50 backdrop-blur-xl
+    border-r border-border/60 bg-sidebar
   ">
-    <!-- Logo / brand -->
-    <div class="flex h-[var(--header-height)] items-center border-b border-border/50 px-5">
-      <span class="text-base font-bold tracking-tight text-foreground">
-        ContractorOS
-      </span>
+    <!-- Logo / brand lockup -->
+    <div class="flex h-[var(--header-height)] items-center gap-2.5 border-b border-border/60 px-4">
+      <!-- Logo mark — replace with actual SVG logo -->
+      <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <span class="text-xs font-bold">C</span>
+      </div>
+      <span class="text-sm font-semibold tracking-tight text-foreground">ContractorOS</span>
     </div>
 
-    <!-- Nav links -->
-    <nav class="flex-1 overflow-y-auto px-3 py-4">
-      <div class="space-y-1">
-        <!-- Nav item — see component-aesthetics.md for full nav item pattern -->
-        <a href="/dashboard" class="sidebar-nav-item">
-          <LayoutDashboard class="h-4 w-4" />
-          Dashboard
-        </a>
+    <!-- Nav links — with section groups -->
+    <nav class="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+
+      <!-- MAIN MENU group -->
+      <div>
+        <p class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+          Main Menu
+        </p>
+        <div class="space-y-0.5">
+          <a href="/dashboard" class={navItemClass(isActive('/dashboard'))}>
+            <LayoutDashboard class="h-4 w-4 shrink-0" />
+            <span class="flex-1">Dashboard</span>
+          </a>
+          <a href="/contacts" class={navItemClass(isActive('/contacts'))}>
+            <Users class="h-4 w-4 shrink-0" />
+            <span class="flex-1">Contacts</span>
+          </a>
+          <!-- Add all primary nav items here following the same pattern -->
+        </div>
       </div>
+
+      <!-- MANAGEMENT group -->
+      <div>
+        <p class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+          Management
+        </p>
+        <div class="space-y-0.5">
+          <a href="/jobs" class={navItemClass(isActive('/jobs'))}>
+            <Briefcase class="h-4 w-4 shrink-0" />
+            <span class="flex-1">Jobs</span>
+          </a>
+          <a href="/invoices" class={navItemClass(isActive('/invoices'))}>
+            <FileText class="h-4 w-4 shrink-0" />
+            <span class="flex-1">Invoices</span>
+            <!-- Count badge example -->
+            {#if unpaidCount > 0}
+              <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {unpaidCount}
+              </span>
+            {/if}
+          </a>
+        </div>
+      </div>
+
     </nav>
 
-    <!-- Bottom: user / org info -->
-    <div class="border-t border-border/50 p-3">
-      <!-- member avatar + name + settings link -->
+    <!-- Bottom: user profile -->
+    <div class="border-t border-border/60 p-3">
+      <button class="
+        flex w-full items-center gap-3 rounded-lg px-2 py-2
+        transition-colors duration-150 hover:bg-accent
+        text-left
+      ">
+        <!-- Avatar with initials fallback -->
+        <div class="
+          flex h-8 w-8 shrink-0 items-center justify-center
+          rounded-full bg-primary/10 text-primary text-xs font-semibold
+        ">
+          {memberInitials}
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-medium text-foreground">{memberName}</p>
+          <p class="truncate text-xs text-muted-foreground">{orgName}</p>
+        </div>
+        <Settings class="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
     </div>
   </aside>
 
-  <!-- Main content — offset by sidebar on desktop -->
+  <!-- Main content — offset by sidebar on desktop, white surface -->
   <main class="
-    min-h-screen
+    min-h-screen bg-background
     md:ml-[var(--sidebar-width)]
     pb-[var(--bottom-nav-height)]
     md:pb-0
@@ -160,6 +225,280 @@ The app has **two navigation modes**:
   <aside class="w-full md:w-72 shrink-0 space-y-4">
     <!-- metadata cards -->
   </aside>
+</div>
+```
+
+---
+
+## Two-Panel Split Layout (Inbox / Detail Pages)
+
+Use this pattern for: Messages & Inbox, Contact detail with activity feed,
+any page that has a list on the left and a detail view on the right.
+
+```svelte
+<!-- Two-panel split — desktop only. Mobile: list page → detail page (separate route) -->
+<div class="flex h-[calc(100vh-var(--header-height))] overflow-hidden">
+
+  <!-- Left panel: list / conversation index -->
+  <div class="
+    w-80 shrink-0 flex flex-col
+    border-r border-border/60 bg-background
+    overflow-hidden
+  ">
+    <!-- Panel header -->
+    <div class="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <h2 class="text-sm font-semibold text-foreground">Messages</h2>
+      <Button variant="ghost" size="icon" class="h-7 w-7">
+        <Plus class="h-4 w-4" />
+      </Button>
+    </div>
+
+    <!-- Panel search -->
+    <div class="border-b border-border/60 px-3 py-2.5">
+      <div class="relative">
+        <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search..."
+          class="h-8 pl-8 text-sm bg-muted border-0 focus-visible:ring-1"
+        />
+      </div>
+    </div>
+
+    <!-- List of items — scrollable -->
+    <div class="flex-1 overflow-y-auto">
+      {#each items as item (item.id)}
+        <button
+          onclick={() => selectedId = item.id}
+          class={cn(
+            'w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border/40',
+            'transition-colors duration-150',
+            selectedId === item.id
+              ? 'bg-primary/5 border-l-2 border-l-primary'
+              : 'hover:bg-muted/60'
+          )}
+        >
+          <!-- Avatar -->
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+            {item.initials}
+          </div>
+          <!-- Content -->
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-medium text-foreground truncate">{item.name}</p>
+              <span class="text-[10px] text-muted-foreground shrink-0">{item.time}</span>
+            </div>
+            <p class="text-xs text-muted-foreground">{item.company}</p>
+            <p class="mt-0.5 text-xs text-muted-foreground truncate">{item.preview}</p>
+          </div>
+          <!-- Unread badge -->
+          {#if item.unread > 0}
+            <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+              {item.unread}
+            </span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  </div>
+
+  <!-- Right panel: detail / conversation view -->
+  <div class="flex flex-1 flex-col overflow-hidden bg-background">
+
+    {#if selectedItem}
+      <!-- Detail header -->
+      <div class="flex items-center justify-between border-b border-border/60 px-6 py-3">
+        <div class="flex items-center gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+            {selectedItem.initials}
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-foreground">{selectedItem.name}</p>
+            <p class="text-xs text-muted-foreground">{selectedItem.company}</p>
+          </div>
+        </div>
+        <!-- Action icons -->
+        <div class="flex items-center gap-1">
+          <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Phone class="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Mail class="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <MoreHorizontal class="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <!-- Scrollable message area -->
+      <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <!-- Messages rendered here -->
+      </div>
+
+      <!-- Compose area -->
+      <div class="border-t border-border/60 px-4 py-3">
+        <div class="flex items-end gap-2 rounded-xl border border-border bg-card px-3 py-2">
+          <Textarea
+            placeholder="Type a message..."
+            class="min-h-[36px] max-h-32 flex-1 resize-none border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
+          />
+          <Button size="icon" class="h-8 w-8 shrink-0 rounded-lg">
+            <Send class="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+    {:else}
+      <!-- No selection empty state -->
+      <div class="flex flex-1 items-center justify-center">
+        <div class="text-center">
+          <div class="mb-3 flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-muted">
+            <MessageSquare class="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p class="text-sm font-medium text-foreground">Select a conversation</p>
+          <p class="mt-1 text-xs text-muted-foreground">Choose from the list on the left</p>
+        </div>
+      </div>
+    {/if}
+
+  </div>
+</div>
+```
+
+**Mobile behavior for two-panel pages**: On mobile (`< md`), show only the list as a full-page route.
+Tapping an item navigates to a separate detail route. Never show both panels stacked on mobile.
+
+---
+
+## Data Table Pattern
+
+Use for: Recent Tasks, Contacts list (desktop), Invoices, Jobs.
+Always include: sortable column headers, inline status badges, row hover, action menu.
+
+```svelte
+<!-- Full data table component structure -->
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <!-- Checkbox column -->
+        <th class="w-10 px-4">
+          <Checkbox
+            checked={allSelected}
+            onchange={toggleAll}
+            class="border-border"
+          />
+        </th>
+
+        <!-- Sortable column header pattern -->
+        <th>
+          <button
+            onclick={() => toggleSort('name')}
+            class="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Name
+            <ChevronsUpDown class="h-3 w-3" />
+          </button>
+        </th>
+
+        <th>Status</th>
+        <th>Progress</th>
+        <th>Due Date</th>
+        <th class="w-10"></th> <!-- Actions column -->
+      </tr>
+    </thead>
+
+    <tbody>
+      {#each rows as row (row.id)}
+        <tr>
+          <!-- Checkbox -->
+          <td class="px-4">
+            <Checkbox bind:checked={row.selected} />
+          </td>
+
+          <!-- Name + subtitle cell -->
+          <td>
+            <div class="flex items-center gap-2.5">
+              <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[11px] font-semibold">
+                {row.initials}
+              </div>
+              <div>
+                <p class="font-medium text-foreground">{row.name}</p>
+                <p class="text-xs text-muted-foreground">{row.subtitle}</p>
+              </div>
+            </div>
+          </td>
+
+          <!-- Status badge -->
+          <td>
+            <StatusBadge status={row.status} />
+          </td>
+
+          <!-- Progress bar + percentage -->
+          <td>
+            {#if row.progress !== null}
+              <div class="flex items-center gap-2">
+                <div class="progress-bar-track w-24">
+                  <div
+                    class={cn(
+                      'progress-bar-fill',
+                      row.progress === 100 ? 'progress-bar-fill-green' : 'progress-bar-fill-blue'
+                    )}
+                    style="width: {row.progress}%"
+                  />
+                </div>
+                <span class="text-xs text-muted-foreground">{row.progress}%</span>
+              </div>
+            {:else}
+              <span class="text-xs text-muted-foreground">Not started</span>
+            {/if}
+          </td>
+
+          <!-- Date -->
+          <td>
+            <span class={cn(
+              'text-sm',
+              isPast(row.dueDate) ? 'text-destructive' : 'text-foreground'
+            )}>
+              {formatDate(row.dueDate)}
+            </span>
+          </td>
+
+          <!-- Row action menu -->
+          <td class="px-2">
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-foreground">
+                  <MoreHorizontal class="h-4 w-4" />
+                </Button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end" class="w-40">
+                <DropdownMenu.Item>Edit</DropdownMenu.Item>
+                <DropdownMenu.Item>View</DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item class="text-destructive">Delete</DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+</div>
+
+<!-- Table toolbar (above the table) -->
+<div class="mb-3 flex items-center justify-between">
+  <h3 class="text-sm font-semibold text-foreground">Recent Tasks</h3>
+  <div class="flex items-center gap-2">
+    <div class="relative">
+      <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Input placeholder="Search..." class="h-8 w-48 pl-8 text-sm" />
+    </div>
+    <Button variant="outline" size="sm" class="h-8 gap-1.5 text-muted-foreground">
+      <Filter class="h-3.5 w-3.5" />
+      Filter
+    </Button>
+  </div>
 </div>
 ```
 

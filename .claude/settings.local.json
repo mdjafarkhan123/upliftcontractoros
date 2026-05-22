@@ -70,7 +70,24 @@
       "Bash(curl -sSL http://localhost:5174/ -o response.html -w \"HTTP %{http_code}\\\\n\")",
       "Bash(git restore *)",
       "Bash(git clean *)",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(git push *)",
+      "Bash(npm list *)",
+      "Bash(findstr *)",
+      "Bash(nslookup *)",
+      "Bash(dir src\\\\routes\\\\api\\\\public)",
+      "Bash(grep -E \"ERROR.*\\(booking|book\\\\\\\\\\\\\\\\\\)\")",
+      "Bash(grep -E \"^17.*\\(quote|change|request|q\\\\\\\\\\\\\\\\\\\\\\\\[\\)\")",
+      "Bash(grep -E \"ERROR.*\\(quotes|deposit|webhooks/stripe|invoices/\\\\+server|invoices/\\\\\\\\[id\\\\\\\\]/\\\\+page|q/\\\\\\\\[token\\\\\\\\]|notificationWorker|outboxWorker|publicAccess|schemas\\\\.ts|events\\\\.ts|stripe\\\\.ts|06_revenue|navigation\\\\.ts|NotificationItem\\)\")",
+      "Bash(git stash *)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(xargs wc -l)",
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\i\\\\[token]\\\\data\")",
+      "Bash(mkdir -p \"D:\\\\Projects\\\\ContractorOs\\\\src\\\\routes\\\\i\\\\[token]\\\\pay\")",
+      "Bash(grep -rn \"invoice.viewed\\\\|invoice\\\\\\\\.viewed\\\\|invoiceViewed\\\\|handlePaymentReceipt\\\\|payment_receipt\\\\|invoice_views\\\\|appointment_reminder_1h_message\\\\|appointment_reminder_1h_enabled\" src/lib/server/workers/ src/lib/server/org/ src/routes/api/settings/automation/ src/lib/server/automation/)",
+      "Bash(grep -rn \"public_token_hash\\\\|invoices\\\\\\\\.public_token\" src/)",
+      "Bash(grep -v \"node_modules\\\\|\\\\\\\\.skill\\\\|\\\\\\\\.md\")"
     ]
   }
 }

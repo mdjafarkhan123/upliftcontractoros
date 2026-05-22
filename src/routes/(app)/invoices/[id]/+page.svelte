@@ -19,7 +19,8 @@
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { isEffectivelyOverdue } from '$lib/utils/invoices';
 	import { getMemberContext } from '$lib/context/member';
-	import { AlertCircle, Ban, CreditCard, Link as LinkIcon, Save, Send } from '@lucide/svelte';
+	import { AlertCircle, Ban, Check, CreditCard, Download, Link as LinkIcon, Save, Send } from '@lucide/svelte';
+	import { formatCurrency, formatDate } from '$lib/utils/format';
 	import type { PageData } from './$types';
 	import type { InvoiceDetail, InvoiceLineItemRow } from '$lib/types/invoices';
 	import type { QuoteLineDraft } from '$lib/types/quotes';
@@ -85,6 +86,11 @@
 			? isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due)
 			: false
 	);
+	const depositPayment = $derived(
+		invoice?.payments?.find(
+			(p) => p.payment_method === 'stripe' && p.notes?.startsWith('Deposit applied from Quote')
+		) ?? null
+	);
 
 	const subtotal = $derived(
 		lineItems.reduce((s, li) => {
@@ -119,6 +125,23 @@
 		}
 		return false;
 	});
+
+	let pdfBusy = $state(false);
+	async function downloadPdf() {
+		if (!invoice || pdfBusy) return;
+		pdfBusy = true;
+		try {
+			const res = await fetch(`/api/invoices/${invoice.id}/pdf`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok || !body.data?.url) {
+				toast.error(body.error ?? 'Could not generate PDF');
+				return;
+			}
+			window.open(body.data.url as string, '_blank');
+		} finally {
+			pdfBusy = false;
+		}
+	}
 
 	async function refresh() {
 		await invoicesStore.loadDetail(data.id, true);
@@ -261,6 +284,11 @@
 					<CreditCard class="mr-1 h-4 w-4" />Record payment
 				</Button>
 			{/if}
+			{#if !isDraft}
+				<Button variant="outline" onclick={downloadPdf} disabled={pdfBusy}>
+					<Download class="mr-1 h-4 w-4" />{pdfBusy ? 'Preparing…' : 'PDF'}
+				</Button>
+			{/if}
 		{/snippet}
 
 		<div class="grid gap-4">
@@ -334,6 +362,24 @@
 				<h2 class="text-sm font-semibold">Line items</h2>
 				<LineItemEditor bind:lineItems readonly={!isDraft} />
 			</div>
+
+			{#if depositPayment}
+				<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+					<div class="flex items-start gap-3">
+						<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+							<Check class="h-4 w-4" />
+						</div>
+						<div class="min-w-0 flex-1">
+							<p class="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+								Deposit applied
+							</p>
+							<p class="mt-1 text-sm text-emerald-900/90 dark:text-emerald-100/90">
+								{formatCurrency(depositPayment.amount)} · collected {formatDate(depositPayment.paid_at)} · via Stripe
+							</p>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			<InvoiceTotalsCard
 				subtotal={isDraft ? subtotal.toFixed(2) : inv.subtotal}

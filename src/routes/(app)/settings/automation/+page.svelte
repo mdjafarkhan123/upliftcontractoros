@@ -37,6 +37,11 @@
 		appointment_reminder_enabled: boolean;
 		appointment_reminder_hours_before: number;
 		appointment_reminder_message: string;
+		appointment_reminder_1h_enabled: boolean;
+		appointment_reminder_1h_message: string;
+
+		payment_receipt_enabled: boolean;
+		payment_receipt_message: string;
 
 		speed_to_lead_enabled: boolean;
 		speed_to_lead_message: string;
@@ -96,6 +101,8 @@
 			'invoice_reminder_message',
 			'review_funnel_message',
 			'appointment_reminder_message',
+			'appointment_reminder_1h_message',
+			'payment_receipt_message',
 			'speed_to_lead_message'
 		] as const;
 		for (const k of templateFields) {
@@ -360,10 +367,46 @@
 					/>
 				</div>
 				<div class="flex flex-col gap-1.5">
-					<Label for="ar_msg">Message <span class="text-destructive">*</span></Label>
+					<Label for="ar_msg">24-hour message <span class="text-destructive">*</span></Label>
 					<Textarea id="ar_msg" bind:value={form.appointment_reminder_message} maxlength={500} />
 					{#if fieldErrors.appointment_reminder_message}
 						<p class="text-xs text-destructive">{fieldErrors.appointment_reminder_message}</p>
+					{/if}
+				</div>
+			</AutomationToggleCard>
+
+			<AutomationToggleCard
+				title="1-hour appointment reminder"
+				description="Send a second reminder 1 hour before the appointment."
+				featureEnabled={flags.feature_appointment_reminders}
+				lockedReason="Not enabled for your plan"
+				bind:enabled={form.appointment_reminder_1h_enabled}
+			>
+				<div class="flex flex-col gap-1.5">
+					<Label for="ar1h_msg">Message <span class="text-destructive">*</span></Label>
+					<Textarea id="ar1h_msg" bind:value={form.appointment_reminder_1h_message} maxlength={500} />
+					<p class="text-xs text-muted-foreground">
+						Allowed variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>
+					</p>
+					{#if fieldErrors.appointment_reminder_1h_message}
+						<p class="text-xs text-destructive">{fieldErrors.appointment_reminder_1h_message}</p>
+					{/if}
+				</div>
+			</AutomationToggleCard>
+
+			<AutomationToggleCard
+				title="Payment receipt"
+				description="Email customers a receipt after each payment."
+				bind:enabled={form.payment_receipt_enabled}
+			>
+				<div class="flex flex-col gap-1.5">
+					<Label for="pr_msg">Receipt message <span class="text-destructive">*</span></Label>
+					<Textarea id="pr_msg" bind:value={form.payment_receipt_message} maxlength={500} />
+					<p class="text-xs text-muted-foreground">
+						Allowed variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>, <code>{'{amount}'}</code>
+					</p>
+					{#if fieldErrors.payment_receipt_message}
+						<p class="text-xs text-destructive">{fieldErrors.payment_receipt_message}</p>
 					{/if}
 				</div>
 			</AutomationToggleCard>

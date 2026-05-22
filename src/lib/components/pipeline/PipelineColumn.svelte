@@ -39,10 +39,12 @@
 </script>
 
 <section
-	class="flex h-full w-[280px] shrink-0 snap-start flex-col rounded-2xl border border-border bg-muted/40 sm:w-[300px]"
+	class="flex h-full w-[280px] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/30 shadow-card sm:w-[300px]"
 	data-stage-id={stageId}
 >
-	<header class="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
+	<header
+		class="flex items-center justify-between gap-2 border-b border-border/60 bg-card/60 px-3 py-3"
+	>
 		<div class="flex items-center gap-2 min-w-0">
 			<span
 				class="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -55,7 +57,7 @@
 				{#if isLost}<span class="ml-1 text-rose-600">●</span>{/if}
 			</h2>
 			<span
-				class="rounded-full bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+				class="rounded-full bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border/60"
 			>
 				{items.length}
 			</span>
@@ -71,7 +73,7 @@
 			items,
 			type: 'opportunity',
 			dropTargetStyle: {},
-			dropTargetClasses: ['ring-2', 'ring-primary/40', 'rounded-2xl'],
+			dropTargetClasses: ['ring-2', 'ring-primary/40', 'rounded-lg'],
 			dragDisabled: !canDrag,
 			flipDurationMs: flipDuration
 		}}
@@ -82,7 +84,7 @@
 			<div animate:flip={{ duration: flipDuration }}>
 				<button
 					type="button"
-					class="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+					class="block w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					onclick={() => onCardClick(opp.id)}
 				>
 					<OpportunityCard
@@ -95,7 +97,9 @@
 			</div>
 		{/each}
 		{#if items.length === 0}
-			<div class="flex h-24 items-center justify-center text-xs text-muted-foreground">
+			<div
+				class="flex h-24 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/50 text-xs text-muted-foreground"
+			>
 				No opportunities
 			</div>
 		{/if}

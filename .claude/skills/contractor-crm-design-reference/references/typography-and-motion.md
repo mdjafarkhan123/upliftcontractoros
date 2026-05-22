@@ -75,6 +75,11 @@ Apply these patterns consistently. Never use arbitrary font sizes — always use
   Revenue this month
 </p>
 
+<!-- Sidebar section label — group headers in the nav rail -->
+<p class="px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+  Main Menu
+</p>
+
 <!-- Table header -->
 <th class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
   Status
@@ -92,6 +97,9 @@ Apply these patterns consistently. Never use arbitrary font sizes — always use
 - **`tracking-wider` + `uppercase`** on table headers and stat labels — clear visual distinction from body
 - **`font-mono`** on IDs, invoice numbers, amounts — improves scannability
 - **Never bold body text** — use `font-medium` for emphasis, `font-semibold` for headings only
+- **Light mode needs slightly heavier weights** — on white backgrounds, `font-normal` body text
+  can feel too thin. Use `font-medium` (500) for list item names, table cell primary values,
+  and any text that needs to hold its own against a white surface.
 - **`text-muted-foreground`** for anything secondary: dates, counts, helper text, labels
 
 ---
@@ -116,12 +124,14 @@ transition-transform duration-150 ease-out
 
 ```svelte
 <!-- List row hover (contacts, jobs, invoices) -->
+<!-- In light mode: hover:bg-muted/60 gives a very subtle gray tint on white -->
+<!-- In dark mode: hover:bg-accent/50 gives the equivalent subtle highlight -->
 <div class="
   cursor-pointer
   rounded-lg px-4 py-3
   transition-colors duration-150 ease-out
-  hover:bg-accent/50
-  active:bg-accent
+  hover:bg-muted/60
+  active:bg-muted
 ">
 
 <!-- Card hover lift (dashboard stat cards) -->

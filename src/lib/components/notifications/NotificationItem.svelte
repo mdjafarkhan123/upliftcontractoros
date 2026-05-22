@@ -29,6 +29,8 @@
 		'invoice.paid': DollarSign,
 		'quote.viewed': Eye,
 		'quote.accepted': CheckCircle2,
+		'quote.changes_requested': MessageSquare,
+		'quote.deposit_paid': DollarSign,
 		'review.received': Star,
 		'private_feedback.received': ThumbsDown,
 		'message.received': MessageSquare,

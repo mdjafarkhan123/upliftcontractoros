@@ -24,7 +24,7 @@ const FEATURE_KEYS: FeatureFlagKey[] = [
 	'feature_appointment_reminders', 'feature_invoice_reminders', 'feature_financial_tools',
 	'feature_stripe_payments', 'feature_growth_feed', 'feature_advanced_reporting',
 	'feature_ai_assistant', 'feature_custom_branding', 'feature_api_access',
-	'feature_webhooks', 'feature_client_portal'
+	'feature_webhooks', 'feature_client_portal', 'feature_online_booking'
 ];
 
 const LIMIT_KEYS: LimitKey[] = [

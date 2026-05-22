@@ -19,6 +19,8 @@ export const appointmentStatusEnum = pgEnum('appointment_status', [
 	'no_show'
 ]);
 
+export const bookingSourceEnum = pgEnum('booking_source', ['internal', 'booking_link']);
+
 export const appointments = pgTable('appointments', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	org_id: uuid('org_id')
@@ -41,7 +43,15 @@ export const appointments = pgTable('appointments', {
 	cancelled_at: timestamp('cancelled_at', { withTimezone: true }),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+
+	booked_via_link_id: uuid('booked_via_link_id'),
+	customer_name: text('customer_name'),
+	customer_phone: text('customer_phone'),
+	customer_email: text('customer_email'),
+	customer_notes: text('customer_notes'),
+	booking_source: bookingSourceEnum('booking_source').notNull().default('internal'),
+	booking_referrer: text('booking_referrer')
 });
 
 export type Appointment = InferSelectModel<typeof appointments>;

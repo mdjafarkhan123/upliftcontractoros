@@ -2,6 +2,7 @@ import type { RawTimelineRow, TimelineEntry, TimelineRegistryEntry } from './typ
 import { messageInRegistry, messageOutRegistry } from './mappers/messages';
 import {
 	quoteAcceptedRegistry,
+	quoteChangesRequestedRegistry,
 	quoteDeclinedRegistry,
 	quoteSentRegistry,
 	quoteViewedRegistry
@@ -42,6 +43,7 @@ export const TIMELINE_REGISTRY: TimelineRegistryEntry[] = [
 	quoteViewedRegistry,
 	quoteAcceptedRegistry,
 	quoteDeclinedRegistry,
+	quoteChangesRequestedRegistry,
 	invoiceSentRegistry,
 	invoicePaidRegistry,
 	paymentRegistry,
@@ -75,6 +77,7 @@ const BY_SOURCE_AND_KIND = new Map<string, TimelineRegistryEntry>(
 export const TIMELINE_SOURCE_TABLES = [
 	'messages',
 	'quotes',
+	'quote_change_requests',
 	'invoices',
 	'payments',
 	'appointments',

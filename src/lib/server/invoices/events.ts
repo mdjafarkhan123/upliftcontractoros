@@ -9,6 +9,7 @@ export function invoiceSentEvent(args: {
 	totalFormatted: string;
 	amountDueFormatted: string;
 	invoiceNumberDisplay: string;
+	publicToken: string | null;
 	paymentLinkUrl: string | null;
 	dueDate: string | null;
 }): NewOutboxEvent {
@@ -24,10 +25,34 @@ export function invoiceSentEvent(args: {
 			total_formatted: args.totalFormatted,
 			amount_due_formatted: args.amountDueFormatted,
 			invoice_number_display: args.invoiceNumberDisplay,
+			public_token: args.publicToken,
 			payment_link_url: args.paymentLinkUrl,
 			due_date: args.dueDate
 		},
 		idempotency_key: `invoice.sent:${args.invoiceId}:${randomUUID()}`
+	};
+}
+
+export function invoiceViewedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	contactId: string;
+	viewId: string;
+	ipHash: string;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'invoice.viewed',
+		resource_type: 'invoice',
+		resource_id: args.invoiceId,
+		payload: {
+			invoice_id: args.invoiceId,
+			contact_id: args.contactId,
+			view_id: args.viewId,
+			ip_hash: args.ipHash,
+			notification_sent: false
+		},
+		idempotency_key: `invoice.viewed:${args.invoiceId}`
 	};
 }
 

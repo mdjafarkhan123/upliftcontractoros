@@ -2,13 +2,20 @@ import { Worker, type Job } from 'bullmq';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
+	automationSettings,
+	contacts,
 	conversations,
+	invoices,
 	notifications,
 	orgMembers,
+	organizations,
+	payments,
 	type NewNotification
 } from '$lib/server/db/schema';
 import { NOTIFICATION_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { automationCancelHooks } from './automationWorker';
+import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
+import { interpolate } from './templates';
 const env = process.env;
 
 type EventJobData = {
@@ -201,6 +208,43 @@ async function handleQuoteDeclined(data: EventJobData) {
 	await automationCancelHooks.quoteDeclined(data);
 }
 
+async function handleQuoteChangesRequested(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'quote.changes_requested',
+			title: 'Client requested changes',
+			body: (data.payload.summary as string | undefined) ?? null,
+			resource_type: 'quote',
+			resource_id: data.resource_id,
+			idempotent: true
+		},
+		'quote.changes_requested'
+	);
+	await automationCancelHooks.quoteChangesRequested(data);
+}
+
+async function handleQuoteDepositPaid(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'quote.deposit_paid',
+			title: 'Deposit received',
+			body: (data.payload.summary as string | undefined) ?? null,
+			resource_type: 'quote',
+			resource_id: data.resource_id,
+			idempotent: true
+		},
+		'quote.deposit_paid'
+	);
+}
+
 async function handleQuoteAccepted(data: EventJobData) {
 	if (!data.org_id) return;
 	const recipients = await adminManagerMembers(data.org_id);
@@ -375,6 +419,113 @@ async function handleContactSmsOptedIn(data: EventJobData) {
 	);
 }
 
+async function handleInvoiceViewed(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'invoice.viewed',
+			title: 'Invoice viewed',
+			body: (data.payload.summary as string | undefined) ?? null,
+			resource_type: 'invoice',
+			resource_id: data.resource_id,
+			// Use idempotency_key so duplicate view events never spam the notification feed.
+			idempotent: true
+		},
+		'invoice.viewed'
+	);
+}
+
+async function handlePaymentRecorded(data: EventJobData) {
+	if (!data.org_id) return;
+
+	// 1. Contractor notification.
+	const recipients = await adminManagerMembers(data.org_id);
+	await dispatchNotification(
+		data.org_id,
+		recipients,
+		{
+			type: 'payment.recorded',
+			title: 'Payment received',
+			body: (data.payload.amount_formatted as string | undefined) ?? null,
+			resource_type: 'invoice',
+			resource_id: data.resource_id,
+			idempotent: false
+		},
+		'payment.recorded'
+	);
+
+	// 2. Transactional receipt email to customer — respects payment_receipt_enabled.
+	const paymentId = data.payload.payment_id as string | undefined;
+	if (!paymentId) return;
+
+	const [settings] = await db
+		.select()
+		.from(automationSettings)
+		.where(eq(automationSettings.org_id, data.org_id));
+	if (!settings?.payment_receipt_enabled) return;
+
+	const [invoiceRow] = await db
+		.select({
+			id: invoices.id,
+			contact_id: invoices.contact_id,
+			total: invoices.total
+		})
+		.from(invoices)
+		.where(eq(invoices.id, data.resource_id))
+		.limit(1);
+	if (!invoiceRow) return;
+
+	const [contact] = await db
+		.select({ id: contacts.id, full_name: contacts.full_name, email: contacts.email })
+		.from(contacts)
+		.where(eq(contacts.id, invoiceRow.contact_id))
+		.limit(1);
+	if (!contact?.email) return;
+
+	const [org] = await db
+		.select({ name: organizations.name })
+		.from(organizations)
+		.where(eq(organizations.id, data.org_id))
+		.limit(1);
+	if (!org) return;
+
+	const [payment] = await db
+		.select({ amount: payments.amount })
+		.from(payments)
+		.where(eq(payments.id, paymentId))
+		.limit(1);
+	if (!payment) return;
+
+	const amountFormatted = data.payload.amount_formatted as string ?? `$${Number(payment.amount).toFixed(2)}`;
+	const body = interpolate(settings.payment_receipt_message, {
+		contact_name: contact.full_name,
+		org_name: org.name,
+		amount: amountFormatted
+	});
+
+	try {
+		await queueAutomationEmail(db, {
+			orgId: data.org_id,
+			contactId: contact.id,
+			contactEmail: contact.email,
+			subject: `Payment receipt from ${org.name}`,
+			body,
+			source: 'automation.payment_receipt'
+		});
+
+		// Mark receipt as sent on the payment row.
+		await db
+			.update(payments)
+			.set({ receipt_sent_at: new Date(), receipt_sent_via: 'email' })
+			.where(eq(payments.id, paymentId));
+	} catch (err) {
+		console.error('[notification] payment receipt email failed:', err);
+	}
+}
+
 export const notificationWorker = new Worker<EventJobData>(
 	NOTIFICATION_QUEUE,
 	async (job: Job<EventJobData>) => {
@@ -390,8 +541,12 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleQuoteViewed(data);
 			case 'quote.accepted':
 				return handleQuoteAccepted(data);
+			case 'quote.deposit_paid':
+				return handleQuoteDepositPaid(data);
 			case 'quote.declined':
 				return handleQuoteDeclined(data);
+			case 'quote.changes_requested':
+				return handleQuoteChangesRequested(data);
 			case 'message.received':
 				return handleMessageReceived(data);
 			case 'message.delivery_failed':
@@ -406,6 +561,10 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleCallMissed(data);
 			case 'contact.sms_opted_in':
 				return handleContactSmsOptedIn(data);
+			case 'invoice.viewed':
+				return handleInvoiceViewed(data);
+			case 'payment.recorded':
+				return handlePaymentRecorded(data);
 			default:
 				console.warn(`[notification] unknown job name: ${job.name}`);
 		}

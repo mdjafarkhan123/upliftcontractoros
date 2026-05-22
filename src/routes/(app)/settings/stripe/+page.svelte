@@ -4,6 +4,8 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import StripeConnectionCard from '$lib/components/settings/StripeConnectionCard.svelte';
+	import StripeSetupGuide from '$lib/components/settings/StripeSetupGuide.svelte';
+	import StripeTestInvoice from '$lib/components/settings/StripeTestInvoice.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -16,7 +18,11 @@
 		stripe_publishable_key: string | null;
 		stripe_webhook_secret_masked: string | null;
 		stripe_account_id: string | null;
+		stripe_account_name: string | null;
+		stripe_account_email: string | null;
+		stripe_livemode: boolean | null;
 		stripe_connected_at: string | null;
+		stripe_last_verified_at: string | null;
 		is_connected: boolean;
 	};
 
@@ -92,7 +98,11 @@
 					stripe_publishable_key: '',
 					stripe_webhook_secret: ''
 				};
-				toast.success('Stripe connected');
+				toast.success(
+					body.data.stripe_livemode
+						? 'Stripe connected · live mode'
+						: 'Stripe connected · test mode'
+				);
 			}
 		} catch {
 			toast.error('Save failed');
@@ -102,7 +112,11 @@
 	}
 
 	async function disconnect() {
-		if (!window.confirm('Disconnect Stripe? Customers won’t be able to pay invoices online until you reconnect.')) {
+		if (
+			!window.confirm(
+				'Disconnect Stripe? Customers won’t be able to pay invoices online until you reconnect.'
+			)
+		) {
 			return;
 		}
 		disconnecting = true;
@@ -118,11 +132,29 @@
 			disconnecting = false;
 		}
 	}
+
+	function handleVerified(next: {
+		livemode: boolean;
+		stripe_account_id: string | null;
+		stripe_account_name: string | null;
+		stripe_account_email: string | null;
+		stripe_last_verified_at: string;
+	}) {
+		if (!status) return;
+		status = {
+			...status,
+			stripe_livemode: next.livemode,
+			stripe_account_id: next.stripe_account_id,
+			stripe_account_name: next.stripe_account_name,
+			stripe_account_email: next.stripe_account_email,
+			stripe_last_verified_at: next.stripe_last_verified_at
+		};
+	}
 </script>
 
 <svelte:head><title>Stripe Settings</title></svelte:head>
 
-<PageWrapper title="Stripe" subtitle="Accept invoice payments online">
+<PageWrapper title="Online payments" subtitle="Get paid by card on every invoice you send.">
 	{#if loading || !status}
 		<SkeletonLoader lines={6} label="Loading Stripe settings" height="64px" />
 	{:else}
@@ -133,12 +165,23 @@
 				publishableKey={status.stripe_publishable_key}
 				webhookSecretMasked={status.stripe_webhook_secret_masked}
 				accountId={status.stripe_account_id}
+				accountName={status.stripe_account_name}
+				accountEmail={status.stripe_account_email}
+				livemode={status.stripe_livemode}
 				connectedAt={status.stripe_connected_at}
+				lastVerifiedAt={status.stripe_last_verified_at}
 				{webhookUrl}
+				onVerified={handleVerified}
 			/>
 
+			{#if status.is_connected && status.stripe_livemode === false}
+				<StripeTestInvoice defaultEmail={m.email} />
+			{/if}
+
+			<StripeSetupGuide {webhookUrl} defaultOpen={!status.is_connected} />
+
 			<form
-				class="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 md:p-5"
+				class="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
 				onsubmit={(e) => {
 					e.preventDefault();
 					void save();
@@ -146,10 +189,10 @@
 			>
 				<header>
 					<h3 class="text-base font-semibold text-foreground">
-						{status.is_connected ? 'Replace credentials' : 'Connect Stripe'}
+						{status.is_connected ? 'Update your Stripe keys' : 'Paste your Stripe keys'}
 					</h3>
 					<p class="text-xs text-muted-foreground">
-						Paste your restricted key, publishable key, and webhook secret. We’ll test the connection before saving.
+						We’ll test the connection with Stripe before saving anything.
 					</p>
 				</header>
 
@@ -159,7 +202,7 @@
 						id="rk"
 						type="password"
 						autocomplete="off"
-						placeholder="rk_live_…"
+						placeholder="rk_live_… or rk_test_…"
 						bind:value={form.stripe_restricted_key}
 						required
 					/>
@@ -172,7 +215,7 @@
 					<Label for="pk">Publishable key <span class="text-destructive">*</span></Label>
 					<Input
 						id="pk"
-						placeholder="pk_live_…"
+						placeholder="pk_live_… or pk_test_…"
 						bind:value={form.stripe_publishable_key}
 						required
 					/>
@@ -204,11 +247,15 @@
 							disabled={disconnecting}
 							onclick={disconnect}
 						>
-							{disconnecting ? 'Disconnecting…' : 'Disconnect'}
+							{disconnecting ? 'Disconnecting…' : 'Disconnect Stripe'}
 						</Button>
 					{/if}
 					<Button type="submit" disabled={saving}>
-						{saving ? 'Testing connection…' : status.is_connected ? 'Replace credentials' : 'Connect'}
+						{saving
+							? 'Testing connection…'
+							: status.is_connected
+								? 'Save changes'
+								: 'Connect Stripe'}
 					</Button>
 				</footer>
 			</form>

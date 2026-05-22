@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"db:types": "npx supabase gen types typescript --project-id wqodecwlynshdujaphaz > src/lib/types/supabase.ts",
 		"build:widget": "vite build --config vite.config.widget.ts",
-		"worker": "tsx worker.ts"
+		"worker": "node --env-file=.env --import tsx worker.ts",
+		"worker:watch": "node --env-file=.env --watch --import tsx worker.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -54,6 +55,8 @@
 		"bits-ui": "^2.18.1",
 		"bullmq": "^5.76.6",
 		"clsx": "^2.1.1",
+		"date-fns": "^3.6.0",
+		"date-fns-tz": "^3.2.0",
 		"drizzle-orm": "^0.45.2",
 		"ioredis": "^5.10.1",
 		"jsonwebtoken": "^9.0.3",

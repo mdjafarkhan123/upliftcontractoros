@@ -13,6 +13,10 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canSendReviewRequests } from '$lib/server/reputation/permissions';
 import { sendSms } from '$lib/server/twilio/sendSms';
 import { interpolate } from '$lib/server/workers/templates';
+import {
+	assertAndIncrementUsage,
+	UsageLimitExceededError
+} from '$lib/server/usage/assertAndIncrementUsage';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -65,19 +69,43 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Automation settings missing.' }, { status: 422 });
 	}
 
-	const [inserted] = await db
-		.insert(reviewRequests)
-		.values({
-			org_id: auth.orgId,
-			job_id: job.id,
-			contact_id: contact.id,
-			status: 'sent',
-			sent_by_automation: false,
-			sent_by_member_id: auth.member.id,
-			sent_at: new Date()
-		})
-		.onConflictDoNothing({ target: reviewRequests.job_id })
-		.returning();
+	let inserted;
+	try {
+		inserted = await db.transaction(async (tx) => {
+			const [row] = await tx
+				.insert(reviewRequests)
+				.values({
+					org_id: auth.orgId,
+					job_id: job.id,
+					contact_id: contact.id,
+					status: 'sent',
+					sent_by_automation: false,
+					sent_by_member_id: auth.member.id,
+					sent_at: new Date()
+				})
+				.onConflictDoNothing({ target: reviewRequests.job_id })
+				.returning();
+			if (!row) return null;
+			// Authoritative SMS usage increment — this route bypasses the SMS worker,
+			// so the limit must be enforced here directly. Throw rolls back the
+			// reviewRequests insert too.
+			await assertAndIncrementUsage(tx, {
+				orgId: auth.orgId,
+				metric: 'sms_sent',
+				limit: org.max_monthly_sms,
+				increment: 1
+			});
+			return row;
+		});
+	} catch (err) {
+		if (err instanceof UsageLimitExceededError) {
+			return json(
+				{ error: `Monthly SMS limit reached (${err.max}). Upgrade your plan to send more.` },
+				{ status: 403 }
+			);
+		}
+		throw err;
+	}
 
 	if (!inserted) {
 		return json({ error: 'A review request has already been sent for this job.' }, { status: 409 });

@@ -13,8 +13,9 @@ import {
 	Settings,
 	MoreHorizontal
 } from '@lucide/svelte';
-import type { OrgMember, FeatureFlags } from '$lib/types';
+import type { OrgMember, FeatureFlags, PermissionKey } from '$lib/types';
 import { can, canAny } from './can';
+import { featureForNavKey } from './featureMap';
 
 export type NavItem = {
 	key: string;
@@ -23,50 +24,36 @@ export type NavItem = {
 	icon: Component;
 };
 
+type NavDef = {
+	key: string;
+	label: string;
+	href: string;
+	icon: Component;
+	permissions: PermissionKey[];
+};
+
+const NAV_DEFS: NavDef[] = [
+	{ key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permissions: ['can_view_dashboard'] },
+	{ key: 'inbox', label: 'Inbox', href: '/inbox', icon: Inbox, permissions: ['can_view_all_conversations', 'can_view_assigned_conversations'] },
+	{ key: 'contacts', label: 'Contacts', href: '/contacts', icon: Users, permissions: ['can_view_all_contacts'] },
+	{ key: 'pipeline', label: 'Pipeline', href: '/pipeline', icon: GitBranch, permissions: ['can_view_full_pipeline'] },
+	{ key: 'jobs', label: 'Jobs', href: '/jobs', icon: Briefcase, permissions: ['can_view_full_pipeline', 'can_view_assigned_jobs'] },
+	{ key: 'quotes', label: 'Quotes', href: '/quotes', icon: FileText, permissions: ['can_view_all_quotes'] },
+	{ key: 'invoices', label: 'Invoices', href: '/invoices', icon: Receipt, permissions: ['can_view_all_invoices'] },
+	{ key: 'appointments', label: 'Appointments', href: '/appointments', icon: Calendar, permissions: ['can_view_all_appointments', 'can_view_assigned_appointments'] },
+	{ key: 'reputation', label: 'Reputation', href: '/reputation', icon: Star, permissions: ['can_view_reviews'] },
+	{ key: 'growth', label: 'Growth', href: '/growth', icon: TrendingUp, permissions: ['can_view_growth_feed'] }
+];
+
 export function buildVisibleNav(member: OrgMember, features?: FeatureFlags): NavItem[] {
 	const items: NavItem[] = [];
-	const f = features;
-
-	if (can(member, 'can_view_dashboard')) {
-		items.push({ key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard });
+	for (const def of NAV_DEFS) {
+		const permitted = def.permissions.length === 1 ? can(member, def.permissions[0]) : canAny(member, def.permissions);
+		if (!permitted) continue;
+		const requiredFeature = featureForNavKey(def.key);
+		if (requiredFeature && features && !features[requiredFeature]) continue;
+		items.push({ key: def.key, label: def.label, href: def.href, icon: def.icon });
 	}
-
-	if (canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations']) && (!f || f.feature_conversations)) {
-		items.push({ key: 'inbox', label: 'Inbox', href: '/inbox', icon: Inbox });
-	}
-
-	if (can(member, 'can_view_all_contacts')) {
-		items.push({ key: 'contacts', label: 'Contacts', href: '/contacts', icon: Users });
-	}
-
-	if (can(member, 'can_view_full_pipeline')) {
-		items.push({ key: 'pipeline', label: 'Pipeline', href: '/pipeline', icon: GitBranch });
-	}
-
-	if (canAny(member, ['can_view_full_pipeline', 'can_view_assigned_jobs'])) {
-		items.push({ key: 'jobs', label: 'Jobs', href: '/jobs', icon: Briefcase });
-	}
-
-	if (can(member, 'can_view_all_quotes') && (!f || f.feature_financial_tools)) {
-		items.push({ key: 'quotes', label: 'Quotes', href: '/quotes', icon: FileText });
-	}
-
-	if (can(member, 'can_view_all_invoices') && (!f || f.feature_financial_tools)) {
-		items.push({ key: 'invoices', label: 'Invoices', href: '/invoices', icon: Receipt });
-	}
-
-	if (canAny(member, ['can_view_all_appointments', 'can_view_assigned_appointments']) && (!f || f.feature_appointments)) {
-		items.push({ key: 'appointments', label: 'Appointments', href: '/appointments', icon: Calendar });
-	}
-
-	if (can(member, 'can_view_reviews')) {
-		items.push({ key: 'reputation', label: 'Reputation', href: '/reputation', icon: Star });
-	}
-
-	if (can(member, 'can_view_growth_feed') && (!f || f.feature_growth_feed)) {
-		items.push({ key: 'growth', label: 'Growth', href: '/growth', icon: TrendingUp });
-	}
-
 	return items;
 }
 

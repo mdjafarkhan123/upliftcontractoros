@@ -27,21 +27,21 @@
 
 	const toneRing = $derived(
 		tone === 'success'
-			? 'ring-emerald-500/20'
+			? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
 			: tone === 'warning'
-				? 'ring-amber-500/20'
+				? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20'
 				: tone === 'danger'
-					? 'ring-rose-500/20'
-					: 'ring-border'
+					? 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20'
+					: 'bg-primary/10 text-primary ring-primary/20'
 	);
 	const toneIcon = $derived(
 		tone === 'success'
-			? 'text-emerald-500'
+			? 'text-emerald-600 dark:text-emerald-400'
 			: tone === 'warning'
-				? 'text-amber-500'
+				? 'text-amber-600 dark:text-amber-400'
 				: tone === 'danger'
-					? 'text-rose-500'
-					: 'text-muted-foreground'
+					? 'text-rose-600 dark:text-rose-400'
+					: 'text-primary'
 	);
 
 	const Tag = $derived(href && !locked ? 'a' : 'div');
@@ -51,20 +51,29 @@
 	this={Tag}
 	href={Tag === 'a' ? href : undefined}
 	class={cn(
-		'relative flex min-h-[112px] flex-col justify-between rounded-2xl border border-border bg-card p-4 ring-1 ring-inset transition-shadow',
-		toneRing,
-		Tag === 'a' && 'hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+		'relative flex min-h-[116px] flex-col justify-between rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-200 ease-out dark:border-white/10',
+		Tag === 'a' &&
+			'hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 		className
 	)}
 >
 	<div class="flex items-start justify-between gap-3">
-		<span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+		<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
 		{#if Icon}
-			<Icon class={cn('h-4 w-4', toneIcon)} />
+			<span
+				class={cn(
+					'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
+					toneRing
+				)}
+			>
+				<Icon class={cn('h-4 w-4', toneIcon)} />
+			</span>
 		{/if}
 	</div>
 	<div class={cn('mt-2 flex flex-col gap-0.5', locked && 'select-none blur-sm')}>
-		<span class="text-2xl font-semibold leading-tight text-foreground md:text-3xl">{value}</span>
+		<span class="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl"
+			>{value}</span
+		>
 		{#if hint}
 			<span class="text-xs text-muted-foreground">{hint}</span>
 		{/if}
@@ -72,7 +81,7 @@
 
 	{#if locked}
 		<div
-			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-2xl bg-card/60 text-center backdrop-blur-[2px]"
+			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-xl bg-card/75 text-center backdrop-blur-[2px]"
 		>
 			<Lock class="h-4 w-4 text-muted-foreground" />
 			<span class="px-3 text-xs text-muted-foreground">

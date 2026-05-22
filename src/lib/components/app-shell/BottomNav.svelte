@@ -18,7 +18,7 @@
 </script>
 
 <nav
-	class="fixed inset-x-0 bottom-0 z-30 flex h-[var(--bottom-nav-height)] items-stretch border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+	class="fixed inset-x-0 bottom-0 z-30 flex h-[var(--bottom-nav-height)] items-stretch border-t border-border/70 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-dropdown backdrop-blur-xl md:hidden"
 	aria-label="Primary"
 >
 	{#each primary as item (item.key)}
@@ -28,7 +28,9 @@
 			href={item.href}
 			class={cn(
 				'flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
-				active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+				active
+					? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-[hsl(var(--brand-light))]'
+					: 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
 			)}
 			aria-current={active ? 'page' : undefined}
 		>
@@ -41,7 +43,7 @@
 		<button
 			type="button"
 			onclick={onMoreClick}
-			class="flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+			class="flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
 			aria-label="More navigation"
 		>
 			<MoreIcon class="h-5 w-5" />

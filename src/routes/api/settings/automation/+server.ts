@@ -7,6 +7,10 @@ import { automationSettings } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { validateTemplateVariables } from '$lib/utils/validation/templateVariables';
 
+// NOTE: automation_workflows counter not enforced here.
+// Current model is fixed boolean toggles gated by feature_automation_engine.
+// Wire assertAndIncrementUsage when user-defined workflows table is introduced.
+
 function assertAdmin(role: string): void {
 	if (role !== 'admin') error(403, 'Admin only.');
 }
@@ -44,6 +48,11 @@ const automationPatchSchema = z
 		appointment_reminder_enabled: z.boolean().optional(),
 		appointment_reminder_hours_before: z.number().int().min(0).max(DELAY_HOURS_MAX).optional(),
 		appointment_reminder_message: z.string().min(1).max(MSG_MAX).optional(),
+		appointment_reminder_1h_enabled: z.boolean().optional(),
+		appointment_reminder_1h_message: z.string().min(1).max(MSG_MAX).optional(),
+
+		payment_receipt_enabled: z.boolean().optional(),
+		payment_receipt_message: z.string().min(1).max(MSG_MAX).optional(),
 
 		speed_to_lead_enabled: z.boolean().optional(),
 		speed_to_lead_message: z.string().min(1).max(MSG_MAX).optional()
@@ -56,6 +65,8 @@ const TEMPLATE_FIELDS = [
 	'invoice_reminder_message',
 	'review_funnel_message',
 	'appointment_reminder_message',
+	'appointment_reminder_1h_message',
+	'payment_receipt_message',
 	'speed_to_lead_message'
 ] as const;
 
@@ -78,6 +89,10 @@ const RETURN_COLUMNS = {
 	appointment_reminder_enabled: automationSettings.appointment_reminder_enabled,
 	appointment_reminder_hours_before: automationSettings.appointment_reminder_hours_before,
 	appointment_reminder_message: automationSettings.appointment_reminder_message,
+	appointment_reminder_1h_enabled: automationSettings.appointment_reminder_1h_enabled,
+	appointment_reminder_1h_message: automationSettings.appointment_reminder_1h_message,
+	payment_receipt_enabled: automationSettings.payment_receipt_enabled,
+	payment_receipt_message: automationSettings.payment_receipt_message,
 	speed_to_lead_enabled: automationSettings.speed_to_lead_enabled,
 	speed_to_lead_message: automationSettings.speed_to_lead_message,
 	// Cast to text so the canonical PostgreSQL microsecond precision survives

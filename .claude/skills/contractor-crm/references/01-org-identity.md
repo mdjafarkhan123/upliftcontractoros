@@ -1,6 +1,6 @@
 # Domain 1 — Organization & Identity
 
-Tables: `organizations`, `org_members`, `automation_settings`
+Tables: `organizations`, `org_members`, `automation_settings`, `org_usage`
 Enums used: `org_status`, `member_role`
 
 ---
@@ -95,7 +95,11 @@ CREATE UNIQUE INDEX idx_organizations_twilio_phone
 **Notes:**
 
 - `twilio_phone_number` unique at infrastructure level (Twilio account) AND DB constraint. One number per org.
-- Org deletion: application-level cron in explicit FK-safe order across 30 tables. No PostgreSQL CASCADE.
+- Org deletion: application-level cron in explicit FK-safe order across schema tables. `org_usage` has `ON DELETE CASCADE`; the deletion cron may still delete it explicitly for audit clarity.
+  Deletion order (insert `invoice_views` between payments and invoices):
+  ```
+  ... payments → invoice_views → invoice_line_items → invoices ...
+  ```
 - `is_setup_complete` gates the contractor app UI — set to TRUE by Platform Owner when onboarding finishes.
 - Feature flags injected into JWT `app_metadata` by `custom_access_token_hook` alongside `org_id` and `role`.
 - Feature flags managed via `/jafar`; agency sets defaults during onboarding.
@@ -221,6 +225,60 @@ CREATE INDEX idx_org_members_org_id
 
 ---
 
+## `org_usage`
+
+Atomic usage counters per organization, per metric, per period. Used for quota
+enforcement and future billing reports.
+
+```sql
+CREATE TABLE org_usage (
+  org_id               UUID NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  period_start_date    DATE NOT NULL DEFAULT '1900-01-01',
+  metric               TEXT NOT NULL CHECK (metric IN (
+                         'sms_sent',
+                         'bulk_sms_sent',
+                         'ai_requests',
+                         'storage_bytes',
+                         'automation_workflows'
+                       )),
+  value                BIGINT NOT NULL DEFAULT 0 CHECK (value >= 0),
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_incremented_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (org_id, period_start_date, metric)
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE INDEX idx_org_usage_org_metric_period
+  ON org_usage (org_id, metric, period_start_date DESC);
+
+CREATE INDEX idx_org_usage_period_start
+  ON org_usage (period_start_date);
+```
+
+**RLS:**
+
+```sql
+ALTER TABLE org_usage ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY org_usage_select_own_org ON org_usage
+  FOR SELECT
+  USING (org_id = (auth.jwt() -> 'app_metadata' ->> 'org_id')::uuid);
+```
+
+**Notes:**
+
+- `organizations.max_*` columns store quota limits; `org_usage.value` stores usage.
+- `period_start_date` is the first day of the monthly usage period.
+- Sentinel `1900-01-01` represents lifetime metrics with no monthly reset window.
+- `storage_bytes` is a lifetime/current-total metric unless product rules define a reset window later.
+- Usage increments must be atomic and scoped by `(org_id, period_start_date, metric)`.
+- Contractor JWTs can SELECT own-org usage rows only. All increments and corrections use service-role API routes or workers.
+
+---
+
 ## `automation_settings`
 
 One row per org. Controls all automation on/off switches and message templates.
@@ -251,10 +309,18 @@ CREATE TABLE automation_settings (
   google_review_link                  TEXT,
   review_funnel_message               TEXT NOT NULL DEFAULT 'Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1–5.',
 
-  -- Appointment Reminder
+  -- Appointment Reminder (24h)
   appointment_reminder_enabled        BOOLEAN NOT NULL DEFAULT TRUE,
   appointment_reminder_hours_before   INTEGER NOT NULL DEFAULT 24,
   appointment_reminder_message        TEXT NOT NULL DEFAULT 'Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out.',
+
+  -- Payment Receipt
+  payment_receipt_enabled             BOOLEAN NOT NULL DEFAULT TRUE,
+  payment_receipt_message             TEXT NOT NULL DEFAULT 'Hi {contact_name}, we received your payment of {amount}. Thank you — we appreciate your business!',
+
+  -- Appointment Reminder (1h)
+  appointment_reminder_1h_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+  appointment_reminder_1h_message     TEXT NOT NULL DEFAULT 'Hi {contact_name}, just a reminder — your appointment is in about 1 hour. See you soon!',
 
   -- Speed to Lead
   speed_to_lead_enabled               BOOLEAN NOT NULL DEFAULT TRUE,
@@ -276,8 +342,10 @@ CREATE UNIQUE INDEX idx_automation_settings_org_id
 
 - Created automatically when a new org is created via `/jafar`. One row, one org, always.
 - `google_review_link` set by agency/Platform Owner once GBP link is known. Used by review funnel for positive-review SMS.
-- Message templates support `{contact_name}` and `{org_name}` interpolation tokens at send time.
+- Message templates support `{contact_name}`, `{org_name}`, and `{amount}` interpolation tokens at send time.
 - Same `quote_followup_message` used for both follow-up reminders.
+- `payment_receipt_message` supports `{amount}` for the payment total.
+- `appointment_reminder_1h_message` is separate from the 24h reminder — different tone ("in 1 hour" vs "tomorrow").
 - No `deleted_at` — never independently deleted. Deleted only when parent org is deleted.
 
 ---
@@ -340,4 +408,3 @@ CREATE UNIQUE INDEX idx_org_email_settings_reply_domain
 - Provider validation: only `resend` and `postmark` allowed.
 - SENSITIVE FIELDS stripped by API layer before returning to contractor: `inbound_webhook_secret`, `provider_domain_id`, `dns_records_required`.
 - Table is NOT Realtime‑subscribed. Domain verification status is polled via API route.
-

@@ -1,5 +1,5 @@
 import type { RawTimelineRow, TimelineEntry, TimelineRegistryEntry } from '../types';
-import { fmtMoney, fmtQuoteNumber, synthId } from './_shared';
+import { fmtMoney, fmtQuoteNumber, makePreview, synthId } from './_shared';
 
 type QuoteRowData = {
 	quote_number: number;
@@ -54,4 +54,33 @@ export const quoteDeclinedRegistry: TimelineRegistryEntry = {
 	source_table: 'quotes',
 	kind: 'declined',
 	mapper: makeMapper('declined', 'quote-declined', 'attention', false)
+};
+
+type QuoteChangeRequestRowData = {
+	quote_number: number;
+	quote_id: string;
+	message: string | null;
+};
+
+export const quoteChangesRequestedRegistry: TimelineRegistryEntry = {
+	source_table: 'quote_change_requests',
+	kind: 'requested',
+	mapper: (row: RawTimelineRow): TimelineEntry => {
+		const d = row.row_data as QuoteChangeRequestRowData;
+		const num = fmtQuoteNumber(d.quote_number);
+		const preview = makePreview(d.message);
+		const description = preview
+			? `Quote ${num} — client requested changes: "${preview}"`
+			: `Quote ${num} — client requested changes`;
+		return {
+			type: row.source_table,
+			id: synthId(row.source_table, row.row_id),
+			created_at: row.effective_at.toISOString(),
+			icon_key: 'quote-changes-requested',
+			tone: 'attention',
+			description,
+			metadata: { quote_number: d.quote_number, quote_id: d.quote_id, kind: 'requested' },
+			link: `/quotes/${d.quote_id}`
+		};
+	}
 };

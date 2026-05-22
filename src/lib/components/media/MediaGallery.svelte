@@ -82,9 +82,7 @@
 			const body = (await res.json()) as { data?: { url: string } };
 			const url = body.data?.url;
 			if (!url) return;
-			items = items.map((it) =>
-				it.localId === item.localId ? { ...it, thumbnailUrl: url } : it
-			);
+			items = items.map((it) => (it.localId === item.localId ? { ...it, thumbnailUrl: url } : it));
 		} catch {
 			// silent — tile will show placeholder
 		}
@@ -129,7 +127,7 @@
 		try {
 			const res = await fetch(`/api/media/${item.id}`, { method: 'DELETE' });
 			if (!res.ok) {
-				const body = await res.json().catch(() => ({})) as { error?: string };
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
 				toast.error(body.error ?? 'Failed to delete');
 				return;
 			}
@@ -153,13 +151,15 @@
 	];
 </script>
 
-<section class="rounded-xl border border-border bg-card p-4">
-	<div class="mb-3 flex items-center justify-between gap-3">
+<section class="rounded-lg border border-border/60 bg-card p-4 shadow-card">
+	<div class="mb-3 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
 		<div class="flex items-center gap-1.5">
 			<ImageIcon class="h-4 w-4 text-muted-foreground" />
 			<h2 class="text-sm font-semibold text-foreground">Photos</h2>
 			{#if !loading}
-				<span class="text-xs text-muted-foreground">({items.filter((i) => i.status !== 'error').length})</span>
+				<span class="text-xs text-muted-foreground"
+					>({items.filter((i) => i.status !== 'error').length})</span
+				>
 			{/if}
 		</div>
 
@@ -175,15 +175,15 @@
 	</div>
 
 	<!-- Before/After filter -->
-	<div class="mb-3 flex gap-1">
+	<div class="mb-3 inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
 		{#each FILTER_TABS as tab (tab.key)}
 			<button
 				onclick={() => (filter = tab.key)}
 				class={[
-					'rounded-md px-3 py-1 text-xs font-medium transition-colors duration-150',
+					'min-h-8 rounded-md px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					filter === tab.key
-						? 'bg-primary text-primary-foreground'
-						: 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+						? 'bg-background text-foreground shadow-sm'
+						: 'text-muted-foreground hover:text-foreground'
 				].join(' ')}
 			>
 				{tab.label}

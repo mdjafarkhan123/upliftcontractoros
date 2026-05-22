@@ -22,9 +22,9 @@
 </script>
 
 <div
-	class="rounded-xl border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+	class="rounded-lg border border-border/60 bg-card p-3 shadow-card transition-all duration-150 ease-out hover:border-border hover:bg-muted/40 hover:shadow-dropdown active:cursor-grabbing"
 >
-	<div class="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+	<div class="mb-1.5 truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
 		{contact_name}
 	</div>
 	<div class="mb-3 line-clamp-2 text-sm font-semibold text-foreground">{title}</div>
@@ -34,7 +34,9 @@
 		</span>
 		{#if assignee_name}
 			<Avatar.Root class="h-7 w-7">
-				<Avatar.Fallback class="text-[10px]">{initials}</Avatar.Fallback>
+				<Avatar.Fallback class="bg-primary/10 text-[10px] font-semibold text-primary">
+					{initials}
+				</Avatar.Fallback>
 			</Avatar.Root>
 		{/if}
 	</div>

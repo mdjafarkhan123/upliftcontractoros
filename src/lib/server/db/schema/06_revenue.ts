@@ -21,7 +21,8 @@ export const quoteStatusEnum = pgEnum('quote_status', [
 	'viewed',
 	'accepted',
 	'declined',
-	'expired'
+	'expired',
+	'changes_requested'
 ]);
 
 export const invoiceStatusEnum = pgEnum('invoice_status', [
@@ -60,6 +61,10 @@ export const quotes = pgTable('quotes', {
 	total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
 	deposit_required: boolean('deposit_required').notNull().default(false),
 	deposit_amount: numeric('deposit_amount', { precision: 12, scale: 2 }),
+	deposit_paid_amount: integer('deposit_paid_amount').notNull().default(0),
+	deposit_paid_at: timestamp('deposit_paid_at', { withTimezone: true }),
+	deposit_stripe_payment_intent_id: text('deposit_stripe_payment_intent_id'),
+	deposit_applied_invoice_id: uuid('deposit_applied_invoice_id'),
 	notes: text('notes'),
 	internal_notes: text('internal_notes'),
 	public_token_hash: text('public_token_hash').notNull().unique(),
@@ -116,6 +121,25 @@ export const quoteViews = pgTable('quote_views', {
 
 export type QuoteView = InferSelectModel<typeof quoteViews>;
 export type NewQuoteView = InferInsertModel<typeof quoteViews>;
+
+// Active customer requests for quote changes. Operational log. No soft delete.
+// Partial unique index in migration ensures at most one unresolved request per quote.
+export const quoteChangeRequests = pgTable('quote_change_requests', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	org_id: uuid('org_id')
+		.notNull()
+		.references(() => organizations.id, { onDelete: 'cascade' }),
+	quote_id: uuid('quote_id')
+		.notNull()
+		.references(() => quotes.id, { onDelete: 'cascade' }),
+	message: text('message').notNull(),
+	requested_at: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+	resolved_at: timestamp('resolved_at', { withTimezone: true }),
+	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export type QuoteChangeRequest = InferSelectModel<typeof quoteChangeRequests>;
+export type NewQuoteChangeRequest = InferInsertModel<typeof quoteChangeRequests>;
 
 export const quoteTemplates = pgTable('quote_templates', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -176,6 +200,8 @@ export const invoices = pgTable('invoices', {
 	amount_paid: numeric('amount_paid', { precision: 12, scale: 2 }).notNull().default('0'),
 	amount_due: numeric('amount_due', { precision: 12, scale: 2 }).notNull().default('0'),
 	notes: text('notes'),
+	public_token: text('public_token').unique(),
+	viewed_at: timestamp('viewed_at', { withTimezone: true }),
 	due_date: date('due_date'),
 	stripe_payment_link_url: text('stripe_payment_link_url'),
 	sent_at: timestamp('sent_at', { withTimezone: true }),
@@ -209,6 +235,27 @@ export const invoiceLineItems = pgTable('invoice_line_items', {
 export type InvoiceLineItem = InferSelectModel<typeof invoiceLineItems>;
 export type NewInvoiceLineItem = InferInsertModel<typeof invoiceLineItems>;
 
+// Append-only view tracking log — no updated_at, no deleted_at
+// Mirrors quote_views. Only first qualifying view triggers invoice.viewed event.
+export const invoiceViews = pgTable('invoice_views', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	org_id: uuid('org_id')
+		.notNull()
+		.references(() => organizations.id),
+	invoice_id: uuid('invoice_id')
+		.notNull()
+		.references(() => invoices.id),
+	ip_hash: text('ip_hash'),
+	user_agent_hash: text('user_agent_hash'),
+	viewed_at: timestamp('viewed_at', { withTimezone: true }).notNull().defaultNow(),
+	notification_sent: boolean('notification_sent').notNull().default(false),
+	notification_sent_at: timestamp('notification_sent_at', { withTimezone: true }),
+	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export type InvoiceView = InferSelectModel<typeof invoiceViews>;
+export type NewInvoiceView = InferInsertModel<typeof invoiceViews>;
+
 // Immutable financial records — no updated_at, no deleted_at
 export const payments = pgTable('payments', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -224,6 +271,8 @@ export const payments = pgTable('payments', {
 	notes: text('notes'),
 	recorded_by: uuid('recorded_by').references(() => orgMembers.id),
 	paid_at: timestamp('paid_at', { withTimezone: true }).notNull().defaultNow(),
+	receipt_sent_at: timestamp('receipt_sent_at', { withTimezone: true }),
+	receipt_sent_via: text('receipt_sent_via'),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

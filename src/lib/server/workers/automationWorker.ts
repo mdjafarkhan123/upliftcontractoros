@@ -21,6 +21,22 @@ import {
 	redisConnection
 } from '$lib/server/queue/bullmq';
 import { interpolate } from './templates';
+import { featureForAutomationJob } from '$lib/permissions/featureMap';
+import type { FeatureFlagKey } from '$lib/types';
+
+const FEATURE_CACHE_TTL_MS = 15_000;
+const featureCache = new Map<string, { value: boolean; expiresAt: number }>();
+
+async function isFeatureEnabled(orgId: string, feature: FeatureFlagKey): Promise<boolean> {
+	const cacheKey = `${orgId}:${feature}`;
+	const cached = featureCache.get(cacheKey);
+	const now = Date.now();
+	if (cached && cached.expiresAt > now) return cached.value;
+	const [row] = await db.select().from(organizations).where(eq(organizations.id, orgId));
+	const value = Boolean(row?.[feature]);
+	featureCache.set(cacheKey, { value, expiresAt: now + FEATURE_CACHE_TTL_MS });
+	return value;
+}
 const env = process.env;
 
 type EventJobData = {
@@ -251,6 +267,11 @@ function publicQuoteUrl(token: string): string {
 	return `${base.replace(/\/$/, '')}/q/${token}`;
 }
 
+function publicInvoiceUrl(token: string): string {
+	const base = env.APP_URL ?? 'http://localhost:5173';
+	return `${base.replace(/\/$/, '')}/i/${token}`;
+}
+
 async function dispatchInitialQuote(data: EventJobData) {
 	if (!data.org_id) return;
 	const orgId = data.org_id;
@@ -384,6 +405,65 @@ async function handleQuoteFollowup(job: Job, data: EventJobData) {
 	} catch (err) {
 		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
 		throw err;
+	}
+}
+
+async function handleInvoiceDispatch(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const { org } = await loadContext(orgId);
+	if (!org) return;
+
+	const contactId = data.payload.contact_id as string | undefined;
+	const rawToken = data.payload.public_token as string | undefined;
+	const totalFormatted = (data.payload.total_formatted as string | undefined) ?? '';
+	const amountDueFormatted = (data.payload.amount_due_formatted as string | undefined) ?? '';
+	const invoiceNumberDisplay = (data.payload.invoice_number_display as string | undefined) ?? '';
+	const hasEmail = Boolean(data.payload.has_email);
+	const dueDate = data.payload.due_date as string | null | undefined;
+	if (!contactId) return;
+
+	const contact = await loadContact(orgId, contactId);
+	if (!contact) return;
+
+	if (rawToken) {
+		const url = publicInvoiceUrl(rawToken);
+		const dueLine = dueDate ? ` Due ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.` : '';
+
+		if (!contact.sms_opt_out) {
+			const smsBody = `Hi ${contact.full_name}, ${org.name} sent you invoice ${invoiceNumberDisplay} for ${totalFormatted}.${dueLine} Pay here: ${url}`;
+			try {
+				await queueAutomationSms(db, {
+					orgId,
+					contactId: contact.id,
+					body: smsBody,
+					source: 'automation.invoice_initial'
+				});
+			} catch (err) {
+				console.error('[automation] invoice SMS dispatch failed:', err);
+			}
+		}
+
+		if (hasEmail && contact.email) {
+			try {
+				const emailBody = `Hi ${contact.full_name},
+
+${org.name} has sent you invoice ${invoiceNumberDisplay} for ${amountDueFormatted}.${dueDate ? `\n\nDue date: ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+
+View and pay your invoice:
+${url}`;
+				await queueAutomationEmail(db, {
+					orgId,
+					contactId: contact.id,
+					contactEmail: contact.email,
+					subject: `Invoice ${invoiceNumberDisplay} from ${org.name}`,
+					body: emailBody,
+					source: 'automation.invoice_initial'
+				});
+			} catch (err) {
+				console.error('[automation] invoice email dispatch failed:', err);
+			}
+		}
 	}
 }
 
@@ -671,7 +751,16 @@ async function handleAppointmentReminder(
 
 	if (automationJobRow) await markJobStarted(automationJobRow.id);
 	try {
-		const body = interpolate(settings.appointment_reminder_message, {
+		// Use separate 1h message when enabled; fall back to the shared message.
+		let messageTemplate = settings.appointment_reminder_message;
+		if (
+			variant === '1h' &&
+			settings.appointment_reminder_1h_enabled &&
+			settings.appointment_reminder_1h_message
+		) {
+			messageTemplate = settings.appointment_reminder_1h_message;
+		}
+		const body = interpolate(messageTemplate, {
 			contact_name: contact.full_name,
 			org_name: org.name
 		});
@@ -712,6 +801,11 @@ async function handleQuoteViewedCancel(data: EventJobData) {
 	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
 }
 
+async function handleQuoteChangesRequestedCancel(data: EventJobData) {
+	if (!data.org_id) return;
+	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+}
+
 async function handleInvoicePaidCancel(data: EventJobData) {
 	if (!data.org_id) return;
 	await cancelPendingJobs(data.org_id, 'invoice_reminder', data.resource_id);
@@ -723,11 +817,20 @@ export const automationWorker = new Worker<EventJobData>(
 	AUTOMATION_QUEUE,
 	async (job) => {
 		const data = job.data;
+		const requiredFeature = featureForAutomationJob(job.name);
+		if (requiredFeature && data.org_id && !(await isFeatureEnabled(data.org_id, requiredFeature))) {
+			console.warn(
+				`[automation] dropped job ${job.id} name=${job.name} org=${data.org_id} reason=feature_disabled feature=${requiredFeature}`
+			);
+			return;
+		}
 		switch (job.name) {
 			case 'speed_to_lead':
 				return handleSpeedToLead(data);
 			case 'missed_call_textback':
 				return handleMissedCallTextback(data);
+			case 'invoice_dispatch':
+				return handleInvoiceDispatch(data);
 			case 'quote_followup':
 				if (data.event_type === 'quote.sent') return handleQuoteFollowupSetup(data);
 				return handleQuoteFollowup(job, data);
@@ -762,5 +865,6 @@ export const automationCancelHooks = {
 	quoteAccepted: handleQuoteAcceptedCancel,
 	quoteDeclined: handleQuoteDeclinedCancel,
 	quoteViewed: handleQuoteViewedCancel,
+	quoteChangesRequested: handleQuoteChangesRequestedCancel,
 	invoicePaid: handleInvoicePaidCancel
 };

@@ -16,7 +16,19 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { Eye, FileText, Save, Send, Trash2, Loader2 } from '@lucide/svelte';
+	import {
+		Check,
+		CreditCard,
+		Eye,
+		FileText,
+		MessageSquare,
+		Receipt,
+		Save,
+		Send,
+		Trash2,
+		Loader2
+	} from '@lucide/svelte';
+	import { formatCurrency } from '$lib/utils/format';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { QuoteDetail, QuoteLineDraft, QuoteLineItemRow } from '$lib/types/quotes';
@@ -66,9 +78,56 @@
 	let templateOpen = $state(false);
 	let saving = $state(false);
 	let deleting = $state(false);
+	let converting = $state(false);
+
+	const isAccepted = $derived(quote?.status === 'accepted');
+
+	async function convertToInvoice() {
+		if (!quote) return;
+		converting = true;
+		try {
+			const res = await fetch(`/api/quotes/${quote.id}/convert-to-invoice`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Failed to convert');
+				return;
+			}
+			const d = body.data as { id: string; invoice_number_display: string; already_existed: boolean };
+			if (d.already_existed) {
+				toast.info(`Invoice ${d.invoice_number_display} already exists`);
+			} else {
+				toast.success(`Invoice ${d.invoice_number_display} created`);
+			}
+			goto(`/invoices/${d.id}`);
+		} catch {
+			toast.error('Network error');
+		} finally {
+			converting = false;
+		}
+	}
 
 	const isDraft = $derived(quote?.status === 'draft');
-	const canResend = $derived(quote?.status === 'sent' || quote?.status === 'viewed');
+	const isChangesRequested = $derived(quote?.status === 'changes_requested');
+	const isEditable = $derived(isDraft || isChangesRequested);
+	const canResend = $derived(
+		quote?.status === 'sent' ||
+			quote?.status === 'viewed' ||
+			quote?.status === 'changes_requested'
+	);
+
+	function formatRequestedAt(iso: string): string {
+		const d = new Date(iso);
+		const now = Date.now();
+		const diff = Math.max(0, now - d.getTime());
+		const min = 60_000;
+		const hr = 60 * min;
+		const day = 24 * hr;
+		if (diff < min) return 'just now';
+		if (diff < hr) return `${Math.floor(diff / min)} min ago`;
+		if (diff < day) return `${Math.floor(diff / hr)} hr ago`;
+		if (diff < 7 * day) return `${Math.floor(diff / day)}d ago`;
+		return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+	}
 
 	const subtotal = $derived(
 		lineItems.reduce((s, li) => {
@@ -125,7 +184,7 @@
 	}
 
 	async function save() {
-		if (!quote || !isDraft) return;
+		if (!quote || !isEditable) return;
 		if (!titleDraft.trim()) {
 			toast.error('Title is required');
 			return;
@@ -224,7 +283,7 @@
 	{@const q = quote}
 	<PageWrapper title={q.quote_number_display}>
 		{#snippet actions()}
-			{#if isDraft}
+			{#if isEditable}
 				<JetEngineButton
 					label="Save"
 					loadingLabel="Saving…"
@@ -240,12 +299,23 @@
 					onclick={() => (sendOpen = true)}
 					disabled={lineItems.length === 0 || dirty}
 				>
-					<Send class="mr-1 h-4 w-4" />Send
+					<Send class="mr-1 h-4 w-4" />{isDraft ? 'Send' : 'Resend'}
 				</Button>
 			{:else if canResend}
 				<Button variant="outline" onclick={() => (sendOpen = true)}>
 					<Send class="mr-1 h-4 w-4" />Resend
 				</Button>
+			{/if}
+			{#if isAccepted}
+				<JetEngineButton
+					label="Create invoice"
+					loadingLabel="Creating…"
+					successLabel="Created"
+					state={converting ? 'loading' : 'idle'}
+					onclick={convertToInvoice}
+				>
+					{#snippet icon()}<Receipt class="h-4 w-4" />{/snippet}
+				</JetEngineButton>
 			{/if}
 			<DownloadPdfButton quoteId={q.id} />
 		{/snippet}
@@ -285,9 +355,74 @@
 				</div>
 			</div>
 
+			{#if q.deposit_required && q.deposit_amount}
+				{#if q.deposit_paid_amount > 0}
+					<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+						<div class="flex items-start gap-3">
+							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+								<Check class="h-4 w-4" />
+							</div>
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+									Deposit received
+								</p>
+								<p class="mt-1 text-sm text-emerald-900/90 dark:text-emerald-100/90">
+									{formatCurrency(q.deposit_amount)}
+									{#if q.deposit_paid_at}
+										&nbsp;· paid {new Date(q.deposit_paid_at).toLocaleDateString('en-US')}
+									{/if}
+								</p>
+							</div>
+						</div>
+					</div>
+				{:else}
+					<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+						<div class="flex items-start gap-3">
+							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+								<CreditCard class="h-4 w-4" />
+							</div>
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
+									Deposit pending
+								</p>
+								<p class="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
+									{formatCurrency(q.deposit_amount)} requested — awaiting client payment.
+								</p>
+							</div>
+						</div>
+					</div>
+				{/if}
+			{/if}
+
+			{#if q.active_change_request}
+				<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-sm">
+					<div class="flex items-start gap-3">
+						<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+							<MessageSquare class="h-4 w-4" />
+						</div>
+						<div class="min-w-0 flex-1">
+							<div class="flex items-center justify-between gap-2">
+								<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
+									Client requested changes
+								</p>
+								<span class="shrink-0 text-xs text-amber-700/80 dark:text-amber-300/80">
+									{formatRequestedAt(q.active_change_request.requested_at)}
+								</span>
+							</div>
+							<p class="mt-1 whitespace-pre-wrap text-sm text-amber-900/90 dark:text-amber-100/90">
+								{q.active_change_request.message}
+							</p>
+							<p class="mt-2 text-xs text-amber-700/80 dark:text-amber-300/80">
+								Update the quote below and re-send. The request will be marked resolved automatically.
+							</p>
+						</div>
+					</div>
+				</div>
+			{/if}
+
 			<div class="grid gap-2 rounded-xl border border-border bg-card p-4">
 				<Label for="quote-title">Title</Label>
-				<Input id="quote-title" bind:value={titleDraft} disabled={!isDraft} />
+				<Input id="quote-title" bind:value={titleDraft} disabled={!isEditable} />
 				<Label for="quote-tax" class="mt-2">Tax rate (%)</Label>
 				<Input
 					id="quote-tax"
@@ -297,29 +432,29 @@
 					max="100"
 					step="0.01"
 					bind:value={taxRateDraft}
-					disabled={!isDraft}
+					disabled={!isEditable}
 				/>
 				<Label for="quote-notes" class="mt-2">Notes</Label>
-				<Textarea id="quote-notes" bind:value={notesDraft} rows={3} disabled={!isDraft} />
+				<Textarea id="quote-notes" bind:value={notesDraft} rows={3} disabled={!isEditable} />
 			</div>
 
 			<div class="space-y-3">
 				<div class="flex items-center justify-between">
 					<h2 class="text-sm font-semibold">Line items</h2>
-					{#if isDraft}
+					{#if isEditable}
 						<Button variant="outline" size="sm" onclick={() => (templateOpen = true)}>
 							<FileText class="mr-1 h-4 w-4" />Apply template
 						</Button>
 					{/if}
 				</div>
-				<LineItemEditor bind:lineItems readonly={!isDraft} />
+				<LineItemEditor bind:lineItems readonly={!isEditable} />
 			</div>
 
 			<QuoteTotalsCard
-				subtotal={isDraft ? subtotal.toFixed(2) : q.subtotal}
-				tax_rate={isDraft ? taxRateNum.toFixed(4) : q.tax_rate}
-				tax_amount={isDraft ? taxAmount.toFixed(2) : q.tax_amount}
-				total={isDraft ? total.toFixed(2) : q.total}
+				subtotal={isEditable ? subtotal.toFixed(2) : q.subtotal}
+				tax_rate={isEditable ? taxRateNum.toFixed(4) : q.tax_rate}
+				tax_amount={isEditable ? taxAmount.toFixed(2) : q.tax_amount}
+				total={isEditable ? total.toFixed(2) : q.total}
 				deposit_required={q.deposit_required}
 				deposit_amount={q.deposit_amount}
 			/>

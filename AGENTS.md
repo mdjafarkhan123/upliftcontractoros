@@ -1,6 +1,6 @@
-# AGENTS.md
+# CLAUDE.md
 
-This file governs how Claude Code works in this repository.
+This file governs how Codex works in this repository.
 Read this file completely before starting any task.
 
 ---
@@ -10,48 +10,56 @@ Read this file completely before starting any task.
 Domain-specific reference skills live in `.codex/skills/`.
 Load them when relevant — do not load all at once.
 
-| Working on                                                 | Load skill                          |
-| ---------------------------------------------------------- | ----------------------------------- |
-| Entity CRUD, status transitions, lifecycle rules,          | `contractor-crm`                    |
-| financial operations, contact dedup, quote/invoice flows,  | → `references/business-rules.md`    |
-| job creation, pipeline stages, soft delete, relationships  |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Permission checks, auth middleware, RLS policies, JWT,     | `contractor-crm`                    |
-| role templates, /jafar, team member CRUD, member           | → `references/permissions-auth.md`  |
-| deactivation, navigation rendering                         |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Outbox events, BullMQ workers, automation sequences,       | `contractor-crm`                    |
-| Realtime, notification dispatch, idempotency keys,         | → `references/automation-events.md` |
-| webhook handlers (Twilio, Stripe), event emission          |                                     |
-| ---------------------------------------------------------- | ------------------                  |
-| Any .svelte file, +page.ts, +layout, Bits UI, SCSS,        | `contractor-crm-svelte-ui`          |
-| navigation, Realtime in UI, client auth guard              |                                     |
+### Core Business & Architecture (`contractor-crm`)
 
-The `contractor-crm` skill covers business rules, permission matrix,
-transaction patterns, and automation architecture. Its SKILL.md has
-universal rules; read only the specific reference file for your task.
-Do not reconstruct business rules from memory — always consult the skill.
+| Working on...                                     | Reference File                                |
+| ------------------------------------------------- | --------------------------------------------- |
+| **Universal Rules** & Transaction Patterns        | `references/business-rules.md`                |
+| **Permissions**, Auth Middleware, RLS, /jafar     | `references/permissions-auth.md`              |
+| **Auth Session**, hooks.server.ts, feature flags  | `references/auth-session.md`                  |
+| **Automation Events** catalog & payload contracts | `references/automation-events.md`             |
+| **Outbox Infrastructure** & worker claim loops    | `references/outbox-worker.md`                 |
+| **BullMQ Workers**, idempotency, Twilio/Stripe    | `references/bullmq-workers.md`                |
+| **Event Flows** (missed call, opp won, payment)   | `references/event-flows.md`                   |
+| **Schema Principles** & Enum Definitions          | `references/00-schema-principles-enums.md`    |
+| **Org Identity**, onboarding, plan quotas         | `references/01-org-identity.md`               |
+| **Contacts**, leads, customers, SMS opt-out       | `references/02-contacts.md`                   |
+| **Pipeline** stages, opportunities, deals         | `references/03-pipeline.md`                   |
+| **Jobs**, service delivery, scope of work         | `references/04-jobs.md`                       |
+| **Communication**, inbox, messaging, Twilio       | `references/05-communication.md`              |
+| **Quotes**, quote items, templates                | `references/06-revenue-quotes.md`             |
+| **Invoices**, invoice items, payments, Stripe     | `references/07-revenue-invoices.md`           |
+| **Appointments**, scheduling, reminders           | `references/08.appoinments.md`                |
+| **Reputation**, reviews, feedback                 | `references/09.reputation.md`                 |
+| **Files & Media**, R2 uploads                     | `references/10-files-and-media.md`            |
+| **Systems & Automations**, activity logs          | `references/11-growth-automations-systems.md` |
+| **Cross-Domain Map**, multi-table queries         | `references/12-cross-domain-map.md`           |
 
-## Reference Documents
+### UI Design & Aesthetics (`contractor-crm-design-reference`)
 
-All architecture documents live in `/docs/`. Before starting any task, read the ones that apply.
+| Working on...                                   | Reference File                        |
+| ----------------------------------------------- | ------------------------------------- |
+| **Color System**, CSS variables, app.css        | `references/color-system.md`          |
+| **Component Aesthetics**, cards, depth, buttons | `references/component-aesthetics.md`  |
+| **Layout Patterns**, sidebar, sticky headers    | `references/layout-patterns.md`       |
+| **Typography & Motion**, fonts, transitions     | `references/typography-and-motion.md` |
 
-| Document                           | Read When                                           |
-| ---------------------------------- | --------------------------------------------------- |
-| `Blueprint v3.md`                  | Product decisions, UX rules, module scope           |
-| `Master Domain Architecture v1.md` | Entity rules, relationships, 30 architectural rules |
-| `Core Schema Design v1.md`         | Exact table/column definitions — authoritative      |
-| `Event System Architecture v1.md`  | Outbox pattern, event catalog, worker logic         |
-| `RLS Policy Matrix v1.md`          | All Row Level Security policies                     |
-| `Roles & Access Matrix v2.md`      | 40 permission booleans, role templates, nav rules   |
+### Svelte & Frontend Patterns (`contractor-crm-svelte-ui`)
 
-**Never assume schema structure from memory. Always read the relevant doc first.**
+| Working on...                                    | Reference File                       |
+| ------------------------------------------------ | ------------------------------------ |
+| **Runes & Reactivity**, $state, $props, $derived | `references/runes-and-reactivity.md` |
+| **Data Patterns**, forms, Realtime, mutations    | `references/data-patterns.md`        |
+| **Shadcn Svelte** primitives & Tailwind usage    | `references/shadcn-svelte.md`        |
+| **List Stores**, caching, SWR, pagination        | `references/list-stores.md`          |
+| **Navigation & Auth**, guards, permission checks | `references/navigation-and-auth.md`  |
+| **Shared Components**, Toasts, Skeletons         | `references/shared-components.md`    |
+
+The `contractor-crm` skill covers business rules and architecture. Its SKILL.md has universal rules; read only the specific reference file for your task. **Never assume schema structure from memory. Always read the relevant skill file first.**
 
 ---
 
 ## Commands
-
-run these commands only when necessary
 
 ```bash
 npm run dev           # start dev server
@@ -75,7 +83,7 @@ npx drizzle-kit studio     # open Drizzle Studio GUI
 
 | Layer            | Technology                                           |
 | ---------------- | ---------------------------------------------------- |
-| Framework        | SvelteKit 5 + Svelte 5 (runes)                       |
+| Framework        | SvelteKit 2 + Svelte 5 (runes)                       |
 | Rendering        | CSR only — `ssr = false` globally                    |
 | Database         | PostgreSQL via Supabase + Drizzle ORM + postgres.js  |
 | Auth             | Supabase SSR + JWT + bcryptjs + otplib (TOTP)        |
@@ -86,9 +94,9 @@ npx drizzle-kit studio     # open Drizzle Studio GUI
 | Storage          | Cloudflare R2 (S3-compatible — `@aws-sdk/client-s3`) |
 | Image processing | Sharp                                                |
 | PDF              | Puppeteer                                            |
-| UI primitives    | Bits UI                                              |
+| UI primitives    | Shadcn Svelte                                        |
 | Validation       | Zod                                                  |
-| Styling          | SCSS (sass-embedded) + CSS custom properties         |
+| Styling          | Tailwind CSS + Custom CSS                            |
 
 ---
 
@@ -97,69 +105,85 @@ npx drizzle-kit studio     # open Drizzle Studio GUI
 ```
 project root
   worker.ts                   ← Standalone worker process. Never touched by SvelteKit.
+  tailwind.config.ts          ← Tailwind config — extends Shadcn Svelte defaults
+  components.json             ← Shadcn Svelte CLI config (paths, aliases, style)
 
 src/
-  routes/
-    +layout.svelte            ← Root layout — imports global.scss, renders children
-    +layout.ts                ← ssr = false (global, never override)
-    (app)/                    ← Authenticated contractor app routes
-    jafar/                    ← Super admin routes — ISOLATED, NOT under (app)/
-    api/                      ← All SvelteKit server API endpoints
-    auth/                     ← Login, logout, forgot-password, callback
-    q/                        ← Public quote routes (no auth)
-    change-password/          ← First-login password change
-
+src/
   lib/
     server/                   ← Server-only. Never imported in .svelte files.
       db/
-        schema/               ← Drizzle schema (one file per domain)
-          index.ts            ← Re-exports all tables, enums, types
-        client.ts             ← Drizzle instance (service role DATABASE_URL)
-        migrate.ts            ← Migration runner
-      auth/                   ← Session helpers (contractor + jafar — separate)
-      permissions/            ← checkPermission() + PermissionKey type
+        schema/               ← Drizzle schema files (one per domain)
+        client.ts             ← Drizzle client
+      auth/                   ← Session helpers
+      permissions/            ← checkPermission utility + PermissionKey type
       queue/                  ← BullMQ connection + queue definitions
       workers/                ← outboxWorker, automationWorker, notificationWorker
-      cron/                   ← node-cron job registrations
-      media/                  ← R2 upload/delete helpers (Sharp processing)
+      cron/                   ← Cron job registrations
+      media/                  ← R2 upload/delete helpers
       org/                    ← Org deletion cascade
-    components/
+    components/               ← Feature components, one folder per domain
       shared/                 ← SkeletonLoader, EmptyState, PageWrapper, Badge, etc.
-      contacts/
-      pipeline/
-      jobs/
-      inbox/
-      quotes/
-      invoices/
-      appointments/
-      reputation/
-      notifications/
-      team/
-      dashboard/
-      growth/
-      settings/
     styles/
-      _variables.scss         ← Design tokens: colors, spacing, breakpoints, touch targets
-      _mixins.scss
-      _reset.scss
-      global.scss
+      app.css                 ← Tailwind base imports + CSS custom properties (colors, spacing, bottom-nav height, touch target minimum)
     types/                    ← Shared TypeScript types
     utils/
-      phone.ts                ← E.164 normalization (libphonenumber-js)
+      phone.ts                ← E.164 normalization
       format.ts               ← Currency, date, quote/invoice number formatters
-      hash.ts                 ← SHA-256 helpers
+      hash.ts                 ← SHA-256 helper
+  routes/
+    (app)/                    ← Protected contractor routes
+    jafar/                    ← Super admin (fully isolated)
+    api/                      ← All API server routes
+    auth/                     ← Login, logout, forgot-password
+    q/                        ← Public quote routes (no auth)
+    change-password/
+
+worker.ts                     ← Standalone worker process entry point (project root)
+drizzle.config.ts             ← Points to schema/index.ts and DATABASE_URL
+
 ```
+
+---
+
+## Deployment — Vercel + Railway
+
+- **Vercel** serves the SvelteKit app (routes, API, static assets including `static/webchat-widget.js`).
+- **Railway** runs the standalone worker (`worker.ts`) on the free tier — build minutes are scarce.
+- Railway's **Watch Paths** are configured to redeploy ONLY when worker-relevant code changes. Current watch list:
+  ```
+  worker.ts
+  src/lib/server/workers/**
+  src/lib/server/cron/**
+  src/lib/server/queue/**
+  src/lib/server/db/**
+  src/lib/server/email/**
+  src/lib/server/media/**
+  src/lib/server/r2/**
+  src/lib/server/twilio/**
+  src/lib/server/org/**
+  src/lib/server/log.ts
+  package.json
+  package-lock.json
+  tsconfig.json
+  drizzle.config.ts
+  nixpacks.toml
+  railway.json
+  railway.toml
+  Dockerfile
+  ```
+- **IMPORTANT:** If you add a new `$lib/server/...` import inside any worker, cron job, or queue module, you MUST add that path to Railway's Watch Paths — otherwise the worker will run against stale code. Flag this to the user whenever such an import is introduced.
+- UI-only, route-only, widget-only, and business-logic-only changes (contacts, pipeline, quotes, jobs, invoices, etc. — anything NOT imported by workers) should never trigger a Railway rebuild.
 
 ---
 
 ## Non-Negotiable Rules
 
 These rules are never overridden by a prompt. If a task conflicts with any of these, stop and flag it.
-
 Full patterns and code examples live in skills — these are the guardrails.
 
-1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Details in `contractor-crm-svelte-ui` skill.
-2. **SCSS only** — no Tailwind, no inline styles. Bits UI styled via data attributes. Details in `contractor-crm-svelte-ui` skill.
+1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
+2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`. Always add required mark for medatory form field.
 3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
 4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
 5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
@@ -171,6 +195,20 @@ Full patterns and code examples live in skills — these are the guardrails.
 11. **Outbox pattern non-negotiable** — business events flow through `outbox_events` → outbox worker → BullMQ. Never trigger automations, SMS, or emails directly from route handlers.
 12. **`/jafar` completely isolated** — separate `jafarSession` cookie, no `org_id`, no `org_members` row, no Supabase auth. Never check jafar session in contractor middleware. Never mix.
 13. **Client-side auth guard mandatory** — `hooks.server.ts` protects initial load + API routes. `/(app)/+layout.svelte` protects client-side navigation. Both required. Neither replaces the other.
+14. **API error response shape is fixed** — every `/api/*` error response must use
+    this exact shape:
+    ```ts
+    // Error
+    { error: string; field_errors?: Partial<Record<string, string>>; }
+    // Success with data
+    { data: T }
+    // Success with no body: return 204
+    ```
+    Never use `message`, `msg`, `details`, or any other top-level key.
+    `field_errors` keys match the form field names exactly. UI reads `error` for
+    toast messages and `field_errors` to map to inline field errors.
+15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
+16. You are an Expert Engineer who has build industry led CRM dozen times. You should always care about performance and code that way but not overengineering. If you have any suggestion you first present to the user then if permission granted then code that way
 
 ---
 
@@ -233,9 +271,6 @@ Ask: **"Anything to adjust before we move on?"**
 - Do not install packages without approval
 - Do not resolve ambiguities silently — surface them
 - Do not use Svelte 4 patterns for any reason
-- Do not start workers from SvelteKit lifecycle hooks
-- Do not perform external API calls inside database transactions
-- Do not scatter permission boolean reads across route handlers
 - Do not write mutations from `.svelte` files or `+page.ts`
 - Do not expose service role credentials in any client-reachable file
 - Do not refactor unrelated code during feature work
@@ -246,10 +281,6 @@ Ask: **"Anything to adjust before we move on?"**
 
 ## Code Quality
 
-- Prefer explicit code over clever abstractions
-- Do not create generic builders, factories, registries, or plugin systems
-- Avoid reusable abstractions until duplication is proven across 3+ use cases
-- Optimize for readability and maintainability — not theoretical flexibility
-- Business logic should be domain-oriented and readable
-- Before modifying a large file: explain what changes and why. Prefer surgical edits over rewrites.
+- Prefer explicit over clever. No generic builders, factories, or plugin systems.
+- No reusable abstractions until duplication is proven across 3+ use cases.
 - Every `POST` and `PATCH` route validates input with Zod. Phone: E.164 normalized. Money: reject negatives, `numeric(12,2)`.

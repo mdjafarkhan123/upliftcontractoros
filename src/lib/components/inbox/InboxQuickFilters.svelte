@@ -25,7 +25,7 @@
 		<div
 			role="tablist"
 			aria-label="Assignee filter"
-			class="inline-flex items-center gap-1 rounded-full border border-border bg-card p-1"
+			class="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background p-1 shadow-sm"
 		>
 			{#each ASSIGNEE_TABS as tab (tab.key)}
 				{@const Icon = tab.icon}
@@ -40,7 +40,7 @@
 						'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
 						active
 							? 'bg-primary text-primary-foreground shadow-sm'
-							: 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+							: 'text-muted-foreground hover:bg-muted hover:text-foreground'
 					)}
 				>
 					<Icon class="h-3.5 w-3.5" />
@@ -58,8 +58,8 @@
 			'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all duration-150',
 			'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
 			unread
-				? 'border-primary/40 bg-primary/10 text-primary'
-				: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+				? 'border-primary/40 bg-primary/10 text-primary shadow-sm'
+				: 'border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
 		)}
 	>
 		<Sparkles class="h-3.5 w-3.5" />

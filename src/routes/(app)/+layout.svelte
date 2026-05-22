@@ -138,12 +138,12 @@
 	</div>
 {:else}
 	<div class="flex min-h-screen flex-col bg-background">
-		<AppHeader org={session.org} member={session.member} />
-		{#if showSetupBanner}
-			<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
-		{/if}
-		<div class="flex flex-1 md:gap-0">
-			<DesktopSidebar items={visibleNav} member={session.member} />
+		<DesktopSidebar items={visibleNav} member={session.member} org={session.org} />
+		<div class="flex min-h-screen flex-1 flex-col md:pl-[var(--sidebar-width)]">
+			<AppHeader org={session.org} member={session.member} />
+			{#if showSetupBanner}
+				<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
+			{/if}
 			<main class="flex-1 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
 				{@render children()}
 			</main>

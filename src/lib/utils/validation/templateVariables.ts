@@ -1,4 +1,4 @@
-export const ALLOWED_TEMPLATE_VARIABLES = ['contact_name', 'org_name'] as const;
+export const ALLOWED_TEMPLATE_VARIABLES = ['contact_name', 'org_name', 'amount'] as const;
 export type AllowedTemplateVariable = (typeof ALLOWED_TEMPLATE_VARIABLES)[number];
 
 const VAR_RE = /\{([a-zA-Z0-9_]+)\}/g;

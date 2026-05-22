@@ -11,6 +11,12 @@ import { validateMagicBytes, isAllowedMimeType } from '$lib/server/media/mimeChe
 import { processImage } from '$lib/server/media/imageProcessor';
 import { r2Upload, r2DeleteObjects } from '$lib/server/media/r2';
 import { sha256Buffer } from '$lib/utils/hash';
+import {
+	assertAndIncrementUsage,
+	getCurrentUsage,
+	UsageLimitExceededError,
+	BYTES_PER_GB
+} from '$lib/server/usage/assertAndIncrementUsage';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const ORG_LOGO_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -85,6 +91,20 @@ export const POST: RequestHandler = async (event) => {
 		return json(
 			{ error: isOrgLogo ? 'Logo exceeds 5 MB maximum' : 'File exceeds 20 MB maximum' },
 			{ status: 400 }
+		);
+	}
+
+	// Soft pre-flight storage check — saves an R2 round-trip if the org is
+	// already at cap. Authoritative atomic check still runs in the DB tx
+	// below (around the media-row insert).
+	const storageLimitBytes = auth.limits.max_storage_gb * BYTES_PER_GB;
+	const currentStorage = await getCurrentUsage(db, auth.orgId, 'storage_bytes');
+	if (currentStorage + file.size > storageLimitBytes) {
+		return json(
+			{
+				error: `Storage limit reached (${auth.limits.max_storage_gb} GB). Delete files or upgrade your plan.`
+			},
+			{ status: 403 }
 		);
 	}
 
@@ -217,32 +237,51 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'File upload failed. Please try again.' }, { status: 502 });
 	}
 
-	// Insert DB row — outside the upload block; if this fails, clean up R2 objects
+	// Insert DB row + atomically increment storage usage in the same tx.
+	// If the storage limit is exceeded (race with another concurrent upload),
+	// the throw rolls back the media row and we clean up R2 below.
 	let inserted;
 	try {
-		[inserted] = await db
-			.insert(media)
-			.values({
-				org_id: auth.orgId,
-				uploaded_by: auth.member.id,
-				job_id: job_id ?? null,
-				quote_id: quote_id ?? null,
-				invoice_id: invoice_id ?? null,
-				r2_key: r2Key,
-				thumbnail_key: thumbnailKey,
-				web_key: webKey,
-				original_filename: file.name,
-				file_size_bytes: uploadedFileSize,
-				media_type: mediaType,
-				mime_type: storedMime,
-				purpose_tag: purpose_tag,
-				scan_status: 'pending',
-				sha256_hash: sha256Buffer(fileBytes)
-			})
-			.returning();
+		inserted = await db.transaction(async (tx) => {
+			const [row] = await tx
+				.insert(media)
+				.values({
+					org_id: auth.orgId,
+					uploaded_by: auth.member.id,
+					job_id: job_id ?? null,
+					quote_id: quote_id ?? null,
+					invoice_id: invoice_id ?? null,
+					r2_key: r2Key,
+					thumbnail_key: thumbnailKey,
+					web_key: webKey,
+					original_filename: file.name,
+					file_size_bytes: uploadedFileSize,
+					media_type: mediaType,
+					mime_type: storedMime,
+					purpose_tag: purpose_tag,
+					scan_status: 'pending',
+					sha256_hash: sha256Buffer(fileBytes)
+				})
+				.returning();
+			await assertAndIncrementUsage(tx, {
+				orgId: auth.orgId,
+				metric: 'storage_bytes',
+				limit: storageLimitBytes,
+				increment: uploadedFileSize
+			});
+			return row;
+		});
 	} catch (dbErr) {
-		// Best-effort R2 cleanup on DB failure
+		// Best-effort R2 cleanup on DB failure (including limit overage)
 		await r2DeleteObjects(uploadedKeys).catch(() => {});
+		if (dbErr instanceof UsageLimitExceededError) {
+			return json(
+				{
+					error: `Storage limit reached (${auth.limits.max_storage_gb} GB). Delete files or upgrade your plan.`
+				},
+				{ status: 403 }
+			);
+		}
 		console.error('[media/upload] DB insert error:', dbErr);
 		return json({ error: 'Failed to save file record. Please try again.' }, { status: 500 });
 	}

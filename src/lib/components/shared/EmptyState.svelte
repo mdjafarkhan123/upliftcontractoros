@@ -18,10 +18,12 @@
 </script>
 
 <div
-	class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/50 px-6 py-12 text-center"
+	class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/20 px-6 py-12 text-center"
 >
 	{#if Icon}
-		<div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+		<div
+			class="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border/60"
+		>
 			<Icon class="h-6 w-6" />
 		</div>
 	{/if}

@@ -77,7 +77,8 @@ export const GET: RequestHandler = async (event) => {
 			title: appointments.title,
 			scheduled_start: appointments.scheduled_start,
 			scheduled_end: appointments.scheduled_end,
-			location: appointments.location
+			location: appointments.location,
+			booking_source: appointments.booking_source
 		})
 		.from(appointments)
 		.innerJoin(contacts, eq(contacts.id, appointments.contact_id))

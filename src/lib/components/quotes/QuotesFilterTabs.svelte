@@ -11,7 +11,7 @@
 		status?: QuotesStatusChip;
 	} = $props();
 
-	const activeChips: QuotesStatusChip[] = ['all', 'draft', 'sent', 'viewed'];
+	const activeChips: QuotesStatusChip[] = ['all', 'draft', 'sent', 'viewed', 'changes_requested'];
 	const closedChips: QuotesStatusChip[] = ['all', 'accepted', 'declined', 'expired'];
 	const chips = $derived(
 		group === 'active' ? activeChips : group === 'closed' ? closedChips : (['all'] as QuotesStatusChip[])
@@ -24,7 +24,8 @@
 		viewed: 'Viewed',
 		accepted: 'Accepted',
 		declined: 'Declined',
-		expired: 'Expired'
+		expired: 'Expired',
+		changes_requested: 'Changes'
 	};
 
 	function onGroupChange(v: string) {

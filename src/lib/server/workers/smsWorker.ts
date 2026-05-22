@@ -12,6 +12,10 @@ import { SMS_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { sendSms } from '$lib/server/twilio/sendSms';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
+import {
+	assertAndIncrementUsage,
+	UsageLimitExceededError
+} from '$lib/server/usage/assertAndIncrementUsage';
 
 const env = process.env;
 const log = createLogger('sms.worker');
@@ -147,7 +151,10 @@ async function processSmsSend(job: Job<SmsJobData>) {
 	}
 
 	const [org] = await db
-		.select({ twilio_phone_number: organizations.twilio_phone_number })
+		.select({
+			twilio_phone_number: organizations.twilio_phone_number,
+			max_monthly_sms: organizations.max_monthly_sms
+		})
 		.from(organizations)
 		.where(eq(organizations.id, msg.org_id))
 		.limit(1);
@@ -162,6 +169,43 @@ async function processSmsSend(job: Job<SmsJobData>) {
 			})
 			.where(eq(messages.id, messageId));
 		return;
+	}
+
+	// Authoritative usage check: atomic increment in tx. If the limit is
+	// exceeded, the throw rolls back the counter and we mark the message as
+	// undeliverable. The increment is NOT refunded on Twilio failures —
+	// counts authorized sends, close enough to "sent" for quota purposes.
+	try {
+		await db.transaction(async (tx) => {
+			await assertAndIncrementUsage(tx, {
+				orgId: msg.org_id,
+				metric: 'sms_sent',
+				limit: org.max_monthly_sms,
+				increment: 1
+			});
+		});
+	} catch (err) {
+		if (err instanceof UsageLimitExceededError) {
+			log.warn({
+				phase: 'limit_exceeded',
+				message_id: messageId,
+				org_id: msg.org_id,
+				metric: err.metric,
+				current: err.current,
+				max: err.max
+			});
+			await db
+				.update(messages)
+				.set({
+					status: 'undeliverable',
+					failure_reason: `Monthly SMS limit reached (${err.max}).`,
+					failed_at: new Date(),
+					updated_at: new Date()
+				})
+				.where(eq(messages.id, messageId));
+			return;
+		}
+		throw err;
 	}
 
 	try {

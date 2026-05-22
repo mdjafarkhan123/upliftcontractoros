@@ -19,6 +19,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 async function deleteFinancialData(tx: Tx, orgId: string): Promise<void> {
 	await tx.execute(sql`DELETE FROM payments WHERE org_id = ${orgId}`);
+	await tx.execute(sql`DELETE FROM invoice_views WHERE org_id = ${orgId}`);
 	await tx.execute(sql`DELETE FROM invoice_line_items WHERE org_id = ${orgId}`);
 	await tx.execute(sql`DELETE FROM invoices WHERE org_id = ${orgId}`);
 	await tx.execute(sql`DELETE FROM quote_views WHERE org_id = ${orgId}`);
@@ -40,7 +41,12 @@ async function deleteCommunicationData(tx: Tx, orgId: string): Promise<void> {
 }
 
 async function deleteAppointmentsData(tx: Tx, orgId: string): Promise<void> {
+	// appointments.booked_via_link_id → booking_links(id). Appointments must
+	// be deleted before booking_links to satisfy the FK. availability_windows
+	// and availability_overrides cascade automatically via ON DELETE CASCADE
+	// from booking_links — no explicit step needed for those.
 	await tx.execute(sql`DELETE FROM appointments WHERE org_id = ${orgId}`);
+	await tx.execute(sql`DELETE FROM booking_links WHERE org_id = ${orgId}`);
 }
 
 async function deleteReputationData(tx: Tx, orgId: string): Promise<void> {

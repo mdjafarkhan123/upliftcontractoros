@@ -2,7 +2,13 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, quoteLineItems, quoteViews, quotes } from '$lib/server/db/schema';
+import {
+	contacts,
+	quoteChangeRequests,
+	quoteLineItems,
+	quoteViews,
+	quotes
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import {
 	canDeleteQuote,
@@ -31,6 +37,8 @@ export const GET: RequestHandler = async (event) => {
 			total: quotes.total,
 			deposit_required: quotes.deposit_required,
 			deposit_amount: quotes.deposit_amount,
+			deposit_paid_amount: quotes.deposit_paid_amount,
+			deposit_paid_at: quotes.deposit_paid_at,
 			notes: quotes.notes,
 			internal_notes: quotes.internal_notes,
 			expires_at: quotes.expires_at,
@@ -77,6 +85,22 @@ export const GET: RequestHandler = async (event) => {
 		.from(quoteViews)
 		.where(and(eq(quoteViews.quote_id, id), eq(quoteViews.org_id, auth.orgId)));
 
+	const [activeChangeRequest] = await db
+		.select({
+			id: quoteChangeRequests.id,
+			message: quoteChangeRequests.message,
+			requested_at: quoteChangeRequests.requested_at
+		})
+		.from(quoteChangeRequests)
+		.where(
+			and(
+				eq(quoteChangeRequests.quote_id, id),
+				eq(quoteChangeRequests.org_id, auth.orgId),
+				isNull(quoteChangeRequests.resolved_at)
+			)
+		)
+		.limit(1);
+
 	return json({
 		data: {
 			...row,
@@ -88,8 +112,16 @@ export const GET: RequestHandler = async (event) => {
 			accepted_at: row.accepted_at?.toISOString() ?? null,
 			declined_at: row.declined_at?.toISOString() ?? null,
 			expires_at: row.expires_at?.toISOString() ?? null,
+			deposit_paid_at: row.deposit_paid_at?.toISOString() ?? null,
 			view_count: viewCount,
-			line_items: lineItems
+			line_items: lineItems,
+			active_change_request: activeChangeRequest
+				? {
+						id: activeChangeRequest.id,
+						message: activeChangeRequest.message,
+						requested_at: activeChangeRequest.requested_at.toISOString()
+					}
+				: null
 		}
 	});
 };
@@ -123,14 +155,41 @@ export const PATCH: RequestHandler = async (event) => {
 	const input = parsed.data;
 
 	const updated = await db.transaction(async (tx) => {
-		const [existing] = await tx.execute<{ id: string; status: string; tax_rate: string }>(sql`
-			SELECT id, status, tax_rate FROM quotes
+		const [existing] = await tx.execute<{
+			id: string;
+			status: string;
+			tax_rate: string;
+			total: string;
+			deposit_paid_amount: number;
+		}>(sql`
+			SELECT id, status, tax_rate, total, deposit_paid_amount FROM quotes
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Quote not found');
-		if (existing.status !== 'draft') {
-			throw error(422, 'Only draft quotes can be edited');
+		if (existing.status !== 'draft' && existing.status !== 'changes_requested') {
+			throw error(422, 'Only draft or change-requested quotes can be edited');
+		}
+
+		// Financial-field lock. Defense-in-depth: a quote with a collected deposit must
+		// never have its financial values mutated, regardless of status.
+		if (existing.deposit_paid_amount > 0) {
+			const financialChange =
+				input.tax_rate !== undefined ||
+				input.deposit_required !== undefined ||
+				input.deposit_amount !== undefined ||
+				input.line_items !== undefined;
+			if (financialChange) {
+				throw error(422, 'Financial fields are locked after deposit collection');
+			}
+		}
+
+		// deposit_amount must be strictly less than the quote total.
+		if (input.deposit_required === true && input.deposit_amount != null) {
+			const total = Number(existing.total);
+			if (Number(input.deposit_amount) >= total) {
+				throw error(422, 'Deposit amount must be less than the quote total');
+			}
 		}
 
 		const updates: Record<string, unknown> = { updated_at: new Date() };
@@ -170,6 +229,14 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 
 		const [row] = await tx.select().from(quotes).where(eq(quotes.id, id)).limit(1);
+
+		// After recalc, enforce deposit_amount < total when deposit is enabled.
+		if (row.deposit_required && row.deposit_amount != null) {
+			if (Number(row.deposit_amount) >= Number(row.total)) {
+				throw error(422, 'Deposit amount must be less than the quote total');
+			}
+		}
+
 		return row;
 	});
 

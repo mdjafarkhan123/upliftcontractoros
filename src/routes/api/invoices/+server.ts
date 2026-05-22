@@ -7,14 +7,19 @@ import {
 	invoiceLineItems,
 	invoices,
 	orgCounters,
+	outboxEvents,
+	payments,
 	quoteLineItems,
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { createInvoiceSchema } from '$lib/server/invoices/schemas';
+import { generateToken } from '$lib/server/quotes/token';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
-import { formatInvoiceNumber } from '$lib/server/invoices/format';
+import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
+import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/events';
+import { formatQuoteNumber } from '$lib/server/quotes/format';
 
 const PAGE_SIZE = 30;
 const ALL_STATUSES = [
@@ -171,6 +176,7 @@ export const POST: RequestHandler = async (event) => {
 			.set({ next_invoice_number: invoiceNumber + 1, updated_at: new Date() })
 			.where(eq(orgCounters.org_id, auth.orgId));
 
+		const rawToken = generateToken();
 		const [inserted] = await tx
 			.insert(invoices)
 			.values({
@@ -185,7 +191,8 @@ export const POST: RequestHandler = async (event) => {
 				status: 'draft',
 				tax_rate: input.tax_rate !== undefined ? String(input.tax_rate) : '0',
 				due_date: input.due_date ?? null,
-				notes: input.notes ?? null
+				notes: input.notes ?? null,
+				public_token: rawToken
 			})
 			.returning();
 
@@ -239,6 +246,83 @@ export const POST: RequestHandler = async (event) => {
 				}))
 			);
 			await recalcInvoiceTotals(tx, inserted.id);
+		}
+
+		// Auto-apply paid quote deposit as a payment credit on this invoice.
+		// Guarded by: deposit_applied_invoice_id IS NULL (first invoice only)
+		// AND payments.stripe_payment_intent_id partial unique index (DB-level no-double-credit).
+		if (input.quote_id) {
+			const [q] = await tx.execute<{
+				id: string;
+				quote_number: number;
+				deposit_paid_amount: number;
+				deposit_stripe_payment_intent_id: string | null;
+				deposit_applied_invoice_id: string | null;
+			}>(sql`
+				SELECT id, quote_number, deposit_paid_amount, deposit_stripe_payment_intent_id,
+				       deposit_applied_invoice_id
+				FROM quotes
+				WHERE id = ${input.quote_id} AND org_id = ${auth.orgId}
+				FOR UPDATE
+			`);
+			if (
+				q &&
+				q.deposit_paid_amount > 0 &&
+				q.deposit_stripe_payment_intent_id &&
+				q.deposit_applied_invoice_id === null
+			) {
+				const amountStr = (q.deposit_paid_amount / 100).toFixed(2);
+				const quoteNumberDisplay = formatQuoteNumber(q.quote_number);
+
+				const [payment] = await tx
+					.insert(payments)
+					.values({
+						org_id: auth.orgId,
+						invoice_id: inserted.id,
+						amount: amountStr,
+						payment_method: 'stripe',
+						stripe_payment_intent_id: q.deposit_stripe_payment_intent_id,
+						notes: `Deposit applied from Quote ${quoteNumberDisplay}`,
+						recorded_by: null
+					})
+					.returning({ id: payments.id });
+
+				await tx
+					.update(quotes)
+					.set({ deposit_applied_invoice_id: inserted.id, updated_at: new Date() })
+					.where(eq(quotes.id, q.id));
+
+				await recalcInvoiceTotals(tx, inserted.id);
+
+				const [after] = await tx.execute<{ status: string; total: string; invoice_number: number }>(sql`
+					SELECT status, total, invoice_number FROM invoices WHERE id = ${inserted.id}
+				`);
+
+				await tx.insert(outboxEvents).values(
+					paymentRecordedEvent({
+						orgId: auth.orgId,
+						invoiceId: inserted.id,
+						paymentId: payment.id,
+						amountFormatted: formatCurrencyUsd(amountStr),
+						invoiceNumberDisplay: formatInvoiceNumber(after.invoice_number)
+					})
+				);
+
+				if (after.status === 'paid') {
+					await tx
+						.insert(outboxEvents)
+						.values(
+							invoicePaidEvent({
+								orgId: auth.orgId,
+								invoiceId: inserted.id,
+								paymentId: payment.id,
+								totalFormatted: formatCurrencyUsd(after.total),
+								invoiceNumberDisplay: formatInvoiceNumber(after.invoice_number)
+							})
+						)
+						.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+				}
+			}
 		}
 
 		const [final] = await tx.select().from(invoices).where(eq(invoices.id, inserted.id)).limit(1);

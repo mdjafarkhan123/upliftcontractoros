@@ -138,7 +138,7 @@
 
 <svelte:head><title>Inbox</title></svelte:head>
 
-<PageWrapper title="Inbox" subtitle="Stay connected with every customer">
+<PageWrapper title="Inbox" subtitle="Stay connected with every customer" class="max-w-screen-2xl">
 	{#if !canView}
 		<EmptyState
 			icon={MessageSquare}
@@ -146,31 +146,39 @@
 			description="You don't have permission to view conversations."
 		/>
 	{:else}
-		<div class="space-y-4">
-			<div class="relative">
-				<Search
-					class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-				/>
-				<Input
-					type="search"
-					inputmode="search"
-					placeholder="Search by contact name"
-					class="pl-10"
-					bind:value={search}
-				/>
+		<div class="mx-auto flex max-w-4xl flex-col gap-4">
+			<div class="rounded-xl border border-border/60 bg-card p-3 shadow-card">
+				<div class="relative">
+					<Search
+						class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70"
+					/>
+					<Input
+						type="search"
+						inputmode="search"
+						placeholder="Search by contact name"
+						class="h-11 rounded-lg border-border/60 bg-background pl-10 shadow-none transition-all duration-150 focus-visible:border-primary/50 focus-visible:ring-primary/20"
+						bind:value={search}
+					/>
+				</div>
+
+				<div class="mt-3 flex flex-col gap-2">
+					<InboxFilters bind:value={status} />
+					<InboxQuickFilters bind:assignee={assignee} bind:unread={unread} canViewAll={canViewAll} />
+				</div>
 			</div>
 
-			<InboxFilters bind:value={status} />
-			<InboxQuickFilters bind:assignee={assignee} bind:unread={unread} canViewAll={canViewAll} />
-
 			{#if showSkeleton}
-				<SkeletonLoader lines={6} label="Loading conversations" />
+				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
+					<SkeletonLoader lines={6} height="72px" label="Loading conversations" />
+				</div>
 			{:else if showError}
-				<p class="text-sm text-destructive">{errorMsg}</p>
+				<div class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card">
+					{errorMsg}
+				</div>
 			{:else if items.length === 0}
 				<EmptyState icon={MessageSquare} title={emptyTitle} description={emptyDescription} />
 			{:else}
-				<ul class="grid gap-2">
+				<ul class="grid gap-2.5">
 					{#each items as c (c.id)}
 						<li>
 							<ConversationRow conversation={c} />
@@ -179,7 +187,7 @@
 				</ul>
 
 				{#if nextCursor}
-					<div class="flex justify-center pt-2">
+					<div class="flex justify-center pt-3">
 						<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
 							{loadingMore ? 'Loading…' : 'Load more'}
 						</Button>

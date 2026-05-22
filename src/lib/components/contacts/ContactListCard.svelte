@@ -37,11 +37,11 @@
 
 <a
 	href={`/contacts/${id}`}
-	class="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/40 active:bg-accent/60"
+	class="group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10"
 >
 	<div class="flex items-start gap-3">
 		<div
-			class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+			class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary ring-1 ring-primary/15"
 		>
 			{initials || '?'}
 		</div>
@@ -64,7 +64,7 @@
 				{/if}
 				{#if sms_opt_out}
 					<span aria-hidden="true">•</span>
-					<span class="font-medium text-amber-700">SMS opted out</span>
+					<span class="font-medium text-amber-700 dark:text-amber-400">SMS opted out</span>
 				{/if}
 			</div>
 		</div>

@@ -3,9 +3,9 @@
 	import { UserCircle, Building2, Settings, LogOut, ChevronDown } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
-	import type { OrgMember } from '$lib/types';
+	import type { Org, OrgMember } from '$lib/types';
 
-	let { member }: { member: OrgMember } = $props();
+	let { member, org }: { member: OrgMember; org?: Org } = $props();
 
 	const initials = $derived(
 		member.full_name

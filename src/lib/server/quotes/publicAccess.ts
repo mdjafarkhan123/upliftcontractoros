@@ -13,13 +13,15 @@ export type ValidQuoteRow = {
 	org_name: string;
 	quote_number: number;
 	title: string;
-	status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
+	status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'changes_requested';
 	subtotal: string;
 	tax_rate: string;
 	tax_amount: string;
 	total: string;
 	deposit_required: boolean;
 	deposit_amount: string | null;
+	deposit_paid_amount: number;
+	deposit_paid_at: Date | null;
 	notes: string | null;
 	viewed_at: Date | null;
 	expires_at: Date | null;
@@ -49,6 +51,8 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			total: quotes.total,
 			deposit_required: quotes.deposit_required,
 			deposit_amount: quotes.deposit_amount,
+			deposit_paid_amount: quotes.deposit_paid_amount,
+			deposit_paid_at: quotes.deposit_paid_at,
 			notes: quotes.notes,
 			viewed_at: quotes.viewed_at,
 			expires_at: quotes.expires_at,
@@ -65,8 +69,13 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 	if (!constantTimeEqualHex(row.stored_hash, hash)) return { ok: false };
 	if (row.deleted_at) return { ok: false };
 	if (row.status === 'draft') return { ok: false };
-	if (row.status === 'accepted' || row.status === 'declined' || row.status === 'expired') {
-		return { ok: false };
+	// Keep accepted quotes reachable when a deposit is still owed — the client must be
+	// able to return to /q/[token] to pay the deposit after acceptance.
+	if (row.status === 'declined' || row.status === 'expired') return { ok: false };
+	if (row.status === 'accepted') {
+		const owesDeposit =
+			row.deposit_required && row.deposit_paid_amount === 0;
+		if (!owesDeposit) return { ok: false };
 	}
 	if (row.expires_at && row.expires_at.getTime() < Date.now()) return { ok: false };
 
@@ -88,6 +97,8 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			total: row.total,
 			deposit_required: row.deposit_required,
 			deposit_amount: row.deposit_amount,
+			deposit_paid_amount: row.deposit_paid_amount,
+			deposit_paid_at: row.deposit_paid_at,
 			notes: row.notes,
 			viewed_at: row.viewed_at,
 			expires_at: row.expires_at
@@ -127,6 +138,7 @@ export async function lookupQuoteForAction(rawToken: string): Promise<LookupForA
 	if (row.status === 'declined') return { ok: false, alreadyTerminal: 'declined' };
 	if (row.status === 'expired') return { ok: false, alreadyTerminal: null };
 	if (row.status === 'draft') return { ok: false, alreadyTerminal: null };
+	if (row.status === 'changes_requested') return { ok: false, alreadyTerminal: null };
 	if (row.expires_at && row.expires_at.getTime() < Date.now()) {
 		return { ok: false, alreadyTerminal: null };
 	}

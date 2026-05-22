@@ -3,11 +3,13 @@ import { eq, sql } from 'drizzle-orm';
 import type Stripe from 'stripe';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { organizations, outboxEvents, payments } from '$lib/server/db/schema';
+import { organizations, outboxEvents, payments, quotes } from '$lib/server/db/schema';
 import { getOrgStripeClient } from '$lib/server/invoices/stripe';
 import { recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/events';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
+import { quoteDepositPaidEvent } from '$lib/server/quotes/events';
+import { formatQuoteNumber } from '$lib/server/quotes/format';
 
 export const POST: RequestHandler = async (event) => {
 	const orgId = event.url.searchParams.get('org_id');
@@ -44,12 +46,29 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (evt.type === 'checkout.session.completed' || evt.type === 'payment_intent.succeeded') {
+		const kind = extractMetadataKind(evt);
+		if (kind === 'quote_deposit') {
+			const handled = await handleQuoteDepositPayment(evt, orgId);
+			return json({ received: true, handled });
+		}
 		const handled = await handlePaymentEvent(evt, orgId);
 		return json({ received: true, handled });
 	}
 
 	return json({ received: true, handled: false });
 };
+
+function extractMetadataKind(evt: Stripe.Event): string | undefined {
+	if (evt.type === 'checkout.session.completed') {
+		const s = evt.data.object as Stripe.Checkout.Session;
+		return s.metadata?.kind;
+	}
+	if (evt.type === 'payment_intent.succeeded') {
+		const pi = evt.data.object as Stripe.PaymentIntent;
+		return pi.metadata?.kind;
+	}
+	return undefined;
+}
 
 async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boolean> {
 	let invoiceId: string | undefined;
@@ -141,6 +160,158 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 					})
 				)
 				.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+		}
+
+		return true;
+	});
+}
+
+async function handleQuoteDepositPayment(evt: Stripe.Event, orgId: string): Promise<boolean> {
+	let quoteId: string | undefined;
+	let paymentIntentId: string | undefined;
+	let amountReceivedCents: number | undefined;
+
+	if (evt.type === 'checkout.session.completed') {
+		const session = evt.data.object as Stripe.Checkout.Session;
+		quoteId = session.metadata?.quote_id;
+		paymentIntentId =
+			typeof session.payment_intent === 'string'
+				? session.payment_intent
+				: session.payment_intent?.id;
+		amountReceivedCents = session.amount_total ?? undefined;
+	} else if (evt.type === 'payment_intent.succeeded') {
+		const pi = evt.data.object as Stripe.PaymentIntent;
+		quoteId = pi.metadata?.quote_id;
+		paymentIntentId = pi.id;
+		amountReceivedCents = pi.amount_received;
+	}
+
+	if (!quoteId || !paymentIntentId || amountReceivedCents === undefined) return false;
+
+	return await db.transaction(async (tx) => {
+		const [quote] = await tx.execute<{
+			id: string;
+			contact_id: string;
+			status: string;
+			quote_number: number;
+			deposit_required: boolean;
+			deposit_amount: string | null;
+			deposit_paid_amount: number;
+			deposit_stripe_payment_intent_id: string | null;
+			deposit_applied_invoice_id: string | null;
+		}>(sql`
+			SELECT id, contact_id, status, quote_number, deposit_required, deposit_amount,
+			       deposit_paid_amount, deposit_stripe_payment_intent_id, deposit_applied_invoice_id
+			FROM quotes
+			WHERE id = ${quoteId} AND org_id = ${orgId} AND deleted_at IS NULL
+			FOR UPDATE
+		`);
+		if (!quote) return false;
+
+		// Idempotency: same PI already applied to this quote → no-op.
+		if (quote.deposit_stripe_payment_intent_id === paymentIntentId) return false;
+		// Defensive: another deposit was already recorded for this quote.
+		if (quote.deposit_paid_amount > 0) return false;
+		if (!quote.deposit_required || quote.deposit_amount == null) return false;
+
+		// V1: reject partial captures. Only the full requested deposit counts.
+		const requestedCents = Math.round(Number(quote.deposit_amount) * 100);
+		if (amountReceivedCents !== requestedCents) return false;
+
+		const now = new Date();
+		await tx
+			.update(quotes)
+			.set({
+				deposit_paid_amount: amountReceivedCents,
+				deposit_paid_at: now,
+				deposit_stripe_payment_intent_id: paymentIntentId,
+				updated_at: now
+			})
+			.where(eq(quotes.id, quote.id));
+
+		const amountStr = (amountReceivedCents / 100).toFixed(2);
+		const quoteNumberDisplay = formatQuoteNumber(quote.quote_number);
+
+		await tx
+			.insert(outboxEvents)
+			.values(
+				quoteDepositPaidEvent({
+					orgId,
+					quoteId: quote.id,
+					contactId: quote.contact_id,
+					amountFormatted: formatCurrencyUsd(amountStr),
+					quoteNumberDisplay,
+					stripePaymentIntentId: paymentIntentId
+				})
+			)
+			.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+
+		// If an invoice was already created from this quote, auto-credit it now.
+		// The payments.stripe_payment_intent_id partial unique index guards against
+		// double-crediting on webhook retry.
+		if (quote.deposit_applied_invoice_id) {
+			const [invoice] = await tx.execute<{
+				id: string;
+				invoice_number: number;
+				status: string;
+				deleted_at: Date | null;
+			}>(sql`
+				SELECT id, invoice_number, status, deleted_at FROM invoices
+				WHERE id = ${quote.deposit_applied_invoice_id} AND org_id = ${orgId}
+				FOR UPDATE
+			`);
+			if (invoice && !invoice.deleted_at && invoice.status !== 'cancelled') {
+				const [dup] = await tx
+					.select({ id: payments.id })
+					.from(payments)
+					.where(eq(payments.stripe_payment_intent_id, paymentIntentId))
+					.limit(1);
+				if (!dup) {
+					const [payment] = await tx
+						.insert(payments)
+						.values({
+							org_id: orgId,
+							invoice_id: invoice.id,
+							amount: amountStr,
+							payment_method: 'stripe',
+							stripe_payment_intent_id: paymentIntentId,
+							notes: `Deposit applied from Quote ${quoteNumberDisplay}`,
+							recorded_by: null
+						})
+						.returning({ id: payments.id });
+
+					await recalcInvoiceTotals(tx, invoice.id);
+
+					const [after] = await tx.execute<{ status: string; total: string }>(sql`
+						SELECT status, total FROM invoices WHERE id = ${invoice.id}
+					`);
+
+					await tx.insert(outboxEvents).values(
+						paymentRecordedEvent({
+							orgId,
+							invoiceId: invoice.id,
+							paymentId: payment.id,
+							amountFormatted: formatCurrencyUsd(amountStr),
+							invoiceNumberDisplay: formatInvoiceNumber(invoice.invoice_number)
+						})
+					);
+
+					if (after.status === 'paid') {
+						await tx
+							.insert(outboxEvents)
+							.values(
+								invoicePaidEvent({
+									orgId,
+									invoiceId: invoice.id,
+									paymentId: payment.id,
+									totalFormatted: formatCurrencyUsd(after.total),
+									invoiceNumberDisplay: formatInvoiceNumber(invoice.invoice_number)
+								})
+							)
+							.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+					}
+				}
+			}
 		}
 
 		return true;

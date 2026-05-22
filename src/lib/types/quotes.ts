@@ -4,7 +4,14 @@ export type QuoteStatus =
 	| 'viewed'
 	| 'accepted'
 	| 'declined'
-	| 'expired';
+	| 'expired'
+	| 'changes_requested';
+
+export type QuoteChangeRequestSummary = {
+	id: string;
+	message: string;
+	requested_at: string;
+};
 
 export type QuotesGroup = 'all' | 'active' | 'closed';
 export type QuotesStatusChip = 'all' | QuoteStatus;
@@ -59,6 +66,8 @@ export type QuoteDetail = {
 	total: string;
 	deposit_required: boolean;
 	deposit_amount: string | null;
+	deposit_paid_amount: number;
+	deposit_paid_at: string | null;
 	notes: string | null;
 	internal_notes: string | null;
 	expires_at: string | null;
@@ -75,6 +84,7 @@ export type QuoteDetail = {
 	opportunity_id: string | null;
 	view_count: number;
 	line_items: QuoteLineItemRow[];
+	active_change_request: QuoteChangeRequestSummary | null;
 };
 
 export type QuoteTemplateListItem = {
@@ -108,6 +118,9 @@ export type PublicQuoteView = {
 	total: string;
 	deposit_required: boolean;
 	deposit_amount: string | null;
+	deposit_paid_amount: number;
+	deposit_paid_at: string | null;
+	deposit_payment_available: boolean;
 	notes: string | null;
 	expires_at: string | null;
 	status: QuoteStatus;

@@ -103,18 +103,18 @@
 <div class="px-1">
 	<div
 		class={cn(
-			'rounded-xl border bg-card shadow-sm transition-colors',
+			'overflow-hidden rounded-xl border bg-card shadow-card transition-colors',
 			isInbound
-				? 'border-l-4 border-l-blue-500/60 border-border'
-				: 'border-l-4 border-l-primary/70 border-border',
+				? 'border-l-4 border-l-blue-500/60 border-border/60'
+				: 'border-l-4 border-l-primary/70 border-border/60',
 			isPending && 'opacity-70',
 			isDestructive && !isTerminalFailure && 'border-destructive/40 border-l-destructive/60',
 			isTerminalFailure && 'border-destructive/60 border-l-destructive bg-destructive/[0.03]'
 		)}
 	>
-		<div class="flex items-start gap-3 border-b border-border/60 px-4 py-2.5">
+		<div class="flex items-start gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
 			<div
-				class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/40 text-muted-foreground"
+				class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60"
 			>
 				<Mail class="h-3.5 w-3.5" />
 			</div>
@@ -128,7 +128,7 @@
 						</span>
 						{#if isAutomated}
 							<span
-								class="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
+								class="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
 							>
 								<Sparkles class="h-2.5 w-2.5" />
 								Automated
@@ -147,7 +147,7 @@
 				{/if}
 			</div>
 		</div>
-		<div class="px-4 py-3">
+		<div class="px-4 py-3.5">
 			<p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
 				{m.body}
 			</p>
@@ -166,7 +166,7 @@
 								type="button"
 								onclick={onRetry}
 								disabled={retrying}
-								class="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-1.5 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60 min-h-[28px]"
+								class="inline-flex min-h-[28px] items-center gap-1 rounded-md border border-destructive/40 px-1.5 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
 							>
 								{#if retrying}
 									<Loader2 class="h-3 w-3 animate-spin" />

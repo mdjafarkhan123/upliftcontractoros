@@ -8,15 +8,25 @@
 
 ## Surface Hierarchy
 
-Three layers. Every element must sit on one of these:
+Four layers. Every element must sit on exactly one of these:
 
 ```
-Layer 0 — Page (bg-background)        ← deepest, darkest
-Layer 1 — Card / Panel (bg-card)      ← one step lighter, bordered
-Layer 2 — Popover / Modal (bg-popover + backdrop-blur)  ← floats above
+LIGHT MODE:
+  Layer 0 — Sidebar (bg-sidebar = gray-50)           ← navigation rail
+  Layer 1 — Page / Content (bg-background = white)   ← main content area
+  Layer 2 — Card (bg-card = white + border + shadow) ← floats on the page
+  Layer 3 — Popover / Modal (bg-popover + shadow-modal) ← highest elevation
+
+DARK MODE:
+  Layer 0 — Page (bg-background = zinc-950)          ← deepest
+  Layer 1 — Sidebar (bg-sidebar = slightly lighter)  ← nav rail
+  Layer 2 — Card (bg-card = zinc-900 + border)       ← surfaces
+  Layer 3 — Popover / Modal                           ← highest elevation
 ```
 
-Never put a card inside a card of the same background. If nesting is needed, use `bg-muted` for the inner.
+Rule: Never put a card inside another card of the same bg.
+If nesting is needed, use bg-muted for the inner surface.
+The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 
 ---
 
@@ -25,15 +35,17 @@ Never put a card inside a card of the same background. If nesting is needed, use
 ### Standard List Card (contacts, jobs, invoices)
 
 ```svelte
+<!-- Light-mode first. Clean white card with very soft border. -->
 <div class="
   group
-  flex items-center gap-4
-  rounded-lg border border-border/50 bg-card px-4 py-3
+  flex items-center gap-3
+  rounded-lg border border-border/60 bg-card px-4 py-3
+  shadow-card
   cursor-pointer
   transition-all duration-150 ease-out
-  hover:border-border hover:bg-accent/30 hover:shadow-sm
+  hover:border-border hover:bg-muted/40 hover:shadow-dropdown
 ">
-  <!-- Avatar -->
+  <!-- Avatar with initials -->
   <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
     JS
   </div>
@@ -45,9 +57,9 @@ Never put a card inside a card of the same background. If nesting is needed, use
   </div>
 
   <!-- Right side: status + chevron -->
-  <div class="flex shrink-0 items-center gap-3">
-    <Badge class="bg-green-500/10 text-green-400 border-green-500/20">Active</Badge>
-    <ChevronRight class="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+  <div class="flex shrink-0 items-center gap-2">
+    <StatusBadge status="active" />
+    <ChevronRight class="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
   </div>
 </div>
 ```
@@ -55,38 +67,47 @@ Never put a card inside a card of the same background. If nesting is needed, use
 ### Stat Card (dashboard KPIs)
 
 ```svelte
+<!-- Clean minimal KPI card — icon badge top-right, number, trend chip below -->
+<!-- No gradient line. No hover lift. Clean white surface. -->
 <Card.Root class="
-  relative overflow-hidden
-  border-border/50
-  transition-all duration-200 ease-out
-  hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 hover:border-border
-  cursor-default
+  border border-border/60 bg-card shadow-card
+  transition-shadow duration-200 hover:shadow-dropdown
 ">
-  <!-- Subtle gradient accent top edge -->
-  <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-
   <Card.Content class="p-5">
-    <div class="flex items-start justify-between">
-      <div>
-        <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Revenue
+    <div class="flex items-start justify-between gap-4">
+
+      <!-- Left: label + number + trend -->
+      <div class="min-w-0">
+        <p class="text-xs font-medium text-muted-foreground">
+          Revenue this month
         </p>
-        <p class="mt-2 text-3xl font-bold tracking-tight text-foreground">
+        <p class="mt-2 text-2xl font-bold tracking-tight text-foreground">
           $24,500
         </p>
-        <p class="mt-1 flex items-center gap-1 text-xs text-green-400">
-          <TrendingUp class="h-3 w-3" />
-          +12.5% from last month
-        </p>
+        <!-- Trend chip -->
+        <div class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 dark:bg-green-500/10">
+          <TrendingUp class="h-3 w-3 text-green-600 dark:text-green-400" />
+          <span class="text-xs font-medium text-green-700 dark:text-green-400">+12.5%</span>
+          <span class="text-xs text-muted-foreground">from last month</span>
+        </div>
       </div>
-      <!-- Icon container -->
-      <div class="rounded-lg bg-primary/10 p-2.5">
+
+      <!-- Right: icon badge -->
+      <div class="rounded-lg bg-primary/10 p-2.5 shrink-0">
         <DollarSign class="h-5 w-5 text-primary" />
       </div>
+
     </div>
   </Card.Content>
 </Card.Root>
 ```
+
+**Icon badge color variants for different KPI cards**:
+- Revenue / financial → `bg-primary/10` with `text-primary` (indigo)
+- Active projects → `bg-blue-50 dark:bg-blue-500/10` with `text-blue-600 dark:text-blue-400`
+- Completed tasks → `bg-green-50 dark:bg-green-500/10` with `text-green-600 dark:text-green-400`
+- Overdue / alerts → `bg-red-50 dark:bg-red-500/10` with `text-red-600 dark:text-red-400`
+- Pending / upcoming → `bg-amber-50 dark:bg-amber-500/10` with `text-amber-600 dark:text-amber-400`
 
 ### Detail Card (contact detail, job detail)
 
@@ -214,16 +235,16 @@ Always use these exact class combinations. Never use shadcn's default Badge vari
   let { status } = $props<{ status: Status }>();
 
   const statusConfig: Record<Status, { label: string; classes: string }> = {
-    active:   { label: 'Active',   classes: 'bg-green-500/10 text-green-400 border-green-500/20' },
-    lead:     { label: 'Lead',     classes: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
-    inactive: { label: 'Inactive', classes: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
-    pending:  { label: 'Pending',  classes: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-    overdue:  { label: 'Overdue',  classes: 'bg-red-500/10 text-red-400 border-red-500/20' },
-    draft:    { label: 'Draft',    classes: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
-    paid:     { label: 'Paid',     classes: 'bg-green-500/10 text-green-400 border-green-500/20' },
-    sent:     { label: 'Sent',     classes: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-    accepted: { label: 'Accepted', classes: 'bg-green-500/10 text-green-400 border-green-500/20' },
-    declined: { label: 'Declined', classes: 'bg-red-500/10 text-red-400 border-red-500/20' },
+    active:   { label: 'Active',   classes: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' },
+    lead:     { label: 'Lead',     classes: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20' },
+    inactive: { label: 'Inactive', classes: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20' },
+    pending:  { label: 'Pending',  classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/20' },
+    overdue:  { label: 'Overdue',  classes: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' },
+    draft:    { label: 'Draft',    classes: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20' },
+    paid:     { label: 'Paid',     classes: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' },
+    sent:     { label: 'Sent',     classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' },
+    accepted: { label: 'Accepted', classes: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' },
+    declined: { label: 'Declined', classes: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' },
   };
 
   const config = statusConfig[status] ?? { label: status, classes: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
@@ -297,6 +318,38 @@ Always use these exact class combinations. Never use shadcn's default Badge vari
 
 ---
 
+## Sidebar Search Input
+
+A search input embedded in the sidebar, above the nav groups.
+Different from the command palette — this filters the current section, not global search.
+
+```svelte
+<!-- Sidebar search — sits between logo and nav groups -->
+<div class="px-3 py-2.5 border-b border-border/60">
+  <div class="relative">
+    <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+    <input
+      type="text"
+      placeholder="Search..."
+      bind:value={sidebarSearch}
+      class="
+        w-full h-8 rounded-md
+        bg-background border border-border/60
+        pl-8 pr-3 text-sm
+        text-foreground placeholder:text-muted-foreground/50
+        transition-colors duration-150
+        focus:outline-none focus:ring-1 focus:ring-ring focus:border-input
+      "
+    />
+  </div>
+</div>
+```
+
+**Note**: On desktop sidebar, this is a compact `h-8` input with `bg-background` (white) so it
+lifts slightly off the `bg-sidebar` (gray-50) surface — creating visual depth without a card.
+
+---
+
 ## Empty State — Designed
 
 ```svelte
@@ -326,13 +379,13 @@ Always use these exact class combinations. Never use shadcn's default Badge vari
 ## Page Header Pattern
 
 ```svelte
-<!-- Sticky header with blur (inside PageWrapper) -->
+<!-- Sticky page header — transparent frosted glass over scrolling content -->
 <header class="
   sticky top-0 z-40
   flex items-center justify-between
-  h-[var(--header-height)] px-4
-  bg-background/80 backdrop-blur-xl
-  border-b border-border/50
+  h-[var(--header-height)] px-6
+  bg-background/90 backdrop-blur-md
+  border-b border-border/60
 ">
   <div>
     <h1 class="text-lg font-semibold tracking-tight text-foreground">{title}</h1>

@@ -20,9 +20,16 @@
 	<div class="flex items-start justify-between gap-3">
 		<div class="min-w-0 flex-1">
 			<p class="text-xs font-medium text-muted-foreground">{appointment.contact_name}</p>
-			<h3 class="mt-0.5 truncate text-base font-semibold text-foreground">
-				{appointment.title}
-			</h3>
+			<div class="mt-0.5 flex items-center gap-2">
+				<h3 class="truncate text-base font-semibold text-foreground">
+					{appointment.title}
+				</h3>
+				{#if appointment.booking_source === 'booking_link'}
+					<span class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+						Self-booked
+					</span>
+				{/if}
+			</div>
 		</div>
 		<AppointmentStatusBadge status={appointment.status} />
 	</div>

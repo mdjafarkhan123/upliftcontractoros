@@ -1,0 +1,93 @@
+/* Light Mode (default) */
+:root {
+	--background: #ffffff;
+	--sidebar: #f3f4f6;
+	--card: #ffffff;
+	--card-raised: #fafafa;
+	--popover: #ffffff;
+	--muted: #f3f4f6;
+	--accent: #ebecf0;
+	--secondary: #ebecf0;
+
+	--primary: #1a965a;
+	--primary-foreground: #ffffff;
+
+	--brand-deep: #13442b;
+	--brand-primary: #227c4f;
+	--brand-light: #17f700;
+
+	--foreground: #0f1729;
+	--card-foreground: #0f1729;
+	--popover-foreground: #0f1729;
+	--muted-foreground: #65758b;
+	--accent-foreground: #0f1729;
+	--secondary-foreground: #0f1729;
+
+	--destructive: #ef4343;
+	--destructive-foreground: #ffffff;
+
+	--border: #e5e7eb;
+	--input: #e5e7eb;
+	--ring: #4346ef;
+
+	--primary-deep: #1e6c45;
+	--primary-edge: #185838;
+	--destructive-deep: #c11f1f;
+	--destructive-edge: #a71b1b;
+	--surface-raised: #1d2734;
+	--surface-raised-hover: #232e3e;
+	--surface-raised-border: #283548;
+	--surface-raised-border-hover: #33445b;
+
+	--status-active: #21c45d;
+	--status-pending: #f59f0a;
+	--status-inactive: #94a3b8;
+	--status-overdue: #ef4343;
+	--status-lead: #0da2e7;
+	--status-draft: #94a3b8;
+}
+
+/* Dark Mode Override */
+.dark {
+	--background: #030711;
+	--sidebar: #080c16;
+	--card: #0b111e;
+	--card-raised: #0e1525;
+	--popover: #0b111e;
+	--muted: #161d27;
+	--accent: #1a222e;
+	--secondary: #1a222e;
+
+	--primary: #6467f2;
+	--primary-foreground: #ffffff;
+
+	--foreground: #f1f5f9;
+	--card-foreground: #f1f5f9;
+	--popover-foreground: #f1f5f9;
+	--muted-foreground: #7588a3;
+	--accent-foreground: #f1f5f9;
+	--secondary-foreground: #f1f5f9;
+
+	--destructive: #dc2828;
+	--destructive-foreground: #ffffff;
+
+	--border: #1f2937;
+	--input: #1f2937;
+	--ring: #6467f2;
+
+	--status-active: #21c45d;
+	--status-pending: #f59f0a;
+	--status-inactive: #94a3b8;
+	--status-overdue: #ef4343;
+	--status-lead: #0da2e7;
+	--status-draft: #94a3b8;
+
+	--primary-deep: #1e6c45;
+	--primary-edge: #185838;
+	--destructive-deep: #c11f1f;
+	--destructive-edge: #a71b1b;
+	--surface-raised: #1d2734;
+	--surface-raised-hover: #232e3e;
+	--surface-raised-border: #283548;
+	--surface-raised-border-hover: #33445b;
+}

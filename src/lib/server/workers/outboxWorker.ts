@@ -1,10 +1,29 @@
 import postgres from 'postgres';
 import { sql, and, eq, lte, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { outboxEvents, type OutboxEvent } from '$lib/server/db/schema';
+import { outboxEvents, organizations, type OutboxEvent } from '$lib/server/db/schema';
 const env = process.env;
 import { automationQueue, notificationQueue, emailQueue, smsQueue, addJob } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
+import { featureForWorkerEvent } from '$lib/permissions/featureMap';
+import type { FeatureFlagKey } from '$lib/types';
+
+const FEATURE_CACHE_TTL_MS = 15_000;
+const featureCache = new Map<string, { value: boolean; expiresAt: number }>();
+
+async function isFeatureEnabled(orgId: string, feature: FeatureFlagKey): Promise<boolean> {
+	const cacheKey = `${orgId}:${feature}`;
+	const cached = featureCache.get(cacheKey);
+	const now = Date.now();
+	if (cached && cached.expiresAt > now) return cached.value;
+	const [row] = await db
+		.select()
+		.from(organizations)
+		.where(eq(organizations.id, orgId));
+	const value = Boolean(row?.[feature]);
+	featureCache.set(cacheKey, { value, expiresAt: now + FEATURE_CACHE_TTL_MS });
+	return value;
+}
 
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 30_000;
@@ -24,6 +43,8 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			];
 		case 'quote.sent':
 			return [{ queue: 'automation', jobName: 'quote_followup' }];
+		case 'invoice.sent':
+			return [{ queue: 'automation', jobName: 'invoice_dispatch' }];
 		case 'job.completed':
 			return [{ queue: 'automation', jobName: 'review_request' }];
 		case 'invoice.overdue':
@@ -37,12 +58,18 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'appointment.cancelled':
 		case 'appointment.no_show':
 			return [{ queue: 'automation', jobName: 'appointment_cancel_reminders' }];
+		case 'payment.recorded':
+			return [{ queue: 'notification', jobName: 'payment.recorded' }];
+		case 'invoice.viewed':
+			return [{ queue: 'notification', jobName: 'invoice.viewed' }];
 		case 'opportunity.won':
 		case 'job.created':
 		case 'invoice.paid':
 		case 'quote.viewed':
 		case 'quote.accepted':
 		case 'quote.declined':
+		case 'quote.changes_requested':
+		case 'quote.deposit_paid':
 		case 'message.received':
 		case 'message.delivery_failed':
 		case 'review.received':
@@ -86,6 +113,18 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 	if (event.event_type === 'media.deleted') {
 		await handleMediaDeleted(event);
 		return { status: 'routed' };
+	}
+	if (event.org_id) {
+		const requiredFeature = featureForWorkerEvent(event.event_type);
+		if (requiredFeature && !(await isFeatureEnabled(event.org_id, requiredFeature))) {
+			console.warn(
+				`[outbox] dropped event_type=${event.event_type} id=${event.id} org=${event.org_id} reason=feature_disabled feature=${requiredFeature}`
+			);
+			return {
+				status: 'unrouted',
+				reason: `feature_disabled:${requiredFeature}`
+			};
+		}
 	}
 	const targets = routeEvent(event);
 	if (targets.length === 0) {

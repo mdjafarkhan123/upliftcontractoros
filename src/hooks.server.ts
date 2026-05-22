@@ -4,12 +4,26 @@ import { createServerClient } from '$lib/server/auth/supabase';
 import { getJafarSession } from '$lib/server/auth/jafarSession';
 import { loadAuthContext, type AuthContext } from '$lib/server/auth/loadAuthContext';
 import {
+	checkFeatureForPath,
+	featureDisabledResponse
+} from '$lib/server/auth/enforceFeatureForRequest';
+import {
 	applyCorsHeaders,
 	buildCorsHeaders,
 	resolveAllowedOrigin
 } from '$lib/server/webchat/cors';
 
-const PUBLIC_PREFIXES = ['/auth', '/jafar', '/q/', '/api/admin', '/api/webhooks', '/api/jafar', '/api/webchat'];
+const PUBLIC_PREFIXES = [
+	'/auth',
+	'/jafar',
+	'/q/',
+	'/book',
+	'/api/admin',
+	'/api/webhooks',
+	'/api/jafar',
+	'/api/webchat',
+	'/api/public/booking'
+];
 const PUBLIC_EXACT = new Set<string>(['/jafar']);
 
 // Routes that remain accessible to authenticated users while their org is suspended.
@@ -49,7 +63,6 @@ function logSuspendedBlock(
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
-	console.log('[hooks]', event.request.method, pathname);
 
 	// 0. CORS for /api/webchat/* — widget is embedded on third-party origins.
 	// Source of truth is each widget's domain_allowlist (via validateOrigin).
@@ -58,7 +71,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (pathname.startsWith('/api/webchat')) {
 		const origin = event.request.headers.get('origin');
 		const allowedOrigin = await resolveAllowedOrigin(origin);
-		console.log('[webchat cors]', { method: event.request.method, pathname, origin, allowedOrigin });
 
 		if (event.request.method === 'OPTIONS') {
 			return new Response(null, { status: 204, headers: buildCorsHeaders(allowedOrigin) });
@@ -141,6 +153,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 						}),
 						{ status: 403, headers: { 'content-type': 'application/json' } }
 					);
+				}
+				const featureCheck = checkFeatureForPath(pathname, auth);
+				if (!featureCheck.ok) {
+					console.warn(
+						JSON.stringify({
+							request_id: crypto.randomUUID(),
+							org_id: auth.orgId,
+							member_id: auth.member.id,
+							route: pathname,
+							reason: 'feature_disabled',
+							feature: featureCheck.feature
+						})
+					);
+					return featureDisabledResponse(featureCheck.feature);
 				}
 			}
 		}

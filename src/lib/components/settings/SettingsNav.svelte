@@ -1,15 +1,25 @@
 <script lang="ts">
-	import { Building2, Bot, CreditCard, UserCircle, ChevronRight, Lock } from '@lucide/svelte';
+	import {
+		Building2,
+		Bot,
+		CreditCard,
+		UserCircle,
+		CalendarClock,
+		ChevronRight,
+		Lock
+	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
 	let {
 		role,
 		featureAutomation,
-		featureStripe
+		featureStripe,
+		featureOnlineBooking
 	}: {
 		role: 'admin' | 'manager' | 'member';
 		featureAutomation: boolean;
 		featureStripe: boolean;
+		featureOnlineBooking: boolean;
 	} = $props();
 
 	type Item = {
@@ -43,8 +53,8 @@
 				role !== 'admin'
 					? 'Admin only'
 					: !featureAutomation
-					? 'Not enabled for your plan'
-					: undefined
+						? 'Not enabled for your plan'
+						: undefined
 		},
 		{
 			href: '/settings/stripe',
@@ -54,11 +64,21 @@
 			adminOnly: true,
 			locked: role !== 'admin' || !featureStripe,
 			lockedReason:
+				role !== 'admin' ? 'Admin only' : !featureStripe ? 'Not enabled for your plan' : undefined
+		},
+		{
+			href: '/settings/booking',
+			label: 'Booking Availability',
+			description: 'Customer self-booking links and weekly hours',
+			icon: CalendarClock,
+			adminOnly: true,
+			locked: role !== 'admin' || !featureOnlineBooking,
+			lockedReason:
 				role !== 'admin'
 					? 'Admin only'
-					: !featureStripe
-					? 'Not enabled for your plan'
-					: undefined
+					: !featureOnlineBooking
+						? 'Not enabled for your plan'
+						: undefined
 		},
 		{
 			href: '/settings/account',
@@ -75,10 +95,12 @@
 	{#each items as item (item.href)}
 		{#if item.locked}
 			<div
-				class="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4 opacity-70"
+				class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 p-4 opacity-80"
 				aria-disabled="true"
 			>
-				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+				<div
+					class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+				>
 					<item.icon class="h-5 w-5" />
 				</div>
 				<div class="flex-1 min-w-0">
@@ -92,7 +114,7 @@
 		{:else}
 			<a
 				href={item.href}
-				class="flex min-h-[64px] items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="group flex min-h-[64px] items-center gap-3 rounded-lg border border-border/60 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-border hover:bg-muted/40 hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			>
 				<div
 					class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
@@ -103,7 +125,9 @@
 					<h3 class="text-sm font-semibold text-foreground">{item.label}</h3>
 					<p class="truncate text-xs text-muted-foreground">{item.description}</p>
 				</div>
-				<ChevronRight class="h-4 w-4 text-muted-foreground" />
+				<ChevronRight
+					class="h-4 w-4 text-muted-foreground/60 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted-foreground"
+				/>
 			</a>
 		{/if}
 	{/each}

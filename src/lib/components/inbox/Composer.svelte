@@ -106,15 +106,15 @@
 		e.preventDefault();
 		void submit();
 	}}
-	class="space-y-2"
+	class="space-y-2.5"
 >
 	<div class="flex flex-wrap items-center gap-2">
 		<label
 			class={cn(
-				'inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors',
+				'inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
 				isInternalNote
-					? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-					: 'border-border bg-card text-muted-foreground hover:bg-accent/40'
+					? 'border-amber-500/40 bg-amber-500/10 text-amber-700 shadow-sm dark:text-amber-400'
+					: 'border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
 			)}
 		>
 			<input
@@ -148,13 +148,13 @@
 			oninput={(e) => (emailSubjectInput = (e.currentTarget as HTMLInputElement).value)}
 			placeholder={subjectRequired ? 'Subject (required)' : 'Subject'}
 			disabled={sending || !canSend || channelBlocked !== null}
-			class="h-10 text-sm"
+			class="h-10 rounded-lg border-border/60 bg-background text-sm shadow-none focus-visible:border-primary/50 focus-visible:ring-primary/20"
 		/>
 	{/if}
 
 	<div
 		class={cn(
-			'flex items-end gap-2 rounded-xl border bg-card p-2 transition-colors focus-within:border-primary/50',
+			'flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-card transition-all duration-150 focus-within:border-primary/50 focus-within:shadow-dropdown',
 			composerBorderClass
 		)}
 	>
@@ -170,15 +170,15 @@
 						: 'Type a message…'}
 			rows={1}
 			disabled={(channelBlocked !== null && !isInternalNote) || sending || !canSend}
-			class="min-h-[44px] resize-none border-0 bg-transparent p-2 text-sm shadow-none focus-visible:ring-0"
+			class="min-h-[48px] resize-none border-0 bg-transparent p-2.5 text-sm shadow-none placeholder:text-muted-foreground/60 focus-visible:ring-0"
 		/>
 		<button
 			type="submit"
 			disabled={submitDisabled}
 			class={cn(
-				'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all',
-				'bg-primary hover:bg-primary/90 active:scale-95',
-				'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:active:scale-100',
+				'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-foreground shadow-sm transition-all',
+				'bg-gradient-to-b from-primary to-[hsl(var(--primary-deep))] hover:shadow-[0_8px_22px_-10px_hsl(var(--primary)/0.9)] active:scale-95',
+				'disabled:cursor-not-allowed disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none disabled:active:scale-100',
 				'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 			)}
 			aria-label="Send message"

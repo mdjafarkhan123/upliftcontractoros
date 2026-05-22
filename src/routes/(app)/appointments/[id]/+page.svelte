@@ -7,7 +7,7 @@
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft, Pencil, MapPin, User, Calendar, Briefcase } from '@lucide/svelte';
+	import { ArrowLeft, Pencil, MapPin, User, Calendar, Briefcase, Globe } from '@lucide/svelte';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
 	import AppointmentForm from '$lib/components/appointments/AppointmentForm.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
@@ -140,9 +140,16 @@
 				<div class="flex items-start justify-between gap-3">
 					<div class="min-w-0">
 						<p class="text-xs font-medium text-muted-foreground">{appointment.contact_name}</p>
-						<h1 class="mt-0.5 text-xl font-semibold leading-tight text-foreground">
-							{appointment.title}
-						</h1>
+						<div class="mt-0.5 flex items-center gap-2">
+							<h1 class="text-xl font-semibold leading-tight text-foreground">
+								{appointment.title}
+							</h1>
+							{#if appointment.booking_source === 'booking_link'}
+								<span class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+									Self-booked
+								</span>
+							{/if}
+						</div>
 					</div>
 					<AppointmentStatusBadge status={appointment.status} />
 				</div>
@@ -213,6 +220,62 @@
 					</div>
 				{/if}
 			</section>
+
+			{#if appointment.booking_source === 'booking_link'}
+				{@const referrerLabel = (() => {
+					const r = appointment.booking_referrer;
+					if (!r) return null;
+					const map: Record<string, string> = {
+						sms: 'SMS',
+						email: 'Email',
+						webchat: 'Web chat',
+						direct: 'Direct',
+						qr: 'QR code'
+					};
+					return map[r] ?? r.replace(/_/g, ' ');
+				})()}
+				<section class="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4">
+					<div class="mb-3 flex items-center gap-2">
+						<Globe class="h-4 w-4 text-muted-foreground" />
+						<h2 class="text-sm font-semibold text-foreground">Booking Details</h2>
+					</div>
+					<p class="mb-3 text-xs text-muted-foreground">
+						Submitted by the customer through your booking link.
+					</p>
+					<dl class="space-y-2 text-sm">
+						{#if appointment.customer_name}
+							<div>
+								<dt class="text-xs font-medium text-muted-foreground">Submitted name</dt>
+								<dd class="text-foreground">{appointment.customer_name}</dd>
+							</div>
+						{/if}
+						{#if appointment.customer_phone}
+							<div>
+								<dt class="text-xs font-medium text-muted-foreground">Submitted phone</dt>
+								<dd class="text-foreground">{appointment.customer_phone}</dd>
+							</div>
+						{/if}
+						{#if appointment.customer_email}
+							<div>
+								<dt class="text-xs font-medium text-muted-foreground">Submitted email</dt>
+								<dd class="text-foreground">{appointment.customer_email}</dd>
+							</div>
+						{/if}
+						{#if appointment.customer_notes}
+							<div>
+								<dt class="text-xs font-medium text-muted-foreground">Notes</dt>
+								<dd class="whitespace-pre-wrap text-foreground">{appointment.customer_notes}</dd>
+							</div>
+						{/if}
+						{#if referrerLabel}
+							<div>
+								<dt class="text-xs font-medium text-muted-foreground">Source</dt>
+								<dd class="text-foreground">{referrerLabel}</dd>
+							</div>
+						{/if}
+					</dl>
+				</section>
+			{/if}
 
 			{#if canEdit && !isTerminal}
 				<section class="grid grid-cols-1 gap-2 sm:grid-cols-3">

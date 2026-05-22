@@ -136,6 +136,26 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 
+	// --- quote change requests: customer-requested edits, joined to quotes for contact filter ---
+	branches.push({
+		sql: sql`
+			select 'quote_change_requests'::text as source_table,
+				qcr.id::text as row_id,
+				qcr.requested_at as effective_at,
+				jsonb_build_object(
+					'kind', 'requested',
+					'quote_number', q.quote_number,
+					'quote_id', q.id::text,
+					'message', qcr.message
+				) as row_data
+			from quote_change_requests qcr
+			join quotes q on q.id = qcr.quote_id
+			where qcr.org_id = ${orgId}
+				and q.contact_id = ${contactId}
+				and q.deleted_at is null
+		`
+	});
+
 	// --- invoices ---
 	const invoiceFields = sql`
 		'invoice_number', i.invoice_number,

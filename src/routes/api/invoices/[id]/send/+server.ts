@@ -7,6 +7,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canSendInvoice } from '$lib/server/invoices/permissions';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
 import { invoiceSentEvent } from '$lib/server/invoices/events';
+import { generateToken } from '$lib/server/quotes/token';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -25,8 +26,10 @@ export const POST: RequestHandler = async (event) => {
 			invoice_number: number;
 			due_date: string | null;
 			stripe_payment_link_url: string | null;
+			public_token: string | null;
 		}>(sql`
-			SELECT id, status, contact_id, total, amount_due, invoice_number, due_date, stripe_payment_link_url
+			SELECT id, status, contact_id, total, amount_due, invoice_number, due_date,
+			       stripe_payment_link_url, public_token
 			FROM invoices
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
@@ -46,9 +49,17 @@ export const POST: RequestHandler = async (event) => {
 
 		const sentAt = new Date();
 
+		// Use the invoice's stable public token. Lazily generate for legacy rows.
+		let rawToken = existing.public_token;
+		const updates: Record<string, unknown> = { status: 'sent', sent_at: sentAt, updated_at: sentAt };
+		if (!rawToken) {
+			rawToken = generateToken();
+			updates.public_token = rawToken;
+		}
+
 		await tx
 			.update(invoices)
-			.set({ status: 'sent', sent_at: sentAt, updated_at: sentAt })
+			.set(updates)
 			.where(eq(invoices.id, id));
 
 		const [contactRow] = await tx
@@ -66,6 +77,7 @@ export const POST: RequestHandler = async (event) => {
 				totalFormatted: formatCurrencyUsd(existing.total),
 				amountDueFormatted: formatCurrencyUsd(existing.amount_due),
 				invoiceNumberDisplay: formatInvoiceNumber(existing.invoice_number),
+				publicToken: rawToken,
 				paymentLinkUrl: existing.stripe_payment_link_url,
 				dueDate: existing.due_date
 			})

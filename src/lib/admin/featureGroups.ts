@@ -31,6 +31,11 @@ export const FEATURE_FLAG_GROUPS: FeatureFlagGroup[] = [
 				description: 'Calendar and scheduling for jobs and consults.'
 			},
 			{
+				key: 'feature_online_booking',
+				label: 'Online Booking',
+				description: 'Public booking links so customers can self-schedule appointments.'
+			},
+			{
 				key: 'feature_media_uploads',
 				label: 'Media uploads',
 				description: 'Photo and document uploads on jobs and contacts.'

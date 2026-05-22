@@ -33,12 +33,12 @@
 	type="button"
 	{onclick}
 	class={cn(
-		'group flex w-full min-h-[60px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left transition-all duration-150 ease-out hover:border-border/80 hover:bg-accent/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+		'group flex w-full min-h-[60px] items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-3 text-left shadow-card transition-all duration-150 ease-out hover:border-border hover:bg-muted/40 hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 		!member.is_active && 'opacity-60'
 	)}
 >
 	<div
-		class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground"
+		class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary ring-1 ring-primary/15"
 	>
 		{initials}
 	</div>

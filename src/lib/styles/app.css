@@ -2,55 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Geist Font ──────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+/* Geist font is loaded via <link> in src/app.html with preconnect — faster than CSS @import. */
 
 @layer base {
-	/* ─── Dark Mode (default) ─────────────────────────────────────────── */
+	/* ─── Light Mode (default) ────────────────────────────────────────── */
 	:root {
-		/* Backgrounds — layered surface system */
-		--background: 224 71% 4%; /* zinc-950 tinted navy — page bg */
-		--card: 222 47% 8%; /* zinc-900 tinted — card surface */
-		--popover: 222 47% 8%; /* same as card */
-		--muted: 215 28% 12%; /* subtle bg for empty states, disabled */
-		--accent: 215 28% 14%; /* hover / selected bg */
-		--secondary: 215 28% 14%; /* secondary button bg */
+		--background: 0 0% 100%;
+		--sidebar: 220 14% 96%;
+		--card: 0 0% 100%;
+		--card-raised: 0 0% 98%;
+		--popover: 0 0% 100%;
+		--muted: 220 14% 96%;
+		--accent: 220 14% 93%;
+		--secondary: 220 14% 93%;
 
-		/* Brand Primary — Contractor OS green */
-		--primary: 150 57% 31%; /* #227d53 — brand primary */
+		--primary: 151 70% 35%;
 		--primary-foreground: 0 0% 100%;
 
 		/* Brand palette (use sparingly for gradients, accents, glow) */
 		--brand-deep: 150 57% 17%; /* #13452d — deep green */
 		--brand-primary: 150 57% 31%; /* #227d53 — primary green */
-		--brand-light: 147 41% 56%; /* #5fbd92 — light green */
+		--brand-light: 114 100% 48%; /* #17f700 — light green */
 
-		/* Text */
-		--foreground: 210 40% 96%; /* near-white — primary text */
-		--card-foreground: 210 40% 96%;
-		--popover-foreground: 210 40% 96%;
-		--muted-foreground: 215 20% 55%; /* zinc-400 — secondary/helper text */
-		--accent-foreground: 210 40% 96%;
-		--secondary-foreground: 210 40% 96%;
+		--foreground: 222 47% 11%;
+		--card-foreground: 222 47% 11%;
+		--popover-foreground: 222 47% 11%;
+		--muted-foreground: 215 16% 47%;
+		--accent-foreground: 222 47% 11%;
+		--secondary-foreground: 222 47% 11%;
 
-		/* Semantic */
-		--destructive: 0 72% 51%; /* red-600 */
+		--destructive: 0 84% 60%;
 		--destructive-foreground: 0 0% 100%;
 
-		/* Borders & Inputs */
-		--border: 215 28% 17%; /* subtle dark border */
-		--input: 215 28% 17%;
-		--ring: 147 41% 56%; /* #5fbd92 — brand light focus ring */
+		--border: 220 13% 91%;
+		--input: 220 13% 91%;
+		--ring: 239 84% 60%;
 
 		/* Button surfaces & edges — gradient/border shades for raised buttons */
 		--primary-deep: 150 57% 27%; /* gradient end for primary button */
 		--primary-edge: 150 57% 22%; /* 1px border under primary button */
 		--destructive-deep: 0 72% 44%; /* gradient end for destructive button */
 		--destructive-edge: 0 72% 38%; /* 1px border under destructive button */
-		--surface-raised: 215 28% 16%; /* secondary button fill */
-		--surface-raised-hover: 215 28% 19%; /* secondary button hover fill */
-		--surface-raised-border: 215 28% 22%; /* secondary button border */
-		--surface-raised-border-hover: 215 28% 28%; /* secondary button hover border */
+		--surface-raised: 220 14% 96%; /* secondary button fill */
+		--surface-raised-hover: 220 14% 92%; /* secondary button hover fill */
+		--surface-raised-border: 220 13% 86%; /* secondary button border */
+		--surface-raised-border-hover: 220 13% 78%; /* secondary button hover border */
 
 		/* Radius */
 		--radius: 0.5rem;
@@ -61,50 +57,66 @@
 		--header-height: 56px;
 		--content-max-width: 768px;
 
-		/* Status colours (semantic — used by Badge, status dots) */
-		--status-active: 147 41% 56%; /* #5fbd92 — brand light */
-		--status-pending: 45 93% 47%; /* yellow-500 */
-		--status-inactive: 215 20% 45%; /* zinc-500 */
-		--status-overdue: 0 72% 51%; /* red-600 */
-		--status-lead: 199 89% 48%; /* sky-500 */
-		--status-draft: 215 20% 45%; /* zinc-500 */
+		--status-active: 142 71% 45%;
+		--status-pending: 38 92% 50%;
+		--status-inactive: 215 20% 65%;
+		--status-overdue: 0 84% 60%;
+		--status-lead: 199 89% 48%;
+		--status-draft: 215 20% 65%;
+
+		--shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+		--shadow-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+		--shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.08);
 	}
 
-	/* ─── Light Mode Override ─────────────────────────────────────────── */
-	.light {
-		--background: 0 0% 100%;
-		--card: 0 0% 98%;
-		--popover: 0 0% 100%;
-		--muted: 210 40% 96%;
-		--accent: 210 40% 94%;
-		--secondary: 210 40% 94%;
+	/* ─── Dark Mode Override ──────────────────────────────────────────── */
+	.dark {
+		--background: 220 28% 5%;
+		--sidebar: 220 22% 8%;
+		--card: 220 22% 11%;
+		--card-raised: 220 18% 15%;
+		--popover: 220 22% 11%;
+		--muted: 220 16% 15%;
+		--accent: 154 34% 16%;
+		--secondary: 220 16% 15%;
 
-		--primary: 150 57% 31%;
+		--primary: 151 62% 43%;
 		--primary-foreground: 0 0% 100%;
 
-		--foreground: 222 47% 11%;
-		--card-foreground: 222 47% 11%;
-		--popover-foreground: 222 47% 11%;
-		--muted-foreground: 215 16% 47%;
-		--accent-foreground: 222 47% 11%;
-		--secondary-foreground: 222 47% 11%;
+		--foreground: 210 40% 96%;
+		--card-foreground: 210 40% 96%;
+		--popover-foreground: 210 40% 96%;
+		--muted-foreground: 215 18% 67%;
+		--accent-foreground: 210 40% 96%;
+		--secondary-foreground: 210 40% 96%;
 
 		--destructive: 0 72% 51%;
 		--destructive-foreground: 0 0% 100%;
 
-		--border: 214 32% 91%;
-		--input: 214 32% 91%;
-		--ring: 150 57% 31%;
+		--border: 220 14% 22%;
+		--input: 220 14% 22%;
+		--ring: 151 62% 46%;
 
-		/* Button surfaces & edges — light mode */
+		--status-active: 142 71% 45%;
+		--status-pending: 38 92% 50%;
+		--status-inactive: 215 20% 65%;
+		--status-overdue: 0 84% 60%;
+		--status-lead: 199 89% 48%;
+		--status-draft: 215 20% 65%;
+
+		--shadow-card: 0 18px 40px -30px rgb(0 0 0 / 0.85), 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+		--shadow-dropdown: 0 22px 55px -28px rgb(0 0 0 / 0.9), 0 1px 0 0 rgb(255 255 255 / 0.06) inset;
+		--shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+
+		/* Button surfaces & edges — dark mode */
 		--primary-deep: 150 57% 27%;
 		--primary-edge: 150 57% 22%;
 		--destructive-deep: 0 72% 44%;
 		--destructive-edge: 0 72% 38%;
-		--surface-raised: 210 40% 96%;
-		--surface-raised-hover: 210 40% 92%;
-		--surface-raised-border: 214 32% 85%;
-		--surface-raised-border-hover: 214 32% 78%;
+		--surface-raised: 215 28% 16%;
+		--surface-raised-hover: 215 28% 19%;
+		--surface-raised-border: 215 28% 22%;
+		--surface-raised-border-hover: 215 28% 28%;
 	}
 
 	* {
@@ -151,7 +163,7 @@
 	);
 }
 
-html.light .skeleton-shimmer {
+html:not(.dark) .skeleton-shimmer {
 	background: #e3e3e3;
 	background: linear-gradient(
 		90deg,
@@ -176,29 +188,6 @@ html.light .skeleton-shimmer {
 	100% {
 		background-position: -200% 0;
 	}
-}
-
-/* ─── Status dot (used inline next to status text) ───────────────── */
-.status-dot {
-	@apply inline-block w-2 h-2 rounded-full;
-}
-.status-dot-active {
-	background: hsl(var(--status-active));
-}
-.status-dot-pending {
-	background: hsl(var(--status-pending));
-}
-.status-dot-inactive {
-	background: hsl(var(--status-inactive));
-}
-.status-dot-overdue {
-	background: hsl(var(--status-overdue));
-}
-.status-dot-lead {
-	background: hsl(var(--status-lead));
-}
-.status-dot-draft {
-	background: hsl(var(--status-draft));
 }
 
 /* ─── Jet Engine spool-up (JetEngineButton loading state) ────────── */
@@ -249,4 +238,73 @@ html.light .skeleton-shimmer {
 /* ─── Focus visible global override ──────────────────────────────── */
 :focus-visible {
 	@apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+/* ─── Status dot — light-first sizing override ───────────────────── */
+.status-dot {
+	@apply inline-block w-1.5 h-1.5 rounded-full shrink-0;
+}
+.status-dot-active {
+	background: hsl(var(--status-active));
+}
+.status-dot-pending {
+	background: hsl(var(--status-pending));
+}
+.status-dot-inactive {
+	background: hsl(var(--status-inactive));
+}
+.status-dot-overdue {
+	background: hsl(var(--status-overdue));
+}
+.status-dot-lead {
+	background: hsl(var(--status-lead));
+}
+.status-dot-draft {
+	background: hsl(var(--status-draft));
+}
+
+/* ─── Data table ─────────────────────────────────────────────────────── */
+.table-container {
+	@apply w-full overflow-x-auto rounded-lg border border-border/60;
+}
+.data-table {
+	@apply w-full text-sm;
+}
+.data-table thead tr {
+	@apply border-b border-border/60 bg-muted/40;
+}
+.data-table thead th {
+	@apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground;
+}
+.data-table tbody tr {
+	@apply border-b border-border/40 transition-colors duration-150;
+}
+.data-table tbody tr:last-child {
+	@apply border-b-0;
+}
+.data-table tbody tr:hover {
+	@apply bg-muted/40;
+}
+.data-table tbody td {
+	@apply px-4 py-3 text-sm text-foreground;
+}
+
+/* ─── Progress bar ───────────────────────────────────────────────────── */
+.progress-bar-track {
+	@apply h-1.5 w-full overflow-hidden rounded-full bg-muted;
+}
+.progress-bar-fill {
+	@apply h-full rounded-full transition-all duration-300;
+}
+.progress-bar-fill-blue {
+	@apply bg-blue-500;
+}
+.progress-bar-fill-green {
+	@apply bg-green-500;
+}
+.progress-bar-fill-yellow {
+	@apply bg-yellow-500;
+}
+.progress-bar-fill-red {
+	@apply bg-red-500;
 }

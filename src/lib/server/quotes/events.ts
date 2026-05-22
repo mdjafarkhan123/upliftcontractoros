@@ -71,3 +71,56 @@ export function quoteDeclinedEvent(args: {
 		idempotency_key: `quote.declined:${args.quoteId}`
 	};
 }
+
+export function quoteDepositPaidEvent(args: {
+	orgId: string;
+	quoteId: string;
+	contactId: string;
+	amountFormatted: string;
+	quoteNumberDisplay: string;
+	stripePaymentIntentId: string;
+}): NewOutboxEvent {
+	const summary = `Client paid ${args.amountFormatted} deposit for Quote ${args.quoteNumberDisplay}`;
+	return {
+		org_id: args.orgId,
+		event_type: 'quote.deposit_paid',
+		resource_type: 'quote',
+		resource_id: args.quoteId,
+		payload: {
+			quote_id: args.quoteId,
+			contact_id: args.contactId,
+			amount_formatted: args.amountFormatted,
+			quote_number_display: args.quoteNumberDisplay,
+			stripe_payment_intent_id: args.stripePaymentIntentId,
+			summary
+		},
+		// Keyed per quote: the Stripe PI partial unique index on quotes.deposit_stripe_payment_intent_id
+		// already prevents double-collection, so one event per quote is correct.
+		idempotency_key: `quote.deposit_paid:${args.quoteId}`
+	};
+}
+
+export function quoteChangesRequestedEvent(args: {
+	orgId: string;
+	quoteId: string;
+	changeRequestId: string;
+	messagePreview: string;
+	quoteNumberDisplay: string;
+}): NewOutboxEvent {
+	const summary = `Quote ${args.quoteNumberDisplay} — ${args.messagePreview}`;
+	return {
+		org_id: args.orgId,
+		event_type: 'quote.changes_requested',
+		resource_type: 'quote',
+		resource_id: args.quoteId,
+		payload: {
+			quote_id: args.quoteId,
+			change_request_id: args.changeRequestId,
+			message_preview: args.messagePreview,
+			quote_number_display: args.quoteNumberDisplay,
+			summary
+		},
+		// Keyed per change request so future cycles emit a fresh event.
+		idempotency_key: `quote.changes_requested:${args.changeRequestId}`
+	};
+}

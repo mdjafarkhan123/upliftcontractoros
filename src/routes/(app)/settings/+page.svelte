@@ -18,5 +18,6 @@
 		role={m.role}
 		featureAutomation={flags.feature_automation_engine}
 		featureStripe={flags.feature_stripe_payments}
+		featureOnlineBooking={flags.feature_online_booking}
 	/>
 </PageWrapper>

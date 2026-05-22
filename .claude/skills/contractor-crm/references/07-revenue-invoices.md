@@ -1,6 +1,6 @@
 # Domain 7 — Revenue: Invoices & Payments
 
-Tables: `invoices`, `invoice_line_items`, `payments`
+Tables: `invoices`, `invoice_line_items`, `invoice_views`, `payments`
 Enums used: `invoice_status`, `payment_method`
 
 ---
@@ -30,6 +30,8 @@ CREATE TABLE invoices (
   amount_paid     NUMERIC(12,2) NOT NULL DEFAULT 0,   -- DENORMALIZED. Sum of payments.
   amount_due      NUMERIC(12,2) NOT NULL DEFAULT 0,   -- DENORMALIZED. total - amount_paid.
   notes           TEXT,
+  public_token_hash       TEXT,                           -- SHA-256 of public token. Nullable for pre-migration rows.
+  viewed_at               TIMESTAMPTZ,                    -- Set on first qualifying view. NULL until viewed.
   due_date        DATE,
   stripe_payment_link_url TEXT,
   sent_at         TIMESTAMPTZ,
@@ -52,6 +54,19 @@ CREATE INDEX idx_invoices_contact_id ON invoices (contact_id);
 CREATE INDEX idx_invoices_job_id ON invoices (job_id);
 CREATE INDEX idx_invoices_status ON invoices (org_id, status);
 CREATE INDEX idx_invoices_due_date ON invoices (org_id, due_date);
+
+-- Token lookup for the public /pay/:token route. Partial: NULL hashes excluded.
+CREATE UNIQUE INDEX idx_invoices_token_hash
+  ON invoices (public_token_hash)
+  WHERE public_token_hash IS NOT NULL;
+
+-- Quote → Invoice conversion deduplication guard.
+-- One active (non-cancelled, non-deleted) invoice per source quote.
+CREATE UNIQUE INDEX idx_invoices_quote_conversion
+  ON invoices (quote_id)
+  WHERE quote_id    IS NOT NULL
+    AND deleted_at  IS NULL
+    AND status      != 'cancelled';
 ```
 
 **Invoice Status Transition Rules:**
@@ -99,6 +114,62 @@ CREATE INDEX idx_invoice_line_items_org_id ON invoice_line_items (org_id);
 
 ---
 
+## `invoice_views`
+
+Invoice view tracking table. Rows are inserted once and may receive a single update after
+notification dispatch state changes. No soft delete. No `updated_at` (tracking table).
+Only the first qualifying view triggers the `invoice.viewed` event and sets
+`invoices.viewed_at`. All views are logged here regardless.
+Qualifying view logic (bot filtering, self-view exclusion, 60-second throttle) is
+enforced at the API layer, not the schema.
+Privacy: raw IP and User-Agent are never stored — SHA-256 hashes only.
+
+```sql
+CREATE TABLE invoice_views (
+  id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id                UUID        NOT NULL REFERENCES organizations (id),
+  invoice_id            UUID        NOT NULL REFERENCES invoices (id),
+  ip_hash               TEXT,                          -- SHA-256 hash. Raw IP never stored.
+  user_agent_hash       TEXT,                          -- SHA-256 hash. Raw UA never stored.
+  viewed_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notification_sent     BOOLEAN     NOT NULL DEFAULT FALSE,
+  notification_sent_at  TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE INDEX idx_invoice_views_invoice_id
+  ON invoice_views (invoice_id);
+
+CREATE INDEX idx_invoice_views_org_id
+  ON invoice_views (org_id);
+```
+
+**RLS:**
+
+```sql
+ALTER TABLE invoice_views ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoice_views FORCE  ROW LEVEL SECURITY;
+
+CREATE POLICY "invoice_views: members select own org invoice views"
+ON invoice_views
+FOR SELECT
+TO authenticated
+USING (org_id = public.get_my_org_id());
+```
+
+**Notes:**
+
+- `ip_hash` and `user_agent_hash` are SHA-256 hashes. Raw IP and User-Agent are never stored.
+- All inserts flow through service role (API layer). Members can only SELECT own-org rows.
+- `notification_sent` tracks whether the contractor has been notified of this view.
+- Mirrors `quote_views` structure and mechanics.
+
+---
+
 ## `payments`
 
 Payment record against an invoice. **No soft delete. No `deleted_at`.** Payments are
@@ -116,6 +187,8 @@ CREATE TABLE payments (
   notes                       TEXT,
   recorded_by                 UUID REFERENCES org_members (id),  -- Null for Stripe webhook payments.
   paid_at                     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  receipt_sent_at             TIMESTAMPTZ,                    -- When receipt was dispatched. NULL = not sent.
+  receipt_sent_via            TEXT CHECK (receipt_sent_via IN ('email', 'sms', 'both')),  -- Channel used.
   created_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -136,5 +209,6 @@ CREATE INDEX idx_payments_org_id ON payments (org_id);
 
 - No `deleted_at`. No `updated_at`. Payments are financially immutable.
 - `recorded_by` is NULL for Stripe webhook-created payments. Set for manually recorded payments (cash, check, etc.).
+- `receipt_sent_at` and `receipt_sent_via` are audit fields — never business-logic anchors.
 - Partial payment flow: when payment recorded, API recalculates `invoices.amount_paid` and `invoices.amount_due`, then transitions status: `amount_due > 0` → `partially_paid`; `amount_due = 0` → `paid`.
 - `POST /api/invoices/[id]/record-payment` must lock the invoice row with `SELECT ... FOR UPDATE` and recalculate inside the same transaction.

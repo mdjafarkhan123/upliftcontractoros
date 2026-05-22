@@ -62,7 +62,7 @@
 						: window.matchMedia('(prefers-color-scheme: light)').matches
 							? 'light'
 							: 'dark';
-				if (theme === 'light') document.documentElement.classList.add('light');
+				if (theme === 'dark') document.documentElement.classList.add('dark');
 				document.documentElement.style.colorScheme = theme;
 			} catch (e) {}
 		})();

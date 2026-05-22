@@ -18,6 +18,7 @@ import { createLogger } from '$lib/server/log';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 import { recordOutboundMessage, type OutboundChannel } from '$lib/server/conversations';
 import { ensureReplyAlias } from '$lib/server/email/replyAlias';
+import { getCurrentUsage } from '$lib/server/usage/assertAndIncrementUsage';
 
 const log = createLogger('inbox.message.insert');
 
@@ -370,12 +371,26 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const [org] = await db
-		.select({ twilio_phone_number: organizations.twilio_phone_number })
+		.select({
+			twilio_phone_number: organizations.twilio_phone_number,
+			max_monthly_sms: organizations.max_monthly_sms
+		})
 		.from(organizations)
 		.where(eq(organizations.id, auth.orgId))
 		.limit(1);
 	if (!org?.twilio_phone_number) {
 		return json({ error: 'Organization is not configured for SMS.' }, { status: 400 });
+	}
+
+	// Soft pre-flight: surface plan-limit rejections immediately so the UI
+	// doesn't enqueue a doomed send. Authoritative atomic check still runs
+	// in the SMS worker just before Twilio is called.
+	const smsUsed = await getCurrentUsage(db, auth.orgId, 'sms_sent');
+	if (smsUsed >= org.max_monthly_sms) {
+		return json(
+			{ error: `Monthly SMS limit reached (${org.max_monthly_sms}). Upgrade your plan to send more.` },
+			{ status: 403 }
+		);
 	}
 
 	const txStart = Date.now();

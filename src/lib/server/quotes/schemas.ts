@@ -7,27 +7,51 @@ const lineItemBase = z.object({
 	position: z.coerce.number().int().min(0).optional()
 });
 
-export const createQuoteSchema = z.object({
-	contact_id: z.string().uuid('Contact is required'),
-	opportunity_id: z.string().uuid().nullable().optional(),
-	title: z.string().trim().min(1, 'Title is required').max(200),
-	tax_rate: z.coerce.number().min(0).max(1).optional(),
-	deposit_required: z.boolean().optional(),
-	deposit_amount: z.coerce.number().min(0).nullable().optional(),
-	notes: z.string().trim().max(5000).nullable().optional(),
-	internal_notes: z.string().trim().max(5000).nullable().optional(),
-	line_items: z.array(lineItemBase).max(200).optional()
-});
+export const createQuoteSchema = z
+	.object({
+		contact_id: z.string().uuid('Contact is required'),
+		opportunity_id: z.string().uuid().nullable().optional(),
+		title: z.string().trim().min(1, 'Title is required').max(200),
+		tax_rate: z.coerce.number().min(0).max(1).optional(),
+		deposit_required: z.boolean().optional(),
+		deposit_amount: z.coerce.number().min(0).nullable().optional(),
+		notes: z.string().trim().max(5000).nullable().optional(),
+		internal_notes: z.string().trim().max(5000).nullable().optional(),
+		line_items: z.array(lineItemBase).max(200).optional()
+	})
+	.superRefine((val, ctx) => {
+		if (val.deposit_required) {
+			if (val.deposit_amount === null || val.deposit_amount === undefined || val.deposit_amount <= 0) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['deposit_amount'],
+					message: 'Deposit amount is required when deposit is enabled'
+				});
+			}
+		}
+	});
 
-export const updateQuoteSchema = z.object({
-	title: z.string().trim().min(1).max(200).optional(),
-	tax_rate: z.coerce.number().min(0).max(1).optional(),
-	deposit_required: z.boolean().optional(),
-	deposit_amount: z.coerce.number().min(0).nullable().optional(),
-	notes: z.string().trim().max(5000).nullable().optional(),
-	internal_notes: z.string().trim().max(5000).nullable().optional(),
-	line_items: z.array(lineItemBase).max(200).optional()
-});
+export const updateQuoteSchema = z
+	.object({
+		title: z.string().trim().min(1).max(200).optional(),
+		tax_rate: z.coerce.number().min(0).max(1).optional(),
+		deposit_required: z.boolean().optional(),
+		deposit_amount: z.coerce.number().min(0).nullable().optional(),
+		notes: z.string().trim().max(5000).nullable().optional(),
+		internal_notes: z.string().trim().max(5000).nullable().optional(),
+		line_items: z.array(lineItemBase).max(200).optional()
+	})
+	.superRefine((val, ctx) => {
+		if (val.deposit_required === true) {
+			if (val.deposit_amount === null || val.deposit_amount === undefined || val.deposit_amount <= 0) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['deposit_amount'],
+					message: 'Deposit amount is required when deposit is enabled'
+				});
+			}
+		}
+	});
 
 export const createLineItemSchema = lineItemBase;
 export const updateLineItemSchema = lineItemBase.partial();

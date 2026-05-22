@@ -4,6 +4,10 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { media, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
+import {
+	assertAndIncrementUsage,
+	BYTES_PER_GB
+} from '$lib/server/usage/assertAndIncrementUsage';
 
 export const DELETE: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -35,6 +39,16 @@ export const DELETE: RequestHandler = async (event) => {
 			.update(media)
 			.set({ deleted_at: new Date(), updated_at: new Date() })
 			.where(and(eq(media.id, id), isNull(media.deleted_at)));
+
+		// Release the storage quota the file was consuming. Negative increment
+		// never throws on the limit; DB CHECK (value >= 0) guards against
+		// underflow if a counter ever drifted below the on-disk total.
+		await assertAndIncrementUsage(tx, {
+			orgId: auth.orgId,
+			metric: 'storage_bytes',
+			limit: auth.limits.max_storage_gb * BYTES_PER_GB,
+			increment: -row.file_size_bytes
+		});
 
 		// Emit media.deleted with all R2 keys in payload so worker never re-queries DB
 		await tx.insert(outboxEvents).values({

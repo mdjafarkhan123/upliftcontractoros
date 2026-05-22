@@ -1,4 +1,16 @@
-import { pgTable, pgEnum, uuid, text, boolean, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import {
+	pgTable,
+	pgEnum,
+	uuid,
+	text,
+	boolean,
+	integer,
+	bigint,
+	timestamp,
+	date,
+	jsonb,
+	primaryKey
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
@@ -27,7 +39,11 @@ export const organizations = pgTable('organizations', {
 	stripe_publishable_key: text('stripe_publishable_key'),
 	stripe_webhook_secret: text('stripe_webhook_secret'),
 	stripe_account_id: text('stripe_account_id'),
+	stripe_account_name: text('stripe_account_name'),
+	stripe_account_email: text('stripe_account_email'),
+	stripe_livemode: boolean('stripe_livemode'),
 	stripe_connected_at: timestamp('stripe_connected_at', { withTimezone: true }),
+	stripe_last_verified_at: timestamp('stripe_last_verified_at', { withTimezone: true }),
 	logo_url: text('logo_url'),
 	primary_color: text('primary_color'),
 	timezone: text('timezone').notNull().default('America/Chicago'),
@@ -64,6 +80,7 @@ export const organizations = pgTable('organizations', {
 	feature_webhooks: boolean('feature_webhooks').notNull().default(false),
 	feature_client_portal: boolean('feature_client_portal').notNull().default(false),
 	feature_webchat: boolean('feature_webchat').notNull().default(false),
+	feature_online_booking: boolean('feature_online_booking').notNull().default(false),
 
 	// Widget token: generated once, immutable, used to identify the org from the public widget
 	widget_token: uuid('widget_token').notNull().default(sql`gen_random_uuid()`).unique(),
@@ -200,6 +217,10 @@ export const automationSettings = pgTable('automation_settings', {
 		.notNull()
 		.default(24),
 	appointment_reminder_message: text('appointment_reminder_message').notNull(),
+	appointment_reminder_1h_enabled: boolean('appointment_reminder_1h_enabled').notNull().default(true),
+	appointment_reminder_1h_message: text('appointment_reminder_1h_message').notNull(),
+	payment_receipt_enabled: boolean('payment_receipt_enabled').notNull().default(true),
+	payment_receipt_message: text('payment_receipt_message').notNull(),
 	speed_to_lead_enabled: boolean('speed_to_lead_enabled').notNull().default(true),
 	speed_to_lead_message: text('speed_to_lead_message').notNull(),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -208,3 +229,31 @@ export const automationSettings = pgTable('automation_settings', {
 
 export type AutomationSettings = InferSelectModel<typeof automationSettings>;
 export type NewAutomationSettings = InferInsertModel<typeof automationSettings>;
+
+// Per-org usage counters. PK (org_id, period_start_date, metric).
+// period_start_date = '1900-01-01' is the sentinel for lifetime metrics
+// (storage_bytes, automation_workflows). Monthly metrics use
+// date_trunc('month', now())::date; daily metrics use now()::date.
+// Migration (incl. CHECK constraints + RLS) is run directly in Supabase —
+// this Drizzle row exists for typed queries only.
+export const orgUsage = pgTable(
+	'org_usage',
+	{
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id, { onDelete: 'cascade' }),
+		period_start_date: date('period_start_date').notNull().default('1900-01-01'),
+		metric: text('metric').notNull(),
+		value: bigint('value', { mode: 'number' }).notNull().default(0),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		last_incremented_at: timestamp('last_incremented_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.org_id, table.period_start_date, table.metric] })
+	})
+);
+
+export type OrgUsage = InferSelectModel<typeof orgUsage>;
+export type NewOrgUsage = InferInsertModel<typeof orgUsage>;

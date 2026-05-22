@@ -119,6 +119,20 @@
 
 	const optedOut = $derived(contact?.sms_opt_out === true);
 	const isClosed = $derived(conversation?.status === 'closed');
+	const contactInitials = $derived(
+		contact?.full_name
+			.split(/\s+/)
+			.map((p) => p[0]?.toUpperCase() ?? '')
+			.slice(0, 2)
+			.join('') || ''
+	);
+	const memberInitials = $derived(
+		member()
+			.full_name.split(/\s+/)
+			.map((p) => p[0]?.toUpperCase() ?? '')
+			.slice(0, 2)
+			.join('') || ''
+	);
 
 	const availableChannels = $derived<OutboundChannel[]>(conversation?.available_channels ?? []);
 	const suggestedChannel = $derived(conversation?.suggested_channel ?? null);
@@ -204,25 +218,38 @@
 	<title>{contact?.full_name ?? 'Conversation'} — Inbox</title>
 </svelte:head>
 
-<div class="flex h-[100dvh] flex-col bg-background">
+<div
+	class="flex h-[calc(100dvh-72px-var(--bottom-nav-height)-env(safe-area-inset-bottom))] flex-col bg-muted/30 md:h-[calc(100dvh-104px)]"
+>
 	<!-- Header -->
 	<header
-		class="flex shrink-0 items-center gap-2 border-b border-border bg-card/60 px-3 py-2 backdrop-blur"
+		class="flex shrink-0 items-center gap-3 border-b border-border/50 bg-background/80 px-3 py-3 backdrop-blur-xl sm:px-5"
 	>
 		<button
-			class="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent/40"
+			class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			onclick={() => goto('/inbox')}
 			aria-label="Back to inbox"
 		>
 			<ArrowLeft class="h-5 w-5" />
 		</button>
-		<div class="min-w-0 flex-1">
-			<div class="truncate text-sm font-semibold text-foreground">
-				{contact?.full_name ?? 'Loading…'}
+		<div class="flex min-w-0 flex-1 items-center gap-3">
+			<div
+				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-sm font-semibold text-primary ring-1 ring-primary/20"
+			>
+				{#if contactInitials}
+					{contactInitials}
+				{:else}
+					<MessageSquare class="h-4 w-4" />
+				{/if}
 			</div>
-			{#if contact}
-				<div class="truncate text-xs text-muted-foreground">{contact.phone}</div>
-			{/if}
+			<div class="min-w-0 flex-1">
+				<div class="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+					{contact?.full_name ?? 'Loading…'}
+				</div>
+				{#if contact}
+					<div class="truncate text-xs text-muted-foreground">{contact.phone}</div>
+				{/if}
+			</div>
 		</div>
 
 		<div class="hidden lg:flex">
@@ -240,7 +267,7 @@
 		</div>
 
 		<button
-			class="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent/40 lg:hidden"
+			class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
 			onclick={() => (mobileContextOpen = true)}
 			aria-label="View contact details"
 		>
@@ -253,12 +280,16 @@
 		<!-- Thread column -->
 		<div class="flex min-w-0 flex-1 flex-col">
 			{#if showSkeleton}
-				<div class="flex-1 overflow-hidden p-4">
-					<SkeletonLoader lines={8} label="Loading messages" />
+				<div class="flex-1 overflow-hidden p-4 md:p-6">
+					<div class="mx-auto max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-card">
+						<SkeletonLoader lines={8} label="Loading messages" />
+					</div>
 				</div>
 			{:else if showError}
-				<div class="flex-1 p-4">
-					<p class="text-sm text-destructive">{errorMsg}</p>
+				<div class="flex-1 p-4 md:p-6">
+					<div class="mx-auto max-w-3xl rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card">
+						{errorMsg}
+					</div>
 				</div>
 			{:else if messages.length === 0}
 				<div class="flex flex-1 items-center justify-center p-4">
@@ -271,45 +302,54 @@
 			{:else}
 				<div
 					bind:this={scrollEl}
-					class="flex-1 space-y-2 overflow-y-auto px-3 py-4 sm:px-4"
+					class="flex-1 space-y-3 overflow-y-auto px-3 py-5 sm:px-5 md:px-6"
 				>
-					{#if nextCursor}
-						<div class="flex justify-center pb-2">
-							<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
-								{loadingMore ? 'Loading…' : 'Load earlier'}
-							</Button>
-						</div>
-					{/if}
-					{#each messages as m (m.id)}
-						<MessageBubble message={m} canRetry={canSend} />
-					{/each}
+					<div class="mx-auto flex max-w-3xl flex-col gap-3">
+						{#if nextCursor}
+							<div class="flex justify-center pb-1">
+								<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
+									{loadingMore ? 'Loading…' : 'Load earlier'}
+								</Button>
+							</div>
+						{/if}
+						{#each messages as m (m.id)}
+							<MessageBubble
+								message={m}
+								canRetry={canSend}
+								inboundInitials={contactInitials}
+								outboundInitials={memberInitials}
+							/>
+						{/each}
+					</div>
 				</div>
 			{/if}
 
 			<!-- Composer + banners -->
 			<div
-				class="shrink-0 border-t border-border bg-card/60 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur sm:px-4"
+				class="shrink-0 border-t border-border/50 bg-background/85 px-3 pb-3 pt-3 backdrop-blur-xl shadow-[0_-10px_30px_-20px_hsl(0_0%_0%/0.18)] sm:px-5"
 			>
-				{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
-					<div class="mb-2">
-						<OptOutBanner />
-					</div>
-				{/if}
-				<Composer
-					availableChannels={availableChannels}
-					suggestedChannel={suggestedChannel}
-					emailSubjectDefault={emailSubjectDefault}
-					canSend={canSend}
-					smsOptOut={optedOut}
-					isClosed={isClosed}
-					onSend={handleSend}
-				/>
+				<div class="mx-auto max-w-3xl">
+					{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
+						<div class="mb-2">
+							<OptOutBanner />
+						</div>
+					{/if}
+					<Composer
+						availableChannels={availableChannels}
+						suggestedChannel={suggestedChannel}
+						emailSubjectDefault={emailSubjectDefault}
+						canSend={canSend}
+						smsOptOut={optedOut}
+						isClosed={isClosed}
+						onSend={handleSend}
+					/>
+				</div>
 			</div>
 		</div>
 
 		<!-- Desktop context sidebar -->
 		<aside
-			class="hidden w-80 shrink-0 overflow-y-auto border-l border-border bg-background/40 px-4 py-4 lg:block"
+			class="hidden w-80 shrink-0 overflow-y-auto border-l border-border/50 bg-background/60 px-4 py-4 backdrop-blur-sm lg:block"
 		>
 			<ContactContextPanel {contact} {context} />
 		</aside>
@@ -319,10 +359,10 @@
 <!-- Mobile context sheet -->
 <Sheet.Root bind:open={mobileContextOpen}>
 	<Sheet.Content side="right" class="w-[85vw] sm:max-w-md">
-		<div class="flex items-center justify-between pb-3">
-			<h2 class="text-base font-semibold">Details</h2>
+		<div class="flex items-center justify-between border-b border-border/60 pb-3">
+			<h2 class="text-base font-semibold tracking-tight">Details</h2>
 			<button
-				class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40"
+				class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				onclick={() => (mobileContextOpen = false)}
 				aria-label="Close"
 			>

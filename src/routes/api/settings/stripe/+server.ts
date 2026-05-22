@@ -40,6 +40,19 @@ function logEvent(
 	console.log(JSON.stringify({ level, event, ...ctx }));
 }
 
+type StripeStatusResponse = {
+	stripe_restricted_key_masked: string | null;
+	stripe_publishable_key: string | null;
+	stripe_webhook_secret_masked: string | null;
+	stripe_account_id: string | null;
+	stripe_account_name: string | null;
+	stripe_account_email: string | null;
+	stripe_livemode: boolean | null;
+	stripe_connected_at: string | null;
+	stripe_last_verified_at: string | null;
+	is_connected: boolean;
+};
+
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
@@ -51,7 +64,11 @@ export const GET: RequestHandler = async (event) => {
 			stripe_publishable_key: organizations.stripe_publishable_key,
 			stripe_webhook_secret: organizations.stripe_webhook_secret,
 			stripe_account_id: organizations.stripe_account_id,
-			stripe_connected_at: organizations.stripe_connected_at
+			stripe_account_name: organizations.stripe_account_name,
+			stripe_account_email: organizations.stripe_account_email,
+			stripe_livemode: organizations.stripe_livemode,
+			stripe_connected_at: organizations.stripe_connected_at,
+			stripe_last_verified_at: organizations.stripe_last_verified_at
 		})
 		.from(organizations)
 		.where(eq(organizations.id, auth.orgId))
@@ -59,19 +76,21 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!row) error(404, 'Organization not found.');
 
-	return json({
-		data: {
-			stripe_restricted_key_masked: maskSecret(row.stripe_restricted_key),
-			stripe_publishable_key: row.stripe_publishable_key, // pk is public, OK to return
-			stripe_webhook_secret_masked: maskSecret(row.stripe_webhook_secret),
-			stripe_account_id: row.stripe_account_id,
-			stripe_connected_at: row.stripe_connected_at,
-			is_connected:
-				!!row.stripe_restricted_key &&
-				!!row.stripe_publishable_key &&
-				!!row.stripe_webhook_secret
-		}
-	});
+	const body: StripeStatusResponse = {
+		stripe_restricted_key_masked: maskSecret(row.stripe_restricted_key),
+		stripe_publishable_key: row.stripe_publishable_key,
+		stripe_webhook_secret_masked: maskSecret(row.stripe_webhook_secret),
+		stripe_account_id: row.stripe_account_id,
+		stripe_account_name: row.stripe_account_name,
+		stripe_account_email: row.stripe_account_email,
+		stripe_livemode: row.stripe_livemode,
+		stripe_connected_at: row.stripe_connected_at?.toISOString() ?? null,
+		stripe_last_verified_at: row.stripe_last_verified_at?.toISOString() ?? null,
+		is_connected:
+			!!row.stripe_restricted_key && !!row.stripe_publishable_key && !!row.stripe_webhook_secret
+	};
+
+	return json({ data: body });
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -107,11 +126,14 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Validation failed.', field_errors }, { status: 400 });
 	}
 
-	// Test connection — never expose raw Stripe response or error message.
-	const accountId: string | null = null;
+	const stripe = new Stripe(stripe_restricted_key, { apiVersion: '2026-04-22.dahlia' });
+
+	// Verify the key works. Source of truth for livemode is Stripe's response —
+	// never trust the key prefix alone.
+	let livemode: boolean;
 	try {
-		const stripe = new Stripe(stripe_restricted_key, { apiVersion: '2026-04-22.dahlia' });
-		await stripe.balance.retrieve();
+		const balance = await stripe.balance.retrieve();
+		livemode = balance.livemode;
 	} catch (err) {
 		logEvent('warn', 'settings.stripe.connect.test_failed', {
 			request_id: crypto.randomUUID(),
@@ -130,6 +152,24 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 
+	// Best-effort fetch of account metadata. If the restricted key lacks Account:read
+	// scope we still save the connection — the contractor can grant that scope later.
+	let accountId: string | null = null;
+	let accountName: string | null = null;
+	let accountEmail: string | null = null;
+	try {
+		const account = await stripe.accounts.retrieve(null);
+		accountId = account.id ?? null;
+		accountName = account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null;
+		accountEmail = account.email ?? null;
+	} catch (err) {
+		logEvent('info', 'settings.stripe.connect.account_metadata_unavailable', {
+			org_id: auth.orgId,
+			member_id: auth.member.id,
+			error_kind: err instanceof Stripe.errors.StripeError ? err.type : 'unknown'
+		});
+	}
+
 	const now = new Date();
 	await db
 		.update(organizations)
@@ -138,7 +178,11 @@ export const POST: RequestHandler = async (event) => {
 			stripe_publishable_key,
 			stripe_webhook_secret,
 			stripe_account_id: accountId,
+			stripe_account_name: accountName,
+			stripe_account_email: accountEmail,
+			stripe_livemode: livemode,
 			stripe_connected_at: now,
+			stripe_last_verified_at: now,
 			updated_at: now
 		})
 		.where(eq(organizations.id, auth.orgId));
@@ -148,19 +192,24 @@ export const POST: RequestHandler = async (event) => {
 		org_id: auth.orgId,
 		member_id: auth.member.id,
 		route: 'POST /api/settings/stripe',
-		account_id_present: !!accountId
+		account_id_present: !!accountId,
+		livemode
 	});
 
-	return json({
-		data: {
-			stripe_restricted_key_masked: maskSecret(stripe_restricted_key),
-			stripe_publishable_key,
-			stripe_webhook_secret_masked: maskSecret(stripe_webhook_secret),
-			stripe_account_id: accountId,
-			stripe_connected_at: now.toISOString(),
-			is_connected: true
-		}
-	});
+	const response: StripeStatusResponse = {
+		stripe_restricted_key_masked: maskSecret(stripe_restricted_key),
+		stripe_publishable_key,
+		stripe_webhook_secret_masked: maskSecret(stripe_webhook_secret),
+		stripe_account_id: accountId,
+		stripe_account_name: accountName,
+		stripe_account_email: accountEmail,
+		stripe_livemode: livemode,
+		stripe_connected_at: now.toISOString(),
+		stripe_last_verified_at: now.toISOString(),
+		is_connected: true
+	};
+
+	return json({ data: response });
 };
 
 export const DELETE: RequestHandler = async (event) => {
@@ -175,7 +224,11 @@ export const DELETE: RequestHandler = async (event) => {
 			stripe_publishable_key: null,
 			stripe_webhook_secret: null,
 			stripe_account_id: null,
+			stripe_account_name: null,
+			stripe_account_email: null,
+			stripe_livemode: null,
 			stripe_connected_at: null,
+			stripe_last_verified_at: null,
 			updated_at: new Date()
 		})
 		.where(eq(organizations.id, auth.orgId));

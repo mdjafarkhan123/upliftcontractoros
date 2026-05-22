@@ -53,6 +53,10 @@ const AUTOMATION_DEFAULTS = {
 		'Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1-5.',
 	appointment_reminder_message:
 		'Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out.',
+	appointment_reminder_1h_message:
+		'Hi {contact_name}, just a reminder — your appointment is in about 1 hour. See you soon!',
+	payment_receipt_message:
+		'Hi {contact_name}, we received your payment of {amount}. Thank you — we appreciate your business!',
 	speed_to_lead_message:
 		"Hi {contact_name}, thanks for reaching out! We'll get back to you shortly."
 } as const;

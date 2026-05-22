@@ -1,6 +1,6 @@
 # Cross-Domain Relationship Map
 
-This file maps every FK relationship across all 30 tables, documents which domains
+This file maps FK relationships across the schema, documents which domains
 depend on which, and lists common multi-table query patterns Claude Code will encounter.
 
 ---
@@ -18,6 +18,7 @@ building Drizzle relations, or verifying which tables connect.
 | `org_members`         | `org_id`                   | `organizations.id` | NO       | Tenant FK   |
 | `automation_settings` | `org_id`                   | `organizations.id` | NO       | One-to-one  |
 | `org_email_settings`  | `org_id`                   | `organizations.id` | NO       | One-to-one  |
+| `org_usage`           | `org_id`                   | `organizations.id` | NO       | Usage counters; ON DELETE CASCADE |
 
 ### Domain 2 — Contacts
 
@@ -70,10 +71,13 @@ building Drizzle relations, or verifying which tables connect.
 | `quotes`                    | `contact_id`     | `contacts.id`        | NO       |                              |
 | `quotes`                    | `opportunity_id` | `opportunities.id`   | YES      | Quotes can exist without opp |
 | `quotes`                    | `issued_by`      | `org_members.id`     | YES      |                              |
+| `quotes`                    | `deposit_applied_invoice_id` | `invoices.id` | YES | ON DELETE SET NULL; API must enforce same org |
 | `quote_line_items`          | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
 | `quote_line_items`          | `quote_id`       | `quotes.id`          | NO       |                              |
 | `quote_views`               | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
 | `quote_views`               | `quote_id`       | `quotes.id`          | NO       |                              |
+| `quote_change_requests`     | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
+| `quote_change_requests`     | `quote_id`       | `quotes.id`          | NO       |                              |
 | `quote_templates`           | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
 | `quote_templates`           | `created_by`     | `org_members.id`     | YES      |                              |
 | `quote_template_line_items` | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
@@ -95,6 +99,8 @@ building Drizzle relations, or verifying which tables connect.
 | `payments`           | `invoice_id`               | `invoices.id`      | NO       |                                |
 | `payments`           | `stripe_payment_intent_id` | —                  | YES      | UNIQUE partial index           |
 | `payments`           | `recorded_by`              | `org_members.id`   | YES      | NULL for Stripe webhook        |
+| `invoice_views`      | `org_id`                   | `organizations.id` | NO       | Tenant FK                      |
+| `invoice_views`      | `invoice_id`               | `invoices.id`      | NO       |                                |
 
 ### Domain 8 — Appointments
 
@@ -155,7 +161,8 @@ Which domains reference which. Read "→" as "has FK into".
 ```
 organizations (root — everything depends on this)
   ├→ org_members (referenced by nearly every domain via assigned_to, author_id, etc.)
-  └→ org_email_settings
+  ├→ org_email_settings
+  └→ org_usage
 
 contacts → organizations, org_members
 contact_addresses → contacts
@@ -169,9 +176,11 @@ jobs → opportunities, contacts, org_members
 conversations → contacts, org_members
 messages → conversations, org_members
 
-quotes → contacts, opportunities, org_members
+quotes → contacts, opportunities, org_members, invoices
+quote_change_requests → quotes
 invoices → contacts, jobs, opportunities, quotes, org_members
 payments → invoices, org_members
+invoice_views → invoices (read-only tracking, no reverse FK)
 
 appointments → contacts, jobs, org_members
 
@@ -197,13 +206,18 @@ webhook retries, and automation replays:
 | `review_requests` | `UNIQUE(job_id)`                           | Hard (no WHERE)                    |
 | `contacts`        | `UNIQUE(org_id, phone)`                    | Hard (no WHERE)                    |
 | `quotes`          | `UNIQUE(org_id, quote_number)`             | Hard (no WHERE)                    |
+| `quotes`          | `UNIQUE(deposit_stripe_payment_intent_id)` | Partial (WHERE NOT NULL)           |
+| `quote_change_requests` | `UNIQUE(quote_id)`                    | Partial (WHERE resolved_at IS NULL)|
 | `invoices`        | `UNIQUE(org_id, invoice_number)`           | Hard (no WHERE)                    |
+| `invoices`        | `UNIQUE(public_token_hash)`                | Partial (WHERE NOT NULL)           |
+| `invoices`        | `UNIQUE(quote_id)`                         | Partial (WHERE active, not cancelled) |
 | `payments`        | `UNIQUE(stripe_payment_intent_id)`         | Partial (WHERE NOT NULL)           |
 | `messages`        | `UNIQUE(twilio_message_sid)`               | Partial (WHERE NOT NULL)           |
 | `outbox_events`   | `UNIQUE(idempotency_key)`                  | Hard (no WHERE)                    |
 | `conversations`   | `UNIQUE(org_id, reply_alias)`              | Partial (WHERE NOT NULL)           |
 | `org_email_settings`| `UNIQUE(org_id)`                         | Hard (no WHERE)                    |
 | `org_email_settings`| `UNIQUE(reply_domain)`                   | Partial (WHERE NOT NULL)           |
+| `org_usage`         | `PRIMARY KEY(org_id, period_start_date, metric)` | Hard (no WHERE)             |
 | `pipeline_stages` | `UNIQUE(org_id)` WHERE is_won/lost/default | Partial (one each)                 |
 | `org_members`     | `UNIQUE(supabase_user_id)`                 | Hard (no WHERE)                    |
 | `org_members`     | `UNIQUE(org_id, email)`                    | Partial (WHERE not deleted)        |

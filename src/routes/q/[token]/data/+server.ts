@@ -2,7 +2,13 @@ import { json } from '@sveltejs/kit';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { outboxEvents, quoteLineItems, quoteViews, quotes } from '$lib/server/db/schema';
+import {
+	organizations,
+	outboxEvents,
+	quoteLineItems,
+	quoteViews,
+	quotes
+} from '$lib/server/db/schema';
 import {
 	clientIpFrom,
 	lookupValidQuoteByToken,
@@ -95,6 +101,12 @@ export const GET: RequestHandler = async (event) => {
 		)
 		.orderBy(quoteLineItems.position);
 
+	const [orgRow] = await db
+		.select({ stripe_secret_key: organizations.stripe_restricted_key })
+		.from(organizations)
+		.where(eq(organizations.id, quote.org_id))
+		.limit(1);
+
 	return json({
 		data: {
 			quote_number_display: formatQuoteNumber(quote.quote_number),
@@ -106,6 +118,9 @@ export const GET: RequestHandler = async (event) => {
 			total: quote.total,
 			deposit_required: quote.deposit_required,
 			deposit_amount: quote.deposit_amount,
+			deposit_paid_amount: quote.deposit_paid_amount,
+			deposit_paid_at: quote.deposit_paid_at?.toISOString() ?? null,
+			deposit_payment_available: Boolean(orgRow?.stripe_secret_key),
 			notes: quote.notes,
 			expires_at: quote.expires_at?.toISOString() ?? null,
 			org_name: quote.org_name,

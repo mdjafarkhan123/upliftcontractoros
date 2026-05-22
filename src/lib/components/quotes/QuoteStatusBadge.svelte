@@ -10,7 +10,8 @@
 		viewed: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
 		accepted: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
 		declined: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
-		expired: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400'
+		expired: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
+		changes_requested: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30'
 	};
 
 	const labels: Record<QuoteStatus, string> = {
@@ -19,7 +20,8 @@
 		viewed: 'Viewed',
 		accepted: 'Accepted',
 		declined: 'Declined',
-		expired: 'Expired'
+		expired: 'Expired',
+		changes_requested: 'Changes requested'
 	};
 </script>
 

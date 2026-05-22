@@ -8,7 +8,7 @@ event-flows.md (end-to-end business flows + concurrency patterns).
 
 ## Table of Contents
 
-1. Complete Event Catalog (30 events, 7 domains)
+1. Complete Event Catalog (33 events, 7 domains)
 2. Event Payload Contracts
 3. Idempotency Key Strategy
 4. Event Naming Conventions
@@ -74,19 +74,21 @@ Every event in the system. Organised by domain. All event types follow
 
 ### Domain: Revenue
 
-| Event Type        | Trigger                                          | Resource |
-| ----------------- | ------------------------------------------------ | -------- |
-| `quote.created`   | New quote drafted                                | quote    |
-| `quote.sent`      | Quote sent to contact                            | quote    |
-| `quote.viewed`    | Contact opens quote link (qualifying view)       | quote    |
-| `quote.accepted`  | Contact accepts quote                            | quote    |
-| `quote.declined`  | Contact declines quote                           | quote    |
-| `quote.expired`   | Quote passes expiry date unresponded             | quote    |
-| `invoice.created` | New invoice created                              | invoice  |
-| `invoice.sent`    | Invoice sent to contact                          | invoice  |
-| `invoice.paid`    | Invoice fully paid (amount_due = 0)              | invoice  |
-| `invoice.overdue` | Invoice passes due date unpaid (nightly cron)    | invoice  |
-| `payment.recorded`| Payment recorded against invoice                 | payment  |
+| Event Type        | Trigger                                          | Resource    |
+| ----------------- | ------------------------------------------------ | ----------- |
+| `quote.created`   | New quote drafted                                | quote       |
+| `quote.sent`      | Quote sent to contact                            | quote       |
+| `quote.viewed`    | Contact opens quote link (qualifying view)       | quote       |
+| `quote.accepted`  | Contact accepts quote                            | quote       |
+| `quote.deposit_paid` | Quote deposit payment succeeds via Stripe     | quote       |
+| `quote.declined`  | Contact declines quote                           | quote       |
+| `quote.expired`   | Quote passes expiry date unresponded             | quote       |
+| `invoice.created` | New invoice created                              | invoice     |
+| `invoice.sent`    | Invoice sent to contact                          | invoice     |
+| `invoice.viewed`  | Contact opens invoice payment link (qualifying view) | invoice  |
+| `invoice.paid`    | Invoice fully paid (amount_due = 0)              | invoice     |
+| `invoice.overdue` | Invoice passes due date unpaid (nightly cron)    | invoice     |
+| `payment.recorded`| Payment recorded against invoice                 | payment     |
 
 ---
 
@@ -124,6 +126,7 @@ automation events over its lifetime.
 | `automation.speed_to_lead`          | `contact.created` + near-instant delay      | contact     |
 | `automation.quote_followup`         | `quote.sent` + 24h delay / 72h delay        | quote       |
 | `automation.invoice_reminder`       | `invoice.overdue` + configurable delay      | invoice     |
+| `automation.payment_receipt`        | `payment.recorded` + near-instant delay     | payment     |
 | `automation.review_request`         | `job.completed` + configurable delay        | job         |
 | `automation.appointment_reminder_24h`| `appointment.created` + calculated delay   | appointment |
 | `automation.appointment_reminder_1h` | `appointment.created` + calculated delay   | appointment |
@@ -234,6 +237,21 @@ Fields listed below are the minimum required. Additional context fields are perm
 }
 ```
 
+### `quote.deposit_paid`
+
+```json
+{
+  "quote_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "opportunity_id": "uuid | null",
+  "deposit_paid_amount": "integer cents",
+  "deposit_paid_at": "ISO8601 timestamp",
+  "stripe_payment_intent_id": "string",
+  "deposit_applied_invoice_id": "uuid | null"
+}
+```
+
 ### `invoice.paid`
 
 ```json
@@ -245,6 +263,19 @@ Fields listed below are the minimum required. Additional context fields are perm
   "total": "decimal string",
   "amount_paid": "decimal string",
   "paid_at": "ISO8601 timestamp"
+}
+```
+
+### `invoice.viewed`
+
+```json
+{
+  "invoice_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "viewed_at": "ISO8601 timestamp",
+  "ip_hash": "string",
+  "notification_sent": false
 }
 ```
 
@@ -303,6 +334,21 @@ Fields listed below are the minimum required. Additional context fields are perm
 }
 ```
 
+### `automation.payment_receipt`
+
+```json
+{
+  "automation_job_id": "uuid",
+  "payment_id": "uuid",
+  "invoice_id": "uuid",
+  "org_id": "uuid",
+  "contact_id": "uuid",
+  "amount": "decimal string",
+  "channel": "email | sms | both",
+  "scheduled_for": "ISO8601 timestamp"
+}
+```
+
 ---
 
 ## 3. Idempotency Key Strategy
@@ -321,7 +367,9 @@ Pattern:  {event_type}:{resource_id}
 Examples:
   job.completed:job-uuid-abc
   quote.accepted:quote-uuid-def
+  quote.deposit_paid:quote-uuid-def:pi_123
   invoice.paid:invoice-uuid-ghi
+  invoice.viewed:invoice-uuid-ghi
   opportunity.won:opp-uuid-jkl
   contact.created:contact-uuid-mno
 ```
@@ -339,7 +387,8 @@ Pattern:  {event_type}:{automation_job_id}
 Examples:
   automation.quote_followup:automation-job-uuid-001
   automation.invoice_reminder:automation-job-uuid-002
-  automation.appointment_reminder_24h:automation-job-uuid-003
+  automation.payment_receipt:automation-job-uuid-003
+  automation.appointment_reminder_24h:automation-job-uuid-004
 ```
 
 `automation_job_id` is the idempotency anchor — each scheduled execution is a
@@ -390,7 +439,8 @@ Singular lowercase noun matching the table name (without plural suffix):
 
 ```
 job, quote, invoice, contact, opportunity, appointment,
-conversation, message, review_request, review, payment
+conversation, message, review_request, review, payment,
+invoice_view
 ```
 
 ### Queue Names
@@ -403,6 +453,7 @@ Examples:
   queue:speed-to-lead
   queue:quote-followup
   queue:invoice-reminder
+  queue:payment-receipt
   queue:review-request
   queue:appointment-reminder
   queue:notification-dispatch

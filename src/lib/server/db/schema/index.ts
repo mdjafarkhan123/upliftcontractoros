@@ -4,7 +4,8 @@ export {
 	memberRoleEnum,
 	organizations,
 	orgMembers,
-	automationSettings
+	automationSettings,
+	orgUsage
 } from './01_org_identity';
 export type {
 	Organization,
@@ -12,7 +13,9 @@ export type {
 	OrgMember,
 	NewOrgMember,
 	AutomationSettings,
-	NewAutomationSettings
+	NewAutomationSettings,
+	OrgUsage,
+	NewOrgUsage
 } from './01_org_identity';
 
 // Domain 2 — Contacts
@@ -73,10 +76,12 @@ export {
 	quotes,
 	quoteLineItems,
 	quoteViews,
+	quoteChangeRequests,
 	quoteTemplates,
 	quoteTemplateLineItems,
 	invoices,
 	invoiceLineItems,
+	invoiceViews,
 	payments
 } from './06_revenue';
 export type {
@@ -86,6 +91,8 @@ export type {
 	NewQuoteLineItem,
 	QuoteView,
 	NewQuoteView,
+	QuoteChangeRequest,
+	NewQuoteChangeRequest,
 	QuoteTemplate,
 	NewQuoteTemplate,
 	QuoteTemplateLineItem,
@@ -94,12 +101,19 @@ export type {
 	NewInvoice,
 	InvoiceLineItem,
 	NewInvoiceLineItem,
+	InvoiceView,
+	NewInvoiceView,
 	Payment,
 	NewPayment
 } from './06_revenue';
 
 // Domain 7 — Appointments
-export { appointmentTypeEnum, appointmentStatusEnum, appointments } from './07_appointments';
+export {
+	appointmentTypeEnum,
+	appointmentStatusEnum,
+	bookingSourceEnum,
+	appointments
+} from './07_appointments';
 export type { Appointment, NewAppointment } from './07_appointments';
 
 // Domain 8 — Reputation
@@ -130,6 +144,17 @@ export type {
 	WebchatSession,
 	NewWebchatSession
 } from './11_webchat';
+
+// Domain 12 — Booking
+export { bookingLinks, availabilityWindows, availabilityOverrides } from './12_booking';
+export type {
+	BookingLink,
+	NewBookingLink,
+	AvailabilityWindow,
+	NewAvailabilityWindow,
+	AvailabilityOverride,
+	NewAvailabilityOverride
+} from './12_booking';
 
 // Domain 10 — Growth, Automation & System
 export {

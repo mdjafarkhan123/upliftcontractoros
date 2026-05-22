@@ -2,7 +2,7 @@ import { fontFamily } from 'tailwindcss/defaultTheme';
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-	darkMode: ['class'],
+	darkMode: 'class',
 	content: ['./src/**/*.{html,js,svelte,ts}'],
 	theme: {
 		screens: {
@@ -19,6 +19,8 @@ const config: Config = {
 				ring: 'hsl(var(--ring) / <alpha-value>)',
 				background: 'hsl(var(--background) / <alpha-value>)',
 				foreground: 'hsl(var(--foreground) / <alpha-value>)',
+				sidebar: 'hsl(var(--sidebar) / <alpha-value>)',
+				'card-raised': 'hsl(var(--card-raised) / <alpha-value>)',
 				primary: {
 					DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
 					foreground: 'hsl(var(--primary-foreground) / <alpha-value>)'
@@ -55,6 +57,11 @@ const config: Config = {
 			},
 			fontFamily: {
 				sans: [...fontFamily.sans]
+			},
+			boxShadow: {
+				card: 'var(--shadow-card)',
+				dropdown: 'var(--shadow-dropdown)',
+				modal: 'var(--shadow-modal)'
 			},
 			spacing: {
 				'bottom-nav': 'var(--bottom-nav-height)'

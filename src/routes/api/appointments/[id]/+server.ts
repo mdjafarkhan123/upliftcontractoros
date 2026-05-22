@@ -42,7 +42,14 @@ function serialize(row: Appointment & {
 		reminder_1h_sent: row.reminder_1h_sent,
 		cancelled_at: row.cancelled_at?.toISOString() ?? null,
 		created_at: row.created_at.toISOString(),
-		updated_at: row.updated_at.toISOString()
+		updated_at: row.updated_at.toISOString(),
+		booking_source: row.booking_source,
+		booked_via_link_id: row.booked_via_link_id,
+		customer_name: row.customer_name,
+		customer_phone: row.customer_phone,
+		customer_email: row.customer_email,
+		customer_notes: row.customer_notes,
+		booking_referrer: row.booking_referrer
 	};
 }
 

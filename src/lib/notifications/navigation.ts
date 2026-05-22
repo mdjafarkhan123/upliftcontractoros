@@ -21,6 +21,8 @@ export function getNotificationHref(n: NotificationItem): string | null {
 			return id ? `/invoices/${id}` : null;
 		case 'quote.viewed':
 		case 'quote.accepted':
+		case 'quote.changes_requested':
+		case 'quote.deposit_paid':
 			return id ? `/quotes/${id}` : null;
 		case 'review.received':
 		case 'private_feedback.received':

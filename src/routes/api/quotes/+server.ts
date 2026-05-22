@@ -174,6 +174,15 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		const [final] = await tx.select().from(quotes).where(eq(quotes.id, inserted.id)).limit(1);
+
+		// Enforce deposit_amount < total when deposit is enabled. Runs after recalc
+		// so the comparison uses authoritative totals.
+		if (final.deposit_required && final.deposit_amount != null) {
+			if (Number(final.deposit_amount) >= Number(final.total)) {
+				throw error(422, 'Deposit amount must be less than the quote total');
+			}
+		}
+
 		return final;
 	});
 

@@ -15,7 +15,7 @@ function readInitial(): Theme {
 function applyToDocument(theme: Theme) {
 	if (!browser) return;
 	const root = document.documentElement;
-	root.classList.toggle('light', theme === 'light');
+	root.classList.toggle('dark', theme === 'dark');
 	root.style.colorScheme = theme;
 }
 

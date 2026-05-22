@@ -35,7 +35,7 @@
 	const assignedTo = $derived(conversation?.assigned_to ?? null);
 </script>
 
-<div class="flex items-center gap-1">
+<div class="flex items-center gap-1.5">
 	{#if !isClosed}
 		<SnoozeMenu
 			isSnoozed={isSnoozed}
@@ -50,7 +50,7 @@
 			variant="ghost"
 			size="sm"
 			disabled={!canManage}
-			class="min-h-[36px] gap-1.5"
+			class="min-h-[36px] gap-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => void onReopen()}
 		>
 			<RotateCcw class="h-4 w-4" />
@@ -61,7 +61,7 @@
 			variant="ghost"
 			size="sm"
 			disabled={!canManage}
-			class="min-h-[36px] gap-1.5"
+			class="min-h-[36px] gap-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => void onClose()}
 		>
 			<CheckCircle2 class="h-4 w-4" />
@@ -77,7 +77,7 @@
 					variant="ghost"
 					size="icon"
 					aria-label="More actions"
-					class="h-9 w-9"
+					class="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 				>
 					<MoreHorizontal class="h-4 w-4" />
 				</Button>

@@ -1,18 +1,15 @@
 import { error } from '@sveltejs/kit';
 import type { AuthContext } from './loadAuthContext';
-import type { FeatureFlagKey, LimitKey } from '$lib/types';
+import type { FeatureFlagKey } from '$lib/types';
+
+// Numeric usage limits are NOT enforced here. They live in `org_usage` and
+// are checked via `assertAndIncrementUsage` at each chokepoint (SMS worker,
+// media upload, etc.). Team-member cap remains an inline COUNT(*) check in
+// the /api/team route — see plan doc.
 
 export function requireFeature(auth: AuthContext, key: FeatureFlagKey): void {
 	if (!auth.featureFlags[key]) {
 		error(403, { message: `Feature not enabled for this organization.`, code: 'FEATURE_DISABLED', feature: key } as App.Error & Record<string, unknown>);
-	}
-}
-
-export function requireWithinLimit(auth: AuthContext, key: LimitKey, currentCount: number): void {
-	const limit = auth.limits[key];
-	if (typeof limit !== 'number') return;
-	if (currentCount >= limit) {
-		error(403, { message: `Plan limit reached.`, code: 'LIMIT_EXCEEDED', limit: key, max: limit, current: currentCount } as App.Error & Record<string, unknown>);
 	}
 }
 
