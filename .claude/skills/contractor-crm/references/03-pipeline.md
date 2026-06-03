@@ -89,3 +89,40 @@ CREATE INDEX idx_opportunities_contact_id ON opportunities (contact_id);
 CREATE INDEX idx_opportunities_stage_id ON opportunities (stage_id);
 CREATE INDEX idx_opportunities_assigned_to ON opportunities (assigned_to);
 ```
+
+---
+
+## Pipeline events
+
+Outbox-routed business events emitted by `/api/pipeline/opportunities/*`.
+See `automation-events.md` for payload schemas; see `outbox-worker.md` for
+how routing + activity persistence works.
+
+| Event                          | Producer                                       | Routing                          |
+| ------------------------------ | ---------------------------------------------- | -------------------------------- |
+| `opportunity.created`          | POST opportunities; public booking webhook     | notification + activity feed     |
+| `opportunity.assignee_changed` | PATCH opportunities (only when assignee diffs) | notification (new assignee only) |
+| `opportunity.stage_changed`    | PATCH opportunities/[id]/stage (every move)    | activity feed only               |
+| `opportunity.won`              | Stage move into `is_won` stage                 | notification + activity feed     |
+| `opportunity.lost`             | Stage move into `is_lost` stage                | notification + activity feed     |
+| `contact.status_changed`       | Side-effect of `opportunity.won` (Flow 2)      | activity feed only               |
+| `job.created`                  | Side-effect of `opportunity.won` (Flow 2)      | notification + activity feed     |
+
+> **Deprecated:** the legacy `opportunity.updated` event was a catch-all
+> "PATCH happened" notice. It is no longer emitted — title/value edits fire
+> no event, and assignee changes have their own granular event. Activity
+> persistence and notifications are driven only by the events listed above.
+
+**Idempotency keys** (see `automation-events.md` §3):
+
+- `opportunity.created` / `won` / `lost`: `{event}:{opp_id}` — exactly-once per lifecycle transition.
+- `opportunity.stage_changed`: `opportunity.stage_changed:{move_request_id}` — client-supplied UUID protects against double-click replays.
+- `opportunity.assignee_changed`: `opportunity.assignee_changed:{opp_id}:{new_assigned_to|"null"}` — same assignee swap is a no-op; new assignee fires fresh notification.
+- `contact.status_changed`: `contact.status_changed:{contact_id}:{opp_id}` — scoped per triggering opportunity.
+
+**Notification recipients** (handled in `notificationWorker`):
+
+- `opportunity.created`: assignee if set, else admin/manager fallback.
+- `opportunity.assignee_changed`: new assignee only; self-assignment is silent.
+- `opportunity.lost`: assignee if set, else admin/manager.
+- `opportunity.stage_changed`, `contact.status_changed`: no notification — feed-only.

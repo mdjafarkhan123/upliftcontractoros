@@ -58,8 +58,7 @@ export async function detectConflicts(
 	type Block = { startMs: number; endMs: number };
 	const blocks: Block[] = existing.map((a) => {
 		const startMs = a.scheduled_start.getTime();
-		const endMs =
-			(a.scheduled_end ? a.scheduled_end.getTime() : startMs + slotMs) + bufferMs;
+		const endMs = (a.scheduled_end ? a.scheduled_end.getTime() : startMs + slotMs) + bufferMs;
 		return { startMs, endMs };
 	});
 

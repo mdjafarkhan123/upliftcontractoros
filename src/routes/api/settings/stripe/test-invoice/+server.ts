@@ -37,7 +37,10 @@ export const POST: RequestHandler = async (event) => {
 	assertAdmin(auth.member.role);
 
 	let body: unknown = {};
-	if (event.request.headers.get('content-length') && event.request.headers.get('content-length') !== '0') {
+	if (
+		event.request.headers.get('content-length') &&
+		event.request.headers.get('content-length') !== '0'
+	) {
 		try {
 			body = await event.request.json();
 		} catch {
@@ -118,7 +121,8 @@ export const POST: RequestHandler = async (event) => {
 					email_opt_in: true,
 					sms_opt_out: true,
 					tags: [TEST_CONTACT_TAG],
-					notes: 'Auto-created from Stripe settings to test the payment flow. Safe to delete after testing.'
+					notes:
+						'Auto-created from Stripe settings to test the payment flow. Safe to delete after testing.'
 				})
 				.returning({ id: contacts.id });
 			contactId = created.id;
@@ -148,7 +152,8 @@ export const POST: RequestHandler = async (event) => {
 				title: 'Stripe test payment',
 				status: 'sent',
 				tax_rate: '0',
-				notes: 'This is a $1.00 test invoice sent from your Stripe settings. Pay it with Stripe test card 4242 4242 4242 4242 to confirm the full flow works.',
+				notes:
+					'This is a $1.00 test invoice sent from your Stripe settings. Pay it with Stripe test card 4242 4242 4242 4242 to confirm the full flow works.',
 				public_token: rawToken,
 				sent_at: sentAt
 			})

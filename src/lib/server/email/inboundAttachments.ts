@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { r2Upload } from '$lib/server/media/r2';
 import { isAllowedMimeType, detectMimeFromBytes } from '$lib/server/media/mimeCheck';
+import { downloadInboundAttachment } from './brevo/webhooks';
 
 const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const MAX_PER_FILE_BYTES = 15 * 1024 * 1024;
@@ -9,10 +10,12 @@ export type RawInboundAttachment = {
 	filename?: string | null;
 	content_type?: string | null;
 	contentType?: string | null;
-	/** base64 inline content from Resend. */
+	/** base64 inline content (when a provider sends it inline). */
 	content?: string | null;
-	/** Pre-signed download URL from Resend (used when content is large). */
+	/** Pre-signed download URL (when a provider links large attachments). */
 	url?: string | null;
+	/** Brevo DownloadToken — fetched via the authenticated inbound endpoint. */
+	downloadToken?: string | null;
 	size?: number | null;
 };
 
@@ -28,7 +31,10 @@ export type PreparedAttachment = {
 function sanitizeFilename(name: string | null | undefined): string {
 	const fallback = 'attachment';
 	if (!name) return fallback;
-	const cleaned = name.replace(/[\\/]+/g, '_').replace(/[^\w\-. ]/g, '').trim();
+	const cleaned = name
+		.replace(/[\\/]+/g, '_')
+		.replace(/[^\w\-. ]/g, '')
+		.trim();
 	return cleaned.length ? cleaned.slice(0, 200) : fallback;
 }
 
@@ -68,10 +74,12 @@ export async function prepareInboundAttachments(input: {
 		try {
 			if (att.content) {
 				buf = Buffer.from(att.content, 'base64');
+			} else if (att.downloadToken) {
+				buf = await downloadInboundAttachment(att.downloadToken);
 			} else if (att.url) {
 				buf = await downloadUrl(att.url);
 			} else {
-				skipped.push({ filename, reason: 'no content or url' });
+				skipped.push({ filename, reason: 'no content, token, or url' });
 				continue;
 			}
 		} catch (err) {
@@ -99,7 +107,10 @@ export async function prepareInboundAttachments(input: {
 		const detected = detectMimeFromBytes(buf);
 		const mime = detected ?? (isAllowedMimeType(claimed) ? claimed : null);
 		if (!mime) {
-			skipped.push({ filename, reason: `disallowed or unrecognized type (${claimed || 'unknown'})` });
+			skipped.push({
+				filename,
+				reason: `disallowed or unrecognized type (${claimed || 'unknown'})`
+			});
 			continue;
 		}
 

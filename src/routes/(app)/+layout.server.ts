@@ -11,9 +11,22 @@ import type { AppSessionData } from '$lib/stores/session.svelte';
 // /api/session.
 
 const ORG_SAFE_FIELDS = [
-	'id', 'name', 'slug', 'trade_type', 'status', 'plan', 'logo_url', 'primary_color',
-	'timezone', 'address', 'city', 'state', 'zip', 'is_setup_complete',
-	'feature_overrides_updated_at', 'created_at'
+	'id',
+	'name',
+	'slug',
+	'trade_type',
+	'status',
+	'plan',
+	'logo_url',
+	'primary_color',
+	'timezone',
+	'address',
+	'city',
+	'state',
+	'zip',
+	'is_setup_complete',
+	'feature_overrides_updated_at',
+	'created_at'
 ] as const;
 
 function pickSafeOrg(org: Org) {

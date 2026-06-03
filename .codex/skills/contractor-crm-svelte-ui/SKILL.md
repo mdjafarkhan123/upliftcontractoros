@@ -26,14 +26,14 @@ description: >
 Each task requires reading one or more reference files from `references/` in this skill
 directory. Read the relevant file(s) BEFORE writing any code. Multiple may apply.
 
-| Task                                                                       | Read first                           |
-| -------------------------------------------------------------------------- | ------------------------------------ |
-| Any component with props, state, derived, effects, snippets                | `references/runes-and-reactivity.md` |
-| Forms, mutations, dirty tracking, optimistic updates, Supabase Realtime    | `references/data-patterns.md`        |
-| Dialog, Sheet, Tabs, Select, Switch, Button, Badge, Bits UI styling        | `references/shadcn-svelte.md`        |
-| Auth guard, permissions, nav, error pages                                  | `references/navigation-and-auth.md`  |
-| Toast, shared components, loading/error/pagination states                  | `references/shared-components.md`    |
-| List stores, caching, SWR, pagination                                      | `references/list-stores.md`          |
+| Task                                                                    | Read first                           |
+| ----------------------------------------------------------------------- | ------------------------------------ |
+| Any component with props, state, derived, effects, snippets             | `references/runes-and-reactivity.md` |
+| Forms, mutations, dirty tracking, optimistic updates, Supabase Realtime | `references/data-patterns.md`        |
+| Dialog, Sheet, Tabs, Select, Switch, Button, Badge, Bits UI styling     | `references/shadcn-svelte.md`        |
+| Auth guard, permissions, nav, error pages                               | `references/navigation-and-auth.md`  |
+| Toast, shared components, loading/error/pagination states               | `references/shared-components.md`    |
+| List stores, caching, SWR, pagination                                   | `references/list-stores.md`          |
 
 When in doubt, read `references/runes-and-reactivity.md` — it applies to every component.
 

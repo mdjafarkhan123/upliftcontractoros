@@ -10,6 +10,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	contacts,
 	conversations,
 	messages,
 	organizations,
@@ -44,9 +45,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 	const [session] = await db
 		.select()
 		.from(webchatSessions)
-		.where(
-			and(eq(webchatSessions.id, sessionId), eq(webchatSessions.session_token, sessionToken))
-		)
+		.where(and(eq(webchatSessions.id, sessionId), eq(webchatSessions.session_token, sessionToken)))
 		.limit(1);
 
 	if (!session) return json({ error: 'Session not found' }, { status: 404 });
@@ -80,6 +79,13 @@ export const GET: RequestHandler = async ({ request, params }) => {
 		.limit(1);
 
 	if (!org) return json({ error: 'Organization not found' }, { status: 404 });
+
+	// Load contact name for visitor avatar
+	const [contact] = await db
+		.select({ full_name: contacts.full_name })
+		.from(contacts)
+		.where(eq(contacts.id, session.contact_id))
+		.limit(1);
 
 	// Load last 50 messages in BOTH directions so the visitor sees their
 	// own history on widget reload. Internal notes are still excluded.
@@ -120,6 +126,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 				widget.offline_message ??
 				"We're currently on site helping customers. Leave your details and we'll reply as soon as possible.",
 			webchat_mode: widget.webchat_mode as 'instant' | 'asynchronous',
+			visitor_name: contact?.full_name ?? null,
 			messages: msgs.map((m) => ({
 				id: m.id,
 				body: m.body ?? '',

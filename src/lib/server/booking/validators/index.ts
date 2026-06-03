@@ -13,11 +13,7 @@ import {
 } from '../timezone/utils';
 
 // Reject any date before today in the org's timezone.
-export function assertDateNotInPast(
-	date: IsoDate,
-	timezone: string,
-	field = 'date'
-): void {
+export function assertDateNotInPast(date: IsoDate, timezone: string, field = 'date'): void {
 	const today = todayInOrgTz(timezone);
 	if (!isoDateLte(today, date)) {
 		throw new BookingValidationError('Date is in the past', field);
@@ -49,10 +45,7 @@ export function assertDateNotFullyPastCutoff(
 	const cutoff = earliestBookableUtc(minAdvanceHours);
 	const nextDayStart = startOfNextLocalDayUtc(date, timezone);
 	if (nextDayStart.getTime() <= cutoff.getTime()) {
-		throw new BookingValidationError(
-			'No bookable time remaining on this date',
-			field
-		);
+		throw new BookingValidationError('No bookable time remaining on this date', field);
 	}
 }
 
@@ -88,10 +81,7 @@ export function isDatePotentiallyInRange(
 
 // Filter UTC candidate slots by the min_advance cutoff (Rule 4). Applies to all
 // dates but only has an effect when the cutoff falls within the day.
-export function filterByMinAdvance(
-	candidates: Date[],
-	minAdvanceHours: number
-): Date[] {
+export function filterByMinAdvance(candidates: Date[], minAdvanceHours: number): Date[] {
 	const cutoff = earliestBookableUtc(minAdvanceHours).getTime();
 	return candidates.filter((c) => c.getTime() >= cutoff);
 }

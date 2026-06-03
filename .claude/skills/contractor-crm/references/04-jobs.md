@@ -1,20 +1,22 @@
 # Domain 4 — Jobs
 
 Tables: `jobs`
-Enums used: `job_status`
+Enums used: `job_status`, `job_source`
 
 ---
 
 ## `jobs`
 
-Operational delivery entity. Always created from a Won opportunity — never independently.
-Service address is a point-in-time snapshot — historically immutable after creation.
+Operational delivery entity. Most Jobs are auto-created from a Won opportunity (source = `opportunity`, one-to-one link). Contractors with `can_view_full_pipeline` can also create a Job manually (source = `manual`, `opportunity_id IS NULL`) for callbacks, warranty visits, repeat customers, or backfill. The 1-Opp-1-Job invariant is enforced by a partial unique index on `opportunity_id WHERE opportunity_id IS NOT NULL`.
+
+Service address is a point-in-time snapshot — historically immutable after creation. For manual jobs it defaults from the contact's primary address.
 
 ```sql
 CREATE TABLE jobs (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                    UUID NOT NULL REFERENCES organizations (id),
-  opportunity_id            UUID NOT NULL REFERENCES opportunities (id),
+  opportunity_id            UUID REFERENCES opportunities (id),  -- Nullable for manual jobs.
+  source                    job_source NOT NULL DEFAULT 'opportunity',  -- 'opportunity' | 'manual'
   contact_id                UUID NOT NULL REFERENCES contacts (id),
   title                     TEXT NOT NULL,
   status                    job_status NOT NULL DEFAULT 'scheduled',

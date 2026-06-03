@@ -5,7 +5,13 @@
 	import { Check, CreditCard, Clock, AlertCircle, Download } from '@lucide/svelte';
 	import { page } from '$app/state';
 
-	type LineItem = { id: string; description: string; quantity: string; unit_price: string; total: string };
+	type LineItem = {
+		id: string;
+		description: string;
+		quantity: string;
+		unit_price: string;
+		total: string;
+	};
 	type PublicInvoice = {
 		invoice_number_display: string;
 		title: string;
@@ -34,6 +40,22 @@
 	let busy = $state(false);
 	let payError = $state<string | null>(null);
 	let pdfBusy = $state(false);
+	let showCustom = $state(false);
+	let customAmountInput = $state('');
+
+	const amountDueCents = $derived(
+		data.invoice ? Math.round(Number(data.invoice.amount_due) * 100) : 0
+	);
+	const customAmountCents = $derived.by(() => {
+		const trimmed = customAmountInput.trim();
+		if (trimmed === '') return null;
+		const n = Number(trimmed);
+		if (!Number.isFinite(n) || n <= 0) return null;
+		return Math.round(n * 100);
+	});
+	const customAmountValid = $derived(
+		customAmountCents !== null && customAmountCents > 0 && customAmountCents <= amountDueCents
+	);
 
 	const isPaid = $derived(data.invoice?.status === 'paid' || justPaid);
 	const isOverdue = $derived(data.invoice?.status === 'overdue' && !isPaid);
@@ -60,11 +82,16 @@
 		}
 	}
 
-	async function pay() {
+	async function pay(amountCents?: number) {
 		busy = true;
 		payError = null;
 		try {
-			const res = await fetch(`/i/${token}/pay`, { method: 'POST' });
+			const init: RequestInit = { method: 'POST' };
+			if (amountCents !== undefined) {
+				init.headers = { 'Content-Type': 'application/json' };
+				init.body = JSON.stringify({ amount_cents: amountCents });
+			}
+			const res = await fetch(`/i/${token}/pay`, init);
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok || !body.data?.url) {
 				payError = body.error ?? 'Could not start payment. Please try again.';
@@ -76,6 +103,15 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	function payFull() {
+		void pay();
+	}
+
+	function payCustom() {
+		if (!customAmountValid || customAmountCents === null) return;
+		void pay(customAmountCents);
 	}
 </script>
 
@@ -100,7 +136,9 @@
 		{:else if isPaid}
 			<div class="space-y-4">
 				<div class="rounded-2xl border border-border bg-card p-8 text-center">
-					<div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
+					<div
+						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
+					>
 						<Check class="h-6 w-6" />
 					</div>
 					<h1 class="mt-4 text-lg font-semibold">Payment received</h1>
@@ -114,7 +152,9 @@
 						<span class="text-muted-foreground">Invoice</span>
 						<span class="font-medium">{data.invoice.invoice_number_display}</span>
 					</div>
-					<div class="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
+					<div
+						class="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold"
+					>
 						<span>Total paid</span>
 						<span>{formatCurrency(data.invoice.total)}</span>
 					</div>
@@ -140,14 +180,18 @@
 				</header>
 
 				{#if isOverdue}
-					<div class="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+					<div
+						class="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300"
+					>
 						<AlertCircle class="h-4 w-4 shrink-0" />
 						<p class="font-medium">This invoice is overdue.</p>
 					</div>
 				{/if}
 
 				{#if inv.status === 'partially_paid'}
-					<div class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+					<div
+						class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"
+					>
 						<Clock class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
 						<div>
 							<p class="font-medium text-amber-800 dark:text-amber-200">Partial payment received</p>
@@ -159,7 +203,9 @@
 				{/if}
 
 				<div class="rounded-2xl border border-border bg-card">
-					<div class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground">
+					<div
+						class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground"
+					>
 						<div class="grid grid-cols-12">
 							<div class="col-span-7">Item</div>
 							<div class="col-span-2 text-right">Qty</div>
@@ -204,7 +250,11 @@
 
 				{#if inv.due_date}
 					<p class="text-center text-sm text-muted-foreground">
-						Due {new Date(inv.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+						Due {new Date(inv.due_date + 'T00:00:00').toLocaleDateString('en-US', {
+							month: 'long',
+							day: 'numeric',
+							year: 'numeric'
+						})}
 					</p>
 				{/if}
 
@@ -222,16 +272,75 @@
 							loadingLabel="Redirecting to payment…"
 							successLabel="Redirecting…"
 							state={busy ? 'loading' : 'idle'}
-							onclick={pay}
+							onclick={payFull}
 						>
 							{#snippet icon()}<CreditCard class="h-5 w-5" />{/snippet}
 						</JetEngineButton>
+
+						{#if !showCustom}
+							<button
+								type="button"
+								class="block w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+								onclick={() => (showCustom = true)}
+								disabled={busy}
+							>
+								Pay a different amount
+							</button>
+						{:else}
+							<div class="rounded-2xl border border-border bg-card p-4 space-y-3">
+								<label class="block text-sm font-medium" for="custom-amount"> Custom amount </label>
+								<div class="relative">
+									<span
+										class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
+										>$</span
+									>
+									<input
+										id="custom-amount"
+										type="text"
+										inputmode="decimal"
+										pattern="[0-9]*\.?[0-9]*"
+										autocomplete="off"
+										bind:value={customAmountInput}
+										placeholder="0.00"
+										disabled={busy}
+										class="min-h-[44px] w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+									/>
+								</div>
+								<p class="text-xs text-muted-foreground">
+									Balance due: {formatCurrency(inv.amount_due)}
+								</p>
+								<div class="flex gap-2">
+									<Button
+										variant="outline"
+										class="min-h-[44px] flex-1"
+										onclick={() => {
+											showCustom = false;
+											customAmountInput = '';
+											payError = null;
+										}}
+										disabled={busy}
+									>
+										Cancel
+									</Button>
+									<Button
+										class="min-h-[44px] flex-1"
+										onclick={payCustom}
+										disabled={busy || !customAmountValid}
+									>
+										{busy ? 'Redirecting…' : 'Continue'}
+									</Button>
+								</div>
+							</div>
+						{/if}
+
 						{#if payError}
 							<p class="text-center text-xs text-destructive">{payError}</p>
 						{/if}
 					</div>
 				{:else if !inv.has_stripe}
-					<div class="rounded-2xl border border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+					<div
+						class="rounded-2xl border border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground"
+					>
 						Contact {inv.org_name} for payment instructions.
 					</div>
 				{/if}

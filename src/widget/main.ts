@@ -32,6 +32,7 @@ interface SessionState {
 	session_token: string;
 	config: WidgetConfig;
 	messages: WidgetMessage[];
+	visitor_name: string;
 }
 
 (function () {
@@ -45,13 +46,17 @@ interface SessionState {
 	const BASE = scriptEl?.src ? new URL(scriptEl.src).origin : window.location.origin;
 	const SESSION_KEY = `wc_session_${widgetToken}`;
 	const CURSOR_KEY = `wc_cursor_${widgetToken}`;
+	const VISITOR_NAME_KEY = `wc_name_${widgetToken}`;
 
 	let session: SessionState | null = null;
 	let open = false;
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 	let pollInFlight = false;
+	let contractorTyping = false;
+	let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const POLL_INTERVAL_MS = 3000;
+	const AUTO_CLOSE_MS = 20000;
 
 	function loadCursor(): string | null {
 		try {
@@ -65,16 +70,21 @@ interface SessionState {
 		try {
 			const prev = loadCursor();
 			if (!prev || iso > prev) localStorage.setItem(CURSOR_KEY, iso);
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	function clearCursor() {
 		try {
 			localStorage.removeItem(CURSOR_KEY);
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	let shadow: ShadowRoot | null = null;
+	let hostEl: HTMLDivElement | null = null;
 	let panelEl: HTMLDivElement | null = null;
 	let bodyEl: HTMLDivElement | null = null;
 	let btnEl: HTMLButtonElement | null = null;
@@ -144,7 +154,7 @@ input, textarea { font: inherit; }
 	pointer-events: none;
 }
 .wc-logo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.22); flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
-.wc-logo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.wc-logo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.28); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); font-size: 15px; font-weight: 600; color: #fff; letter-spacing: .02em; text-transform: uppercase; }
 .wc-header-text { flex: 1; min-width: 0; }
 .wc-org-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 .wc-org-status { font-size: 12px; opacity: .85; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
@@ -203,14 +213,35 @@ input, textarea { font: inherit; }
 .wc-error.wc-visible { display: block; }
 .wc-mode-hint { font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; padding-top: 4px; }
 
-.wc-msg-row { display: flex; max-width: 100%; animation: wcSlideIn .26s cubic-bezier(.2,.9,.3,1.2); }
+.wc-msg-row { display: flex; max-width: 100%; animation: wcSlideIn .26s cubic-bezier(.2,.9,.3,1.2); align-items: flex-end; }
 .wc-msg-row.wc-in { justify-content: flex-start; }
 .wc-msg-row.wc-out { justify-content: flex-end; }
 .wc-msg {
-	max-width: 82%;
+	max-width: 78%;
 	padding: 10px 14px;
 	font-size: 14px; line-height: 1.45; word-wrap: break-word; overflow-wrap: break-word;
 	position: relative;
+}
+.wc-msg-avatar {
+	width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+	flex-shrink: 0;
+	display: flex; align-items: center; justify-content: center;
+	font-size: 11px; font-weight: 600; letter-spacing: .02em;
+	overflow: hidden;
+}
+.wc-msg-avatar img {
+	width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+}
+.wc-msg-avatar-org {
+	margin-right: 8px;
+	background: linear-gradient(135deg, ${primary} 0%, ${shadeColor(primary, -18)} 100%);
+	color: #fff;
+	box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.wc-msg-avatar-visitor {
+	margin-left: 8px;
+	background: #e2e8f0;
+	color: #64748b;
 }
 .wc-msg-in .wc-msg {
 	background: #f1f5f9; color: #0f172a;
@@ -271,6 +302,36 @@ input, textarea { font: inherit; }
 .wc-send:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .wc-send svg { width: 18px; height: 18px; }
 
+.wc-typing {
+	display: flex; align-items: flex-end; gap: 6px;
+	padding: 4px 0 8px 18px;
+	animation: wcSlideIn .22s cubic-bezier(.2,.9,.3,1.2);
+}
+.wc-typing-avatar {
+	width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+	background: linear-gradient(135deg, ${primary} 0%, ${shadeColor(primary, -18)} 100%);
+	color: #fff; font-size: 11px; font-weight: 600;
+	display: flex; align-items: center; justify-content: center;
+	box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.wc-typing-dots {
+	display: flex; align-items: center; gap: 4px;
+	background: #f1f5f9; border-radius: 16px 16px 16px 4px;
+	padding: 12px 16px;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.wc-typing-dot {
+	width: 7px; height: 7px; border-radius: 50%;
+	background: #94a3b8;
+	animation: wcTypingBounce 1.4s infinite ease-in-out both;
+}
+.wc-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.wc-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+.wc-typing-dot:nth-child(3) { animation-delay: 0s; }
+@keyframes wcTypingBounce {
+	0%, 80%, 100% { transform: scale(0.6); opacity: .4; }
+	40% { transform: scale(1); opacity: 1; }
+}
 .wc-branding {
 	text-align: center; padding: 8px 0 10px;
 	font-size: 11px; color: #94a3b8; background: #ffffff;
@@ -286,7 +347,13 @@ input, textarea { font: inherit; }
 
 	function hexToRgba(hex: string, alpha: number): string {
 		const h = hex.replace('#', '');
-		const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+		const full =
+			h.length === 3
+				? h
+						.split('')
+						.map((c) => c + c)
+						.join('')
+				: h;
 		const r = parseInt(full.substring(0, 2), 16);
 		const g = parseInt(full.substring(2, 4), 16);
 		const b = parseInt(full.substring(4, 6), 16);
@@ -296,7 +363,13 @@ input, textarea { font: inherit; }
 
 	function shadeColor(hex: string, percent: number): string {
 		const h = hex.replace('#', '');
-		const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+		const full =
+			h.length === 3
+				? h
+						.split('')
+						.map((c) => c + c)
+						.join('')
+				: h;
 		let r = parseInt(full.substring(0, 2), 16);
 		let g = parseInt(full.substring(2, 4), 16);
 		let b = parseInt(full.substring(4, 6), 16);
@@ -313,7 +386,6 @@ input, textarea { font: inherit; }
 	const closeIcon = `<svg class="wc-icon wc-icon-close" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 	const closeIconSmall = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 	const sendIcon = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-	const logoIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="rgba(255,255,255,.95)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 5a3 3 0 1 1-3 3 3 3 0 0 1 3-3zm0 13a7 7 0 0 1-5.6-2.8c0-1.86 3.73-2.88 5.6-2.88s5.6 1 5.6 2.88A7 7 0 0 1 12 20z"/></svg>`;
 
 	// ── DOM construction ────────────────────────────────────────────────────
 
@@ -321,6 +393,20 @@ input, textarea { font: inherit; }
 		const host = document.createElement('div');
 		host.id = 'contractor-os-webchat';
 		host.style.cssText = 'all: initial; position: fixed; width: 0; height: 0; z-index: 2147483646;';
+		hostEl = host;
+
+		// Intercept wheel events that bubble out of the Shadow DOM.
+		// Calling preventDefault on the light-DOM host reliably stops
+		// the host page from scrolling.
+		host.addEventListener(
+			'wheel',
+			(e) => {
+				e.preventDefault();
+				if (bodyEl) bodyEl.scrollTop += e.deltaY;
+			},
+			{ passive: false }
+		);
+
 		document.body.appendChild(host);
 		return host.attachShadow({ mode: 'open' });
 	}
@@ -352,14 +438,14 @@ input, textarea { font: inherit; }
 			logo.addEventListener('error', () => {
 				const ph = document.createElement('div');
 				ph.className = 'wc-logo-placeholder';
-				ph.innerHTML = logoIcon;
+				ph.textContent = getInitials(config.org_name);
 				logo.replaceWith(ph);
 			});
 			header.appendChild(logo);
 		} else {
 			const ph = document.createElement('div');
 			ph.className = 'wc-logo-placeholder';
-			ph.innerHTML = logoIcon;
+			ph.textContent = getInitials(config.org_name);
 			header.appendChild(ph);
 		}
 
@@ -404,7 +490,8 @@ input, textarea { font: inherit; }
 
 		const intro = document.createElement('p');
 		intro.className = 'wc-form-intro';
-		intro.textContent = config.intro_message || `Hi! Send us a message and we'll get back to you shortly.`;
+		intro.textContent =
+			config.intro_message || `Hi! Send us a message and we'll get back to you shortly.`;
 		form.appendChild(intro);
 
 		const nameField = document.createElement('div');
@@ -458,6 +545,7 @@ input, textarea { font: inherit; }
 		const hideError = () => errorEl.classList.remove('wc-visible');
 
 		submitBtn.addEventListener('click', async () => {
+			resetAutoClose();
 			const name = nameInput.value.trim();
 			const phone = phoneInput.value.trim();
 			if (!name || !phone) {
@@ -476,7 +564,9 @@ input, textarea { font: inherit; }
 		});
 
 		[nameInput, phoneInput].forEach((el) => {
+			el.addEventListener('click', resetAutoClose);
 			el.addEventListener('keydown', (e) => {
+				resetAutoClose();
 				if (e.key === 'Enter') {
 					e.preventDefault();
 					submitBtn.click();
@@ -525,13 +615,16 @@ input, textarea { font: inherit; }
 
 		const send = () => sendMessage(textarea, sendBtn);
 		sendBtn.addEventListener('click', send);
+		textarea.addEventListener('click', resetAutoClose);
 		textarea.addEventListener('keydown', (e) => {
+			resetAutoClose();
 			if (e.key === 'Enter' && !e.shiftKey) {
 				e.preventDefault();
 				send();
 			}
 		});
 		textarea.addEventListener('input', () => {
+			resetAutoClose();
 			textarea.style.height = 'auto';
 			textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 		});
@@ -541,10 +634,31 @@ input, textarea { font: inherit; }
 	}
 
 	function appendMessage(msg: WidgetMessage, direction: 'in' | 'out') {
-		if (!bodyEl) return;
+		if (!bodyEl || !session) return;
 		const row = document.createElement('div');
 		row.className = `wc-msg-row wc-${direction}`;
 		row.dataset.msgId = msg.id;
+
+		if (direction === 'in') {
+			const avatar = document.createElement('div');
+			avatar.className = 'wc-msg-avatar wc-msg-avatar-org';
+			const logo = session.config.logo_url;
+			const orgName = session.config.org_name;
+			if (logo) {
+				const img = document.createElement('img');
+				img.src = logo;
+				img.alt = orgName;
+				img.addEventListener('error', () => {
+					avatar.textContent = getInitials(orgName);
+					avatar.classList.add('wc-msg-avatar-fallback');
+				});
+				avatar.appendChild(img);
+			} else {
+				avatar.textContent = getInitials(orgName);
+				avatar.classList.add('wc-msg-avatar-fallback');
+			}
+			row.appendChild(avatar);
+		}
 
 		const bubble = document.createElement('div');
 		bubble.className = 'wc-msg';
@@ -559,12 +673,53 @@ input, textarea { font: inherit; }
 		bubble.appendChild(time);
 
 		row.appendChild(bubble);
+
+		if (direction === 'out') {
+			const avatar = document.createElement('div');
+			avatar.className = 'wc-msg-avatar wc-msg-avatar-visitor';
+			avatar.textContent = getInitials(session.visitor_name || '?');
+			row.appendChild(avatar);
+		}
+
 		bodyEl.appendChild(row);
 		scrollToBottom();
 	}
 
 	function scrollToBottom() {
-		if (bodyEl) requestAnimationFrame(() => { bodyEl!.scrollTop = bodyEl!.scrollHeight; });
+		if (bodyEl)
+			requestAnimationFrame(() => {
+				bodyEl!.scrollTop = bodyEl!.scrollHeight;
+			});
+	}
+
+	function renderTypingIndicator() {
+		if (!bodyEl || !session) return;
+		removeTypingIndicator();
+		const row = document.createElement('div');
+		row.className = 'wc-typing';
+		row.id = 'wc-typing-indicator';
+
+		const avatar = document.createElement('div');
+		avatar.className = 'wc-typing-avatar';
+		avatar.textContent = getInitials(session.config.org_name);
+		row.appendChild(avatar);
+
+		const dots = document.createElement('div');
+		dots.className = 'wc-typing-dots';
+		for (let i = 0; i < 3; i++) {
+			const dot = document.createElement('span');
+			dot.className = 'wc-typing-dot';
+			dots.appendChild(dot);
+		}
+		row.appendChild(dots);
+		bodyEl.appendChild(row);
+		scrollToBottom();
+	}
+
+	function removeTypingIndicator() {
+		if (!bodyEl) return;
+		const el = bodyEl.querySelector('#wc-typing-indicator');
+		if (el) el.remove();
 	}
 
 	function formatTime(iso: string): string {
@@ -575,7 +730,33 @@ input, textarea { font: inherit; }
 		}
 	}
 
+	function getInitials(name: string): string {
+		return name
+			.split(/\s+/)
+			.map((p) => p[0]?.toUpperCase() ?? '')
+			.slice(0, 2)
+			.join('') || '?';
+	}
+
 	// ── Toggle ──────────────────────────────────────────────────────────────
+
+	function clearAutoClose() {
+		if (autoCloseTimer) {
+			clearTimeout(autoCloseTimer);
+			autoCloseTimer = null;
+		}
+	}
+
+	function scheduleAutoClose() {
+		clearAutoClose();
+		autoCloseTimer = setTimeout(() => {
+			if (open) togglePanel();
+		}, AUTO_CLOSE_MS);
+	}
+
+	function resetAutoClose() {
+		if (open) scheduleAutoClose();
+	}
 
 	function togglePanel() {
 		open = !open;
@@ -584,8 +765,11 @@ input, textarea { font: inherit; }
 			btnEl.setAttribute('data-open', String(open));
 			btnEl.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 		}
-		// Poll lifecycle is bound to session existence (see init/startSession),
-		// not panel visibility. Minimizing must NOT drop sync.
+		if (open) {
+			scheduleAutoClose();
+		} else {
+			clearAutoClose();
+		}
 	}
 
 	// ── Bootstrap ───────────────────────────────────────────────────────────
@@ -608,7 +792,9 @@ input, textarea { font: inherit; }
 					startPolling();
 					return;
 				}
-			} catch { /* invalid */ }
+			} catch {
+				/* invalid */
+			}
 			localStorage.removeItem(SESSION_KEY);
 			clearCursor();
 		}
@@ -643,7 +829,10 @@ input, textarea { font: inherit; }
 		}
 	}
 
-	async function restoreSession(sessionId: string, sessionToken: string): Promise<SessionState | null> {
+	async function restoreSession(
+		sessionId: string,
+		sessionToken: string
+	): Promise<SessionState | null> {
 		try {
 			const res = await fetch(`${BASE}/api/webchat/session/${sessionId}/restore`, {
 				headers: { Authorization: `Bearer ${sessionToken}` }
@@ -657,6 +846,7 @@ input, textarea { font: inherit; }
 					intro_message: string;
 					offline_message: string;
 					webchat_mode: 'instant' | 'asynchronous';
+					visitor_name: string | null;
 					messages: Array<{
 						id: string;
 						body: string;
@@ -667,6 +857,10 @@ input, textarea { font: inherit; }
 				};
 			};
 			if (!json.data) return null;
+			const storedName = localStorage.getItem(VISITOR_NAME_KEY) || json.data.visitor_name || '';
+			if (!localStorage.getItem(VISITOR_NAME_KEY) && json.data.visitor_name) {
+				localStorage.setItem(VISITOR_NAME_KEY, json.data.visitor_name);
+			}
 			return {
 				session_id: sessionId,
 				session_token: sessionToken,
@@ -678,14 +872,19 @@ input, textarea { font: inherit; }
 					offline_message: json.data.offline_message,
 					webchat_mode: json.data.webchat_mode
 				},
-				messages: json.data.messages
+				messages: json.data.messages,
+				visitor_name: storedName
 			};
 		} catch {
 			return null;
 		}
 	}
 
-	async function startSession(name: string, phone: string, _config: WidgetConfig): Promise<string | null> {
+	async function startSession(
+		name: string,
+		phone: string,
+		_config: WidgetConfig
+	): Promise<string | null> {
 		try {
 			const res = await fetch(`${BASE}/api/webchat/session/start`, {
 				method: 'POST',
@@ -721,13 +920,15 @@ input, textarea { font: inherit; }
 					offline_message: json.data.offline_message,
 					webchat_mode: json.data.webchat_mode
 				},
-				messages: []
+				messages: [],
+				visitor_name: name
 			};
 
 			localStorage.setItem(
 				SESSION_KEY,
 				JSON.stringify({ session_id: session.session_id, session_token: session.session_token })
 			);
+			localStorage.setItem(VISITOR_NAME_KEY, name);
 			// Fresh session — clear any stale cursor from a prior session
 			clearCursor();
 
@@ -830,7 +1031,10 @@ input, textarea { font: inherit; }
 			});
 			if (res.ok) {
 				const json = (await res.json()) as {
-					data?: { messages: Array<{ id: string; body: string; created_at: string; sent_at: string }> };
+					data?: {
+						messages: Array<{ id: string; body: string; created_at: string; sent_at: string }>;
+						contractor_is_typing?: boolean;
+					};
 				};
 				const rows = json.data?.messages ?? [];
 				for (const row of rows) {
@@ -840,6 +1044,13 @@ input, textarea { font: inherit; }
 					const incoming: WidgetMessage = { ...row, direction: 'outbound' };
 					session.messages.push(incoming);
 					appendMessage(incoming, 'in');
+				}
+
+				const typing = json.data?.contractor_is_typing ?? false;
+				if (typing !== contractorTyping) {
+					contractorTyping = typing;
+					if (typing) renderTypingIndicator();
+					else removeTypingIndicator();
 				}
 			}
 		} catch {
@@ -851,7 +1062,9 @@ input, textarea { font: inherit; }
 	}
 
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', () => { void init(); });
+		document.addEventListener('DOMContentLoaded', () => {
+			void init();
+		});
 	} else {
 		void init();
 	}

@@ -18,11 +18,7 @@ export async function touchContactLastContacted(orgId: string, contactId: string
 			.update(contacts)
 			.set({ last_contacted_at: new Date() })
 			.where(
-				and(
-					eq(contacts.org_id, orgId),
-					eq(contacts.id, contactId),
-					isNull(contacts.deleted_at)
-				)
+				and(eq(contacts.org_id, orgId), eq(contacts.id, contactId), isNull(contacts.deleted_at))
 			);
 	} catch (err) {
 		log.warn({

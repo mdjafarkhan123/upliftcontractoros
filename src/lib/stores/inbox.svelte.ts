@@ -36,6 +36,20 @@ export type ConversationListItem = {
 	unread_count: number;
 	snoozed_until: string | null;
 	has_delivery_failure: boolean;
+	tags: string[];
+	created_at: string;
+};
+
+export type MessageMedia = {
+	id: string;
+	r2_key: string;
+	thumbnail_key: string | null;
+	web_key: string | null;
+	original_filename: string;
+	file_size_bytes: number;
+	media_type: 'photo' | 'pdf' | 'attachment';
+	mime_type: string;
+	purpose_tag: string;
 	created_at: string;
 };
 
@@ -48,6 +62,7 @@ export type ThreadMessage = {
 	body: string | null;
 	is_internal_note: boolean;
 	media_urls: string[] | null;
+	media?: MessageMedia[];
 	status: MessageStatus;
 	twilio_message_sid: string | null;
 	reply_to_message_id: string | null;
@@ -80,6 +95,7 @@ export type ConversationDetail = {
 	last_message_preview: string | null;
 	last_message_channel: MessageChannel | null;
 	last_message_direction: MessageDirection | null;
+	last_inbound_at: string | null;
 	unread_count: number;
 	snoozed_until: string | null;
 	has_delivery_failure: boolean;
@@ -99,12 +115,27 @@ export type ContactSummary = {
 	email: string | null;
 	status: string;
 	sms_opt_out: boolean;
+	lead_source: string | null;
+};
+
+export type NextAppointment = {
+	id: string;
+	title: string | null;
+	scheduled_start: string;
+	type: string;
+};
+
+export type SmsQuota = {
+	used: number;
+	limit: number;
 };
 
 export type ThreadContext = {
 	pipeline_stage: string | null;
 	latest_quote: { id: string; quote_number: number; status: string; total: string } | null;
 	latest_invoice: { id: string; invoice_number: number; status: string; total: string } | null;
+	next_appointment: NextAppointment | null;
+	sms_quota: SmsQuota;
 };
 
 export type InboxFilters = {
@@ -112,6 +143,7 @@ export type InboxFilters = {
 	assignee: AssigneeFilter;
 	unread: boolean;
 	q: string;
+	tag: string;
 };
 
 type ListStatus = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
@@ -140,12 +172,41 @@ const PREVIEW_LIMIT = 140;
 
 const listCache = new SvelteMap<string, ListEntry>();
 let currentListKey = $state('');
+// Last filters passed to loadList — lets realtime handlers revalidate the
+// currently-visible list when a message arrives for a conversation not in it.
+let currentFilters: InboxFilters | null = null;
 let listStatus = $state<ListStatus>('idle');
 let listError = $state<string | null>(null);
 let listController: AbortController | null = null;
 
+// Realtime can fire a burst of forced list reloads — on reconnect (the manager
+// replays missed events) and whenever a message lands for a conversation not in
+// the current filtered view. Without coalescing, each one replaces + re-sorts
+// the whole list, so a flapping connection makes the UI visibly jump. This
+// throttle runs the first reload immediately (leading edge) then collapses any
+// further requests in the window into a single trailing reload.
+const LIST_REVALIDATE_THROTTLE_MS = 3_000;
+let listRevalidateTimer: ReturnType<typeof setTimeout> | null = null;
+let lastListRevalidateAt = 0;
+
+function scheduleListRevalidate(): void {
+	if (!currentFilters) return;
+	const sinceLast = Date.now() - lastListRevalidateAt;
+	if (sinceLast >= LIST_REVALIDATE_THROTTLE_MS) {
+		lastListRevalidateAt = Date.now();
+		void inboxStore.loadList(currentFilters, true);
+		return;
+	}
+	if (listRevalidateTimer) return; // a trailing reload is already queued
+	listRevalidateTimer = setTimeout(() => {
+		listRevalidateTimer = null;
+		lastListRevalidateAt = Date.now();
+		if (currentFilters) void inboxStore.loadList(currentFilters, true);
+	}, LIST_REVALIDATE_THROTTLE_MS - sinceLast);
+}
+
 function buildListKey(f: InboxFilters): string {
-	return `${f.status}|${f.assignee}|${f.unread ? '1' : '0'}|${f.q.trim()}`;
+	return `${f.status}|${f.assignee}|${f.unread ? '1' : '0'}|${f.q.trim()}|${f.tag.trim()}`;
 }
 
 function buildListParams(f: InboxFilters, cursor: string | null): URLSearchParams {
@@ -154,6 +215,7 @@ function buildListParams(f: InboxFilters, cursor: string | null): URLSearchParam
 	if (f.assignee !== 'all') p.set('assignee', f.assignee);
 	if (f.unread) p.set('unread', '1');
 	if (f.q.trim()) p.set('q', f.q.trim());
+	if (f.tag.trim()) p.set('tag', f.tag.trim());
 	if (cursor) p.set('cursor', cursor);
 	return p;
 }
@@ -208,10 +270,10 @@ async function fetchThreadMessages(
 
 // ───── Reconcilers ─────────────────────────────────────────────────────────
 
-function previewFor(channel: MessageChannel, body: string | null): string {
+function previewFor(channel: MessageChannel, body: string | null, hasMedia = false): string {
 	if (channel === 'missed_call') return 'Missed phone call';
-	if (!body) return '';
-	const trimmed = body.trim();
+	const trimmed = body?.trim() ?? '';
+	if (!trimmed) return hasMedia ? '📷 Photo' : '';
 	return trimmed.length > PREVIEW_LIMIT ? trimmed.slice(0, PREVIEW_LIMIT) : trimmed;
 }
 
@@ -290,10 +352,7 @@ function applyMessageToThread(conversationId: string, msg: ThreadMessage): void 
 	threadCache.set(conversationId, { ...entry, messages });
 }
 
-function applyConversationPatch(
-	conversationId: string,
-	patch: Partial<ConversationDetail>
-): void {
+function applyConversationPatch(conversationId: string, patch: Partial<ConversationDetail>): void {
 	const entry = threadCache.get(conversationId);
 	if (entry?.conversation) {
 		threadCache.set(conversationId, {
@@ -329,6 +388,7 @@ export const inboxStore = {
 	async loadList(filters: InboxFilters, force = false): Promise<void> {
 		const key = buildListKey(filters);
 		currentListKey = key;
+		currentFilters = filters;
 		const cached = listCache.get(key);
 		const fresh = cached && Date.now() - cached.fetchedAt < LIST_TTL_MS;
 		if (fresh && !force) {
@@ -356,6 +416,13 @@ export const inboxStore = {
 		} finally {
 			if (listController === controller) listController = null;
 		}
+	},
+
+	// Throttled, fire-and-forget reload of the currently-visible list. Used by the
+	// realtime reconnect path so a flapping connection can't reload the list on
+	// every blip (which makes the UI jump). Safe no-op until a list has loaded.
+	revalidateList(): void {
+		scheduleListRevalidate();
 	},
 
 	async loadMoreList(filters: InboxFilters): Promise<void> {
@@ -463,6 +530,9 @@ export const inboxStore = {
 			isInternalNote?: boolean;
 			channel?: OutboundChannel;
 			emailSubject?: string;
+			interpolate?: boolean;
+			mediaIds?: string[];
+			optimisticMedia?: MessageMedia[];
 		} = {}
 	): Promise<{ ok: true; message: ThreadMessage } | { ok: false; error: string }> {
 		const isInternal = opts.isInternalNote === true;
@@ -470,7 +540,10 @@ export const inboxStore = {
 		const optimisticKey = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		const nowIso = new Date().toISOString();
 		const optimisticChannel: MessageChannel =
-			opts.channel ?? entry?.conversation?.suggested_channel ?? entry?.conversation?.last_message_channel ?? 'sms';
+			opts.channel ??
+			entry?.conversation?.suggested_channel ??
+			entry?.conversation?.last_message_channel ??
+			'sms';
 
 		const optimistic: ThreadMessage = {
 			id: optimisticKey,
@@ -481,6 +554,7 @@ export const inboxStore = {
 			body,
 			is_internal_note: isInternal,
 			media_urls: null,
+			media: opts.optimisticMedia ?? [],
 			status: 'sending',
 			twilio_message_sid: null,
 			reply_to_message_id: null,
@@ -510,6 +584,8 @@ export const inboxStore = {
 			const payload: Record<string, unknown> = { body, is_internal_note: isInternal };
 			if (opts.channel) payload.channel = opts.channel;
 			if (opts.emailSubject) payload.email_subject = opts.emailSubject;
+			if (opts.interpolate) payload.interpolate = true;
+			if (opts.mediaIds && opts.mediaIds.length > 0) payload.media_ids = opts.mediaIds;
 			const res = await fetch(`/api/conversations/${conversationId}/messages`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -540,19 +616,31 @@ export const inboxStore = {
 
 			if (!isInternal) {
 				const confirmed = json.data.message;
+				const confirmedHasMedia = (confirmed.media?.length ?? 0) > 0;
 				patchListEntries(conversationId, (c) => ({
 					...c,
 					last_message_at: confirmed.created_at,
-					last_message_preview: previewFor(confirmed.channel, confirmed.body),
+					last_message_preview: previewFor(confirmed.channel, confirmed.body, confirmedHasMedia),
 					last_message_channel: confirmed.channel,
 					last_message_direction: 'outbound'
 				}));
 				applyConversationPatch(conversationId, {
 					last_message_at: confirmed.created_at,
-					last_message_preview: previewFor(confirmed.channel, confirmed.body),
+					last_message_preview: previewFor(confirmed.channel, confirmed.body, confirmedHasMedia),
 					last_message_channel: confirmed.channel,
 					last_message_direction: 'outbound'
 				});
+				// Sending into a closed/snoozed thread reopens it server-side — mirror
+				// that here so the UI flips to open without waiting for a refetch.
+				const priorStatus = threadCache.get(conversationId)?.conversation?.status;
+				if (priorStatus && priorStatus !== 'open') {
+					applyConversationPatch(conversationId, { status: 'open', snoozed_until: null });
+					patchListEntries(conversationId, (c) => ({
+						...c,
+						status: 'open',
+						snoozed_until: null
+					}));
+				}
 			}
 			return { ok: true, message: json.data.message };
 		} catch (e) {
@@ -643,6 +731,49 @@ export const inboxStore = {
 		} catch (e) {
 			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
 		}
+	},
+
+	async updateTags(
+		conversationId: string,
+		tags: string[]
+	): Promise<{ ok: true; tags: string[] } | { ok: false; error: string }> {
+		const before = threadCache.get(conversationId)?.conversation?.tags ?? [];
+		const normalized = Array.from(
+			new Set(tags.map((t) => t.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean))
+		);
+		applyConversationPatch(conversationId, { tags: normalized });
+		patchListEntries(conversationId, (c) => ({ ...c, tags: normalized }));
+		try {
+			const res = await fetch(`/api/conversations/${conversationId}/tags`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ tags: normalized })
+			});
+			if (!res.ok) {
+				applyConversationPatch(conversationId, { tags: before });
+				patchListEntries(conversationId, (c) => ({ ...c, tags: before }));
+				const json = (await res.json().catch(() => ({}))) as { error?: string };
+				return { ok: false, error: json.error ?? 'Failed to update tags' };
+			}
+			const body = (await res.json()) as { data: { tags: string[] } };
+			applyConversationPatch(conversationId, { tags: body.data.tags });
+			patchListEntries(conversationId, (c) => ({ ...c, tags: body.data.tags }));
+			return { ok: true, tags: body.data.tags };
+		} catch (e) {
+			applyConversationPatch(conversationId, { tags: before });
+			patchListEntries(conversationId, (c) => ({ ...c, tags: before }));
+			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+		}
+	},
+
+	getOrgTags(): string[] {
+		const tags = new Set<string>();
+		for (const entry of listCache.values()) {
+			for (const item of entry.items) {
+				for (const t of item.tags ?? []) tags.add(t);
+			}
+		}
+		return [...tags].sort();
 	},
 
 	async setAssignee(
@@ -738,10 +869,9 @@ export const inboxStore = {
 		);
 		applyConversationPatch(conversationId, { has_delivery_failure: false });
 		try {
-			const res = await fetch(
-				`/api/conversations/${conversationId}/messages/${messageId}/retry`,
-				{ method: 'POST' }
-			);
+			const res = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/retry`, {
+				method: 'POST'
+			});
 			const body = (await res.json().catch(() => ({}))) as {
 				data?: { message: ThreadMessage };
 				error?: string;
@@ -782,18 +912,80 @@ export const inboxStore = {
 		}
 	},
 
+	applyRealtimeMediaInsert(row: {
+		id: string;
+		message_id: string | null;
+		r2_key: string;
+		thumbnail_key: string | null;
+		web_key: string | null;
+		original_filename: string;
+		file_size_bytes: number;
+		media_type: 'photo' | 'pdf' | 'attachment';
+		mime_type: string;
+		purpose_tag: string;
+		created_at: string;
+		deleted_at?: string | null;
+	}): void {
+		// Inbound MMS (and any async-attached media) lands in the media table after
+		// the message already rendered. Append it to the in-thread message so the
+		// photo/file appears without a refresh.
+		if (!row.message_id || row.deleted_at) return;
+		for (const [convId, entry] of threadCache) {
+			const idx = entry.messages.findIndex((m) => m.id === row.message_id);
+			if (idx < 0) continue;
+			const msg = entry.messages[idx];
+			const existing = msg.media ?? [];
+			if (existing.some((mm) => mm.id === row.id)) return;
+			const next = entry.messages.slice();
+			next[idx] = {
+				...msg,
+				media: [
+					...existing,
+					{
+						id: row.id,
+						r2_key: row.r2_key,
+						thumbnail_key: row.thumbnail_key,
+						web_key: row.web_key,
+						original_filename: row.original_filename,
+						file_size_bytes: row.file_size_bytes,
+						media_type: row.media_type,
+						mime_type: row.mime_type,
+						purpose_tag: row.purpose_tag,
+						created_at: row.created_at
+					}
+				]
+			};
+			threadCache.set(convId, { ...entry, messages: next });
+			return;
+		}
+	},
+
 	applyRealtimeMessageInsert(msg: ThreadMessage): void {
 		applyMessageToThread(msg.conversation_id, msg);
 
+		// New or reactivated conversation: if the message targets a conversation that
+		// isn't in the currently-visible list, the per-row patch below has nothing to
+		// update. Revalidate the current list (background, stays on screen) so brand-new
+		// leads and reopened threads surface instantly instead of after the TTL lapses.
+		const inCurrentList = (listCache.get(currentListKey)?.items ?? []).some(
+			(c) => c.id === msg.conversation_id
+		);
+		if (!inCurrentList && currentFilters) {
+			scheduleListRevalidate();
+		}
+
 		const isInbound = msg.direction === 'inbound';
 		const isInternal = msg.is_internal_note;
-		const newPreview = previewFor(msg.channel, msg.body);
+		// An empty-bodied inbound message is an MMS whose photo lands a moment later;
+		// show "📷 Photo" now rather than a blank preview that the server already set.
+		const msgHasMedia =
+			(msg.media?.length ?? 0) > 0 || (isInbound && !isInternal && !(msg.body ?? '').trim());
+		const newPreview = previewFor(msg.channel, msg.body, msgHasMedia);
 
 		patchListEntries(msg.conversation_id, (c) => ({
 			...c,
 			last_message_at: msg.created_at,
-			last_inbound_at:
-				isInbound && !isInternal ? msg.created_at : c.last_inbound_at,
+			last_inbound_at: isInbound && !isInternal ? msg.created_at : c.last_inbound_at,
 			last_message_preview: isInternal ? c.last_message_preview : newPreview,
 			last_message_channel: isInternal ? c.last_message_channel : msg.channel,
 			last_message_direction: isInternal ? c.last_message_direction : msg.direction,
@@ -802,13 +994,17 @@ export const inboxStore = {
 
 		const currentDetail = threadCache.get(msg.conversation_id)?.conversation;
 		const nextUnread =
-			isInbound && !isInternal ? (currentDetail?.unread_count ?? 0) + 1 : currentDetail?.unread_count;
+			isInbound && !isInternal
+				? (currentDetail?.unread_count ?? 0) + 1
+				: currentDetail?.unread_count;
 		applyConversationPatch(msg.conversation_id, {
 			last_message_at: msg.created_at,
-			last_message_preview: isInternal ? currentDetail?.last_message_preview ?? null : newPreview,
-			last_message_channel: isInternal ? currentDetail?.last_message_channel ?? null : msg.channel,
+			last_message_preview: isInternal ? (currentDetail?.last_message_preview ?? null) : newPreview,
+			last_message_channel: isInternal
+				? (currentDetail?.last_message_channel ?? null)
+				: msg.channel,
 			last_message_direction: isInternal
-				? currentDetail?.last_message_direction ?? null
+				? (currentDetail?.last_message_direction ?? null)
 				: msg.direction,
 			...(nextUnread !== undefined ? { unread_count: nextUnread } : {})
 		});

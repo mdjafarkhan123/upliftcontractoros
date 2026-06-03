@@ -1,8 +1,7 @@
 import { json } from '@sveltejs/kit';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { invoiceLineItems, invoices, payments } from '$lib/server/db/schema';
 import { lookupValidInvoiceByToken } from '$lib/server/invoices/publicAccess';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { sha256Hex, clientIpFrom } from '$lib/server/invoices/publicAccess';
@@ -31,8 +30,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	// Derive balance from payments table — server-authoritative.
-	const [balanceRow] = await db
-		.execute<{ total_paid: string; amount_due: string }>(sql`
+	const [balanceRow] = await db.execute<{ total_paid: string; amount_due: string }>(sql`
 			SELECT
 				COALESCE(SUM(p.amount), 0)::text AS total_paid,
 				GREATEST(0, i.total - COALESCE(SUM(p.amount), 0))::text AS amount_due
@@ -47,31 +45,54 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Nothing is due on this invoice.' }, { status: 422 });
 	}
 
-	const lineRows = await db
-		.select({
-			description: invoiceLineItems.description,
-			quantity: invoiceLineItems.quantity,
-			unit_price: invoiceLineItems.unit_price,
-			total: invoiceLineItems.total
-		})
-		.from(invoiceLineItems)
-		.where(
-			and(
-				eq(invoiceLineItems.invoice_id, invoice.id),
-				isNull(invoiceLineItems.deleted_at)
-			)
-		)
-		.orderBy(asc(invoiceLineItems.position));
+	let requestedAmountCents: number | null = null;
+	const rawBody = await event.request.text();
+	if (rawBody.trim().length > 0) {
+		try {
+			const parsed = JSON.parse(rawBody) as { amount_cents?: unknown };
+			if (parsed.amount_cents !== undefined && parsed.amount_cents !== null) {
+				const n = Number(parsed.amount_cents);
+				if (!Number.isInteger(n) || n <= 0) {
+					return json(
+						{
+							error: 'Enter a valid amount greater than zero.',
+							field_errors: { amount_cents: 'Enter a valid amount.' }
+						},
+						{ status: 400 }
+					);
+				}
+				if (n > amountDueCents) {
+					return json(
+						{
+							error: 'Amount cannot exceed the balance due.',
+							field_errors: { amount_cents: 'Cannot exceed balance due.' }
+						},
+						{ status: 400 }
+					);
+				}
+				requestedAmountCents = n;
+			}
+		} catch {
+			return json({ error: 'Invalid request body.' }, { status: 400 });
+		}
+	}
+
+	const chargeCents = requestedAmountCents ?? amountDueCents;
+	const isPartial = chargeCents < amountDueCents;
 
 	const stripe = getOrgStripeClient(invoice.stripe_secret_key);
 	const invoiceNumberDisplay = formatInvoiceNumber(invoice.invoice_number);
 
 	// Build line items for Stripe. Use a single balance line to avoid rounding drift.
-	const stripeLines = [{
-		description: `Invoice ${invoiceNumberDisplay}`,
-		quantity: 1,
-		unit_amount_cents: amountDueCents
-	}];
+	const stripeLines = [
+		{
+			description: isPartial
+				? `Partial payment for Invoice ${invoiceNumberDisplay}`
+				: `Invoice ${invoiceNumberDisplay}`,
+			quantity: 1,
+			unit_amount_cents: chargeCents
+		}
+	];
 
 	const origin = event.url.origin;
 	const successUrl = `${origin}/i/${token}?paid=1`;

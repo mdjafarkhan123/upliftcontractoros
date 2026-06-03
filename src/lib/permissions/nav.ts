@@ -33,22 +33,85 @@ type NavDef = {
 };
 
 const NAV_DEFS: NavDef[] = [
-	{ key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permissions: ['can_view_dashboard'] },
-	{ key: 'inbox', label: 'Inbox', href: '/inbox', icon: Inbox, permissions: ['can_view_all_conversations', 'can_view_assigned_conversations'] },
-	{ key: 'contacts', label: 'Contacts', href: '/contacts', icon: Users, permissions: ['can_view_all_contacts'] },
-	{ key: 'pipeline', label: 'Pipeline', href: '/pipeline', icon: GitBranch, permissions: ['can_view_full_pipeline'] },
-	{ key: 'jobs', label: 'Jobs', href: '/jobs', icon: Briefcase, permissions: ['can_view_full_pipeline', 'can_view_assigned_jobs'] },
-	{ key: 'quotes', label: 'Quotes', href: '/quotes', icon: FileText, permissions: ['can_view_all_quotes'] },
-	{ key: 'invoices', label: 'Invoices', href: '/invoices', icon: Receipt, permissions: ['can_view_all_invoices'] },
-	{ key: 'appointments', label: 'Appointments', href: '/appointments', icon: Calendar, permissions: ['can_view_all_appointments', 'can_view_assigned_appointments'] },
-	{ key: 'reputation', label: 'Reputation', href: '/reputation', icon: Star, permissions: ['can_view_reviews'] },
-	{ key: 'growth', label: 'Growth', href: '/growth', icon: TrendingUp, permissions: ['can_view_growth_feed'] }
+	{
+		key: 'dashboard',
+		label: 'Dashboard',
+		href: '/dashboard',
+		icon: LayoutDashboard,
+		permissions: ['can_view_dashboard']
+	},
+	{
+		key: 'inbox',
+		label: 'Inbox',
+		href: '/inbox',
+		icon: Inbox,
+		permissions: ['can_view_all_conversations', 'can_view_assigned_conversations']
+	},
+	{
+		key: 'contacts',
+		label: 'Contacts',
+		href: '/contacts',
+		icon: Users,
+		permissions: ['can_view_all_contacts']
+	},
+	{
+		key: 'pipeline',
+		label: 'Pipeline',
+		href: '/pipeline',
+		icon: GitBranch,
+		permissions: ['can_view_full_pipeline', 'can_view_assigned_opportunities']
+	},
+	{
+		key: 'jobs',
+		label: 'Jobs',
+		href: '/jobs',
+		icon: Briefcase,
+		permissions: ['can_view_full_pipeline', 'can_view_assigned_jobs']
+	},
+	{
+		key: 'quotes',
+		label: 'Quotes',
+		href: '/quotes',
+		icon: FileText,
+		permissions: ['can_view_all_quotes']
+	},
+	{
+		key: 'invoices',
+		label: 'Invoices',
+		href: '/invoices',
+		icon: Receipt,
+		permissions: ['can_view_all_invoices']
+	},
+	{
+		key: 'appointments',
+		label: 'Appointments',
+		href: '/appointments',
+		icon: Calendar,
+		permissions: ['can_view_all_appointments', 'can_view_assigned_appointments']
+	},
+	{
+		key: 'reputation',
+		label: 'Reputation',
+		href: '/reputation',
+		icon: Star,
+		permissions: ['can_view_reviews']
+	},
+	{
+		key: 'growth',
+		label: 'Growth Feed',
+		href: '/growth',
+		icon: TrendingUp,
+		permissions: ['can_view_growth_feed']
+	}
 ];
 
 export function buildVisibleNav(member: OrgMember, features?: FeatureFlags): NavItem[] {
 	const items: NavItem[] = [];
 	for (const def of NAV_DEFS) {
-		const permitted = def.permissions.length === 1 ? can(member, def.permissions[0]) : canAny(member, def.permissions);
+		const permitted =
+			def.permissions.length === 1
+				? can(member, def.permissions[0])
+				: canAny(member, def.permissions);
 		if (!permitted) continue;
 		const requiredFeature = featureForNavKey(def.key);
 		if (requiredFeature && features && !features[requiredFeature]) continue;

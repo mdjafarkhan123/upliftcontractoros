@@ -2,12 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	contacts,
-	outboxEvents,
-	quoteChangeRequests,
-	quotes
-} from '$lib/server/db/schema';
+import { contacts, outboxEvents, quoteChangeRequests, quotes } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canSendQuote } from '$lib/server/quotes/permissions';
 import { generateToken, hashToken } from '$lib/server/quotes/token';

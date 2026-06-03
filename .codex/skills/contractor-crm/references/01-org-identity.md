@@ -394,4 +394,3 @@ CREATE UNIQUE INDEX idx_org_email_settings_reply_domain
 - Provider validation: only `resend` and `postmark` allowed.
 - SENSITIVE FIELDS stripped by API layer before returning to contractor: `inbound_webhook_secret`, `provider_domain_id`, `dns_records_required`.
 - Table is NOT Realtime‑subscribed. Domain verification status is polled via API route.
-

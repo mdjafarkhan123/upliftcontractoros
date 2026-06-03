@@ -129,7 +129,7 @@
 
 <svelte:head><title>Job</title></svelte:head>
 
-<PageWrapper class="md:max-w-3xl">
+<PageWrapper>
 	<Button variant="ghost" href="/jobs" class="mb-4">
 		<ArrowLeft class="h-4 w-4" /> Back to jobs
 	</Button>
@@ -152,7 +152,14 @@
 				</div>
 				<div class="mt-3 flex items-center justify-between gap-2">
 					<span class="text-xs text-muted-foreground">Review request</span>
-					<JobReviewIndicator status={job.review_request_status} />
+					<JobReviewIndicator
+						jobId={job.id}
+						jobStatus={job.status}
+						status={job.review_request_status}
+						onSent={(next) => {
+							if (job) job = { ...job, review_request_status: next };
+						}}
+					/>
 				</div>
 				{#if canEdit && job.status !== 'completed' && job.status !== 'cancelled'}
 					<div class="mt-3">
@@ -182,6 +189,10 @@
 			<JobScopeSection scope_of_work={job.scope_of_work} notes={job.notes} />
 
 			<JobLinksSection
+				job_id={job.id}
+				contact_id={job.contact_id}
+				contact_name={job.contact_name}
+				job_title={job.title}
 				opportunity_id={job.opportunity_id}
 				invoice_count={job.invoice_count}
 				appointment_count={job.appointment_count}

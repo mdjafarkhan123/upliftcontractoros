@@ -1,6 +1,7 @@
 # Domain 11 — Growth, Automation & System
 
 Tables: `growth_feed_items`, `internal_activity_log`, `notifications`,
+`member_notification_preferences`, `push_subscriptions`, `notification_delivery_state`,
 `automation_jobs`, `outbox_events`, `org_counters`
 Enums used: `growth_feed_type`, `automation_job_status`, `automation_job_type`,
 `outbox_event_status`
@@ -71,6 +72,77 @@ CREATE INDEX idx_internal_activity_log_created_at
 
 ---
 
+## `activity_events`
+
+Contractor-facing Recent Activity feed table. Append-only, populated by the
+outbox worker during dispatch (same transaction as outbox row →
+`processed`). Decoupled from `outbox_events` so feed history survives any
+future outbox retention/cleanup policy.
+
+Read by `/api/dashboard/summary` to populate `recent_activity` in the
+dashboard response. Rows are rendered via `activityRegistry.ts` — only event
+types present in the registry are queried (`ACTIVITY_ALLOWLIST`).
+
+```sql
+CREATE TABLE activity_events (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        UUID NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  event_type    TEXT NOT NULL,         -- Mirrors outbox_events.event_type
+  resource_type TEXT NOT NULL,
+  resource_id   UUID NOT NULL,
+  contact_id    UUID,                  -- Denormalized from payload for fast joins
+  payload       JSONB NOT NULL,        -- Copied verbatim from outbox payload
+  event_version INTEGER NOT NULL DEFAULT 1,
+  occurred_at   TIMESTAMPTZ NOT NULL,  -- = source outbox_events.created_at
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE INDEX activity_events_org_occurred_idx
+  ON activity_events (org_id, occurred_at DESC);
+CREATE INDEX activity_events_org_type_occurred_idx
+  ON activity_events (org_id, event_type, occurred_at DESC);
+```
+
+**Write path (in `outboxWorker.processBatch`):**
+
+For every outbox row successfully `dispatch()`'d, if `event_type` is in
+`ACTIVITY_ALLOWLIST`, the worker inserts an `activity_events` row inside the
+same transaction as the outbox status update. Feed-only events
+(`opportunity.stage_changed`, `contact.status_changed`) route to zero
+queues but are still considered "routed" and still get persisted here —
+that's why their activity rows exist despite no notification firing.
+
+**Read path (dashboard summary):**
+
+```sql
+SELECT ae.id, ae.event_type, ae.resource_type, ae.resource_id,
+       ae.payload, ae.occurred_at, c.full_name AS contact_name
+FROM activity_events ae
+LEFT JOIN contacts c ON c.id = ae.contact_id
+WHERE ae.org_id = $1
+  AND ae.event_type = ANY($2::text[])   -- ACTIVITY_ALLOWLIST
+ORDER BY ae.occurred_at DESC
+LIMIT 30;
+```
+
+**Notes:**
+
+- `payload.event_version` is mirrored into the row column so future versioned
+  payloads can be filtered without parsing JSONB.
+- `contact_id` is denormalized at write time (extracted from
+  `payload.contact_id`) — not a foreign key, because some events resource on
+  contacts directly (where `resource_id = contact_id`) and historic rows must
+  survive contact deletion. Rendering code tolerates `NULL` contact joins.
+- No `deleted_at`, no `updated_at` — append-only audit log shape.
+- ON DELETE CASCADE on `org_id` matches existing pattern for org-deletion
+  sweeps (`src/lib/server/org/deleteOrg.ts`).
+
+---
+
 ## `notifications`
 
 In-app notification records per org member. Drives the notification bell via Supabase
@@ -86,8 +158,14 @@ CREATE TABLE notifications (
   body            TEXT,
   resource_type   TEXT,                   -- Polymorphic. e.g. 'job', 'quote', 'invoice'
   resource_id     UUID,                   -- Polymorphic. Points to the related entity.
+  metadata        JSONB NOT NULL DEFAULT '{}'::JSONB,
+  route           TEXT,                   -- Internal app route for deep-linking
+  priority        TEXT NOT NULL DEFAULT 'normal', -- 'low', 'normal', 'high'
+  aggregation_count INTEGER NOT NULL DEFAULT 1,   -- Supports batching (e.g. "5 new leads")
   read_at         TIMESTAMPTZ,
-  idempotency_key     TEXT,   -- NULLABLE: worker sets only for deduplicable events
+  push_sent_at    TIMESTAMPTZ,
+  last_event_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  idempotency_key TEXT,                   -- NULLABLE: worker sets only for deduplicable events
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -100,12 +178,19 @@ CREATE UNIQUE INDEX idx_notifications_idempotency_key
   ON notifications (idempotency_key)
   WHERE idempotency_key IS NOT NULL;
 
-CREATE INDEX idx_notifications_member_id
-  ON notifications (member_id, created_at DESC);
+-- Batching protection: Prevent duplicate unread rows during concurrent events
+CREATE UNIQUE INDEX notifications_unread_batch_uq
+  ON notifications (member_id, type, resource_id)
+  WHERE read_at IS NULL AND resource_id IS NOT NULL;
+
+CREATE INDEX idx_notifications_member_read_created
+  ON notifications (member_id, read_at, created_at DESC);
+
+CREATE INDEX idx_notifications_member_type_resource
+  ON notifications (member_id, type, resource_id);
+
 CREATE INDEX idx_notifications_org_id ON notifications (org_id);
-CREATE INDEX idx_notifications_unread
-  ON notifications (member_id, read_at)
-  WHERE read_at IS NULL;
+
 -- Cron purge sweep index
 CREATE INDEX idx_notifications_created_at ON notifications (created_at);
 ```
@@ -115,6 +200,85 @@ CREATE INDEX idx_notifications_created_at ON notifications (created_at);
 - `resource_type` + `resource_id` are polymorphic. If the referenced entity is soft-deleted, UI must handle gracefully — show "this item has been removed", never crash.
 - Retention: purged at 90 days by nightly cron. Unread notifications are NOT exempt.
 - `idempotency_key` is NULLABLE. For events that must never produce duplicates (e.g. `quote_viewed`, `invoice_paid`), the worker generates a semantic key like `{event_type}:{resource_id}:{member_id}`. For intentionally repeatable notifications (reminders, follow-ups), the worker leaves it NULL.
+
+---
+
+## `member_notification_preferences`
+
+Per-member preferences for notification delivery.
+
+```sql
+CREATE TABLE member_notification_preferences (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id            UUID NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  member_id         UUID NOT NULL REFERENCES org_members (id) ON DELETE CASCADE,
+  notification_type TEXT NOT NULL,
+  in_app_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  push_enabled      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE UNIQUE INDEX member_notification_preferences_unique_idx
+  ON member_notification_preferences (member_id, notification_type);
+```
+
+---
+
+## `push_subscriptions`
+
+Web Push subscriptions per browser/device.
+
+```sql
+CREATE TABLE push_subscriptions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          UUID NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  member_id       UUID NOT NULL REFERENCES org_members (id) ON DELETE CASCADE,
+  endpoint        TEXT NOT NULL UNIQUE,
+  p256dh          TEXT NOT NULL,
+  auth            TEXT NOT NULL,
+  user_agent      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at    TIMESTAMPTZ
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE INDEX push_subscriptions_member_idx
+  ON push_subscriptions (member_id);
+```
+
+---
+
+## `notification_delivery_state`
+
+Internal state to prevent push spam (throttling).
+
+```sql
+CREATE TABLE notification_delivery_state (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id         UUID NOT NULL REFERENCES org_members (id) ON DELETE CASCADE,
+  notification_type TEXT NOT NULL,
+  resource_id       UUID NOT NULL,
+  last_push_sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE UNIQUE INDEX notification_delivery_state_unique_idx
+  ON notification_delivery_state (member_id, notification_type, resource_id);
+
+CREATE INDEX notification_delivery_state_last_push_idx
+  ON notification_delivery_state (last_push_sent_at);
+```
 
 ---
 

@@ -13,7 +13,11 @@ export function checkFeatureForPath(
 
 export function featureDisabledResponse(feature: string): Response {
 	return new Response(
-		JSON.stringify({ error: 'Feature not enabled for this organization.', code: 'FEATURE_DISABLED', feature }),
+		JSON.stringify({
+			error: 'Feature not enabled for this organization.',
+			code: 'FEATURE_DISABLED',
+			feature
+		}),
 		{ status: 403, headers: { 'content-type': 'application/json' } }
 	);
 }

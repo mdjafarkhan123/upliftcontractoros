@@ -36,7 +36,7 @@
 	}
 
 	const inputBase =
-		'block w-full min-h-[48px] rounded-xl border bg-card/60 px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 ease-out focus:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60';
+		'block w-full min-h-[48px] rounded-xl border bg-card px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 ease-out focus:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60';
 </script>
 
 <form onsubmit={handleSubmit} class="space-y-4" novalidate>
@@ -44,13 +44,7 @@
 	<div aria-hidden="true" class="pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0">
 		<label>
 			Website
-			<input
-				type="text"
-				tabindex="-1"
-				autocomplete="off"
-				name="website"
-				bind:value={website}
-			/>
+			<input type="text" tabindex="-1" autocomplete="off" name="website" bind:value={website} />
 		</label>
 	</div>
 
@@ -86,7 +80,10 @@
 			placeholder="+1 555 123 4567"
 			bind:value={customerPhone}
 			disabled={submitting}
-			class={cn(inputBase, fieldErrors.customerPhone ? 'border-destructive/60' : 'border-border/60')}
+			class={cn(
+				inputBase,
+				fieldErrors.customerPhone ? 'border-destructive/60' : 'border-border/60'
+			)}
 		/>
 		<p class="mt-1.5 text-[11px] text-muted-foreground/70">
 			Include country code (e.g. +1 for US/Canada)
@@ -107,7 +104,10 @@
 			placeholder="you@example.com"
 			bind:value={customerEmail}
 			disabled={submitting}
-			class={cn(inputBase, fieldErrors.customerEmail ? 'border-destructive/60' : 'border-border/60')}
+			class={cn(
+				inputBase,
+				fieldErrors.customerEmail ? 'border-destructive/60' : 'border-border/60'
+			)}
 		/>
 		{#if fieldErrors.customerEmail}
 			<p class="mt-1.5 text-xs text-destructive">{fieldErrors.customerEmail}</p>

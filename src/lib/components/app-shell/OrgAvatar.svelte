@@ -45,19 +45,13 @@
 </script>
 
 <div
-	class={cn(
-		'relative shrink-0 overflow-hidden rounded-md',
-		sizeClass,
-		className
-	)}
+	class={cn('relative shrink-0 overflow-hidden rounded-md', sizeClass, className)}
 	aria-hidden="true"
 >
 	<div
 		class={cn(
 			'absolute inset-0 flex items-center justify-center font-semibold',
-			showImage
-				? 'bg-muted text-muted-foreground'
-				: 'bg-primary text-primary-foreground'
+			showImage ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
 		)}
 	>
 		{#if isLoading}

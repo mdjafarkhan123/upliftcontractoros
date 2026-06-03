@@ -20,13 +20,10 @@ const createSchema = z
 		end_time: z.string().regex(timeRegex).optional().nullable(),
 		reason: z.string().trim().max(500).optional().nullable()
 	})
-	.refine(
-		(v) => v.is_blocked || (v.start_time && v.end_time),
-		{
-			message: 'Start time and end time are required when not blocking the day.',
-			path: ['start_time']
-		}
-	);
+	.refine((v) => v.is_blocked || (v.start_time && v.end_time), {
+		message: 'Start time and end time are required when not blocking the day.',
+		path: ['start_time']
+	});
 
 function adminGuard(auth: NonNullable<App.Locals['auth']>) {
 	if (auth.member.role !== 'admin') error(403, 'Admin only.');
@@ -84,7 +81,10 @@ export const POST: RequestHandler = async (event) => {
 	const today = todayInOrgTz(auth.org.timezone);
 	if (input.override_date < today) {
 		return json(
-			{ error: 'Cannot block a date in the past.', field_errors: { override_date: 'Must be today or later.' } },
+			{
+				error: 'Cannot block a date in the past.',
+				field_errors: { override_date: 'Must be today or later.' }
+			},
 			{ status: 400 }
 		);
 	}
@@ -92,7 +92,10 @@ export const POST: RequestHandler = async (event) => {
 	if (!input.is_blocked && input.start_time && input.end_time) {
 		if (toMinutes(input.end_time) <= toMinutes(input.start_time)) {
 			return json(
-				{ error: 'End time must be after start time.', field_errors: { end_time: 'Must be after start.' } },
+				{
+					error: 'End time must be after start time.',
+					field_errors: { end_time: 'Must be after start.' }
+				},
 				{ status: 400 }
 			);
 		}
@@ -111,13 +114,15 @@ export const POST: RequestHandler = async (event) => {
 
 	if (existing) {
 		return json(
-			{ error: 'This date already has an override.', field_errors: { override_date: 'Already set.' } },
+			{
+				error: 'This date already has an override.',
+				field_errors: { override_date: 'Already set.' }
+			},
 			{ status: 409 }
 		);
 	}
 
-	const normalize = (t: string | null | undefined) =>
-		t ? (t.length === 5 ? `${t}:00` : t) : null;
+	const normalize = (t: string | null | undefined) => (t ? (t.length === 5 ? `${t}:00` : t) : null);
 
 	const [created] = await db
 		.insert(availabilityOverrides)

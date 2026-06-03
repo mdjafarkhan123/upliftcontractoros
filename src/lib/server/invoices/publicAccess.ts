@@ -28,9 +28,7 @@ export type ValidInvoiceRow = {
 	stripe_secret_key: string | null;
 };
 
-export type InvoiceLookupResult =
-	| { ok: true; invoice: ValidInvoiceRow }
-	| { ok: false };
+export type InvoiceLookupResult = { ok: true; invoice: ValidInvoiceRow } | { ok: false };
 
 function constantTimeEqualString(a: string, b: string): boolean {
 	if (a.length !== b.length) return false;

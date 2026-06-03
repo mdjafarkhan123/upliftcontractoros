@@ -21,7 +21,11 @@ function makeId(): string {
 	return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function push(variant: ToastVariant, message: string, opts?: { description?: string; duration?: number }): string {
+function push(
+	variant: ToastVariant,
+	message: string,
+	opts?: { description?: string; duration?: number }
+): string {
 	const id = makeId();
 	items.push({ id, variant, message, description: opts?.description, createdAt: Date.now() });
 	const duration = opts?.duration ?? DEFAULT_DURATIONS[variant];

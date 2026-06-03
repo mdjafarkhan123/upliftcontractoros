@@ -22,6 +22,7 @@ export const load: PageLoad = ({ url }) => {
 		status: parseStatus(url.searchParams.get('status')),
 		assignee: parseAssignee(url.searchParams.get('assignee')),
 		unread: url.searchParams.get('unread') === '1',
-		q: url.searchParams.get('q') ?? ''
+		q: url.searchParams.get('q') ?? '',
+		tag: url.searchParams.get('tag') ?? ''
 	};
 };

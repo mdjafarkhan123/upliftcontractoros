@@ -6,10 +6,13 @@ import {
 	boolean,
 	integer,
 	bigint,
+	numeric,
 	timestamp,
 	date,
 	jsonb,
-	primaryKey
+	primaryKey,
+	index,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -82,8 +85,28 @@ export const organizations = pgTable('organizations', {
 	feature_webchat: boolean('feature_webchat').notNull().default(false),
 	feature_online_booking: boolean('feature_online_booking').notNull().default(false),
 
+	// Master capability gates added in 0026 to close gaps where contractor toggles
+	// existed with no jafar-side gate. Default false; flipped on per plan template.
+	feature_payment_receipt: boolean('feature_payment_receipt').notNull().default(false),
+	feature_quote_followup: boolean('feature_quote_followup').notNull().default(false),
+	feature_speed_to_lead: boolean('feature_speed_to_lead').notNull().default(false),
+
+	// SMS channel allowances (jafar layer). Gates the SMS variant of automations
+	// that have or may have an email channel. SMS-only automations (missed_call_textback,
+	// speed_to_lead) use their capability flag as the SMS gate.
+	payment_receipt_sms_allowed: boolean('payment_receipt_sms_allowed').notNull().default(false),
+	quote_followup_sms_allowed: boolean('quote_followup_sms_allowed').notNull().default(false),
+	appointment_reminder_sms_allowed: boolean('appointment_reminder_sms_allowed')
+		.notNull()
+		.default(false),
+	invoice_reminder_sms_allowed: boolean('invoice_reminder_sms_allowed').notNull().default(false),
+	review_funnel_sms_allowed: boolean('review_funnel_sms_allowed').notNull().default(false),
+
 	// Widget token: generated once, immutable, used to identify the org from the public widget
-	widget_token: uuid('widget_token').notNull().default(sql`gen_random_uuid()`).unique(),
+	widget_token: uuid('widget_token')
+		.notNull()
+		.default(sql`gen_random_uuid()`)
+		.unique(),
 
 	// Local-part for contractor outbound email on the shared apex (e.g. "acme-roofing"
 	// → acme-roofing@<EMAIL_APEX_DOMAIN>). Backfilled from slug at migration time.
@@ -96,12 +119,19 @@ export const organizations = pgTable('organizations', {
 	max_storage_gb: integer('max_storage_gb').notNull().default(5),
 	max_automation_workflows: integer('max_automation_workflows').notNull().default(0),
 
-	integration_status: jsonb('integration_status')
-		.$type<IntegrationStatus>()
-		.notNull()
-		.default({}),
+	integration_status: jsonb('integration_status').$type<IntegrationStatus>().notNull().default({}),
 	feature_overrides_updated_at: timestamp('feature_overrides_updated_at', { withTimezone: true }),
-	feature_flags_updated_by: uuid('feature_flags_updated_by').references((): any => orgMembers.id)
+	feature_flags_updated_by: uuid('feature_flags_updated_by').references((): any => orgMembers.id),
+
+	// Review attribution: admin-supplied baseline of the org's Google review count.
+	// Used by the attribution engine to compute Δ when an admin reconciles the count.
+	last_known_review_count: integer('last_known_review_count').notNull().default(0),
+	last_review_check_at: timestamp('last_review_check_at', { withTimezone: true }),
+
+	// Visible-hours range for the internal appointments calendar (time rail).
+	// Off-hours appointments still render; this is a display hint, not a constraint.
+	calendar_day_start_hour: integer('calendar_day_start_hour').notNull().default(7),
+	calendar_day_end_hour: integer('calendar_day_end_hour').notNull().default(19)
 });
 
 export type Organization = InferSelectModel<typeof organizations>;
@@ -140,9 +170,16 @@ export const orgMembers = pgTable('org_members', {
 	can_create_contacts: boolean('can_create_contacts').notNull().default(false),
 	can_edit_contacts: boolean('can_edit_contacts').notNull().default(false),
 	can_delete_contacts: boolean('can_delete_contacts').notNull().default(false),
+	// Merge duplicate contacts. Distinct from delete: merge reparents every
+	// linked record across the contact graph (data surgery), so it is an
+	// admin-tier capability — granted to the admin role template only.
+	can_merge_contacts: boolean('can_merge_contacts').notNull().default(false),
 
 	// Module 4: Pipeline
 	can_view_full_pipeline: boolean('can_view_full_pipeline').notNull().default(false),
+	can_view_assigned_opportunities: boolean('can_view_assigned_opportunities')
+		.notNull()
+		.default(false),
 	can_move_pipeline_stages: boolean('can_move_pipeline_stages').notNull().default(false),
 	can_create_opportunities: boolean('can_create_opportunities').notNull().default(false),
 
@@ -211,16 +248,30 @@ export const automationSettings = pgTable('automation_settings', {
 	review_funnel_enabled: boolean('review_funnel_enabled').notNull().default(true),
 	review_funnel_delay_hours: integer('review_funnel_delay_hours').notNull().default(2),
 	review_funnel_message: text('review_funnel_message').notNull(),
+	review_funnel_reminder_enabled: boolean('review_funnel_reminder_enabled').notNull().default(true),
+	review_funnel_reminder_message: text('review_funnel_reminder_message').notNull(),
+	review_funnel_nudge_1_message: text('review_funnel_nudge_1_message').notNull(),
+	review_funnel_nudge_2_message: text('review_funnel_nudge_2_message').notNull(),
 	google_review_link: text('google_review_link'),
 	appointment_reminder_enabled: boolean('appointment_reminder_enabled').notNull().default(true),
 	appointment_reminder_hours_before: integer('appointment_reminder_hours_before')
 		.notNull()
 		.default(24),
 	appointment_reminder_message: text('appointment_reminder_message').notNull(),
-	appointment_reminder_1h_enabled: boolean('appointment_reminder_1h_enabled').notNull().default(true),
+	appointment_reminder_1h_enabled: boolean('appointment_reminder_1h_enabled')
+		.notNull()
+		.default(true),
 	appointment_reminder_1h_message: text('appointment_reminder_1h_message').notNull(),
+	appointment_confirmation_enabled: boolean('appointment_confirmation_enabled')
+		.notNull()
+		.default(true),
+	appointment_confirmation_sms_message: text('appointment_confirmation_sms_message').notNull(),
+	appointment_confirmation_email_subject: text('appointment_confirmation_email_subject').notNull(),
+	appointment_confirmation_email_message: text('appointment_confirmation_email_message').notNull(),
 	payment_receipt_enabled: boolean('payment_receipt_enabled').notNull().default(true),
 	payment_receipt_message: text('payment_receipt_message').notNull(),
+	payment_receipt_sms_enabled: boolean('payment_receipt_sms_enabled').notNull().default(false),
+	payment_receipt_sms_message: text('payment_receipt_sms_message').notNull(),
 	speed_to_lead_enabled: boolean('speed_to_lead_enabled').notNull().default(true),
 	speed_to_lead_message: text('speed_to_lead_message').notNull(),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -257,3 +308,71 @@ export const orgUsage = pgTable(
 
 export type OrgUsage = InferSelectModel<typeof orgUsage>;
 export type NewOrgUsage = InferInsertModel<typeof orgUsage>;
+
+// ── SMS credit system ──────────────────────────────────────────────────────
+// Dollar-denominated prepaid credit. Replaces the count-based max_monthly_sms
+// gate as the authoritative SMS money guard. Money is numeric(12,4) so sub-cent
+// Twilio pricing and PO per-SMS prices are exact; all balance math runs in
+// Postgres (never JS floats). See $lib/server/sms/credit.ts.
+export const smsCreditEntryTypeEnum = pgEnum('sms_credit_entry_type', [
+	'charge', // outbound SMS send (negative amount)
+	'refund', // failed/undeliverable send refunded (positive amount)
+	'manual_topup', // PO manual credit add via /jafar (positive amount)
+	'monthly_grant' // monthly included allowance, rollover (positive amount)
+]);
+
+// One row per org — live balance + PO-configured pricing/allowance.
+export const orgSmsCredit = pgTable('org_sms_credit', {
+	org_id: uuid('org_id')
+		.primaryKey()
+		.references(() => organizations.id, { onDelete: 'cascade' }),
+	balance: numeric('balance', { precision: 12, scale: 4 }).notNull().default('0'),
+	monthly_included_credit: numeric('monthly_included_credit', { precision: 12, scale: 4 })
+		.notNull()
+		.default('5.0000'),
+	per_sms_cost: numeric('per_sms_cost', { precision: 12, scale: 4 }).notNull().default('0.1000'),
+	last_monthly_grant_at: timestamp('last_monthly_grant_at', { withTimezone: true }),
+	// PO-controlled (per org, via /jafar) display gate. When true, the contractor
+	// Settings → SMS Credits page reveals the per-SMS price and an estimated
+	// "messages remaining". Default false keeps the Blueprint's "no complexity
+	// exposed to the contractor" stance — the PO opts an org in explicitly.
+	show_cost_to_contractor: boolean('show_cost_to_contractor').notNull().default(false),
+	// Set when balance first drops below 20% of monthly_included_credit; guards
+	// the low-credit warning so it fires once per cycle. Cleared on monthly grant
+	// and on manual top-up so a replenished org can be warned again next time.
+	low_credit_notified_at: timestamp('low_credit_notified_at', { withTimezone: true }),
+	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export type OrgSmsCredit = InferSelectModel<typeof orgSmsCredit>;
+export type NewOrgSmsCredit = InferInsertModel<typeof orgSmsCredit>;
+
+// Append-only audit of every balance change. The UNIQUE idempotency_key is the
+// no-double-deduction / no-double-refund guarantee (charge:{msgId},
+// refund:{msgId}, monthly_grant:{orgId}:YYYY-MM, manual_topup:{uuid}).
+// message_id is a soft reference (no FK) to avoid a circular schema import.
+export const smsCreditLedger = pgTable(
+	'sms_credit_ledger',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id, { onDelete: 'cascade' }),
+		entry_type: smsCreditEntryTypeEnum('entry_type').notNull(),
+		amount: numeric('amount', { precision: 12, scale: 4 }).notNull(),
+		balance_after: numeric('balance_after', { precision: 12, scale: 4 }).notNull(),
+		message_id: uuid('message_id'),
+		created_by: text('created_by'), // jafar admin id, or null for system/cron
+		note: text('note'),
+		idempotency_key: text('idempotency_key').notNull(),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		uniqueIndex('sms_credit_ledger_idempotency_key_uq').on(t.idempotency_key),
+		index('sms_credit_ledger_org_created_idx').on(t.org_id, t.created_at.desc())
+	]
+);
+
+export type SmsCreditLedger = InferSelectModel<typeof smsCreditLedger>;
+export type NewSmsCreditLedger = InferInsertModel<typeof smsCreditLedger>;

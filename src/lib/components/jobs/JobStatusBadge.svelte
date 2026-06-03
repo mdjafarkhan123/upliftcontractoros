@@ -14,9 +14,7 @@
 					: 'warning'
 	);
 	const label = $derived(
-		status === 'in_progress'
-			? 'In Progress'
-			: status[0].toUpperCase() + status.slice(1)
+		status === 'in_progress' ? 'In Progress' : status[0].toUpperCase() + status.slice(1)
 	);
 </script>
 

@@ -120,6 +120,6 @@ Shadow:        shadow-sm (default) · shadow-md (hover lift) · shadow-xl (modal
 - **KPI cards use icon badges** — every stat card has a colored icon container
   (rounded-lg, bg-primary/10 or colored variant) in the top-right corner.
 - **Tables have sortable header style** — `text-xs font-medium text-muted-foreground
-  uppercase tracking-wider` for all table `<th>` elements.
+uppercase tracking-wider` for all table `<th>` elements.
 - **Borders are suggestions, not walls** — use `border-border/60` as the default.
   Only use `border-border` (full opacity) for active/focus states and important dividers.

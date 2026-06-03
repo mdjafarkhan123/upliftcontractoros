@@ -1,0 +1,19 @@
+
+> contractoros@0.0.1 worker
+> node --env-file=.env --import tsx worker.ts
+
+{"ts":"2026-05-30T06:37:03.815Z","level":"info","scope":"cron","job":"org-lifecycle-advance","scheduled":"0 1 * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.818Z","level":"info","scope":"cron","job":"invoice-overdue-sweep","scheduled":"0 2 * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.821Z","level":"info","scope":"cron","job":"quote-expiry-sweep","scheduled":"30 2 * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.823Z","level":"info","scope":"cron","job":"notification-purge","scheduled":"0 3 * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.826Z","level":"info","scope":"cron","job":"monthly-growth-summary","scheduled":"0 6 1 * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.829Z","level":"info","scope":"cron","job":"webchat-session-cleanup","scheduled":"0 4 * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.831Z","level":"info","scope":"cron","job":"unsnooze-conversations","scheduled":"*/5 * * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.834Z","level":"info","scope":"cron","job":"unread-count-reconcile","scheduled":"0 * * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.836Z","level":"info","scope":"cron","job":"follow-up-due-sweep","scheduled":"*/15 * * * *","timezone":"UTC"}
+{"ts":"2026-05-30T06:37:03.838Z","level":"info","scope":"cron","job":"sms-monthly-grant","scheduled":"0 5 1 * *","timezone":"UTC"}
+[1m[worker] Started ΓÇö [36moutbox[0m [32mautomation[0m [33mnotification[0m [35memail[0m [34msms[0m + cron active[0m
+[36m[outbox] listening on outbox_channel[0m
+{"ts":"2026-05-30T06:39:36.470Z","level":"info","scope":"sms.worker","phase":"already_processed","message_id":"f50ab1e8-f759-493b-a8d2-08dc8957d7f7","status":"delivered"}
+{"ts":"2026-05-30T06:40:00.990Z","level":"info","scope":"cron","job":"unsnooze-conversations","started_at":"2026-05-30T06:40:00.020Z","finished_at":"2026-05-30T06:40:00.990Z","duration_ms":970,"processed_count":0,"skipped_count":0,"error_count":0,"scanned_count":0,"affected_count":0}
+{"ts":"2026-05-30T06:40:35.909Z","level":"info","scope":"sms.worker","phase":"already_processed","message_id":"bf9ba1c8-522e-4b36-a41e-1d0f676c8763","status":"delivered"}

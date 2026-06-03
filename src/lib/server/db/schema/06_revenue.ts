@@ -204,6 +204,7 @@ export const invoices = pgTable('invoices', {
 	viewed_at: timestamp('viewed_at', { withTimezone: true }),
 	due_date: date('due_date'),
 	stripe_payment_link_url: text('stripe_payment_link_url'),
+	stripe_payment_link_id: text('stripe_payment_link_id'),
 	sent_at: timestamp('sent_at', { withTimezone: true }),
 	paid_at: timestamp('paid_at', { withTimezone: true }),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),

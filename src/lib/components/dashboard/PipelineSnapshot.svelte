@@ -12,12 +12,12 @@
 </script>
 
 <section
-	class="relative overflow-hidden rounded-xl border border-border/70 bg-card shadow-card dark:border-white/10"
+	class="relative overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card dark:border-white/10"
 >
 	<header
-		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-4 py-3"
+		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-5 py-4"
 	>
-		<h2 class="text-sm font-semibold text-foreground">Pipeline snapshot</h2>
+		<h2 class="text-base font-semibold tracking-tight text-foreground">Pipeline snapshot</h2>
 		<a
 			href="/pipeline"
 			class="rounded-md text-xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Switch } from '$lib/components/ui/switch';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
@@ -162,60 +163,83 @@
 
 		<div class="space-y-1.5">
 			<Label for="type">Appointment type <span class="text-destructive">*</span></Label>
-			<select
-				id="type"
-				class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-				bind:value={link.appointment_type}
-			>
-				<option value="estimate">Estimate</option>
-				<option value="job_start">Job start</option>
-				<option value="follow_up">Follow up</option>
-				<option value="inspection">Inspection</option>
-				<option value="other">Other</option>
-			</select>
+			<Select.Root bind:value={link.appointment_type}>
+				<Select.Trigger class="h-11 w-full">
+					<Select.Value />
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="estimate">Estimate</Select.Item>
+					<Select.Item value="job_start">Job start</Select.Item>
+					<Select.Item value="follow_up">Follow up</Select.Item>
+					<Select.Item value="inspection">Inspection</Select.Item>
+					<Select.Item value="other">Other</Select.Item>
+				</Select.Content>
+			</Select.Root>
 		</div>
 
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div class="space-y-1.5">
 				<Label for="slot">Slot duration <span class="text-destructive">*</span></Label>
-				<select id="slot" class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" bind:value={link.slot_duration_minutes}>
-					<option value={30}>30 min</option>
-					<option value={45}>45 min</option>
-					<option value={60}>60 min</option>
-					<option value={90}>90 min</option>
-					<option value={120}>120 min</option>
-				</select>
+				<Select.Root bind:value={link.slot_duration_minutes}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value={30}>30 min</Select.Item>
+						<Select.Item value={45}>45 min</Select.Item>
+						<Select.Item value={60}>60 min</Select.Item>
+						<Select.Item value={90}>90 min</Select.Item>
+						<Select.Item value={120}>120 min</Select.Item>
+					</Select.Content>
+				</Select.Root>
 			</div>
 			<div class="space-y-1.5">
 				<Label for="buf">Buffer <span class="text-destructive">*</span></Label>
-				<select id="buf" class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" bind:value={link.buffer_minutes}>
-					<option value={0}>None</option>
-					<option value={15}>15 min</option>
-					<option value={30}>30 min</option>
-				</select>
+				<Select.Root bind:value={link.buffer_minutes}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value={0}>None</Select.Item>
+						<Select.Item value={15}>15 min</Select.Item>
+						<Select.Item value={30}>30 min</Select.Item>
+					</Select.Content>
+				</Select.Root>
 			</div>
 			<div class="space-y-1.5">
 				<Label for="adv">Min advance <span class="text-destructive">*</span></Label>
-				<select id="adv" class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" bind:value={link.min_advance_hours}>
-					<option value={1}>1 hour</option>
-					<option value={4}>4 hours</option>
-					<option value={24}>24 hours</option>
-					<option value={48}>48 hours</option>
-				</select>
+				<Select.Root bind:value={link.min_advance_hours}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value={1}>1 hour</Select.Item>
+						<Select.Item value={4}>4 hours</Select.Item>
+						<Select.Item value={24}>24 hours</Select.Item>
+						<Select.Item value={48}>48 hours</Select.Item>
+					</Select.Content>
+				</Select.Root>
 			</div>
 			<div class="space-y-1.5">
 				<Label for="hor">Booking horizon <span class="text-destructive">*</span></Label>
-				<select id="hor" class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" bind:value={link.max_future_days}>
-					<option value={14}>14 days</option>
-					<option value={30}>30 days</option>
-					<option value={60}>60 days</option>
-				</select>
+				<Select.Root bind:value={link.max_future_days}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value={14}>14 days</Select.Item>
+						<Select.Item value={30}>30 days</Select.Item>
+						<Select.Item value={60}>60 days</Select.Item>
+					</Select.Content>
+				</Select.Root>
 			</div>
 		</div>
 
 		<div class="flex items-center justify-between rounded-lg border border-border bg-card p-4">
 			<div>
-				<p class="text-sm font-semibold text-foreground">Link is {link.is_active ? 'active' : 'inactive'}</p>
+				<p class="text-sm font-semibold text-foreground">
+					Link is {link.is_active ? 'active' : 'inactive'}
+				</p>
 				<p class="text-xs text-muted-foreground">
 					{link.is_active ? 'Customers can book through this link.' : 'Public URL returns 404.'}
 				</p>

@@ -60,9 +60,21 @@ export const FEATURE_MODULE_MAP: Record<FeatureFlagKey, FeatureModuleBinding> = 
 		workerEvents: []
 	},
 	feature_review_funnel: {
-		apiPrefixes: ['/api/reputation', '/api/reviews', '/api/review-requests', '/api/private-feedback'],
+		apiPrefixes: [
+			'/api/reputation',
+			'/api/reviews',
+			'/api/review-requests',
+			'/api/private-feedback'
+		],
 		navKeys: ['reputation'],
-		workerEvents: ['review.received', 'private_feedback.received', 'negative_feedback', 'job.completed']
+		workerEvents: [
+			'review.received',
+			'private_feedback.received',
+			'negative_feedback',
+			'job.completed',
+			'review_request.sent',
+			'review_request.engaged'
+		]
 	},
 	feature_appointment_reminders: {
 		apiPrefixes: [],
@@ -136,7 +148,17 @@ export const FEATURE_MODULE_MAP: Record<FeatureFlagKey, FeatureModuleBinding> = 
 		apiPrefixes: ['/api/booking-links'],
 		navKeys: [],
 		workerEvents: []
-	}
+	},
+	// New capability + SMS-allowance gates. These are evaluated inside automation
+	// handlers (not URL- or event-routed), so no prefixes/navKeys/workerEvents.
+	feature_payment_receipt: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	feature_quote_followup: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	feature_speed_to_lead: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	payment_receipt_sms_allowed: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	quote_followup_sms_allowed: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	appointment_reminder_sms_allowed: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	invoice_reminder_sms_allowed: { apiPrefixes: [], navKeys: [], workerEvents: [] },
+	review_funnel_sms_allowed: { apiPrefixes: [], navKeys: [], workerEvents: [] }
 };
 
 export const FEATURE_GATE_BYPASS_PREFIXES: readonly string[] = [
@@ -180,15 +202,20 @@ export function featureForWorkerEvent(eventType: string): FeatureFlagKey | null 
 }
 
 export const AUTOMATION_JOB_FEATURE_MAP: Record<string, FeatureFlagKey> = {
-	speed_to_lead: 'feature_conversations',
+	speed_to_lead: 'feature_speed_to_lead',
 	missed_call_textback: 'feature_missed_call_textback',
-	quote_followup: 'feature_financial_tools',
+	quote_followup: 'feature_quote_followup',
 	invoice_reminder: 'feature_invoice_reminders',
-	review_request: 'feature_review_funnel',
+	'review.send': 'feature_review_funnel',
+	'review.unengaged': 'feature_review_funnel',
+	'review.nudge_1': 'feature_review_funnel',
+	'review.nudge_2': 'feature_review_funnel',
+	'review.expire': 'feature_review_funnel',
 	appointment_reminder: 'feature_appointment_reminders',
 	appointment_reminder_24h: 'feature_appointment_reminders',
 	appointment_reminder_1h: 'feature_appointment_reminders',
-	appointment_reschedule: 'feature_appointment_reminders'
+	appointment_reschedule: 'feature_appointment_reminders',
+	appointment_confirmation: 'feature_appointment_reminders'
 };
 
 export function featureForAutomationJob(jobName: string): FeatureFlagKey | null {

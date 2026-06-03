@@ -58,6 +58,8 @@ export const GET: RequestHandler = async (event) => {
 	const assignee = url.searchParams.get('assignee');
 	const unread = url.searchParams.get('unread') === '1';
 	const searchRaw = (url.searchParams.get('q') ?? '').trim();
+	const tagRaw = url.searchParams.get('tag');
+	const normalizedTag = tagRaw ? tagRaw.trim().toLowerCase().replace(/\s+/g, ' ') : null;
 	const cursor = parseCursor(url.searchParams.get('cursor'));
 
 	const unreadInboundExpr = sql<number>`(CASE WHEN ${conversations.unread_count} > 0 AND ${conversations.last_message_direction} = 'inbound' THEN 1 ELSE 0 END)`;
@@ -97,6 +99,10 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(ilike(contacts.full_name, `%${searchRaw}%`));
 	}
 
+	if (normalizedTag) {
+		conditions.push(sql`${conversations.tags} @> ARRAY[${normalizedTag}]::text[]`);
+	}
+
 	if (cursor) {
 		// Strict lex compare of (u, last_inbound_at, last_message_at, id) under DESC NULLS LAST.
 		// COALESCE to a far-past sentinel so NULL ranks last while staying comparable.
@@ -134,6 +140,7 @@ export const GET: RequestHandler = async (event) => {
 			last_message_direction: conversations.last_message_direction,
 			unread_count: conversations.unread_count,
 			snoozed_until: conversations.snoozed_until,
+			tags: conversations.tags,
 			created_at: conversations.created_at,
 			has_delivery_failure: hasDeliveryFailureExpr,
 			unread_inbound: unreadInboundExpr

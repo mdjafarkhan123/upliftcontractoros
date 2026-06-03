@@ -123,7 +123,11 @@ export async function renderQuotePdf(data: QuotePdfData): Promise<Buffer> {
 	const page = await browser.newPage();
 	try {
 		await page.setContent(renderHtml(data), { waitUntil: 'networkidle0' });
-		const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.4in', bottom: '0.4in', left: '0.4in', right: '0.4in' } });
+		const pdf = await page.pdf({
+			format: 'Letter',
+			printBackground: true,
+			margin: { top: '0.4in', bottom: '0.4in', left: '0.4in', right: '0.4in' }
+		});
 		return Buffer.from(pdf);
 	} finally {
 		await page.close();

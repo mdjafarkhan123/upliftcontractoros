@@ -109,10 +109,7 @@ export const PATCH: RequestHandler = async (event) => {
 				.update(quoteTemplateLineItems)
 				.set({ deleted_at: new Date(), updated_at: new Date() })
 				.where(
-					and(
-						eq(quoteTemplateLineItems.template_id, id),
-						isNull(quoteTemplateLineItems.deleted_at)
-					)
+					and(eq(quoteTemplateLineItems.template_id, id), isNull(quoteTemplateLineItems.deleted_at))
 				);
 			if (input.line_items.length > 0) {
 				await tx.insert(quoteTemplateLineItems).values(
@@ -159,10 +156,7 @@ export const DELETE: RequestHandler = async (event) => {
 			.update(quoteTemplateLineItems)
 			.set({ deleted_at: now, updated_at: now })
 			.where(
-				and(
-					eq(quoteTemplateLineItems.template_id, id),
-					isNull(quoteTemplateLineItems.deleted_at)
-				)
+				and(eq(quoteTemplateLineItems.template_id, id), isNull(quoteTemplateLineItems.deleted_at))
 			);
 
 		return updated[0];

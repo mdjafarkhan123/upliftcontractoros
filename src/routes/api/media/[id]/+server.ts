@@ -4,10 +4,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { media, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	assertAndIncrementUsage,
-	BYTES_PER_GB
-} from '$lib/server/usage/assertAndIncrementUsage';
+import { assertAndIncrementUsage, BYTES_PER_GB } from '$lib/server/usage/assertAndIncrementUsage';
 
 export const DELETE: RequestHandler = async (event) => {
 	const auth = event.locals.auth;

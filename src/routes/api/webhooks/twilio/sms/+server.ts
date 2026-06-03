@@ -1,26 +1,18 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
-	automationSettings,
 	contacts,
 	inboundCommunicationEvents,
 	messages,
 	organizations,
-	outboxEvents,
-	privateFeedback,
-	reviewRequests,
-	reviews
+	outboxEvents
 } from '$lib/server/db/schema';
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { detectOptKeyword } from '$lib/server/twilio/optOut';
-import { sendSms } from '$lib/server/twilio/sendSms';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
-import {
-	findOrCreateOpenConversation,
-	recordInboundMessage
-} from '$lib/server/conversations';
+import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/conversations';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -45,6 +37,16 @@ export const POST: RequestHandler = async ({ request }) => {
 	const sid = params.MessageSid;
 
 	if (!fromRaw || !toRaw || !sid) return twiml();
+
+	// Inbound MMS media — Twilio sends NumMedia + MediaUrlN/MediaContentTypeN.
+	// The URLs are private and expiring, so a worker fetches + stores them; here
+	// we only collect them to hand off via the outbox.
+	const numMedia = Math.min(parseInt(params.NumMedia ?? '0', 10) || 0, 10);
+	const inboundMedia: { url: string; content_type: string }[] = [];
+	for (let i = 0; i < numMedia; i++) {
+		const url = params[`MediaUrl${i}`];
+		if (url) inboundMedia.push({ url, content_type: params[`MediaContentType${i}`] ?? '' });
+	}
 
 	// Idempotency: if we have already stored this SID, return 200 silently
 	const [existingMsg] = await db
@@ -105,174 +107,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			})
 			.where(eq(contacts.id, existingContact.id));
 		return twiml();
-	}
-
-	// Review funnel digit reply — only fires when an inbound from a known contact
-	// is exactly "1".."5" AND the contact has the most-recent unresolved sent
-	// review_request. Falls through to generic inbound otherwise.
-	const trimmedBody = body.trim();
-	const digitMatch = existingContact ? trimmedBody.match(/^[1-5]$/) : null;
-	if (digitMatch) {
-		const score = Number(digitMatch[0]);
-		const [latestRequest] = await db
-			.select()
-			.from(reviewRequests)
-			.where(
-				and(
-					eq(reviewRequests.org_id, org.id),
-					eq(reviewRequests.contact_id, existingContact!.id),
-					eq(reviewRequests.status, 'sent'),
-					isNull(reviewRequests.deleted_at)
-				)
-			)
-			.orderBy(desc(reviewRequests.created_at))
-			.limit(1);
-
-		if (latestRequest) {
-			const [orgSettings] = await db
-				.select({ google_review_link: automationSettings.google_review_link })
-				.from(automationSettings)
-				.where(eq(automationSettings.org_id, org.id))
-				.limit(1);
-
-			let replyMessage: string | null = null;
-			let processed = false;
-
-			try {
-				await db.transaction(async (tx) => {
-					const [locked] = await tx
-						.select()
-						.from(reviewRequests)
-						.where(eq(reviewRequests.id, latestRequest.id))
-						.for('update');
-					if (!locked || locked.status !== 'sent') return;
-
-					await tx
-						.update(reviewRequests)
-						.set({
-							status: 'responded',
-							response_score: score,
-							responded_at: new Date(),
-							updated_at: new Date()
-						})
-						.where(eq(reviewRequests.id, locked.id));
-
-					const { conversation: conv } = await findOrCreateOpenConversation(tx, {
-						orgId: org.id,
-						contactId: existingContact!.id,
-						createdChannel: 'sms'
-					});
-					const insertedMsg = await recordInboundMessage(tx, {
-						orgId: org.id,
-						conversationId: conv.id,
-						channel: 'sms',
-						body,
-						twilioMessageSid: sid,
-						source: 'webhook'
-					});
-					await tx.insert(outboxEvents).values({
-						org_id: org.id,
-						event_type: 'message.received',
-						resource_type: 'message',
-						resource_id: insertedMsg.id,
-						payload: {
-							message_id: insertedMsg.id,
-							conversation_id: conv.id,
-							contact_id: existingContact!.id,
-							org_id: org.id,
-							channel: 'sms',
-							body,
-							twilio_message_sid: sid,
-							is_new_contact: false
-						},
-						idempotency_key: `message.received:${insertedMsg.id}`
-					});
-
-					if (score >= 4) {
-						const link = orgSettings?.google_review_link?.trim() || null;
-						const [insertedReview] = await tx
-							.insert(reviews)
-							.values({
-								org_id: org.id,
-								job_id: locked.job_id,
-								contact_id: locked.contact_id,
-								review_request_id: locked.id,
-								score,
-								platform: 'sms',
-								google_review_link_sent: !!link
-							})
-							.returning();
-						await tx.insert(outboxEvents).values({
-							org_id: org.id,
-							event_type: 'review.received',
-							resource_type: 'review',
-							resource_id: insertedReview.id,
-							payload: {
-								review_id: insertedReview.id,
-								org_id: org.id,
-								job_id: locked.job_id,
-								contact_id: locked.contact_id,
-								review_request_id: locked.id,
-								score,
-								summary: `${score}-star review from ${existingContact!.full_name}`
-							},
-							idempotency_key: `review.received:${locked.id}`
-						});
-						replyMessage = link
-							? `Thanks so much for the ${score}-star review! Would you mind sharing it publicly here? ${link}`
-							: `Thanks so much for the ${score}-star review — we really appreciate it!`;
-					} else {
-						const [insertedFeedback] = await tx
-							.insert(privateFeedback)
-							.values({
-								org_id: org.id,
-								job_id: locked.job_id,
-								contact_id: locked.contact_id,
-								review_request_id: locked.id,
-								score
-							})
-							.returning();
-						await tx.insert(outboxEvents).values({
-							org_id: org.id,
-							event_type: 'private_feedback.received',
-							resource_type: 'private_feedback',
-							resource_id: insertedFeedback.id,
-							payload: {
-								private_feedback_id: insertedFeedback.id,
-								org_id: org.id,
-								job_id: locked.job_id,
-								contact_id: locked.contact_id,
-								review_request_id: locked.id,
-								score,
-								summary: `${score}-star feedback from ${existingContact!.full_name}`
-							},
-							idempotency_key: `private_feedback.received:${locked.id}`
-						});
-						replyMessage = `Thank you for the honest feedback — we're sorry we missed the mark. Someone from our team will reach out shortly to make it right.`;
-					}
-					processed = true;
-				});
-			} catch (e) {
-				const msg = e instanceof Error ? e.message : '';
-				if (/unique|duplicate/i.test(msg)) return twiml();
-				console.error('[twilio sms webhook] review reply transaction failed', e);
-				return new Response('Internal error', { status: 500 });
-			}
-
-			if (processed) {
-				void touchContactLastContacted(org.id, existingContact!.id);
-			}
-
-			if (processed && replyMessage && !existingContact!.sms_opt_out) {
-				try {
-					await sendSms(org.twilio_phone_number, existingContact!.phone, replyMessage);
-					void touchContactLastContacted(org.id, existingContact!.id);
-				} catch (e) {
-					console.error('[twilio sms webhook] review reply SMS send failed', e);
-				}
-			}
-			return twiml();
-		}
 	}
 
 	// Normal inbound path — wrap business mutations + outbox in one transaction
@@ -368,7 +202,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			const { conversation: conv } = await findOrCreateOpenConversation(tx, {
 				orgId: org.id,
 				contactId,
-				createdChannel: 'sms'
+				createdChannel: 'sms',
+				reactivate: true
 			});
 
 			const insertedMsg = await recordInboundMessage(tx, {
@@ -377,7 +212,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				channel: 'sms',
 				body,
 				twilioMessageSid: sid,
-				source: 'webhook'
+				source: 'webhook',
+				hasMedia: inboundMedia.length > 0
 			});
 
 			await tx.insert(outboxEvents).values({
@@ -397,6 +233,23 @@ export const POST: RequestHandler = async ({ request }) => {
 				},
 				idempotency_key: `message.received:${insertedMsg.id}`
 			});
+
+			if (inboundMedia.length > 0) {
+				await tx.insert(outboxEvents).values({
+					org_id: org.id,
+					event_type: 'message.media.received',
+					resource_type: 'message',
+					resource_id: insertedMsg.id,
+					payload: {
+						message_id: insertedMsg.id,
+						conversation_id: conv.id,
+						contact_id: contactId,
+						org_id: org.id,
+						media: inboundMedia
+					},
+					idempotency_key: `message.media.received:${insertedMsg.id}`
+				});
+			}
 
 			touchedContactId = contactId;
 		});

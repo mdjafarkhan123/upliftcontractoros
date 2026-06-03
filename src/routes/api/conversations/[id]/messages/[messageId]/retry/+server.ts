@@ -65,17 +65,13 @@ export const POST: RequestHandler = async (event) => {
 		// Permanent failures (undeliverable, bounced) are not retryable — the
 		// underlying cause (opt-out, invalid number, hard bounce) won't change
 		// on a retry.
-		return json(
-			{ error: 'This message cannot be retried.' },
-			{ status: 400 }
-		);
+		return json({ error: 'This message cannot be retried.' }, { status: 400 });
 	}
 	if (msg.channel !== 'sms' && msg.channel !== 'email') {
 		return json({ error: 'Channel does not support retry.' }, { status: 400 });
 	}
 
-	const eventType =
-		msg.channel === 'sms' ? 'sms.send.requested' : 'email.send.requested';
+	const eventType = msg.channel === 'sms' ? 'sms.send.requested' : 'email.send.requested';
 	const nowIso = Date.now();
 	const idempotencyKey = `${eventType}:${messageId}:retry:${nowIso}`;
 

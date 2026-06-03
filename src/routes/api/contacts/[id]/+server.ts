@@ -9,6 +9,7 @@ import { updateContactSchema } from '$lib/server/contacts/schemas';
 import {
 	findContactByPhone,
 	isAssigneeValid,
+	isReferrerValid,
 	loadContactDetail,
 	countLinkedRecords,
 	hasAnyLinks
@@ -17,10 +18,15 @@ import {
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
-	if (!auth.member.can_view_all_contacts) error(403, 'Forbidden');
 
 	const detail = await loadContactDetail(auth.orgId, event.params.id);
 	if (!detail) error(404, 'Contact not found');
+
+	// Restricted members can only see contacts assigned to them. Return 404
+	// (not 403) so we don't leak the existence of contacts they can't access.
+	if (!auth.member.can_view_all_contacts && detail.contact.assigned_to !== auth.member.id) {
+		error(404, 'Contact not found');
+	}
 
 	return json(detail);
 };
@@ -49,7 +55,8 @@ export const PATCH: RequestHandler = async (event) => {
 	) {
 		return json(
 			{
-				error: 'sms_opt_out cannot be modified manually. Re-opt-in occurs only via inbound START/YES.',
+				error:
+					'sms_opt_out cannot be modified manually. Re-opt-in occurs only via inbound START/YES.',
 				code: 'OPT_OUT_IMMUTABLE'
 			},
 			{ status: 422 }
@@ -85,6 +92,12 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (!existing) error(404, 'Contact not found');
 
+	// Restricted members can only mutate contacts assigned to them. 404 (not
+	// 403) avoids leaking the existence of other contacts via probing.
+	if (!auth.member.can_view_all_contacts && existing.assigned_to !== auth.member.id) {
+		error(404, 'Contact not found');
+	}
+
 	// Optimistic concurrency — client must send the updated_at it read.
 	if (updates.updated_at !== undefined) {
 		const clientStamp = new Date(updates.updated_at).getTime();
@@ -110,9 +123,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if (updates.notes !== undefined) next.notes = updates.notes;
 	if (updates.tags !== undefined) next.tags = updates.tags;
 	if (updates.next_follow_up_at !== undefined) {
-		next.next_follow_up_at = updates.next_follow_up_at
-			? new Date(updates.next_follow_up_at)
-			: null;
+		next.next_follow_up_at = updates.next_follow_up_at ? new Date(updates.next_follow_up_at) : null;
 	}
 	if (updates.preferred_contact_method !== undefined) {
 		next.preferred_contact_method = updates.preferred_contact_method;
@@ -127,6 +138,23 @@ export const PATCH: RequestHandler = async (event) => {
 		existing.converted_at === null
 	) {
 		next.converted_at = new Date();
+	}
+
+	// Archiving a contact with live linked records would make it disappear from
+	// default views while opportunities/jobs/quotes/invoices/conversations still
+	// reference it. Same guard pattern as DELETE — close or reassign first.
+	if (updates.status === 'archived' && existing.status !== 'archived') {
+		const counts = await countLinkedRecords(auth.orgId, event.params.id);
+		if (hasAnyLinks(counts)) {
+			return json(
+				{
+					error: 'Contact has linked records. Close or reassign them before archiving.',
+					code: 'CONTACT_HAS_LINKS',
+					counts
+				},
+				{ status: 409 }
+			);
+		}
 	}
 
 	if (updates.assigned_to !== undefined) {
@@ -144,6 +172,25 @@ export const PATCH: RequestHandler = async (event) => {
 				);
 			}
 			next.assigned_to = updates.assigned_to;
+		}
+	}
+
+	if (updates.referred_by_contact_id !== undefined) {
+		if (updates.referred_by_contact_id === null) {
+			next.referred_by_contact_id = null;
+		} else {
+			const ok = await isReferrerValid(auth.orgId, updates.referred_by_contact_id, event.params.id);
+			if (!ok) {
+				return json(
+					{
+						error: 'Referrer is not a valid contact in this organization.',
+						code: 'INVALID_REFERRER'
+					},
+					{ status: 422 }
+				);
+			}
+			next.referred_by_contact_id = updates.referred_by_contact_id;
+			if (!updates.lead_source) next.lead_source = 'referral';
 		}
 	}
 
@@ -201,7 +248,7 @@ export const DELETE: RequestHandler = async (event) => {
 	if (!auth.member.can_delete_contacts) error(403, 'Forbidden');
 
 	const [existing] = await db
-		.select({ id: contacts.id })
+		.select({ id: contacts.id, assigned_to: contacts.assigned_to })
 		.from(contacts)
 		.where(
 			and(
@@ -213,6 +260,9 @@ export const DELETE: RequestHandler = async (event) => {
 		.limit(1);
 
 	if (!existing) error(404, 'Contact not found');
+	if (!auth.member.can_view_all_contacts && existing.assigned_to !== auth.member.id) {
+		error(404, 'Contact not found');
+	}
 
 	const counts = await countLinkedRecords(auth.orgId, event.params.id);
 	if (hasAnyLinks(counts)) {

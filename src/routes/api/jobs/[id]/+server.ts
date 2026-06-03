@@ -30,6 +30,7 @@ export const GET: RequestHandler = async (event) => {
 			contact_phone: contacts.phone,
 			contact_email: contacts.email,
 			opportunity_id: jobs.opportunity_id,
+			source: jobs.source,
 			assigned_to: jobs.assigned_to,
 			assignee_name: orgMembers.full_name,
 			notes: jobs.notes,
@@ -49,9 +50,7 @@ export const GET: RequestHandler = async (event) => {
 		.from(jobs)
 		.innerJoin(contacts, eq(contacts.id, jobs.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, jobs.assigned_to))
-		.where(
-			and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at))
-		)
+		.where(and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 		.limit(1);
 
 	if (!row) error(404, 'Job not found');
@@ -63,11 +62,7 @@ export const GET: RequestHandler = async (event) => {
 		.select({ c: sql<number>`count(*)::int` })
 		.from(invoices)
 		.where(
-			and(
-				eq(invoices.job_id, id),
-				eq(invoices.org_id, auth.orgId),
-				isNull(invoices.deleted_at)
-			)
+			and(eq(invoices.job_id, id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at))
 		);
 
 	const [appointmentCountRow] = await db
@@ -132,9 +127,7 @@ export const PATCH: RequestHandler = async (event) => {
 			status: jobs.status
 		})
 		.from(jobs)
-		.where(
-			and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at))
-		)
+		.where(and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 		.limit(1);
 	if (!existing) error(404, 'Job not found');
 
@@ -143,10 +136,7 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	if (existing.status === 'completed' || existing.status === 'cancelled') {
-		return json(
-			{ error: 'Cannot edit a closed job.', code: 'JOB_CLOSED' },
-			{ status: 422 }
-		);
+		return json({ error: 'Cannot edit a closed job.', code: 'JOB_CLOSED' }, { status: 422 });
 	}
 
 	if (input.assigned_to) {
@@ -181,11 +171,7 @@ export const PATCH: RequestHandler = async (event) => {
 		input.assigned_to !== undefined && input.assigned_to !== existing.assigned_to;
 
 	const result = await db.transaction(async (tx) => {
-		const [updated] = await tx
-			.update(jobs)
-			.set(updates)
-			.where(eq(jobs.id, id))
-			.returning();
+		const [updated] = await tx.update(jobs).set(updates).where(eq(jobs.id, id)).returning();
 
 		if (assigneeChanged) {
 			await tx.insert(outboxEvents).values({
@@ -199,7 +185,7 @@ export const PATCH: RequestHandler = async (event) => {
 					from_assigned_to: existing.assigned_to,
 					to_assigned_to: updated.assigned_to
 				},
-				idempotency_key: `job.assigned:${updated.id}:${Date.now()}`
+				idempotency_key: `job.assigned:${updated.id}:${updated.assigned_to ?? 'null'}`
 			});
 		}
 

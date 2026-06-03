@@ -11,18 +11,22 @@
 ### Installation
 
 Option A — Google Fonts (already in `app.css`):
+
 ```css
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
 ```
 
 Option B — Self-hosted (preferred for production — no FOUT, no external request):
+
 ```bash
 npm install geist
 ```
+
 ```css
 /* app.css */
 @import 'geist/font/sans';
 ```
+
 ```typescript
 // tailwind.config.ts
 fontFamily: {
@@ -38,57 +42,37 @@ Apply these patterns consistently. Never use arbitrary font sizes — always use
 
 ```svelte
 <!-- Page title (h1) — major section header -->
-<h1 class="text-2xl font-semibold tracking-tight text-foreground">
-  Contacts
-</h1>
+<h1 class="text-2xl font-semibold tracking-tight text-foreground">Contacts</h1>
 
 <!-- Page subtitle / description -->
-<p class="text-sm text-muted-foreground">
-  Manage your leads and customers
-</p>
+<p class="text-sm text-muted-foreground">Manage your leads and customers</p>
 
 <!-- Section header (h2) — within a page -->
-<h2 class="text-base font-semibold text-foreground">
-  Recent Activity
-</h2>
+<h2 class="text-base font-semibold text-foreground">Recent Activity</h2>
 
 <!-- Card title -->
-<p class="text-sm font-medium text-foreground">
-  Job #1042 — Roof Replacement
-</p>
+<p class="text-sm font-medium text-foreground">Job #1042 — Roof Replacement</p>
 
 <!-- Card body / list value -->
-<p class="text-sm text-foreground">
-  Jane Smith
-</p>
+<p class="text-sm text-foreground">Jane Smith</p>
 
 <!-- Label / helper text -->
-<p class="text-xs text-muted-foreground">
-  Last updated 2 hours ago
-</p>
+<p class="text-xs text-muted-foreground">Last updated 2 hours ago</p>
 
 <!-- Stat / metric — large number display -->
-<p class="text-3xl font-bold tracking-tight text-foreground">
-  $24,500
-</p>
-<p class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-  Revenue this month
-</p>
+<p class="text-3xl font-bold tracking-tight text-foreground">$24,500</p>
+<p class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue this month</p>
 
 <!-- Sidebar section label — group headers in the nav rail -->
 <p class="px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-  Main Menu
+	Main Menu
 </p>
 
 <!-- Table header -->
-<th class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-  Status
-</th>
+<th class="text-xs font-medium text-muted-foreground uppercase tracking-wider"> Status </th>
 
 <!-- Code / monospace (invoice numbers, IDs) -->
-<span class="font-mono text-sm text-foreground">
-  INV-2024-0042
-</span>
+<span class="font-mono text-sm text-foreground"> INV-2024-0042 </span>
 ```
 
 ### Typography Rules
@@ -107,6 +91,7 @@ Apply these patterns consistently. Never use arbitrary font sizes — always use
 ## Motion System
 
 ### The Golden Rule
+
 Every interactive element needs a transition. No exceptions.
 
 ```css
@@ -195,20 +180,24 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 ```svelte
 <!-- src/lib/components/shared/SkeletonLoader.svelte -->
 <script lang="ts">
-  let { lines = 3, height = '1rem', gap = '0.75rem' } = $props<{
-    lines?: number;
-    height?: string;
-    gap?: string;
-  }>();
+	let {
+		lines = 3,
+		height = '1rem',
+		gap = '0.75rem'
+	} = $props<{
+		lines?: number;
+		height?: string;
+		gap?: string;
+	}>();
 </script>
 
 <div class="flex flex-col" style="gap: {gap}">
-  {#each Array(lines) as _, i}
-    <div
-      class="skeleton-shimmer rounded-md"
-      style="height: {height}; width: {i === lines - 1 ? '60%' : '100%'}"
-    />
-  {/each}
+	{#each Array(lines) as _, i}
+		<div
+			class="skeleton-shimmer rounded-md"
+			style="height: {height}; width: {i === lines - 1 ? '60%' : '100%'}"
+		/>
+	{/each}
 </div>
 ```
 
@@ -217,13 +206,13 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 ```svelte
 <!-- Use for button loading states -->
 <svg
-  class="h-4 w-4 animate-spin text-current"
-  xmlns="http://www.w3.org/2000/svg"
-  fill="none"
-  viewBox="0 0 24 24"
+	class="h-4 w-4 animate-spin text-current"
+	xmlns="http://www.w3.org/2000/svg"
+	fill="none"
+	viewBox="0 0 24 24"
 >
-  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+	<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+	<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 </svg>
 ```
 
@@ -234,29 +223,29 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 ```svelte
 <!-- Large monetary amount — stat card -->
 <div>
-  <p class="text-3xl font-bold tracking-tight text-foreground">
-    {formatCurrency(revenue)}
-  </p>
-  <p class="mt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-    Revenue this month
-  </p>
+	<p class="text-3xl font-bold tracking-tight text-foreground">
+		{formatCurrency(revenue)}
+	</p>
+	<p class="mt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+		Revenue this month
+	</p>
 </div>
 
 <!-- Inline amount — table cell / list item -->
 <span class="font-mono text-sm font-medium text-foreground">
-  {formatCurrency(amount)}
+	{formatCurrency(amount)}
 </span>
 
 <!-- Positive delta (trending up) -->
 <span class="flex items-center gap-1 text-xs font-medium text-green-400">
-  <TrendingUp class="h-3 w-3" />
-  +12.5%
+	<TrendingUp class="h-3 w-3" />
+	+12.5%
 </span>
 
 <!-- Negative delta -->
 <span class="flex items-center gap-1 text-xs font-medium text-red-400">
-  <TrendingDown class="h-3 w-3" />
-  -3.2%
+	<TrendingDown class="h-3 w-3" />
+	-3.2%
 </span>
 ```
 
@@ -266,24 +255,34 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 
 ```svelte
 <!-- Contact avatar with initials fallback -->
-<div class="
+<div
+	class="
   flex h-9 w-9 shrink-0 items-center justify-center
   rounded-full bg-primary/10 text-primary
   text-sm font-semibold
-">
-  {contact.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+"
+>
+	{contact.full_name
+		.split(' ')
+		.map((n) => n[0])
+		.join('')
+		.slice(0, 2)
+		.toUpperCase()}
 </div>
 
 <!-- With image (when photo_url exists) -->
 {#if contact.photo_url}
-  <img
-    src={contact.photo_url}
-    alt={contact.full_name}
-    class="h-9 w-9 rounded-full object-cover"
-  />
+	<img src={contact.photo_url} alt={contact.full_name} class="h-9 w-9 rounded-full object-cover" />
 {:else}
-  <div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
-    {contact.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-  </div>
+	<div
+		class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold"
+	>
+		{contact.full_name
+			.split(' ')
+			.map((n) => n[0])
+			.join('')
+			.slice(0, 2)
+			.toUpperCase()}
+	</div>
 {/if}
 ```

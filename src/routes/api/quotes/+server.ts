@@ -2,7 +2,13 @@ import { json, error } from '@sveltejs/kit';
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, orgCounters, quoteLineItems, quotes } from '$lib/server/db/schema';
+import {
+	contacts,
+	opportunities,
+	orgCounters,
+	quoteLineItems,
+	quotes
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateQuote, canViewAnyQuote } from '$lib/server/quotes/permissions';
 import { createQuoteSchema } from '$lib/server/quotes/schemas';
@@ -12,7 +18,7 @@ import { formatQuoteNumber } from '$lib/server/quotes/format';
 
 const PAGE_SIZE = 30;
 const ALL_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired'] as const;
-const ACTIVE_STATUSES = ['draft', 'sent', 'viewed'] as const;
+const ACTIVE_STATUSES = ['draft', 'sent', 'viewed', 'changes_requested'] as const;
 const CLOSED_STATUSES = ['accepted', 'declined', 'expired'] as const;
 
 export const GET: RequestHandler = async (event) => {
@@ -123,6 +129,30 @@ export const POST: RequestHandler = async (event) => {
 		)
 		.limit(1);
 	if (!contactRow) return json({ error: 'Contact not found' }, { status: 422 });
+
+	if (input.opportunity_id) {
+		const [oppRow] = await db
+			.select({ id: opportunities.id })
+			.from(opportunities)
+			.where(
+				and(
+					eq(opportunities.id, input.opportunity_id),
+					eq(opportunities.org_id, auth.orgId),
+					eq(opportunities.contact_id, input.contact_id),
+					isNull(opportunities.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!oppRow) {
+			return json(
+				{
+					error: 'Opportunity does not belong to this contact',
+					field_errors: { opportunity_id: 'Invalid opportunity' }
+				},
+				{ status: 422 }
+			);
+		}
+	}
 
 	const created = await db.transaction(async (tx) => {
 		const [counter] = await tx.execute<{ next_quote_number: number }>(sql`

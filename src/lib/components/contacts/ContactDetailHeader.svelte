@@ -2,34 +2,42 @@
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
-	import { ArrowLeft, Trash2, Phone, Mail, Pencil } from '@lucide/svelte';
+	import { ArrowLeft, Trash2, Phone, Mail, Pencil, UserPlus, Merge } from '@lucide/svelte';
 
 	let {
 		full_name,
 		phone,
+		alt_phone = null,
 		email,
 		status,
 		assignee_name,
+		referrer,
 		canEdit,
 		canDelete,
+		canMerge = false,
 		onBack,
 		onEdit,
-		onDelete
+		onDelete,
+		onMerge
 	}: {
 		full_name: string;
 		phone: string;
+		alt_phone?: string | null;
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		assignee_name?: string | null;
+		referrer?: { id: string; name: string } | null;
 		canEdit: boolean;
 		canDelete: boolean;
+		canMerge?: boolean;
 		onBack: () => void;
 		onEdit: () => void;
 		onDelete: () => void;
+		onMerge?: () => void;
 	} = $props();
 
 	const statusVariant = $derived(
-		status === 'customer' ? 'success' : status === 'archived' ? 'default' : 'info'
+		status === 'customer' ? 'success' : status === 'archived' ? 'warning' : 'info'
 	);
 	const statusLabel = $derived(
 		status === 'customer' ? 'Customer' : status === 'archived' ? 'Archived' : 'Lead'
@@ -58,6 +66,11 @@
 					<Pencil class="h-5 w-5 text-muted-foreground" />
 				</Button>
 			{/if}
+			{#if canMerge}
+				<Button variant="ghost" size="icon" aria-label="Merge duplicate" onclick={onMerge}>
+					<Merge class="h-5 w-5 text-muted-foreground" />
+				</Button>
+			{/if}
 			{#if canDelete}
 				<Button variant="ghost" size="icon" aria-label="Delete contact" onclick={onDelete}>
 					<Trash2 class="h-5 w-5 text-destructive" />
@@ -82,6 +95,15 @@
 			{:else}
 				<p class="mt-1 text-sm italic text-muted-foreground">Unassigned</p>
 			{/if}
+			{#if referrer}
+				<a
+					href={`/contacts/${referrer.id}`}
+					class="mt-0.5 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+				>
+					<UserPlus class="h-3.5 w-3.5" />
+					Referred by {referrer.name}
+				</a>
+			{/if}
 		</div>
 	</div>
 
@@ -93,6 +115,16 @@
 			<Phone class="h-4 w-4 text-muted-foreground" />
 			<span class="font-medium">{formatPhoneDisplay(phone)}</span>
 		</a>
+		{#if alt_phone}
+			<a
+				class="flex min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent/40"
+				href={`tel:${alt_phone}`}
+			>
+				<Phone class="h-4 w-4 text-muted-foreground" />
+				<span class="font-medium">{formatPhoneDisplay(alt_phone)}</span>
+				<span class="text-xs text-muted-foreground">(alt)</span>
+			</a>
+		{/if}
 		{#if email}
 			<a
 				class="flex min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent/40"

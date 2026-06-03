@@ -5,7 +5,10 @@ export {
 	organizations,
 	orgMembers,
 	automationSettings,
-	orgUsage
+	orgUsage,
+	smsCreditEntryTypeEnum,
+	orgSmsCredit,
+	smsCreditLedger
 } from './01_org_identity';
 export type {
 	Organization,
@@ -15,7 +18,11 @@ export type {
 	AutomationSettings,
 	NewAutomationSettings,
 	OrgUsage,
-	NewOrgUsage
+	NewOrgUsage,
+	OrgSmsCredit,
+	NewOrgSmsCredit,
+	SmsCreditLedger,
+	NewSmsCreditLedger
 } from './01_org_identity';
 
 // Domain 2 — Contacts
@@ -38,12 +45,7 @@ export type {
 
 // Domain 3 — Pipeline
 export { pipelineStages, opportunities } from './03_pipeline';
-export type {
-	PipelineStage,
-	NewPipelineStage,
-	Opportunity,
-	NewOpportunity
-} from './03_pipeline';
+export type { PipelineStage, NewPipelineStage, Opportunity, NewOpportunity } from './03_pipeline';
 
 // Domain 4 — Jobs
 export { jobStatusEnum, jobs } from './04_jobs';
@@ -112,24 +114,36 @@ export {
 	appointmentTypeEnum,
 	appointmentStatusEnum,
 	bookingSourceEnum,
-	appointments
+	appointments,
+	appointmentAssignees
 } from './07_appointments';
-export type { Appointment, NewAppointment } from './07_appointments';
+export type {
+	Appointment,
+	NewAppointment,
+	AppointmentAssignee,
+	NewAppointmentAssignee
+} from './07_appointments';
 
 // Domain 8 — Reputation
 export {
 	reviewRequestStatusEnum,
+	reviewEventTypeEnum,
 	reviewRequests,
 	reviews,
-	privateFeedback
+	privateFeedback,
+	reviewEvents
 } from './08_reputation';
 export type {
+	ReviewRequestStatus,
+	ReviewEventType,
 	ReviewRequest,
 	NewReviewRequest,
 	Review,
 	NewReview,
 	PrivateFeedback,
-	NewPrivateFeedback
+	NewPrivateFeedback,
+	ReviewEvent,
+	NewReviewEvent
 } from './08_reputation';
 
 // Domain 9 — Files & Media
@@ -156,6 +170,14 @@ export type {
 	NewAvailabilityOverride
 } from './12_booking';
 
+// Domain 13 — Quick Replies (Inbox)
+export { quickReplies } from './13_quick_replies';
+export type { QuickReply, NewQuickReply } from './13_quick_replies';
+
+// Domain 14 — Email Domains (per-tenant Brevo sending/receiving)
+export { emailDomainStatusEnum, emailDomains } from './14_email_domains';
+export type { EmailDomain, NewEmailDomain, EmailDnsRecord } from './14_email_domains';
+
 // Domain 10 — Growth, Automation & System
 export {
 	growthFeedTypeEnum,
@@ -164,7 +186,11 @@ export {
 	outboxEventStatusEnum,
 	growthFeedItems,
 	internalActivityLog,
+	activityEvents,
 	notifications,
+	memberNotificationPreferences,
+	pushSubscriptions,
+	notificationDeliveryState,
 	automationJobs,
 	outboxEvents,
 	orgCounters
@@ -174,8 +200,16 @@ export type {
 	NewGrowthFeedItem,
 	InternalActivityLog,
 	NewInternalActivityLog,
+	ActivityEvent,
+	NewActivityEvent,
 	Notification,
 	NewNotification,
+	MemberNotificationPreference,
+	NewMemberNotificationPreference,
+	PushSubscription,
+	NewPushSubscription,
+	NotificationDeliveryState,
+	NewNotificationDeliveryState,
 	AutomationJob,
 	NewAutomationJob,
 	OutboxEvent,

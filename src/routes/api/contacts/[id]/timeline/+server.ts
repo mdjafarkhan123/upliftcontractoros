@@ -6,7 +6,9 @@ import { contacts } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import {
 	fetchTimelineRows,
-	TIMELINE_PAGE_SIZE
+	TIMELINE_PAGE_SIZE,
+	TIMELINE_CATEGORIES,
+	type TimelineCategory
 } from '$lib/server/timeline/buildQuery';
 import { mapRowToEntry } from '$lib/server/timeline/registry';
 import {
@@ -33,10 +35,9 @@ import {
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
-	if (!auth.member.can_view_all_contacts) error(403, 'Forbidden');
 
 	const [exists] = await db
-		.select({ id: contacts.id })
+		.select({ id: contacts.id, assigned_to: contacts.assigned_to })
 		.from(contacts)
 		.where(
 			and(
@@ -47,6 +48,10 @@ export const GET: RequestHandler = async (event) => {
 		)
 		.limit(1);
 	if (!exists) error(404, 'Contact not found');
+	if (!auth.member.can_view_all_contacts && exists.assigned_to !== auth.member.id) {
+		// 404 (not 403) — don't leak existence.
+		error(404, 'Contact not found');
+	}
 
 	const cursorParam = event.url.searchParams.get('cursor');
 	let cursor = null;
@@ -57,30 +62,54 @@ export const GET: RequestHandler = async (event) => {
 		if (!cursor) error(400, 'Invalid cursor');
 	}
 
+	// Free-text filter. Cap length to keep the ILIKE pattern bounded; empty/
+	// whitespace-only collapses to no filter.
+	const rawSearch = event.url.searchParams.get('q');
+	const search = rawSearch ? rawSearch.trim().slice(0, 100) : null;
+
+	const rawTypes = event.url.searchParams.get('types');
+	const validSet = new Set<string>(TIMELINE_CATEGORIES);
+	const types: TimelineCategory[] | null = rawTypes
+		? (rawTypes.split(',').filter((t) => validSet.has(t)) as TimelineCategory[])
+		: null;
+
 	const { rows, hasMore } = await fetchTimelineRows({
 		orgId: auth.orgId,
 		contactId: event.params.id,
 		cursor,
-		includePrivateFeedback: auth.member.can_view_negative_feedback === true
+		includePrivateFeedback: auth.member.can_view_negative_feedback === true,
+		search,
+		types: types && types.length > 0 ? types : null
 	});
 
+	// The cursor must advance past the last raw row we *consumed*, not the last
+	// row that produced a visible entry. Rows whose mapper returns null still
+	// occupy a position in the ordering; if we anchored the cursor on the last
+	// rendered entry, a null-heavy tail would be re-scanned (or, worse, dropped
+	// entirely when a whole window maps to null) on the next page.
 	const items: TimelineEntry[] = [];
-	let lastRawRow: RawTimelineRow | null = null;
+	let lastConsumedRow: RawTimelineRow | null = null;
+	let consumed = 0;
 	for (const row of rows) {
 		if (items.length >= TIMELINE_PAGE_SIZE) break;
+		lastConsumedRow = row;
+		consumed++;
 		const entry = mapRowToEntry(row);
 		if (!entry) continue;
 		items.push(entry);
-		lastRawRow = row;
 	}
 
-	const filledPage = items.length >= TIMELINE_PAGE_SIZE;
+	// More data exists if the union had rows beyond our fetch window (hasMore),
+	// or we stopped early on a full page with rows still buffered in this fetch.
+	// Either way we emit a cursor so a short page (lots of null-mapped rows) is
+	// never mistaken for the end of the timeline.
+	const moreToFetch = hasMore || consumed < rows.length;
 	const next_cursor =
-		filledPage && lastRawRow && (hasMore || rows.length > items.length)
+		moreToFetch && lastConsumedRow
 			? encodeCursor({
-					effective_at: lastRawRow.effective_at.toISOString(),
-					source_table: lastRawRow.source_table,
-					row_id: lastRawRow.row_id
+					effective_at: lastConsumedRow.effective_at.toISOString(),
+					source_table: lastConsumedRow.source_table,
+					row_id: lastConsumedRow.row_id
 				})
 			: null;
 

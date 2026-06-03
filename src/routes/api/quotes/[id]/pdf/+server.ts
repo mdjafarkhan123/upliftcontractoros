@@ -2,12 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	contacts,
-	organizations,
-	quoteLineItems,
-	quotes
-} from '$lib/server/db/schema';
+import { contacts, organizations, quoteLineItems, quotes } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewAnyQuote } from '$lib/server/quotes/permissions';
 import { generateAndStoreQuotePdf } from '$lib/server/quotes/pdf';

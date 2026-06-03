@@ -24,6 +24,12 @@ export type QueueAutomationEmailInput = {
 	 * findOrCreateOpenConversation runs (createdChannel='email').
 	 */
 	conversationId?: string;
+	/**
+	 * When set, the emailWorker will generate an RFC 5545 .ics calendar
+	 * attachment from the referenced appointment and prepend it to the
+	 * outbound email. Used by booking confirmation emails.
+	 */
+	appointmentId?: string;
 };
 
 /**
@@ -118,7 +124,8 @@ export async function queueAutomationEmail(
 			conversation_id: conversationId,
 			contact_id: input.contactId,
 			org_id: input.orgId,
-			source: input.source
+			source: input.source,
+			...(input.appointmentId ? { appointment_id: input.appointmentId } : {})
 		},
 		idempotency_key: `email.send.requested:${message.id}`
 	});

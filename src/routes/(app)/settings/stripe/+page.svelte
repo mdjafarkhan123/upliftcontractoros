@@ -154,7 +154,11 @@
 
 <svelte:head><title>Stripe Settings</title></svelte:head>
 
-<PageWrapper title="Online payments" subtitle="Get paid by card on every invoice you send.">
+<PageWrapper
+	title="Online payments"
+	subtitle="Get paid by card on every invoice you send."
+	back="/settings"
+>
 	{#if loading || !status}
 		<SkeletonLoader lines={6} label="Loading Stripe settings" height="64px" />
 	{:else}

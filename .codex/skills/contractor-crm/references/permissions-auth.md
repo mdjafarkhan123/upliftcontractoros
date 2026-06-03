@@ -24,11 +24,11 @@ Cross-reference: Roles & Access Matrix v2, RLS Policy Matrix v1, Master Domain A
 
 ## 1. Role Definitions
 
-| Role      | Who They Are                         | Created By                     |
-| --------- | ------------------------------------ | ------------------------------ |
-| Admin     | The contractor — organization owner  | Platform Owner via `/jafar`    |
-| Manager   | Office staff, operations lead        | Admin via Team Settings        |
-| Member    | Field worker, technician, crew       | Admin via Team Settings        |
+| Role    | Who They Are                        | Created By                  |
+| ------- | ----------------------------------- | --------------------------- |
+| Admin   | The contractor — organization owner | Platform Owner via `/jafar` |
+| Manager | Office staff, operations lead       | Admin via Team Settings     |
+| Member  | Field worker, technician, crew      | Admin via Team Settings     |
 
 Admin always has full access. No toggles shown. Cannot be restricted.
 
@@ -44,6 +44,7 @@ Admin always has full access. No toggles shown. Cannot be restricted.
   permission utility. Direct boolean column reads scattered across the codebase are forbidden
 
 **Seeding rules:**
+
 - Admin: all 40 columns seeded TRUE at creation
 - Manager/Member: all 40 columns seeded from role template as explicit TRUE or FALSE
 - Admin can override individual toggles after applying a template
@@ -54,107 +55,121 @@ Admin always has full access. No toggles shown. Cannot be restricted.
 ## 3. Full Permission Matrix with Defaults
 
 ### Dashboard (Module 1)
-| Permission                   | Admin   | Manager | Member |
-| ---------------------------- | ------- | ------- | ------ |
-| `can_view_dashboard`         | Always  | ON      | ON     |
-| `can_view_revenue`           | Always  | ON      | OFF    |
-| `can_view_pipeline_snapshot` | Always  | ON      | OFF    |
+
+| Permission                   | Admin  | Manager | Member |
+| ---------------------------- | ------ | ------- | ------ |
+| `can_view_dashboard`         | Always | ON      | ON     |
+| `can_view_revenue`           | Always | ON      | OFF    |
+| `can_view_pipeline_snapshot` | Always | ON      | OFF    |
 
 ### Inbox (Module 2)
-| Permission                        | Admin   | Manager | Member |
-| --------------------------------- | ------- | ------- | ------ |
-| `can_view_all_conversations`      | Always  | ON      | OFF    |
-| `can_view_assigned_conversations` | Always  | ON      | ON     |
-| `can_send_messages`               | Always  | ON      | ON     |
-| `can_delete_conversations`        | Always  | OFF     | OFF    |
+
+| Permission                        | Admin  | Manager | Member |
+| --------------------------------- | ------ | ------- | ------ |
+| `can_view_all_conversations`      | Always | ON      | OFF    |
+| `can_view_assigned_conversations` | Always | ON      | ON     |
+| `can_send_messages`               | Always | ON      | ON     |
+| `can_delete_conversations`        | Always | OFF     | OFF    |
 
 ### Contacts (Module 3)
-| Permission             | Admin   | Manager | Member |
-| ---------------------- | ------- | ------- | ------ |
-| `can_view_all_contacts`| Always  | ON      | OFF    |
-| `can_create_contacts`  | Always  | ON      | OFF    |
-| `can_edit_contacts`    | Always  | ON      | OFF    |
-| `can_delete_contacts`  | Always  | OFF     | OFF    |
+
+| Permission              | Admin  | Manager | Member |
+| ----------------------- | ------ | ------- | ------ |
+| `can_view_all_contacts` | Always | ON      | OFF    |
+| `can_create_contacts`   | Always | ON      | OFF    |
+| `can_edit_contacts`     | Always | ON      | OFF    |
+| `can_delete_contacts`   | Always | OFF     | OFF    |
 
 ### Pipeline (Module 4)
-| Permission                  | Admin   | Manager | Member |
-| --------------------------- | ------- | ------- | ------ |
-| `can_view_full_pipeline`    | Always  | ON      | OFF    |
-| `can_move_pipeline_stages`  | Always  | ON      | OFF    |
-| `can_create_opportunities`  | Always  | ON      | OFF    |
+
+| Permission                 | Admin  | Manager | Member |
+| -------------------------- | ------ | ------- | ------ |
+| `can_view_full_pipeline`   | Always | ON      | OFF    |
+| `can_move_pipeline_stages` | Always | ON      | OFF    |
+| `can_create_opportunities` | Always | ON      | OFF    |
 
 ### Jobs (Module 4 cont.)
-| Permission                 | Admin   | Manager | Member |
-| -------------------------- | ------- | ------- | ------ |
-| `can_view_assigned_jobs`   | Always  | ON      | ON     |
+
+| Permission               | Admin  | Manager | Member |
+| ------------------------ | ------ | ------- | ------ |
+| `can_view_assigned_jobs` | Always | ON      | ON     |
 
 ### Quotes (Module 5)
-| Permission             | Admin   | Manager | Member |
-| ---------------------- | ------- | ------- | ------ |
-| `can_view_all_quotes`  | Always  | ON      | OFF    |
-| `can_create_quotes`    | Always  | ON      | OFF    |
-| `can_send_quotes`      | Always  | ON      | OFF    |
-| `can_edit_quotes`      | Always  | ON      | OFF    |
-| `can_delete_quotes`    | Always  | OFF     | OFF    |
+
+| Permission            | Admin  | Manager | Member |
+| --------------------- | ------ | ------- | ------ |
+| `can_view_all_quotes` | Always | ON      | OFF    |
+| `can_create_quotes`   | Always | ON      | OFF    |
+| `can_send_quotes`     | Always | ON      | OFF    |
+| `can_edit_quotes`     | Always | ON      | OFF    |
+| `can_delete_quotes`   | Always | OFF     | OFF    |
 
 ### Invoices (Module 6)
-| Permission               | Admin   | Manager | Member |
-| ------------------------ | ------- | ------- | ------ |
-| `can_view_all_invoices`  | Always  | ON      | OFF    |
-| `can_create_invoices`    | Always  | ON      | OFF    |
-| `can_send_invoices`      | Always  | ON      | OFF    |
-| `can_record_payments`    | Always  | ON      | OFF    |
-| `can_delete_invoices`    | Always  | OFF     | OFF    |
+
+| Permission              | Admin  | Manager | Member |
+| ----------------------- | ------ | ------- | ------ |
+| `can_view_all_invoices` | Always | ON      | OFF    |
+| `can_create_invoices`   | Always | ON      | OFF    |
+| `can_send_invoices`     | Always | ON      | OFF    |
+| `can_record_payments`   | Always | ON      | OFF    |
+| `can_delete_invoices`   | Always | OFF     | OFF    |
 
 ### Appointments (Module 7)
-| Permission                       | Admin   | Manager | Member |
-| -------------------------------- | ------- | ------- | ------ |
-| `can_view_all_appointments`      | Always  | ON      | OFF    |
-| `can_view_assigned_appointments` | Always  | ON      | ON     |
-| `can_create_appointments`        | Always  | ON      | OFF    |
-| `can_reschedule_appointments`    | Always  | ON      | OFF    |
+
+| Permission                       | Admin  | Manager | Member |
+| -------------------------------- | ------ | ------- | ------ |
+| `can_view_all_appointments`      | Always | ON      | OFF    |
+| `can_view_assigned_appointments` | Always | ON      | ON     |
+| `can_create_appointments`        | Always | ON      | OFF    |
+| `can_reschedule_appointments`    | Always | ON      | OFF    |
 
 ### Reputation (Module 8)
-| Permission                    | Admin   | Manager | Member |
-| ----------------------------- | ------- | ------- | ------ |
-| `can_view_reviews`            | Always  | ON      | OFF    |
-| `can_send_review_requests`    | Always  | ON      | OFF    |
-| `can_view_negative_feedback`  | Always  | ON      | OFF    |
+
+| Permission                   | Admin  | Manager | Member |
+| ---------------------------- | ------ | ------- | ------ |
+| `can_view_reviews`           | Always | ON      | OFF    |
+| `can_send_review_requests`   | Always | ON      | OFF    |
+| `can_view_negative_feedback` | Always | ON      | OFF    |
 
 ### Growth Feed (Module 9)
-| Permission              | Admin   | Manager | Member |
-| ----------------------- | ------- | ------- | ------ |
-| `can_view_growth_feed`  | Always  | ON      | OFF    |
+
+| Permission             | Admin  | Manager | Member |
+| ---------------------- | ------ | ------- | ------ |
+| `can_view_growth_feed` | Always | ON      | OFF    |
 
 ### Files & Media (Module 10)
-| Permission             | Admin   | Manager | Member |
-| ---------------------- | ------- | ------- | ------ |
-| `can_view_all_files`   | Always  | ON      | OFF    |
-| `can_upload_files`     | Always  | ON      | ON     |
-| `can_delete_files`     | Always  | OFF     | OFF    |
+
+| Permission           | Admin  | Manager | Member |
+| -------------------- | ------ | ------- | ------ |
+| `can_view_all_files` | Always | ON      | OFF    |
+| `can_upload_files`   | Always | ON      | ON     |
+| `can_delete_files`   | Always | OFF     | OFF    |
 
 ### Team Management (Module 11)
-| Permission                | Admin   | Manager | Member |
-| ------------------------- | ------- | ------- | ------ |
-| `can_view_team_members`   | Always  | ON      | OFF    |
-| `can_create_team_members` | Always  | OFF     | OFF    |
-| `can_edit_team_members`   | Always  | OFF     | OFF    |
-| `can_delete_team_members` | Always  | OFF     | OFF    |
+
+| Permission                | Admin  | Manager | Member |
+| ------------------------- | ------ | ------- | ------ |
+| `can_view_team_members`   | Always | ON      | OFF    |
+| `can_create_team_members` | Always | OFF     | OFF    |
+| `can_edit_team_members`   | Always | OFF     | OFF    |
+| `can_delete_team_members` | Always | OFF     | OFF    |
 
 ### Admin-Only Sections (No Toggles — Permanently Restricted)
-| Section                   | Admin   | Manager | Member |
-| ------------------------- | ------- | ------- | ------ |
-| Organization settings     | Always  | NEVER   | NEVER  |
-| Branding settings         | Always  | NEVER   | NEVER  |
-| Billing & subscription    | Always  | NEVER   | NEVER  |
-| Integrations              | Always  | NEVER   | NEVER  |
-| Automation settings       | Always  | NEVER   | NEVER  |
+
+| Section                | Admin  | Manager | Member |
+| ---------------------- | ------ | ------- | ------ |
+| Organization settings  | Always | NEVER   | NEVER  |
+| Branding settings      | Always | NEVER   | NEVER  |
+| Billing & subscription | Always | NEVER   | NEVER  |
+| Integrations           | Always | NEVER   | NEVER  |
+| Automation settings    | Always | NEVER   | NEVER  |
 
 ---
 
 ## 4. Role Template Defaults
 
 ### Manager Template (Quick Reference)
+
 ```
 Full dashboard with revenue + pipeline | All conversations + send
 View/create/edit contacts (no delete) | Full pipeline + create opportunities
@@ -166,6 +181,7 @@ No settings/billing access
 ```
 
 ### Member Template (Quick Reference)
+
 ```
 Dashboard only (no revenue, no pipeline) | Assigned conversations + send
 No contact access | No pipeline access | Assigned jobs only
@@ -179,6 +195,7 @@ No team management | No settings/billing
 ## 5. Account Creation Flows
 
 ### Admin Account (Platform Owner creates via /jafar)
+
 ```
 Platform Owner → /jafar → creates org + Admin auth user
 → sets temporary password, shares via secure channel
@@ -187,6 +204,7 @@ Platform Owner → /jafar → creates org + Admin auth user
 ```
 
 ### Team Member Account (Admin creates via Team Settings)
+
 ```
 Admin → Team Settings → Add Team Member
 → Enter: full name, email, password
@@ -207,10 +225,10 @@ Injected via `app_metadata` at account creation using
 
 ```json
 {
-  "app_metadata": {
-    "org_id": "<uuid>",
-    "role": "admin | manager | member"
-  }
+	"app_metadata": {
+		"org_id": "<uuid>",
+		"role": "admin | manager | member"
+	}
 }
 ```
 
@@ -237,6 +255,7 @@ the claims is transparent to RLS policies and the frontend.
 The responsibility split is absolute:
 
 **RLS enforces (database level):**
+
 - `org_id` tenant isolation on every table
 - Assignment scoping on 4 tables (belt-and-suspenders)
 - Soft-delete protection (`AND deleted_at IS NULL`) on all applicable tables
@@ -244,12 +263,14 @@ The responsibility split is absolute:
 - `org_usage` SELECT rows are limited to the caller's JWT `app_metadata.org_id`
 
 **API middleware enforces (application level):**
+
 - All 40 fine-grained permission checks
 - Business rule authorization
 - Feature-level access rules
 - Assignment-aware visibility (`assigned_to = user_id` for Members)
 
 **Service role (SvelteKit server routes + /jafar):**
+
 - Bypasses RLS through PostgreSQL session-level `SET row_security = off`
 - Handles every `INSERT` / `UPDATE` / `DELETE`
 - Never exposed to the browser client
@@ -264,6 +285,7 @@ Contractor JWTs have SELECT-only policies.
 ## 8. RLS Helper Functions
 
 ### get_my_org_id()
+
 Extracts `org_id` from JWT `app_metadata`. Zero DB round-trips — pure JWT parsing.
 Returns NULL if claim absent → all `org_id = get_my_org_id()` predicates evaluate
 FALSE → zero rows returned (correct failure mode).
@@ -279,6 +301,7 @@ $$;
 ```
 
 ### get_my_member_id()
+
 Resolves calling user's `org_members.id` via `supabase_user_id = auth.uid()`.
 Uses unique index for O(1) lookup. STABLE = evaluated once per statement.
 Returns NULL if: no matching row, inactive (`is_active = FALSE`), or soft-deleted.
@@ -303,12 +326,12 @@ Both functions: REVOKE ALL FROM PUBLIC, GRANT EXECUTE TO authenticated.
 Four tables have TWO permissive SELECT policies. PostgreSQL ORs them — a row matches
 if EITHER policy passes.
 
-| Table           | Policy A (full access)              | Policy B (assigned only)                 |
-| --------------- | ----------------------------------- | ---------------------------------------- |
-| `opportunities` | `can_view_full_pipeline = TRUE`     | `assigned_to = get_my_member_id()`       |
-| `jobs`          | `can_view_full_pipeline = TRUE`     | `assigned_to = get_my_member_id()`       |
+| Table           | Policy A (full access)              | Policy B (assigned only)                                                      |
+| --------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+| `opportunities` | `can_view_full_pipeline = TRUE`     | `assigned_to = get_my_member_id()`                                            |
+| `jobs`          | `can_view_full_pipeline = TRUE`     | `assigned_to = get_my_member_id()`                                            |
 | `conversations` | `can_view_all_conversations = TRUE` | `assigned_to = get_my_member_id()` + `can_view_assigned_conversations = TRUE` |
-| `appointments`  | `can_view_all_appointments = TRUE`  | `assigned_to = get_my_member_id()` + `can_view_assigned_appointments = TRUE` |
+| `appointments`  | `can_view_all_appointments = TRUE`  | `assigned_to = get_my_member_id()` + `can_view_assigned_appointments = TRUE`  |
 
 All policies include `org_id = get_my_org_id() AND deleted_at IS NULL`.
 Policy A checks the boolean permission via subquery on `org_members`.
@@ -321,12 +344,12 @@ Policy B always checks `assigned_to = get_my_member_id()`.
 Four tables have RLS enabled but NO permissive policy for contractor JWTs.
 PostgreSQL default = DENY when no permissive policy matches.
 
-| Table                    | Reason                                          |
-| ------------------------ | ----------------------------------------------- |
-| `internal_activity_log`  | Agency-internal only — contractor access forbidden |
-| `outbox_events`          | Transactional dispatch infra — not contractor-facing |
-| `automation_jobs`        | BullMQ execution audit — workers only           |
-| `org_counters`           | SELECT FOR UPDATE number generation — service role only |
+| Table                   | Reason                                                  |
+| ----------------------- | ------------------------------------------------------- |
+| `internal_activity_log` | Agency-internal only — contractor access forbidden      |
+| `outbox_events`         | Transactional dispatch infra — not contractor-facing    |
+| `automation_jobs`       | BullMQ execution audit — workers only                   |
+| `org_counters`          | SELECT FOR UPDATE number generation — service role only |
 
 `org_usage` is not service-role-only: contractor JWTs may SELECT their own org's
 usage rows. No contractor JWT INSERT, UPDATE, or DELETE policy exists; all usage
@@ -351,14 +374,14 @@ if (!member || !member.is_active) return error(403);
 if (!member.can_view_all_quotes) return error(403);
 
 // 4. Execute query scoped by org_id from session (not request body)
-const quotes = await db.select().from(quotesTable)
-  .where(and(
-    eq(quotesTable.org_id, member.org_id),
-    isNull(quotesTable.deleted_at)
-  ));
+const quotes = await db
+	.select()
+	.from(quotesTable)
+	.where(and(eq(quotesTable.org_id, member.org_id), isNull(quotesTable.deleted_at)));
 ```
 
 Key principles:
+
 - `org_id` comes from the authenticated session — NEVER from the request body
 - Permission check happens BEFORE any database query
 - Use the centralized permission utility — never check booleans inline
@@ -391,6 +414,7 @@ The `/jafar` route is never linked in app navigation.
 - IP allowlisting strongly encouraged but not required in v1
 
 ### /jafar Routes In Scope
+
 ```
 /jafar                   → Super Admin login page (no branding, no hints)
 /jafar/dashboard         → Org list overview
@@ -399,6 +423,7 @@ The `/jafar` route is never linked in app navigation.
 ```
 
 ### Platform Owner Capabilities
+
 ```
 → Create new contractor organizations
 → Create Admin accounts for those organizations

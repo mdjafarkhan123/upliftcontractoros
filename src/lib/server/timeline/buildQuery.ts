@@ -28,20 +28,51 @@ export const TIMELINE_PAGE_SIZE = 50;
  */
 export const TIMELINE_FETCH_LIMIT = 60;
 
+export const TIMELINE_CATEGORIES = [
+	'messages',
+	'quotes',
+	'invoices',
+	'appointments',
+	'jobs',
+	'reviews',
+	'notes',
+	'automations'
+] as const;
+export type TimelineCategory = (typeof TIMELINE_CATEGORIES)[number];
+
 export type BuildQueryParams = {
 	orgId: string;
 	contactId: string;
 	cursor: TimelineCursor | null;
 	includePrivateFeedback: boolean;
+	/** Optional free-text filter. Already trimmed/length-capped by the route. */
+	search?: string | null;
+	/** Optional type filter. When set, only branches whose source_table matches are included. */
+	types?: TimelineCategory[] | null;
 };
 
-type SourceBranch = { sql: SQL };
+/**
+ * Escape the LIKE wildcards in user input so a literal `%`, `_`, or `\`
+ * typed into the search box is matched literally rather than acting as a
+ * pattern metacharacter. Values are still parameterized by the driver — this
+ * is about pattern semantics, not injection.
+ */
+function escapeLike(term: string): string {
+	return term.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
 
-function buildBranches(orgId: string, contactId: string, includePrivateFeedback: boolean): SourceBranch[] {
+type SourceBranch = { sql: SQL; category: TimelineCategory };
+
+function buildBranches(
+	orgId: string,
+	contactId: string,
+	includePrivateFeedback: boolean
+): SourceBranch[] {
 	const branches: SourceBranch[] = [];
 
 	// --- messages (inbound + outbound) ---
 	branches.push({
+		category: 'messages',
 		sql: sql`
 			select
 				'messages'::text as source_table,
@@ -63,6 +94,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	});
 
 	branches.push({
+		category: 'messages',
 		sql: sql`
 			select
 				'messages'::text as source_table,
@@ -92,6 +124,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	`;
 
 	branches.push({
+		category: 'quotes',
 		sql: sql`
 			select 'quotes'::text as source_table,
 				(q.id::text || ':sent') as row_id,
@@ -103,6 +136,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'quotes',
 		sql: sql`
 			select 'quotes'::text as source_table,
 				(q.id::text || ':viewed') as row_id,
@@ -114,6 +148,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'quotes',
 		sql: sql`
 			select 'quotes'::text as source_table,
 				(q.id::text || ':accepted') as row_id,
@@ -125,6 +160,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'quotes',
 		sql: sql`
 			select 'quotes'::text as source_table,
 				(q.id::text || ':declined') as row_id,
@@ -138,6 +174,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 
 	// --- quote change requests: customer-requested edits, joined to quotes for contact filter ---
 	branches.push({
+		category: 'quotes',
 		sql: sql`
 			select 'quote_change_requests'::text as source_table,
 				qcr.id::text as row_id,
@@ -164,6 +201,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	`;
 
 	branches.push({
+		category: 'invoices',
 		sql: sql`
 			select 'invoices'::text as source_table,
 				(i.id::text || ':sent') as row_id,
@@ -175,6 +213,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'invoices',
 		sql: sql`
 			select 'invoices'::text as source_table,
 				(i.id::text || ':paid') as row_id,
@@ -188,6 +227,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 
 	// --- payments (financial immutability — no deleted_at on payments) ---
 	branches.push({
+		category: 'invoices',
 		sql: sql`
 			select
 				'payments'::text as source_table,
@@ -212,6 +252,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	`;
 
 	branches.push({
+		category: 'appointments',
 		sql: sql`
 			select 'appointments'::text as source_table,
 				(a.id::text || ':scheduled') as row_id,
@@ -226,6 +267,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	// when status='completed'. Acceptable for v1 — revisit if a dedicated
 	// timestamp is added in a later chapter.
 	branches.push({
+		category: 'appointments',
 		sql: sql`
 			select 'appointments'::text as source_table,
 				(a.id::text || ':completed') as row_id,
@@ -238,6 +280,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	});
 
 	branches.push({
+		category: 'appointments',
 		sql: sql`
 			select 'appointments'::text as source_table,
 				(a.id::text || ':cancelled') as row_id,
@@ -253,6 +296,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	const jobFields = sql`'title', j.title, 'job_id', j.id::text`;
 
 	branches.push({
+		category: 'jobs',
 		sql: sql`
 			select 'jobs'::text as source_table,
 				(j.id::text || ':created') as row_id,
@@ -263,6 +307,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'jobs',
 		sql: sql`
 			select 'jobs'::text as source_table,
 				(j.id::text || ':completed') as row_id,
@@ -274,6 +319,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 		`
 	});
 	branches.push({
+		category: 'jobs',
 		sql: sql`
 			select 'jobs'::text as source_table,
 				(j.id::text || ':cancelled') as row_id,
@@ -287,6 +333,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 
 	// --- review requests ---
 	branches.push({
+		category: 'reviews',
 		sql: sql`
 			select
 				'review_requests'::text as source_table,
@@ -301,6 +348,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 
 	// --- reviews (immutable — no deleted_at) ---
 	branches.push({
+		category: 'reviews',
 		sql: sql`
 			select
 				'reviews'::text as source_table,
@@ -319,6 +367,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	// --- private feedback (permission-gated — branch skipped when hidden) ---
 	if (includePrivateFeedback) {
 		branches.push({
+			category: 'reviews',
 			sql: sql`
 				select
 					'private_feedback'::text as source_table,
@@ -333,6 +382,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 
 	// --- contact notes (with author join) ---
 	branches.push({
+		category: 'notes',
 		sql: sql`
 			select
 				'notes'::text as source_table,
@@ -352,6 +402,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	// --- customer-visible automations ---
 	// Each automation type joins through its resource table to filter by contact_id.
 	branches.push({
+		category: 'automations',
 		sql: sql`
 			select
 				'automations'::text as source_table,
@@ -373,6 +424,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	});
 
 	branches.push({
+		category: 'automations',
 		sql: sql`
 			select
 				'automations'::text as source_table,
@@ -394,6 +446,7 @@ function buildBranches(orgId: string, contactId: string, includePrivateFeedback:
 	});
 
 	branches.push({
+		category: 'automations',
 		sql: sql`
 			select
 				'automations'::text as source_table,
@@ -421,14 +474,52 @@ export async function fetchTimelineRows(params: BuildQueryParams): Promise<{
 	rows: RawTimelineRow[];
 	hasMore: boolean;
 }> {
-	const branches = buildBranches(params.orgId, params.contactId, params.includePrivateFeedback);
+	const allBranches = buildBranches(params.orgId, params.contactId, params.includePrivateFeedback);
+
+	const branches =
+		params.types && params.types.length > 0
+			? allBranches.filter((b) => params.types!.includes(b.category))
+			: allBranches;
+
+	if (branches.length === 0) return { rows: [], hasMore: false };
 
 	const unionParts: SQL[] = branches.map((b) => sql`(${b.sql})`);
 	const union = sql.join(unionParts, sql` union all `);
 
-	const cursorFilter = params.cursor
-		? sql`where (effective_at, source_table, row_id) < (${new Date(params.cursor.effective_at)}::timestamptz, ${params.cursor.source_table}::text, ${params.cursor.row_id}::text)`
-		: sql``;
+	const conditions: SQL[] = [];
+
+	if (params.cursor) {
+		conditions.push(
+			sql`(effective_at, source_table, row_id) < (${new Date(params.cursor.effective_at)}::timestamptz, ${params.cursor.source_table}::text, ${params.cursor.row_id}::text)`
+		);
+	}
+
+	// Free-text search. Match against the bucket name (so "quote"/"invoice"/
+	// "payment"/"note" surface those event types) plus the human-readable text
+	// already carried in row_data (message bodies, note content, quote/invoice
+	// numbers, titles, etc.). Numeric/id fields are intentionally excluded to
+	// avoid noisy false positives.
+	const term = params.search?.trim();
+	if (term) {
+		const pattern = `%${escapeLike(term)}%`;
+		conditions.push(sql`
+			(
+				source_table || ' ' ||
+				coalesce(row_data->>'kind', '') || ' ' ||
+				coalesce(row_data->>'body', '') || ' ' ||
+				coalesce(row_data->>'content', '') || ' ' ||
+				coalesce(row_data->>'message', '') || ' ' ||
+				coalesce(row_data->>'quote_number', '') || ' ' ||
+				coalesce(row_data->>'invoice_number', '') || ' ' ||
+				coalesce(row_data->>'title', '') || ' ' ||
+				coalesce(row_data->>'payment_method', '') || ' ' ||
+				coalesce(row_data->>'platform', '')
+			) ilike ${pattern}
+		`);
+	}
+
+	const whereClause =
+		conditions.length > 0 ? sql`where ${sql.join(conditions, sql` and `)}` : sql``;
 
 	const query = sql`
 		with timeline as (
@@ -436,7 +527,7 @@ export async function fetchTimelineRows(params: BuildQueryParams): Promise<{
 		)
 		select source_table, row_id, effective_at, row_data
 		from timeline
-		${cursorFilter}
+		${whereClause}
 		order by effective_at desc, source_table desc, row_id desc
 		limit ${TIMELINE_FETCH_LIMIT + 1}
 	`;

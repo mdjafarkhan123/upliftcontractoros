@@ -84,8 +84,7 @@ export const GET: RequestHandler = async (event) => {
 	);
 
 	const last = page[page.length - 1];
-	const next_cursor =
-		hasMore && last ? `${last.published_at.toISOString()}|${last.id}` : null;
+	const next_cursor = hasMore && last ? `${last.published_at.toISOString()}|${last.id}` : null;
 
 	return json({ data: { items, next_cursor } });
 };

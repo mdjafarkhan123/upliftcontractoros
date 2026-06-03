@@ -20,7 +20,9 @@ export const paymentRegistry: TimelineRegistryEntry = {
 	kind: '',
 	mapper: (row) => {
 		const d = row.row_data as PaymentRowData;
-		const methodLabel = d.payment_method ? METHOD_LABEL[d.payment_method] ?? d.payment_method : null;
+		const methodLabel = d.payment_method
+			? (METHOD_LABEL[d.payment_method] ?? d.payment_method)
+			: null;
 		// Keep description compact (< 140 chars). Stripe method is implied
 		// most of the time; only annotate when it's a non-default method.
 		const description =

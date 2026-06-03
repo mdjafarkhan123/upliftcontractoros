@@ -51,9 +51,7 @@
 	}
 
 	function updateField(client_id: string, patch: Partial<QuoteLineDraft>) {
-		lineItems = lineItems.map((x) =>
-			x.client_id === client_id ? { ...x, ...patch } : x
-		);
+		lineItems = lineItems.map((x) => (x.client_id === client_id ? { ...x, ...patch } : x));
 	}
 </script>
 
@@ -120,7 +118,7 @@
 	{/each}
 
 	{#if !readonly}
-		<div class="rounded-xl border border-dashed border-border bg-card/50 p-3">
+		<div class="rounded-xl border border-dashed border-border bg-card p-3">
 			<div class="space-y-2">
 				<Input bind:value={draftDescription} placeholder="Add a line item description" />
 				<div class="grid grid-cols-12 gap-2">

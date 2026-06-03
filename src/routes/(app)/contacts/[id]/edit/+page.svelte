@@ -5,11 +5,14 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import AddressesTab from '$lib/components/contacts/AddressesTab.svelte';
+	import ContactTagsEditor from '$lib/components/contacts/ContactTagsEditor.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import { Switch } from '$lib/components/ui/switch';
+	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatDateTime } from '$lib/utils/format';
 	import { ArrowLeft } from '@lucide/svelte';
@@ -39,16 +42,68 @@
 	>('manual');
 	let status = $state<'lead' | 'customer' | 'archived'>('lead');
 	let next_follow_up_at_local = $state(''); // datetime-local string
-	let preferred_contact_method = $state<
-		'' | 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger'
-	>('');
+	let preferred_contact_method = $state<'' | 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger'>(
+		''
+	);
 	let email_opt_in = $state(false);
+	let tags = $state<string[]>([]);
 
 	let assignees = $state<Array<{ id: string; full_name: string }>>([]);
+
+	let referred_by_contact_id = $state<string>('');
+	let referrerSearch = $state('');
+	let referrerResults = $state<Array<{ id: string; full_name: string; phone: string }>>([]);
+	let referrerName = $state('');
+	let referrerSearchTimer: ReturnType<typeof setTimeout> | null = null;
+	let showReferrerDropdown = $state(false);
+
+	function onReferrerInput(e: Event) {
+		const val = (e.target as HTMLInputElement).value;
+		referrerSearch = val;
+		if (!val.trim()) {
+			referrerResults = [];
+			showReferrerDropdown = false;
+			return;
+		}
+		if (referrerSearchTimer) clearTimeout(referrerSearchTimer);
+		referrerSearchTimer = setTimeout(async () => {
+			const res = await fetch(`/api/contacts?q=${encodeURIComponent(val.trim())}&status=all`);
+			if (res.ok) {
+				const body = await res.json();
+				referrerResults = (body.items as Array<{ id: string; full_name: string; phone: string }>)
+					.filter((c: { id: string }) => c.id !== data.id)
+					.slice(0, 8);
+				showReferrerDropdown = referrerResults.length > 0;
+			}
+		}, 250);
+	}
+
+	function selectReferrer(r: { id: string; full_name: string }) {
+		referred_by_contact_id = r.id;
+		referrerName = r.full_name;
+		referrerSearch = r.full_name;
+		showReferrerDropdown = false;
+		lead_source = 'referral';
+	}
+
+	function clearReferrer() {
+		referred_by_contact_id = '';
+		referrerName = '';
+		referrerSearch = '';
+		referrerResults = [];
+		showReferrerDropdown = false;
+	}
 
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
 	let fieldErrors = $state<Record<string, string>>({});
+	let archiveBlockCounts = $state<null | {
+		opportunities: number;
+		jobs: number;
+		quotes: number;
+		invoices: number;
+		conversations: number;
+	}>(null);
 
 	function toLocalInput(iso: string | null): string {
 		if (!iso) return '';
@@ -97,6 +152,13 @@
 			preferred_contact_method =
 				(body.contact.preferred_contact_method as typeof preferred_contact_method) ?? '';
 			email_opt_in = body.contact.email_opt_in;
+			tags = body.contact.tags ?? [];
+
+			if (body.contact.referred_by_contact_id && body.referrer) {
+				referred_by_contact_id = body.contact.referred_by_contact_id;
+				referrerName = body.referrer.name;
+				referrerSearch = body.referrer.name;
+			}
 
 			if (assigneesRes.ok) {
 				const aBody = (await assigneesRes.json()) as {
@@ -117,6 +179,7 @@
 		saving = true;
 		saveError = null;
 		fieldErrors = {};
+		archiveBlockCounts = null;
 
 		const payload: Record<string, unknown> = {
 			updated_at: original.contact.updated_at,
@@ -124,11 +187,13 @@
 			phone: phone.trim(),
 			email: email.trim() ? email.trim() : null,
 			assigned_to: assigned_to || null,
+			referred_by_contact_id: referred_by_contact_id || null,
 			lead_source,
 			status,
 			next_follow_up_at: fromLocalInput(next_follow_up_at_local),
 			preferred_contact_method: preferred_contact_method || null,
-			email_opt_in
+			email_opt_in,
+			tags
 		};
 
 		try {
@@ -164,6 +229,12 @@
 				saveError = body.error;
 				return;
 			}
+			if (res.status === 409 && body.code === 'CONTACT_HAS_LINKS') {
+				archiveBlockCounts = body.counts;
+				fieldErrors.status = 'Has linked records';
+				saveError = body.error ?? 'Contact has linked records.';
+				return;
+			}
 
 			saveError = body.error ?? 'Failed to save contact.';
 		} finally {
@@ -175,7 +246,7 @@
 <svelte:head><title>Edit {original?.contact.full_name ?? 'contact'}</title></svelte:head>
 
 <PageWrapper>
-	<div class="mx-auto w-full max-w-2xl space-y-6">
+	<div class="w-full space-y-6">
 		<button
 			type="button"
 			class="inline-flex h-11 items-center gap-1 rounded-md px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -245,46 +316,100 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-1.5">
 							<Label for="assigned_to">Assigned to</Label>
-							<select
-								id="assigned_to"
-								class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								bind:value={assigned_to}
-							>
-								<option value="">Unassigned</option>
-								{#each assignees as a (a.id)}
-									<option value={a.id}>{a.full_name}</option>
-								{/each}
-							</select>
+							<Select.Root bind:value={assigned_to}>
+								<Select.Trigger class="h-11 w-full">
+									<Select.Value />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="">Unassigned</Select.Item>
+									{#each assignees as a (a.id)}
+										<Select.Item value={a.id}>{a.full_name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
 							{#if fieldErrors.assigned_to}
 								<p class="text-xs text-destructive">{fieldErrors.assigned_to}</p>
 							{/if}
 						</div>
 						<div class="space-y-1.5">
 							<Label for="lead_source">Lead source</Label>
-							<select
-								id="lead_source"
-								class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								bind:value={lead_source}
-							>
-								<option value="manual">Manual</option>
-								<option value="website_form">Website form</option>
-								<option value="live_chat">Live chat</option>
-								<option value="missed_call">Missed call</option>
-								<option value="referral">Referral</option>
-								<option value="other">Other</option>
-							</select>
+							<Select.Root bind:value={lead_source}>
+								<Select.Trigger class="h-11 w-full">
+									<Select.Value />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="manual">Manual</Select.Item>
+									<Select.Item value="website_form">Website form</Select.Item>
+									<Select.Item value="live_chat">Live chat</Select.Item>
+									<Select.Item value="missed_call">Missed call</Select.Item>
+									<Select.Item value="referral">Referral</Select.Item>
+									<Select.Item value="other">Other</Select.Item>
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="relative space-y-1.5 sm:col-span-2">
+							<Label for="referred_by">Referred by (optional)</Label>
+							{#if referred_by_contact_id}
+								<div
+									class="flex h-11 items-center justify-between rounded-md border border-border bg-muted/50 px-3 text-sm"
+								>
+									<span class="truncate font-medium">{referrerName}</span>
+									<button
+										type="button"
+										class="ml-2 text-muted-foreground hover:text-foreground"
+										onclick={clearReferrer}
+										aria-label="Clear referrer">&times;</button
+									>
+								</div>
+							{:else}
+								<Input
+									id="referred_by"
+									type="search"
+									inputmode="search"
+									placeholder="Search contacts…"
+									value={referrerSearch}
+									oninput={onReferrerInput}
+									onfocus={() => {
+										if (referrerResults.length > 0) showReferrerDropdown = true;
+									}}
+									onblur={() =>
+										setTimeout(() => {
+											showReferrerDropdown = false;
+										}, 150)}
+									autocomplete="off"
+								/>
+								{#if showReferrerDropdown}
+									<ul
+										class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-lg"
+									>
+										{#each referrerResults as r (r.id)}
+											<li>
+												<button
+													type="button"
+													class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+													onmousedown={() => selectReferrer(r)}
+												>
+													<span class="font-medium">{r.full_name}</span>
+													<span class="text-xs text-muted-foreground">{r.phone}</span>
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							{/if}
 						</div>
 						<div class="space-y-1.5 sm:col-span-2">
 							<Label for="status">Contact status</Label>
-							<select
-								id="status"
-								class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								bind:value={status}
-							>
-								<option value="lead">Lead</option>
-								<option value="customer">Customer</option>
-								<option value="archived">Archived</option>
-							</select>
+							<Select.Root bind:value={status}>
+								<Select.Trigger class="h-11 w-full">
+									<Select.Value />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="lead">Lead</Select.Item>
+									<Select.Item value="customer">Customer</Select.Item>
+									<Select.Item value="archived">Archived</Select.Item>
+								</Select.Content>
+							</Select.Root>
 							{#if original.contact.converted_at}
 								<p class="text-xs text-muted-foreground">
 									Converted on {formatDateTime(original.contact.converted_at)}
@@ -293,6 +418,30 @@
 								<p class="text-xs text-muted-foreground">
 									Saving will mark this contact as converted.
 								</p>
+							{/if}
+							{#if archiveBlockCounts}
+								<div class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs">
+									<p class="font-medium text-destructive">
+										Can't archive — close or reassign these first:
+									</p>
+									<ul class="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-foreground">
+										{#if archiveBlockCounts.opportunities > 0}
+											<li>Opportunities: {archiveBlockCounts.opportunities}</li>
+										{/if}
+										{#if archiveBlockCounts.jobs > 0}
+											<li>Jobs: {archiveBlockCounts.jobs}</li>
+										{/if}
+										{#if archiveBlockCounts.quotes > 0}
+											<li>Quotes: {archiveBlockCounts.quotes}</li>
+										{/if}
+										{#if archiveBlockCounts.invoices > 0}
+											<li>Invoices: {archiveBlockCounts.invoices}</li>
+										{/if}
+										{#if archiveBlockCounts.conversations > 0}
+											<li>Conversations: {archiveBlockCounts.conversations}</li>
+										{/if}
+									</ul>
+								</div>
 							{/if}
 						</div>
 					</div>
@@ -306,11 +455,7 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-1.5">
 							<Label for="next_follow_up_at">Next follow-up</Label>
-							<Input
-								id="next_follow_up_at"
-								type="datetime-local"
-								bind:value={next_follow_up_at_local}
-							/>
+							<DateTimePicker bind:value={next_follow_up_at_local} placeholder="Pick date & time" />
 							{#if next_follow_up_at_local}
 								<button
 									type="button"
@@ -323,18 +468,19 @@
 						</div>
 						<div class="space-y-1.5">
 							<Label for="preferred_contact_method">Preferred method</Label>
-							<select
-								id="preferred_contact_method"
-								class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								bind:value={preferred_contact_method}
-							>
-								<option value="">No preference</option>
-								<option value="sms">SMS</option>
-								<option value="call">Call</option>
-								<option value="email">Email</option>
-								<option value="whatsapp">WhatsApp</option>
-								<option value="messenger">Messenger</option>
-							</select>
+							<Select.Root bind:value={preferred_contact_method}>
+								<Select.Trigger class="h-11 w-full">
+									<Select.Value />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="">No preference</Select.Item>
+									<Select.Item value="sms">SMS</Select.Item>
+									<Select.Item value="call">Call</Select.Item>
+									<Select.Item value="email">Email</Select.Item>
+									<Select.Item value="whatsapp">WhatsApp</Select.Item>
+									<Select.Item value="messenger">Messenger</Select.Item>
+								</Select.Content>
+							</Select.Root>
 						</div>
 						<div
 							class="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 sm:col-span-2"
@@ -348,6 +494,14 @@
 							<Switch bind:checked={email_opt_in} aria-label="Email opt-in" />
 						</div>
 					</div>
+				</section>
+
+				<!-- Tags -->
+				<section class="rounded-2xl border border-border bg-card p-5">
+					<h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+						Tags
+					</h2>
+					<ContactTagsEditor bind:value={tags} />
 				</section>
 
 				{#if saveError}

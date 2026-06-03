@@ -44,9 +44,7 @@ export const PATCH: RequestHandler = async (event) => {
 			assigned_to: jobs.assigned_to
 		})
 		.from(jobs)
-		.where(
-			and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at))
-		)
+		.where(and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 		.limit(1);
 	if (!existing) error(404, 'Job not found');
 
@@ -78,11 +76,7 @@ export const PATCH: RequestHandler = async (event) => {
 			if (next === 'completed') updates.completed_at = now;
 			if (next === 'cancelled') updates.cancelled_at = now;
 
-			const [updated] = await tx
-				.update(jobs)
-				.set(updates)
-				.where(eq(jobs.id, id))
-				.returning();
+			const [updated] = await tx.update(jobs).set(updates).where(eq(jobs.id, id)).returning();
 
 			if (next === 'completed') {
 				await tx.insert(outboxEvents).values({
@@ -121,11 +115,7 @@ export const PATCH: RequestHandler = async (event) => {
 		const msg = e instanceof Error ? e.message : '';
 		// Idempotency_key UNIQUE — duplicate dispatch attempt; return current row
 		if (/unique|duplicate/i.test(msg) && /idempotency/i.test(msg)) {
-			const [current] = await db
-				.select()
-				.from(jobs)
-				.where(eq(jobs.id, id))
-				.limit(1);
+			const [current] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
 			return json({ job: current });
 		}
 		throw e;

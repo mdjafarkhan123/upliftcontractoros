@@ -1,12 +1,18 @@
 import { json } from '@sveltejs/kit';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { organizations, outboxEvents } from '$lib/server/db/schema';
+import {
+	automationSettings,
+	organizations,
+	orgSmsCredit,
+	outboxEvents,
+	smsCreditLedger
+} from '$lib/server/db/schema';
 import { createOrgSchema, createOrganizationWithAdmin } from '$lib/server/admin/orgProvisioning';
 
 export async function GET() {
-	const orgs = await db
+	const rows = await db
 		.select({
 			id: organizations.id,
 			name: organizations.name,
@@ -14,10 +20,41 @@ export async function GET() {
 			status: organizations.status,
 			trade_type: organizations.trade_type,
 			is_setup_complete: organizations.is_setup_complete,
-			created_at: organizations.created_at
+			created_at: organizations.created_at,
+			google_review_link: automationSettings.google_review_link,
+			last_known_review_count: organizations.last_known_review_count,
+			last_review_check_at: organizations.last_review_check_at,
+			sms_balance: orgSmsCredit.balance,
+			sms_monthly_allowance: orgSmsCredit.monthly_included_credit
 		})
 		.from(organizations)
+		.leftJoin(automationSettings, eq(automationSettings.org_id, organizations.id))
+		.leftJoin(orgSmsCredit, eq(orgSmsCredit.org_id, organizations.id))
 		.orderBy(desc(organizations.created_at));
+
+	// Manual top-ups added in the current calendar month, summed per org — the
+	// "+ ($x)" the PO sees next to balance / allowance on each org row.
+	const topupRows = await db
+		.select({
+			org_id: smsCreditLedger.org_id,
+			total: sql<string>`coalesce(sum(${smsCreditLedger.amount}), 0)`
+		})
+		.from(smsCreditLedger)
+		.where(
+			and(
+				eq(smsCreditLedger.entry_type, 'manual_topup'),
+				gte(smsCreditLedger.created_at, sql`date_trunc('month', now())`)
+			)
+		)
+		.groupBy(smsCreditLedger.org_id);
+	const topupByOrg = new Map(topupRows.map((r) => [r.org_id, Number(r.total)]));
+
+	const orgs = rows.map((o) => ({
+		...o,
+		sms_balance: Number(o.sms_balance ?? 0),
+		sms_monthly_allowance: Number(o.sms_monthly_allowance ?? 0),
+		sms_topup_this_month: topupByOrg.get(o.id) ?? 0
+	}));
 
 	const deadLetters = await db
 		.select({

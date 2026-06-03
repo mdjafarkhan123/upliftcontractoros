@@ -1,24 +1,27 @@
 <script lang="ts">
 	import * as Tabs from '$lib/components/ui/tabs';
 
+	export type ContactStatusValue = 'all' | 'leads' | 'customers' | 'archived';
+
 	let {
-		value = $bindable<'all' | 'leads' | 'customers'>('all'),
+		value = $bindable<ContactStatusValue>('all'),
 		onChange
 	}: {
-		value?: 'all' | 'leads' | 'customers';
-		onChange?: (next: 'all' | 'leads' | 'customers') => void;
+		value?: ContactStatusValue;
+		onChange?: (next: ContactStatusValue) => void;
 	} = $props();
 
-	function set(next: 'all' | 'leads' | 'customers') {
+	function set(next: ContactStatusValue) {
 		value = next;
 		onChange?.(next);
 	}
 </script>
 
-<Tabs.Root value={value} onValueChange={(v: string) => set(v as 'all' | 'leads' | 'customers')}>
+<Tabs.Root {value} onValueChange={(v: string) => set(v as ContactStatusValue)}>
 	<Tabs.List>
 		<Tabs.Trigger value="all">All</Tabs.Trigger>
 		<Tabs.Trigger value="leads">Leads</Tabs.Trigger>
 		<Tabs.Trigger value="customers">Customers</Tabs.Trigger>
+		<Tabs.Trigger value="archived">Archived</Tabs.Trigger>
 	</Tabs.List>
 </Tabs.Root>

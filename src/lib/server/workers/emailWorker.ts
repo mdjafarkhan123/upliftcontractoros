@@ -2,13 +2,17 @@ import { Worker, type Job } from 'bullmq';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
+	appointments,
 	contacts,
 	conversations,
+	emailDomains,
 	media,
 	messages,
 	organizations,
 	outboxEvents
 } from '$lib/server/db/schema';
+import { generateIcs } from '$lib/server/ics/generateIcs';
+import type { EmailAttachment } from '$lib/server/email/client';
 import { EMAIL_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { sendConversationEmail } from '$lib/server/email/conversationEmails';
 import { ensureReplyAlias } from '$lib/server/email/replyAlias';
@@ -36,12 +40,12 @@ type EmailJobData = {
 function isPermanentFailure(err: unknown): boolean {
 	const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
 	return (
-		msg.includes('invalid') && msg.includes('recipient') ||
+		(msg.includes('invalid') && msg.includes('recipient')) ||
 		msg.includes('suppress') ||
 		msg.includes('blocked') ||
 		msg.includes('does not exist') ||
 		msg.includes('no mx records') ||
-		msg.includes('attachment') && msg.includes('too large')
+		(msg.includes('attachment') && msg.includes('too large'))
 	);
 }
 
@@ -55,17 +59,13 @@ async function loadAttachments(orgId: string, messageId: string) {
 			file_size_bytes: media.file_size_bytes
 		})
 		.from(media)
-		.where(
-			and(
-				eq(media.org_id, orgId),
-				eq(media.message_id, messageId),
-				isNull(media.deleted_at)
-			)
-		);
+		.where(and(eq(media.org_id, orgId), eq(media.message_id, messageId), isNull(media.deleted_at)));
 
 	const totalBytes = rows.reduce((sum, r) => sum + r.file_size_bytes, 0);
 	if (totalBytes > MAX_ATTACHMENT_BYTES_TOTAL) {
-		throw new Error(`Attachment total size ${totalBytes} exceeds limit ${MAX_ATTACHMENT_BYTES_TOTAL}`);
+		throw new Error(
+			`Attachment total size ${totalBytes} exceeds limit ${MAX_ATTACHMENT_BYTES_TOTAL}`
+		);
 	}
 
 	const out = [];
@@ -105,18 +105,19 @@ async function processEmailSend(job: Job<EmailJobData>) {
 	const data = job.data;
 	const messageId = data.resource_id;
 
-	const [msg] = await db
-		.select()
-		.from(messages)
-		.where(eq(messages.id, messageId))
-		.limit(1);
+	const [msg] = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
 
 	if (!msg) {
 		log.warn({ phase: 'message_missing', message_id: messageId });
 		return;
 	}
 	if (msg.channel !== 'email' || msg.direction !== 'outbound') {
-		log.warn({ phase: 'wrong_kind', message_id: messageId, channel: msg.channel, direction: msg.direction });
+		log.warn({
+			phase: 'wrong_kind',
+			message_id: messageId,
+			channel: msg.channel,
+			direction: msg.direction
+		});
 		return;
 	}
 	if (msg.status !== 'queued' && msg.status !== 'sending' && msg.status !== 'failed') {
@@ -162,15 +163,45 @@ async function processEmailSend(job: Job<EmailJobData>) {
 	}
 
 	const [org] = await db
-		.select({ name: organizations.name, slug: organizations.slug, email_sender_local: organizations.email_sender_local })
+		.select({
+			name: organizations.name,
+			slug: organizations.slug,
+			email_sender_local: organizations.email_sender_local
+		})
 		.from(organizations)
 		.where(eq(organizations.id, msg.org_id))
 		.limit(1);
 	if (!org) throw new Error(`Organization ${msg.org_id} not found`);
 
+	// Per-tenant sending/receiving domain. No shared-domain fallback: if the org's
+	// Brevo domain isn't verified, the message cannot be sent.
+	const [emailDomain] = await db
+		.select({
+			domain: emailDomains.domain,
+			inbound_domain: emailDomains.inbound_domain,
+			status: emailDomains.status
+		})
+		.from(emailDomains)
+		.where(eq(emailDomains.org_id, msg.org_id))
+		.limit(1);
+	if (!emailDomain || emailDomain.status !== 'verified') {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason: 'Email domain not set up for this organization',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
+	const sendingDomain = emailDomain.domain;
+	const inboundDomain = emailDomain.inbound_domain;
+
 	const replyAlias = await ensureReplyAlias(msg.org_id, conv.id);
 
-	let attachments;
+	let attachments: EmailAttachment[];
 	try {
 		attachments = await loadAttachments(msg.org_id, messageId);
 	} catch (err) {
@@ -187,11 +218,55 @@ async function processEmailSend(job: Job<EmailJobData>) {
 		return;
 	}
 
+	// Optional appointment .ics attachment. Prepended so it appears first in the
+	// email — most clients surface the topmost .ics as the "Add to calendar"
+	// affordance. Best-effort: a generation failure must not block the send.
+	const appointmentId =
+		typeof data.payload?.appointment_id === 'string' ? data.payload.appointment_id : null;
+	if (appointmentId) {
+		try {
+			const [appt] = await db
+				.select({
+					id: appointments.id,
+					title: appointments.title,
+					scheduled_start: appointments.scheduled_start,
+					scheduled_end: appointments.scheduled_end,
+					location: appointments.location
+				})
+				.from(appointments)
+				.where(eq(appointments.id, appointmentId))
+				.limit(1);
+			if (appt) {
+				const end = appt.scheduled_end ?? new Date(appt.scheduled_start.getTime() + 60 * 60_000);
+				const ics = generateIcs({
+					uid: `appointment-${appt.id}@${org.slug}`,
+					start: appt.scheduled_start,
+					end,
+					summary: `${appt.title} — ${org.name}`,
+					location: appt.location ?? undefined,
+					organizerName: org.name,
+					customerName: contact.full_name,
+					customerEmail: contact.email
+				});
+				attachments = [ics, ...attachments];
+			}
+		} catch (err) {
+			log.warn({
+				phase: 'ics_generation_failed',
+				message_id: messageId,
+				appointment_id: appointmentId,
+				error: err instanceof Error ? err.message : String(err)
+			});
+		}
+	}
+
 	const recipient = msg.email_to_addresses?.[0] ?? contact.email;
 
 	try {
 		const result = await sendConversationEmail({
 			org,
+			sendingDomain,
+			inboundDomain,
 			replyAlias,
 			to: recipient,
 			subject: msg.email_subject ?? '',

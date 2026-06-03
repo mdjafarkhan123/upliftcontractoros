@@ -20,6 +20,7 @@ import {
 	pipelineStages
 } from '$lib/server/db/schema';
 import { generateSlotsForDate, BookingValidationError } from '$lib/server/booking';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 import {
 	assertIsoDate,
 	startOfLocalDayUtc,
@@ -122,11 +123,13 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	if (!row) return notFound();
 
+	const resolvedLogoUrl = await resolveLogoUrl(row.org_logo_url);
+
 	return json(
 		{
 			data: {
 				org_name: row.org_name,
-				org_logo_url: row.org_logo_url,
+				org_logo_url: resolvedLogoUrl,
 				org_timezone: row.org_timezone,
 				title: row.title,
 				description: row.description,
@@ -178,9 +181,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				status: 429,
 				headers: {
 					...NO_STORE,
-					...(ipCheck.retryAfterSeconds
-						? { 'Retry-After': String(ipCheck.retryAfterSeconds) }
-						: {})
+					...(ipCheck.retryAfterSeconds ? { 'Retry-After': String(ipCheck.retryAfterSeconds) } : {})
 				}
 			}
 		);
@@ -340,8 +341,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			const cEnd = cStart + slotDurMs;
 			for (const a of existing) {
 				const bStart = a.scheduled_start.getTime();
-				const bEnd =
-					(a.scheduled_end ? a.scheduled_end.getTime() : bStart + slotDurMs) + bufferMs;
+				const bEnd = (a.scheduled_end ? a.scheduled_end.getTime() : bStart + slotDurMs) + bufferMs;
 				if (cStart < bEnd && cEnd > bStart) {
 					return {
 						ok: false as const,
@@ -428,11 +428,14 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				resource_type: 'opportunity',
 				resource_id: insertedOpp.id,
 				payload: {
+					event_version: 1,
 					opportunity_id: insertedOpp.id,
 					org_id: link.org_id,
 					contact_id: contactId,
 					stage_id: defaultStage.id,
-					title: opportunityTitle
+					title: opportunityTitle,
+					value: null,
+					assigned_to: null
 				},
 				idempotency_key: `opportunity.created:${insertedOpp.id}`
 			});

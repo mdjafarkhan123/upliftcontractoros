@@ -1,6 +1,7 @@
 <script lang="ts">
 	import AppointmentStatusBadge from './AppointmentStatusBadge.svelte';
-	import { formatDateTime } from '$lib/utils/format';
+	import { formatDateTimeInOrgTz } from '$lib/utils/formatInOrgTz';
+	import { sessionStore } from '$lib/stores/session.svelte';
 	import { Calendar, MapPin, User } from '@lucide/svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 
@@ -8,6 +9,8 @@
 		appointment,
 		highlight = false
 	}: { appointment: AppointmentListItem; highlight?: boolean } = $props();
+
+	const orgTz = $derived(sessionStore.data?.org.timezone);
 </script>
 
 <a
@@ -25,7 +28,9 @@
 					{appointment.title}
 				</h3>
 				{#if appointment.booking_source === 'booking_link'}
-					<span class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+					<span
+						class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+					>
 						Self-booked
 					</span>
 				{/if}
@@ -37,12 +42,15 @@
 	<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
 		<span class="inline-flex items-center gap-1">
 			<Calendar class="h-3.5 w-3.5" />
-			{formatDateTime(appointment.scheduled_start)}
+			{formatDateTimeInOrgTz(appointment.scheduled_start, orgTz)}
 		</span>
 		<span class="inline-flex items-center gap-1">
 			<User class="h-3.5 w-3.5" />
 			{#if appointment.assignee_name}
 				{appointment.assignee_name}
+				{#if appointment.assignee_count > 1}
+					<span class="text-muted-foreground/80">+{appointment.assignee_count - 1}</span>
+				{/if}
 			{:else}
 				<span class="italic">Unassigned</span>
 			{/if}

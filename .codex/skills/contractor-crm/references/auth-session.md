@@ -11,13 +11,13 @@ Cross-reference: [[permissions-auth]], [[business-rules]].
 
 ## 1. Two Layers — Permissions vs Entitlements
 
-| Layer            | Where it lives                                | Authority for                                          |
-| ---------------- | --------------------------------------------- | ------------------------------------------------------ |
-| **Permissions**  | 40 booleans on `org_members`                  | Member-level access (per-user capabilities)            |
-| **Feature flags**| 21 `feature_*` booleans on `organizations`    | Org-level entitlements (plan-based capabilities)       |
-| **Quota limits** | 6 `max_*` integers on `organizations`         | Org-level usage ceilings                               |
-| **Usage**        | `org_usage` rows                              | Atomic current counters by org, metric, and period     |
-| **Integrations** | `integration_status` JSONB on `organizations` | External service readiness (Stripe connected, etc.)    |
+| Layer             | Where it lives                                | Authority for                                       |
+| ----------------- | --------------------------------------------- | --------------------------------------------------- |
+| **Permissions**   | 40 booleans on `org_members`                  | Member-level access (per-user capabilities)         |
+| **Feature flags** | 21 `feature_*` booleans on `organizations`    | Org-level entitlements (plan-based capabilities)    |
+| **Quota limits**  | 6 `max_*` integers on `organizations`         | Org-level usage ceilings                            |
+| **Usage**         | `org_usage` rows                              | Atomic current counters by org, metric, and period  |
+| **Integrations**  | `integration_status` JSONB on `organizations` | External service readiness (Stripe connected, etc.) |
 
 **Feature flags are NOT bypassed by Admin.** If an org has
 `feature_stripe_payments = false`, the Admin of that org is still
@@ -44,16 +44,16 @@ request joins `org_members` and `organizations`. Returned shape:
 
 ```ts
 type AuthContext = {
-  supabaseUser: User;
-  member: OrgMember;
-  org: Org;
-  orgId: string;
-  permissions: OrgMember;            // alias of member for readability
-  featureFlags: FeatureFlags;        // 21 feature_* booleans
-  limits: OrgLimits;                 // 6 max_* integers
-  integrationStatus: IntegrationStatus;
-  orgStatus: 'active' | 'suspended' | 'pending_deletion' | 'deleted';
-  featureOverridesUpdatedAt: Date | null;
+	supabaseUser: User;
+	member: OrgMember;
+	org: Org;
+	orgId: string;
+	permissions: OrgMember; // alias of member for readability
+	featureFlags: FeatureFlags; // 21 feature_* booleans
+	limits: OrgLimits; // 6 max_* integers
+	integrationStatus: IntegrationStatus;
+	orgStatus: 'active' | 'suspended' | 'pending_deletion' | 'deleted';
+	featureOverridesUpdatedAt: Date | null;
 };
 ```
 
@@ -72,6 +72,7 @@ For every request:
    `event.locals.auth`.
 
 **Public paths (auth NOT loaded):**
+
 - `/auth/*`
 - `/jafar` and `/jafar/*`
 - `/q/*`
@@ -80,6 +81,7 @@ For every request:
 - `/api/jafar/*`
 
 **Redirect / 401 rules for non-public paths:**
+
 - `/change-password` — requires auth, allows un-changed password
 - `/api/*` — returns 401 JSON if no auth, 403 JSON if org suspended
 - Everything else (app routes) — redirects to `/auth/login`,
@@ -97,13 +99,14 @@ forced redirect to `/setup` (deprecated).
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 
 export const POST: RequestHandler = async (event) => {
-  const auth = event.locals.auth;
-  assertOrgActive(auth); // narrows auth from AuthContext|null → AuthContext
-  // ...
+	const auth = event.locals.auth;
+	assertOrgActive(auth); // narrows auth from AuthContext|null → AuthContext
+	// ...
 };
 ```
 
 Checks:
+
 - auth is loaded
 - `member.is_active`
 - `orgStatus !== 'suspended'`
@@ -135,6 +138,7 @@ requireWithinLimit(auth, 'max_monthly_sms', count);
 
 All three `require*` helpers throw `error(403, { code, ... })` with
 structured codes:
+
 - `FEATURE_DISABLED`
 - `LIMIT_EXCEEDED`
 - `INTEGRATION_NOT_CONNECTED`
@@ -146,16 +150,17 @@ prompts instead of a generic 403.
 
 ## 6. Client Session
 
-| Route                        | Method | Returns                                                   |
-| ---------------------------- | ------ | --------------------------------------------------------- |
-| `GET /api/session`           | GET    | `{ org, member, featureFlags, limits, integrationStatus }`|
-| `GET /api/session/status`    | GET    | `{ status, feature_overrides_updated_at }`                |
+| Route                     | Method | Returns                                                    |
+| ------------------------- | ------ | ---------------------------------------------------------- |
+| `GET /api/session`        | GET    | `{ org, member, featureFlags, limits, integrationStatus }` |
+| `GET /api/session/status` | GET    | `{ status, feature_overrides_updated_at }`                 |
 
 `/api/session` strips internal fields from `org` (no Stripe keys,
 no Twilio number) — safe to expose to the browser.
 
 `/(app)/+layout.ts` calls `fetch('/api/session')` in its `load()` and
 hands the result to `+layout.svelte`. The layout sets four contexts:
+
 - `setOrgContext`
 - `setMemberContext`
 - `setFeatureFlagsContext`
@@ -184,16 +189,17 @@ plan change reaches a logged-in user.
 ## 8. Navigation Gating
 
 `buildVisibleNav(member, featureFlags)` hides a nav item when EITHER:
+
 - the relevant permission is FALSE, or
 - the relevant feature flag is FALSE.
 
-| Nav item     | Feature flag                                  |
-| ------------ | --------------------------------------------- |
-| Inbox        | `feature_conversations`                       |
-| Quotes       | `feature_financial_tools`                     |
-| Invoices     | `feature_financial_tools`                     |
-| Appointments | `feature_appointments`                        |
-| Growth       | `feature_growth_feed`                         |
+| Nav item     | Feature flag              |
+| ------------ | ------------------------- |
+| Inbox        | `feature_conversations`   |
+| Quotes       | `feature_financial_tools` |
+| Invoices     | `feature_financial_tools` |
+| Appointments | `feature_appointments`    |
+| Growth       | `feature_growth_feed`     |
 
 Dashboard, Contacts, Pipeline, Jobs, Reputation have no feature flag
 in v1 (always available if permission allows).
@@ -208,6 +214,7 @@ is a public prefix. `/jafar` uses its own session via
 the only layer that can write `feature_*` columns.
 
 When `/jafar` updates feature flags it MUST also set:
+
 - `feature_overrides_updated_at = now()`
 - `feature_flags_updated_by = <admin member id of the org>` (or null)
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
@@ -12,6 +13,19 @@
 	const member = getMemberContext();
 	const canCreate = $derived(member().can_create_appointments);
 	const canEditAssignee = $derived(member().can_view_all_appointments);
+
+	const initialContact = $derived.by(() => {
+		const id = page.url.searchParams.get('contact_id');
+		const name = page.url.searchParams.get('contact_name');
+		return id && name ? { id, full_name: name } : null;
+	});
+	const initialJob = $derived.by(() => {
+		const id = page.url.searchParams.get('job_id');
+		const title = page.url.searchParams.get('job_title');
+		return id && title ? { id, title, status: 'scheduled' } : null;
+	});
+	const initialStart = $derived(page.url.searchParams.get('start'));
+	const initialEnd = $derived(page.url.searchParams.get('end'));
 
 	let assignees = $state<{ id: string; full_name: string }[]>([]);
 
@@ -54,7 +68,7 @@
 
 <svelte:head><title>New appointment</title></svelte:head>
 
-<PageWrapper class="md:max-w-2xl">
+<PageWrapper>
 	<Button variant="ghost" href="/appointments" class="mb-4">
 		<ArrowLeft class="h-4 w-4" /> Back to appointments
 	</Button>
@@ -71,6 +85,10 @@
 			mode="create"
 			{assignees}
 			{canEditAssignee}
+			{initialContact}
+			{initialJob}
+			{initialStart}
+			{initialEnd}
 			onCancel={() => goto('/appointments')}
 			onSubmit={handleSubmit}
 		/>

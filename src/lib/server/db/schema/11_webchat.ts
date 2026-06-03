@@ -42,7 +42,10 @@ export const webchatSessions = pgTable('webchat_sessions', {
 	conversation_id: uuid('conversation_id')
 		.notNull()
 		.references(() => conversations.id),
-	session_token: uuid('session_token').notNull().unique().default(sql`gen_random_uuid()`),
+	session_token: uuid('session_token')
+		.notNull()
+		.unique()
+		.default(sql`gen_random_uuid()`),
 	visitor_ip_hash: text('visitor_ip_hash'),
 	user_agent_hash: text('user_agent_hash'),
 	last_active_at: timestamp('last_active_at', { withTimezone: true }).notNull().defaultNow(),

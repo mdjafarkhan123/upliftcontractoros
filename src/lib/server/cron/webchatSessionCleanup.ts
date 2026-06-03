@@ -64,9 +64,7 @@ export async function runWebchatSessionCleanup(): Promise<CronJobResult> {
 						);
 
 					// Hard-delete the stale session record
-					await tx
-						.delete(webchatSessions)
-						.where(eq(webchatSessions.id, session.id));
+					await tx.delete(webchatSessions).where(eq(webchatSessions.id, session.id));
 				});
 				totalClosed += 1;
 				totalDeleted += 1;

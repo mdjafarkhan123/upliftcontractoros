@@ -124,7 +124,10 @@
 			<span class="text-center text-xs text-white">{item.errorMsg ?? 'Upload failed'}</span>
 			<button
 				class="flex items-center gap-1 rounded bg-white/20 px-2 py-1 text-xs font-medium text-white hover:bg-white/30"
-				onclick={(e) => { e.stopPropagation(); item.retry?.(); }}
+				onclick={(e) => {
+					e.stopPropagation();
+					item.retry?.();
+				}}
 			>
 				<RotateCcw class="h-3 w-3" /> Retry
 			</button>

@@ -7,7 +7,8 @@
 	const styles: Record<QuoteStatus, string> = {
 		draft: 'bg-muted text-muted-foreground',
 		sent: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-		viewed: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+		viewed:
+			'bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/40 dark:text-amber-300 dark:ring-amber-500/40',
 		accepted: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
 		declined: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
 		expired: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
@@ -32,5 +33,8 @@
 		className
 	)}
 >
+	{#if status === 'viewed'}
+		<span class="mr-1" aria-hidden="true">👀</span>
+	{/if}
 	{labels[status]}
 </span>

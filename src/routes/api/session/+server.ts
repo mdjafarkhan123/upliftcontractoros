@@ -4,9 +4,24 @@ import type { Org, OrgMember } from '$lib/types';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 
 const ORG_SAFE_FIELDS = [
-	'id', 'name', 'slug', 'trade_type', 'status', 'plan', 'logo_url', 'primary_color',
-	'timezone', 'address', 'city', 'state', 'zip', 'is_setup_complete',
-	'feature_overrides_updated_at', 'created_at'
+	'id',
+	'name',
+	'slug',
+	'trade_type',
+	'status',
+	'plan',
+	'logo_url',
+	'primary_color',
+	'timezone',
+	'address',
+	'city',
+	'state',
+	'zip',
+	'is_setup_complete',
+	'calendar_day_start_hour',
+	'calendar_day_end_hour',
+	'feature_overrides_updated_at',
+	'created_at'
 ] as const;
 
 function pickSafeOrg(org: Org) {

@@ -10,7 +10,13 @@ export async function getMemberPermissions(memberId: string): Promise<OrgMember 
 	const [member] = await db
 		.select()
 		.from(orgMembers)
-		.where(and(eq(orgMembers.id, memberId), eq(orgMembers.is_active, true), isNull(orgMembers.deleted_at)))
+		.where(
+			and(
+				eq(orgMembers.id, memberId),
+				eq(orgMembers.is_active, true),
+				isNull(orgMembers.deleted_at)
+			)
+		)
 		.limit(1);
 	return member ?? null;
 }

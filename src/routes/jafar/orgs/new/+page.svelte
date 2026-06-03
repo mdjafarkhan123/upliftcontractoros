@@ -4,11 +4,7 @@
 	import FeatureFlagsEditor from '$lib/components/jafar/FeatureFlagsEditor.svelte';
 	import LimitsEditor from '$lib/components/jafar/LimitsEditor.svelte';
 	import PermissionMatrixEditor from '$lib/components/jafar/PermissionMatrixEditor.svelte';
-	import {
-		getPlanTemplate,
-		type PlanName,
-		type PlanTemplate
-	} from '$lib/admin/planTemplates';
+	import { getPlanTemplate, type PlanName, type PlanTemplate } from '$lib/admin/planTemplates';
 	import { fullAdminPermissions } from '$lib/permissions/permissions-matrix';
 	import type { FeatureFlags, OrgLimits, PermissionKey } from '$lib/types';
 
@@ -98,11 +94,35 @@
 	</div>
 
 	<!-- Header -->
-	<div>
-		<h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Create organization</h1>
-		<p class="mt-1 text-sm text-slate-400">
-			Provision a new tenant, seed its first admin, and set entitlements.
-		</p>
+	<div class="flex items-start gap-4">
+		<span
+			class="hidden size-12 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-gradient-to-br from-red-500/15 to-red-600/5 text-red-300 sm:inline-flex"
+			aria-hidden="true"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="22"
+				height="22"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<path d="M3 21h18" />
+				<path d="M5 21V7l8-4v18" />
+				<path d="M19 21v-8" />
+				<path d="M16 16h6" />
+				<path d="M19 13v6" />
+			</svg>
+		</span>
+		<div>
+			<h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Create organization</h1>
+			<p class="mt-1 text-sm text-slate-400">
+				Provision a new tenant, seed its first admin, and set entitlements.
+			</p>
+		</div>
 	</div>
 
 	{#if errorMessage}
@@ -139,9 +159,31 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Business details</h2>
-				<p class="mt-0.5 text-xs text-slate-500">Public identity and operating region.</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M3 21h18" />
+						<path d="M5 21V7l8-4v18" />
+						<path d="M19 21V11l-6-4" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Business details</h2>
+					<p class="mt-0.5 text-xs text-slate-500">Public identity and operating region.</p>
+				</div>
 			</header>
 
 			<div class="grid gap-5 px-5 py-5 sm:grid-cols-2">
@@ -231,9 +273,31 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Telephony</h2>
-				<p class="mt-0.5 text-xs text-slate-500">Dedicated Twilio number for this tenant.</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path
+							d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"
+						/>
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Telephony</h2>
+					<p class="mt-0.5 text-xs text-slate-500">Dedicated Twilio number for this tenant.</p>
+				</div>
 			</header>
 
 			<div class="px-5 py-5">
@@ -257,11 +321,34 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Plan template</h2>
-				<p class="mt-0.5 text-xs text-slate-500">
-					Pre-fills flags + limits. Plan label is display-only; flags below are the entitlement.
-				</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path
+							d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+						/>
+						<path d="m9 12 2 2 4-4" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Plan template</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						Pre-fills flags + limits. Plan label is display-only; flags below are the entitlement.
+					</p>
+				</div>
 			</header>
 			<div class="px-5 py-5">
 				<PlanTemplateSelector bind:value={plan} onApply={applyTemplate} />
@@ -272,11 +359,32 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Feature flags</h2>
-				<p class="mt-0.5 text-xs text-slate-500">
-					The authoritative entitlement layer. Tenants only get what's toggled on here.
-				</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+						<line x1="4" y1="22" x2="4" y2="15" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Feature flags</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						The authoritative entitlement layer. Tenants only get what's toggled on here.
+					</p>
+				</div>
 			</header>
 			<div class="px-5 py-5">
 				<FeatureFlagsEditor bind:flags />
@@ -287,11 +395,33 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Usage limits</h2>
-				<p class="mt-0.5 text-xs text-slate-500">
-					Hard caps. Use 0 for disabled or unlimited, depending on the field.
-				</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M12 20v-6" />
+						<path d="M6 20V10" />
+						<path d="M18 20V4" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Usage limits</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						Hard caps. Use 0 for disabled or unlimited, depending on the field.
+					</p>
+				</div>
 			</header>
 			<div class="px-5 py-5">
 				<LimitsEditor bind:limits />
@@ -302,12 +432,33 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Initial admin</h2>
-				<p class="mt-0.5 text-xs text-slate-500">
-					First member of the organization. They will be prompted to change their password on
-					login.
-				</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+						<circle cx="12" cy="7" r="4" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Initial admin</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						First member of the organization. They will be prompted to change their password on
+						login.
+					</p>
+				</div>
 			</header>
 
 			<div class="grid gap-5 px-5 py-5 sm:grid-cols-2">
@@ -359,11 +510,32 @@
 		<section
 			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
 		>
-			<header class="border-b border-slate-800/80 px-5 py-4">
-				<h2 class="text-base font-semibold text-white">Initial admin permissions</h2>
-				<p class="mt-0.5 text-xs text-slate-500">
-					Role is display metadata. These booleans are the actual authorization layer.
-				</p>
+			<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+				<span
+					class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300"
+					aria-hidden="true"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+						<path d="m9 12 2 2 4-4" />
+					</svg>
+				</span>
+				<div>
+					<h2 class="text-base font-semibold text-white">Initial admin permissions</h2>
+					<p class="mt-0.5 text-xs text-slate-500">
+						Role is display metadata. These booleans are the actual authorization layer.
+					</p>
+				</div>
 			</header>
 			<div class="px-5 py-5">
 				<PermissionMatrixEditor bind:permissions={adminPermissions} />

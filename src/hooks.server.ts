@@ -7,22 +7,20 @@ import {
 	checkFeatureForPath,
 	featureDisabledResponse
 } from '$lib/server/auth/enforceFeatureForRequest';
-import {
-	applyCorsHeaders,
-	buildCorsHeaders,
-	resolveAllowedOrigin
-} from '$lib/server/webchat/cors';
+import { applyCorsHeaders, buildCorsHeaders, resolveAllowedOrigin } from '$lib/server/webchat/cors';
 
 const PUBLIC_PREFIXES = [
 	'/auth',
 	'/jafar',
 	'/q/',
+	'/r/',
 	'/book',
 	'/api/admin',
 	'/api/webhooks',
 	'/api/jafar',
 	'/api/webchat',
-	'/api/public/booking'
+	'/api/public/booking',
+	'/api/r/'
 ];
 const PUBLIC_EXACT = new Set<string>(['/jafar']);
 
@@ -45,11 +43,7 @@ function matchesPrefix(pathname: string, prefixes: string[]): boolean {
 	return false;
 }
 
-function logSuspendedBlock(
-	event: RequestEvent,
-	auth: AuthContext,
-	reason: 'org_suspended'
-): void {
+function logSuspendedBlock(event: RequestEvent, auth: AuthContext, reason: 'org_suspended'): void {
 	console.warn(
 		JSON.stringify({
 			request_id: crypto.randomUUID(),
@@ -105,7 +99,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Single getUser() call — validates the JWT against Supabase Auth.
 		// getSession() is intentionally NOT called: it returns unverified data and
 		// is unsafe on its own per Supabase docs, so pairing the two is wasted RTT.
-		const { data: { user } } = await supabase.auth.getUser();
+		const {
+			data: { user }
+		} = await supabase.auth.getUser();
 		const auth = user ? await loadAuthContext(user) : null;
 		event.locals.auth = auth;
 

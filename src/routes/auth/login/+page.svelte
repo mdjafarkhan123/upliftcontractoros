@@ -3,6 +3,7 @@
 	import AuthCard from '$lib/components/auth/AuthCard.svelte';
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import AuthField from '$lib/components/auth/AuthField.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let {
 		data,
@@ -68,17 +69,8 @@
 				{/snippet}
 			</AuthField>
 
-			<button
-				type="submit"
-				disabled={loading}
-				class="group relative inline-flex h-11 w-full items-center justify-center overflow-hidden rounded-xl text-sm font-semibold text-white shadow-lg shadow-primary/30 transition-all duration-150 hover:shadow-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
-				style="background: linear-gradient(135deg, hsl(var(--brand-primary)) 0%, hsl(var(--brand-deep)) 100%);"
-			>
-				<span
-					class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-					style="background: linear-gradient(135deg, hsl(var(--brand-light)) 0%, hsl(var(--brand-primary)) 100%);"
-				></span>
-				<span class="relative inline-flex items-center gap-2">
+			<Button type="submit" size="lg" disabled={loading} class="h-11 w-full text-sm font-semibold">
+				{#snippet children()}
 					{#if loading}
 						<svg
 							class="h-4 w-4 animate-spin"
@@ -119,8 +111,8 @@
 							<path d="m12 5 7 7-7 7" />
 						</svg>
 					{/if}
-				</span>
-			</button>
+				{/snippet}
+			</Button>
 		</form>
 	{/snippet}
 

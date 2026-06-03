@@ -2,15 +2,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Send } from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import {
-		reviewRequestsStore,
-		reputationSummaryStore
-	} from '$lib/stores/reputation.svelte';
+	import { reviewRequestsStore, reputationSummaryStore } from '$lib/stores/reputation.svelte';
 
-	let {
-		jobId,
-		label = 'Send review request'
-	}: { jobId: string; label?: string } = $props();
+	let { jobId, label = 'Send review request' }: { jobId: string; label?: string } = $props();
 
 	let loading = $state(false);
 
@@ -36,5 +30,6 @@
 </script>
 
 <Button size="sm" class="h-9" onclick={send} disabled={loading}>
-	<Send class="h-4 w-4" /> {loading ? 'Sending…' : label}
+	<Send class="h-4 w-4" />
+	{loading ? 'Sending…' : label}
 </Button>

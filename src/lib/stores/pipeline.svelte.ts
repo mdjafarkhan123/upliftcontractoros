@@ -14,9 +14,7 @@ let error = $state<string | null>(null);
 let lastFetchedAt = $state(0);
 let activeController: AbortController | null = null;
 
-async function fetchAll(
-	signal: AbortSignal
-): Promise<{
+async function fetchAll(signal: AbortSignal): Promise<{
 	stages: PipelineStageRow[];
 	opportunities: OpportunityRow[];
 	assignees: Assignee[];

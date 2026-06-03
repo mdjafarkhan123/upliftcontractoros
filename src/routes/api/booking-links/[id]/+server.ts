@@ -3,11 +3,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	availabilityOverrides,
-	availabilityWindows,
-	bookingLinks
-} from '$lib/server/db/schema';
+import { availabilityOverrides, availabilityWindows, bookingLinks } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { requireFeature } from '$lib/server/auth/featureGuard';
 import { loadBookingLinkForOrg } from '$lib/server/booking/loadBookingLink';
@@ -21,12 +17,8 @@ const updateSchema = z.object({
 	slot_duration_minutes: z
 		.union([z.literal(30), z.literal(45), z.literal(60), z.literal(90), z.literal(120)])
 		.optional(),
-	buffer_minutes: z
-		.union([z.literal(0), z.literal(15), z.literal(30)])
-		.optional(),
-	min_advance_hours: z
-		.union([z.literal(1), z.literal(4), z.literal(24), z.literal(48)])
-		.optional(),
+	buffer_minutes: z.union([z.literal(0), z.literal(15), z.literal(30)]).optional(),
+	min_advance_hours: z.union([z.literal(1), z.literal(4), z.literal(24), z.literal(48)]).optional(),
 	max_future_days: z.union([z.literal(14), z.literal(30), z.literal(60)]).optional(),
 	is_active: z.boolean().optional()
 });

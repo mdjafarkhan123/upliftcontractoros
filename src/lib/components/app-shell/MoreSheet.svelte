@@ -41,7 +41,9 @@
 					onclick={() => navigate(item.href)}
 					class={cn(
 						'flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-xl border border-border px-3 py-3 text-xs font-medium transition-colors',
-						active ? 'border-primary/40 bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
+						active
+							? 'border-primary/40 bg-primary/10 text-primary'
+							: 'text-foreground hover:bg-accent'
 					)}
 				>
 					<Icon class="h-5 w-5" />

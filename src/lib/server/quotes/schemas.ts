@@ -21,7 +21,11 @@ export const createQuoteSchema = z
 	})
 	.superRefine((val, ctx) => {
 		if (val.deposit_required) {
-			if (val.deposit_amount === null || val.deposit_amount === undefined || val.deposit_amount <= 0) {
+			if (
+				val.deposit_amount === null ||
+				val.deposit_amount === undefined ||
+				val.deposit_amount <= 0
+			) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ['deposit_amount'],
@@ -43,7 +47,11 @@ export const updateQuoteSchema = z
 	})
 	.superRefine((val, ctx) => {
 		if (val.deposit_required === true) {
-			if (val.deposit_amount === null || val.deposit_amount === undefined || val.deposit_amount <= 0) {
+			if (
+				val.deposit_amount === null ||
+				val.deposit_amount === undefined ||
+				val.deposit_amount <= 0
+			) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ['deposit_amount'],
@@ -57,7 +65,9 @@ export const createLineItemSchema = lineItemBase;
 export const updateLineItemSchema = lineItemBase.partial();
 
 export const listQuotesQuerySchema = z.object({
-	status: z.enum(['all', 'active', 'closed', 'draft', 'sent', 'viewed', 'accepted', 'declined', 'expired']).default('all'),
+	status: z
+		.enum(['all', 'active', 'closed', 'draft', 'sent', 'viewed', 'accepted', 'declined', 'expired'])
+		.default('all'),
 	cursor: z.string().nullable().optional()
 });
 

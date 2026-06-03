@@ -5,6 +5,7 @@
 		AlertCircle,
 		Ban,
 		Loader2,
+		Clock,
 		StickyNote,
 		MessageSquare,
 		Globe,
@@ -15,6 +16,7 @@
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import EmailMessageCard from './EmailMessageCard.svelte';
+	import MessageMedia from './MessageMedia.svelte';
 	import { cn } from '$lib/utils/cn';
 
 	let {
@@ -33,6 +35,9 @@
 	const isEmail = $derived(m.channel === 'email');
 	const isInbound = $derived(m.direction === 'inbound');
 	const isInternal = $derived(m.is_internal_note);
+	const mediaItems = $derived(m.media ?? []);
+	const hasMedia = $derived(mediaItems.length > 0);
+	const hasBody = $derived(!!m.body && m.body.trim().length > 0);
 
 	const timestamp = $derived(
 		m.created_at
@@ -53,6 +58,28 @@
 	);
 
 	let retrying = $state(false);
+
+	// Stall detection: an outbound message only leaves 'queued'/'sending' when the
+	// worker processes it and Realtime pushes the new status. If the worker is down
+	// or frozen, the status never advances — without this the bubble spins forever
+	// with no feedback. After STALL_MS we swap the infinite spinner for a "delayed"
+	// hint. This is non-destructive and time-based: the instant the real status
+	// arrives via Realtime, the derived recomputes and the hint disappears.
+	const STALL_MS = 20_000;
+	const isPending = $derived(m.status === 'queued' || m.status === 'sending');
+	let nowTs = $state(Date.now());
+	$effect(() => {
+		// Only tick while this message is actually pending — cleans up on resolve.
+		if (!isPending || m._optimistic_key) return;
+		const id = setInterval(() => (nowTs = Date.now()), 5000);
+		return () => clearInterval(id);
+	});
+	const isStalled = $derived(
+		isPending &&
+			!m._optimistic_key &&
+			m.created_at != null &&
+			nowTs - new Date(m.created_at).getTime() > STALL_MS
+	);
 
 	async function onRetry() {
 		if (retrying || m._optimistic_key) return;
@@ -103,7 +130,12 @@
 				{/if}
 			</div>
 		{/if}
-		<div class={cn('flex max-w-[78%] flex-col md:max-w-[70%]', isInbound ? 'items-start' : 'items-end')}>
+		<div
+			class={cn(
+				'flex max-w-[78%] flex-col md:max-w-[70%]',
+				isInbound ? 'items-start' : 'items-end'
+			)}
+		>
 			{#if isAutomated}
 				<div
 					class="mb-1 inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
@@ -123,7 +155,12 @@
 					isTerminalFailure && 'border-2 border-destructive/70 bg-destructive/5'
 				)}
 			>
-				<p class="whitespace-pre-wrap break-words">{m.body}</p>
+				{#if hasMedia}
+					<MessageMedia media={mediaItems} align={isInbound ? 'start' : 'end'} />
+				{/if}
+				{#if hasBody}
+					<p class="whitespace-pre-wrap break-words">{m.body}</p>
+				{/if}
 				<div
 					class={cn(
 						'mt-1 flex items-center justify-end gap-1 text-[10px]',
@@ -137,12 +174,19 @@
 					{/if}
 					<span>{timestamp}</span>
 					{#if !isInbound}
-						{#if m.status === 'queued' || m.status === 'sending'}
-							<Loader2 class="h-3 w-3 animate-spin" aria-label="Sending" />
+						{#if isPending}
+							{#if isStalled}
+								<Clock class="h-3 w-3 text-amber-300" aria-label="Sending delayed" />
+							{:else}
+								<Loader2 class="h-3 w-3 animate-spin" aria-label="Sending" />
+							{/if}
 						{:else if m.status === 'delivered'}
 							<Check class="h-3 w-3" aria-label="Delivered" />
 						{:else if isTerminalFailure}
-							<Ban class="h-3 w-3 text-destructive" aria-label={m.status === 'bounced' ? 'Bounced' : 'Undeliverable'} />
+							<Ban
+								class="h-3 w-3 text-destructive"
+								aria-label={m.status === 'bounced' ? 'Bounced' : 'Undeliverable'}
+							/>
 						{:else if isDestructive}
 							<AlertCircle class="h-3 w-3 text-destructive" aria-label="Failed" />
 						{:else}
@@ -152,10 +196,21 @@
 				</div>
 			</div>
 
+			{#if !isInbound && isStalled}
+				<div class="mt-1 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+					<Clock class="h-3 w-3" />
+					<span class="opacity-90">Taking longer than usual to send…</span>
+				</div>
+			{/if}
+
 			{#if !isInbound && isDestructive}
 				<div class="mt-1.5 flex items-center gap-2 text-[10px] text-destructive">
 					<span class="font-medium uppercase tracking-wide">
-						{m.status === 'bounced' ? 'Bounced' : m.status === 'undeliverable' ? 'Undeliverable' : 'Failed'}
+						{m.status === 'bounced'
+							? 'Bounced'
+							: m.status === 'undeliverable'
+								? 'Undeliverable'
+								: 'Failed'}
 					</span>
 					<span class="max-w-[220px] truncate opacity-80">
 						{m.failure_reason ?? (isTerminalFailure ? 'No retry available' : 'Failed to send')}

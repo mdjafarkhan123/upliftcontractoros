@@ -16,7 +16,7 @@
 	}
 </script>
 
-<Tabs.Root value={value} onValueChange={(v: string) => set(v as StatusFilter)}>
+<Tabs.Root {value} onValueChange={(v: string) => set(v as StatusFilter)}>
 	<Tabs.List class="w-full justify-start overflow-x-auto">
 		<Tabs.Trigger value="open">Open</Tabs.Trigger>
 		<Tabs.Trigger value="snoozed">Snoozed</Tabs.Trigger>

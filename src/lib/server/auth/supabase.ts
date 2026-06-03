@@ -13,7 +13,13 @@ export function createServerClient(event: RequestEvent) {
 			getAll: () => event.cookies.getAll(),
 			setAll: (cookies) => {
 				for (const { name, value, options } of cookies) {
-					event.cookies.set(name, value, { ...options, path: '/' });
+					try {
+						event.cookies.set(name, value, { ...options, path: '/' });
+					} catch {
+						// `cookies.set` throws if the response has already been sent
+						// (e.g. background token refresh after the handler returned).
+						// Safe to ignore — the next request will refresh again.
+					}
 				}
 			}
 		}

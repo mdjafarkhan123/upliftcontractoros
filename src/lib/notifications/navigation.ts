@@ -30,6 +30,8 @@ export function getNotificationHref(n: NotificationItem): string | null {
 		case 'message.received':
 		case 'call.missed':
 			return id ? `/inbox/${id}` : null;
+		case 'contact_follow_up_due':
+			return id ? `/contacts/${id}` : null;
 		case 'appointment_booked':
 			return id ? `/appointments/${id}` : null;
 		default:

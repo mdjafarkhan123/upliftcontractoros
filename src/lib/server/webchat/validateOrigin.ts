@@ -3,10 +3,7 @@
  * Returns true if the origin is allowed, false if not.
  * An empty allowlist permits all origins (useful during development/testing).
  */
-export function validateOrigin(
-	request: Request,
-	domainAllowlist: string[]
-): boolean {
+export function validateOrigin(request: Request, domainAllowlist: string[]): boolean {
 	if (domainAllowlist.length === 0) return true;
 
 	const origin = request.headers.get('origin');

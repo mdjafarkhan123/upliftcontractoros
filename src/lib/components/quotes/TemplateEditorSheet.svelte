@@ -167,8 +167,7 @@
 					position: idx
 				}))
 			};
-			const url =
-				mode === 'edit' ? `/api/quote-templates/${templateId}` : '/api/quote-templates';
+			const url = mode === 'edit' ? `/api/quote-templates/${templateId}` : '/api/quote-templates';
 			const method = mode === 'edit' ? 'PATCH' : 'POST';
 			const res = await fetch(url, {
 				method,
@@ -194,10 +193,7 @@
 </script>
 
 <Sheet.Root bind:open>
-	<Sheet.Content
-		side="right"
-		class="flex w-full flex-col gap-0 p-0 sm:max-w-xl md:w-[640px]"
-	>
+	<Sheet.Content side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-xl md:w-[640px]">
 		<Sheet.Header class="border-b border-border px-5 py-4">
 			<Sheet.Title>{mode === 'edit' ? 'Edit template' : 'New template'}</Sheet.Title>
 		</Sheet.Header>
@@ -311,12 +307,9 @@
 							</div>
 						{/each}
 
-						<div class="rounded-xl border border-dashed border-border bg-card/50 p-3">
+						<div class="rounded-xl border border-dashed border-border bg-card p-3">
 							<div class="space-y-2">
-								<Input
-									bind:value={draftDescription}
-									placeholder="Add a line item description"
-								/>
+								<Input bind:value={draftDescription} placeholder="Add a line item description" />
 								<div class="grid grid-cols-12 gap-2">
 									<div class="col-span-3">
 										<Input

@@ -4,8 +4,12 @@
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import LostReasonDialog from './LostReasonDialog.svelte';
+	import OpportunityQuotesSection from './OpportunityQuotesSection.svelte';
+	import OpportunityActivitySection from './OpportunityActivitySection.svelte';
+	import { getMemberContext } from '$lib/context/member';
 	import { formatCurrency, formatDate } from '$lib/utils/format';
 	import type { OpportunityDetail, PipelineStageRow } from '$lib/types/pipeline';
 
@@ -31,10 +35,18 @@
 		onChanged
 	}: Props = $props();
 
+	const member = getMemberContext();
+	const canViewRevenue = $derived(member().can_view_revenue);
+	const canCreateQuotes = $derived(member().can_create_quotes);
+	const newQuoteHref = $derived(
+		`/quotes/new?opportunity_id=${opportunity.id}&contact_id=${opportunity.contact_id}`
+	);
+
 	let title = $derived(opportunity.title);
 	let value = $derived(opportunity.value ?? '');
 	let assignedTo = $derived(opportunity.assigned_to ?? '');
 	let stageId = $derived(opportunity.stage_id);
+	let expectedCloseDate = $derived(opportunity.expected_close_date ?? '');
 
 	let saving = $state(false);
 	let stageSaving = $state(false);
@@ -48,11 +60,26 @@
 		value = opportunity.value ?? '';
 		assignedTo = opportunity.assigned_to ?? '';
 		stageId = opportunity.stage_id;
+		expectedCloseDate = opportunity.expected_close_date ?? '';
 	});
 
 	const wonStage = $derived(stages.find((s) => s.is_won));
 	const lostStage = $derived(stages.find((s) => s.is_lost));
 	const currentStage = $derived(stages.find((s) => s.id === opportunity.stage_id));
+
+	const daysInStage = $derived(
+		Math.max(
+			0,
+			Math.floor((Date.now() - new Date(opportunity.stage_entered_at).getTime()) / 86_400_000)
+		)
+	);
+	const staleAfter = $derived(currentStage?.stale_after_days ?? null);
+	const showAging = $derived(staleAfter !== null);
+	const isStale = $derived(staleAfter !== null && daysInStage >= staleAfter);
+
+	function openFollowUp() {
+		window.location.href = `/inbox?contact=${opportunity.contact_id}`;
+	}
 
 	async function saveFields() {
 		saving = true;
@@ -64,7 +91,8 @@
 				body: JSON.stringify({
 					title: title.trim(),
 					value: value.trim() || null,
-					assigned_to: assignedTo || null
+					assigned_to: assignedTo || null,
+					expected_close_date: expectedCloseDate || null
 				})
 			});
 			const body = await res.json();
@@ -79,12 +107,25 @@
 	}
 
 	async function moveToStage(targetStageId: string, lost_reason?: string) {
+		const fromStageId = opportunity.stage_id;
 		const res = await fetch(`/api/pipeline/opportunities/${opportunity.id}/stage`, {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ stage_id: targetStageId, lost_reason })
+			body: JSON.stringify({
+				stage_id: targetStageId,
+				from_stage_id: fromStageId,
+				move_request_id: crypto.randomUUID(),
+				lost_reason
+			})
 		});
-		const body = await res.json();
+		const body = await res.json().catch(() => ({}));
+		if (res.status === 409) {
+			errorMsg = body.error ?? 'This opportunity has already moved.';
+			if (body?.current_stage_id) {
+				onChanged({ ...opportunity, stage_id: body.current_stage_id });
+			}
+			return null;
+		}
 		if (!res.ok) {
 			errorMsg = body.error ?? 'Could not move stage.';
 			return null;
@@ -165,34 +206,68 @@
 				</div>
 				<div class="space-y-1.5">
 					<Label for="d-assignee">Assigned to</Label>
-					<select
-						id="d-assignee"
-						bind:value={assignedTo}
-						disabled={!canEdit}
-						class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						<option value="">Unassigned</option>
-						{#each assignees as m (m.id)}
-							<option value={m.id}>{m.full_name}</option>
-						{/each}
-					</select>
+					<Select.Root bind:value={assignedTo} disabled={!canEdit}>
+						<Select.Trigger class="h-11 w-full" disabled={!canEdit}>
+							<Select.Value />
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="">Unassigned</Select.Item>
+							{#each assignees as m (m.id)}
+								<Select.Item value={m.id}>{m.full_name}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</div>
 			</div>
 
 			<div class="space-y-1.5">
+				<Label for="d-expected-close">Expected close date</Label>
+				<Input
+					id="d-expected-close"
+					type="date"
+					bind:value={expectedCloseDate}
+					disabled={!canEdit}
+				/>
+			</div>
+
+			<div class="space-y-1.5">
 				<Label for="d-stage">Stage</Label>
-				<select
-					id="d-stage"
+				<Select.Root
 					bind:value={stageId}
 					disabled={!canEdit || stageSaving}
-					onchange={changeStage}
-					class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+					onValueChange={changeStage}
 				>
-					{#each stages as s (s.id)}
-						<option value={s.id}>{s.name}</option>
-					{/each}
-				</select>
+					<Select.Trigger class="h-11 w-full" disabled={!canEdit || stageSaving}>
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						{#each stages as s (s.id)}
+							<Select.Item value={s.id}>{s.name}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
 			</div>
+
+			{#if showAging}
+				<div
+					class={isStale
+						? 'flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3'
+						: 'flex items-center justify-between gap-3 text-xs text-muted-foreground'}
+				>
+					<div class={isStale ? 'text-sm text-amber-700 dark:text-amber-300' : ''}>
+						{#if isStale}
+							<span class="font-semibold">Stuck:</span>
+						{/if}
+						In stage for {daysInStage} day{daysInStage === 1 ? '' : 's'}
+						{#if isStale && staleAfter !== null}
+							<span class="opacity-80"> · threshold {staleAfter}d</span>
+						{/if}
+					</div>
+					{#if isStale}
+						<Button size="sm" variant="outline" onclick={openFollowUp}>Send follow-up</Button>
+					{/if}
+				</div>
+			{/if}
 
 			{#if currentStage?.is_lost && opportunity.lost_reason}
 				<div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
@@ -200,6 +275,22 @@
 					<p class="mt-1 text-sm text-foreground">{opportunity.lost_reason}</p>
 				</div>
 			{/if}
+
+			{#if canViewRevenue}
+				<OpportunityQuotesSection
+					quotes={opportunity.quotes ?? []}
+					contactId={opportunity.contact_id}
+					opportunityId={opportunity.id}
+					canCreate={canCreateQuotes}
+				/>
+			{/if}
+
+			<OpportunityActivitySection
+				activity={opportunity.activity ?? []}
+				hasQuotes={(opportunity.quotes?.length ?? 0) > 0}
+				canCreate={canViewRevenue && canCreateQuotes}
+				{newQuoteHref}
+			/>
 
 			{#if opportunity.closed_at}
 				<p class="text-xs text-muted-foreground">

@@ -44,10 +44,7 @@ export function quoteViewedEvent(args: {
 	};
 }
 
-export function quoteAcceptedEvent(args: {
-	orgId: string;
-	quoteId: string;
-}): NewOutboxEvent {
+export function quoteAcceptedEvent(args: { orgId: string; quoteId: string }): NewOutboxEvent {
 	return {
 		org_id: args.orgId,
 		event_type: 'quote.accepted',
@@ -58,10 +55,7 @@ export function quoteAcceptedEvent(args: {
 	};
 }
 
-export function quoteDeclinedEvent(args: {
-	orgId: string;
-	quoteId: string;
-}): NewOutboxEvent {
+export function quoteDeclinedEvent(args: { orgId: string; quoteId: string }): NewOutboxEvent {
 	return {
 		org_id: args.orgId,
 		event_type: 'quote.declined',

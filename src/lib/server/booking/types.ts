@@ -9,9 +9,7 @@ export interface TimeWindow {
 	end_time: string;
 }
 
-export type ResolvedAvailability =
-	| { blocked: true }
-	| { blocked: false; windows: TimeWindow[] };
+export type ResolvedAvailability = { blocked: true } | { blocked: false; windows: TimeWindow[] };
 
 export interface SlotEngineConfig {
 	slot_duration_minutes: number;

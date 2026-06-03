@@ -16,7 +16,8 @@
 	import { PERMISSION_GROUPS } from '$lib/team/permissions-config';
 	import type { PermissionValues } from '$lib/team/permissions-config';
 	import type { OrgMember } from '$lib/types';
-	import { AlertTriangle } from '@lucide/svelte';
+	import { AlertTriangle, Info } from '@lucide/svelte';
+	import { cn } from '$lib/utils/cn';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -54,16 +55,43 @@
 		target?.role === 'admin' ? 'Admin' : target?.role === 'manager' ? 'Manager' : 'Member'
 	);
 
-onMount(async () => {
+	const initials = $derived(
+		target
+			? target.full_name
+					.split(' ')
+					.map((p) => p[0] ?? '')
+					.slice(0, 2)
+					.join('')
+					.toUpperCase()
+			: ''
+	);
+
+	const avatarColor = $derived(
+		target?.role === 'admin'
+			? 'bg-primary/10 text-primary ring-primary/15'
+			: target?.role === 'manager'
+				? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20'
+				: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20'
+	);
+
+	onMount(async () => {
 		try {
 			const res = await fetch(`/api/team/${data.id}`);
-			if (res.status === 404) { loadError = 'Team member not found.'; return; }
-			if (res.status === 403) { loadError = 'You do not have access.'; return; }
-			if (!res.ok) { loadError = 'Failed to load team member.'; return; }
+			if (res.status === 404) {
+				loadError = 'Team member not found.';
+				return;
+			}
+			if (res.status === 403) {
+				loadError = 'You do not have access.';
+				return;
+			}
+			if (!res.ok) {
+				loadError = 'Failed to load team member.';
+				return;
+			}
 			const body = (await res.json()) as { data: OrgMember };
 			target = body.data;
 			fullName = body.data.full_name;
-			// Extract permission values
 			const vals = {} as PermissionValues;
 			for (const group of PERMISSION_GROUPS) {
 				for (const p of group.permissions) {
@@ -111,9 +139,10 @@ onMount(async () => {
 				email: updated.email,
 				role: updated.role,
 				is_active: updated.is_active,
-				created_at: updated.created_at instanceof Date
-					? updated.created_at.toISOString()
-					: String(updated.created_at)
+				created_at:
+					updated.created_at instanceof Date
+						? updated.created_at.toISOString()
+						: String(updated.created_at)
 			});
 			toast.success('Permissions saved');
 		} finally {
@@ -147,21 +176,36 @@ onMount(async () => {
 				email: snapshot.email,
 				role: snapshot.role,
 				is_active: false,
-				created_at: snapshot.created_at instanceof Date
-					? snapshot.created_at.toISOString()
-					: String(snapshot.created_at)
+				created_at:
+					snapshot.created_at instanceof Date
+						? snapshot.created_at.toISOString()
+						: String(snapshot.created_at)
 			});
 			toast.success(`${snapshot.full_name} has been deactivated`);
 			deactivateOpen = false;
 
 			if (counts) {
-				const total = counts.assigned_contacts + counts.open_conversations + counts.active_jobs + counts.upcoming_appointments;
+				const total =
+					counts.assigned_contacts +
+					counts.open_conversations +
+					counts.active_jobs +
+					counts.upcoming_appointments;
 				if (total > 0) {
 					const parts: string[] = [];
-					if (counts.assigned_contacts) parts.push(`${counts.assigned_contacts} contact${counts.assigned_contacts !== 1 ? 's' : ''}`);
-					if (counts.open_conversations) parts.push(`${counts.open_conversations} open conversation${counts.open_conversations !== 1 ? 's' : ''}`);
-					if (counts.active_jobs) parts.push(`${counts.active_jobs} active job${counts.active_jobs !== 1 ? 's' : ''}`);
-					if (counts.upcoming_appointments) parts.push(`${counts.upcoming_appointments} upcoming appointment${counts.upcoming_appointments !== 1 ? 's' : ''}`);
+					if (counts.assigned_contacts)
+						parts.push(
+							`${counts.assigned_contacts} contact${counts.assigned_contacts !== 1 ? 's' : ''}`
+						);
+					if (counts.open_conversations)
+						parts.push(
+							`${counts.open_conversations} open conversation${counts.open_conversations !== 1 ? 's' : ''}`
+						);
+					if (counts.active_jobs)
+						parts.push(`${counts.active_jobs} active job${counts.active_jobs !== 1 ? 's' : ''}`);
+					if (counts.upcoming_appointments)
+						parts.push(
+							`${counts.upcoming_appointments} upcoming appointment${counts.upcoming_appointments !== 1 ? 's' : ''}`
+						);
 					toast.info(`${parts.join(', ')} still assigned — reassign manually.`, { duration: 7000 });
 				}
 			}
@@ -175,84 +219,130 @@ onMount(async () => {
 	<title>{target?.full_name ?? 'Team member'}</title>
 </svelte:head>
 
-<PageWrapper
-	title={target?.full_name ?? 'Team member'}
-	subtitle={target?.email}
->
-	{#snippet actions()}
-		{#if target}
-			<Badge label={roleLabel} variant={roleVariant} />
-			{#if !target.is_active}
-				<Badge label="Inactive" variant="danger" />
-			{/if}
-		{/if}
-	{/snippet}
-
+<PageWrapper title={target?.full_name ?? 'Team member'} back="/settings/team">
 	{#if loading}
 		<SkeletonLoader lines={8} label="Loading team member" />
 	{:else if loadError}
-		<div class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+		<div
+			class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+		>
 			{loadError}
 		</div>
 	{:else if target}
-		<div class="max-w-lg space-y-8">
-			<!-- Name field -->
-			{#if canEdit}
-				<div class="space-y-1.5">
-					<Label for="full_name">Full name</Label>
-					<Input id="full_name" bind:value={fullName} maxlength={200} />
+		<div class="space-y-4">
+			<!-- Profile hero card -->
+			<div class="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
+				<div class="flex items-center gap-4">
+					<div
+						class={cn(
+							'flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold ring-2',
+							avatarColor
+						)}
+					>
+						{initials}
+					</div>
+					<div class="min-w-0 flex-1">
+						<div class="flex flex-wrap items-center gap-2">
+							<span class="text-base font-semibold text-foreground">{target.full_name}</span>
+							<Badge label={roleLabel} variant={roleVariant} />
+							{#if !target.is_active}
+								<Badge label="Inactive" variant="danger" />
+							{/if}
+						</div>
+						<p class="mt-0.5 text-sm text-muted-foreground">{target.email}</p>
+					</div>
 				</div>
-			{/if}
+			</div>
 
-			<!-- Role/access notices -->
+			<!-- Role/access notice -->
 			{#if isTargetAdmin}
-				<div class="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+				<div
+					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
+				>
+					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 					<p class="text-sm text-muted-foreground">
 						Admin permissions cannot be edited. Admins always have full access.
 					</p>
 				</div>
 			{:else if isSelf}
-				<div class="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+				<div
+					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
+				>
+					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 					<p class="text-sm text-muted-foreground">You cannot edit your own permissions.</p>
 				</div>
 			{:else if canEdit && target.role === 'manager'}
-				<div class="flex items-start gap-3 rounded-xl border border-[hsl(var(--status-warning))]/40 bg-[hsl(var(--status-warning))]/10 px-4 py-3">
+				<div
+					class="flex items-start gap-3 rounded-xl border border-[hsl(var(--status-warning))]/40 bg-[hsl(var(--status-warning))]/10 px-4 py-3.5"
+				>
 					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--status-warning))]" />
 					<div>
 						<p class="text-sm font-medium text-foreground">Editing Manager permissions</p>
 						<p class="text-sm text-muted-foreground">
-							Changes apply to their account immediately on their next action — no re-login required.
+							Changes apply immediately on their next action — no re-login required.
 						</p>
 					</div>
 				</div>
 			{:else if canEdit}
-				<div class="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+				<div
+					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
+				>
+					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 					<p class="text-sm text-muted-foreground">
 						Permission changes apply immediately on their next action — no re-login required.
 					</p>
 				</div>
 			{/if}
 
-			<!-- Permission editor -->
-			<div class="space-y-3">
-				<h2 class="text-sm font-semibold text-foreground">Permissions</h2>
-				<PermissionEditor bind:permissions readonly={!canEdit} />
+			<!-- Basic info card -->
+			{#if canEdit}
+				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+					<div class="border-b border-border/60 px-5 py-3.5">
+						<p class="text-sm font-semibold text-foreground">Basic Information</p>
+					</div>
+					<div class="px-5 py-5">
+						<div class="space-y-1.5">
+							<Label for="full_name">Full name</Label>
+							<Input id="full_name" bind:value={fullName} maxlength={200} />
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Permissions card -->
+			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+				<div class="border-b border-border/60 px-5 py-3.5">
+					<p class="text-sm font-semibold text-foreground">Permissions</p>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						{canEdit
+							? 'Toggle individual permissions for this member.'
+							: "This member's current access level."}
+					</p>
+				</div>
+				<div class="px-5 py-5">
+					<PermissionEditor bind:permissions readonly={!canEdit} />
+				</div>
 			</div>
 
 			{#if saveError}
-				<div class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+				<div
+					class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+				>
 					{saveError}
 				</div>
 			{/if}
 
-			<!-- Action buttons -->
-			<div class="flex flex-wrap justify-between gap-3 border-t border-border pt-4">
+			<!-- Action footer card -->
+			<div
+				class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm"
+			>
 				<div>
 					{#if canDeactivate && target.is_active}
-						<Button variant="outline" onclick={openDeactivateDialog} class="text-destructive hover:text-destructive hover:border-destructive/50">
+						<Button
+							variant="outline"
+							onclick={openDeactivateDialog}
+							class="text-destructive hover:text-destructive hover:border-destructive/50"
+						>
 							Deactivate member
 						</Button>
 					{/if}

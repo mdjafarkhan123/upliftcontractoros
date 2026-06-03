@@ -13,9 +13,7 @@
 
 	const token = $derived(page.params.token);
 	const initialAction = $derived<'accepted' | 'declined' | 'changes_requested' | null>(
-		data.quote?.status === 'accepted' && data.quote.deposit_paid_amount > 0
-			? 'accepted'
-			: null
+		data.quote?.status === 'accepted' && data.quote.deposit_paid_amount > 0 ? 'accepted' : null
 	);
 	let action = $state<'accepted' | 'declined' | 'changes_requested' | null>(null);
 	$effect(() => {
@@ -50,13 +48,9 @@
 	});
 
 	const alreadyChangesRequested = $derived(data.quote?.status === 'changes_requested');
-	const canTakeAction = $derived(
-		data.quote && !alreadyChangesRequested && action === null
-	);
+	const canTakeAction = $derived(data.quote && !alreadyChangesRequested && action === null);
 
-	const taxPct = $derived(
-		data.quote ? (Number(data.quote.tax_rate) * 100).toFixed(2) + '%' : '0%'
-	);
+	const taxPct = $derived(data.quote ? (Number(data.quote.tax_rate) * 100).toFixed(2) + '%' : '0%');
 
 	async function doAction(kind: 'accept' | 'decline') {
 		busy = kind;
@@ -127,7 +121,11 @@
 </script>
 
 <svelte:head>
-	<title>{data.quote ? `${data.quote.org_name} — Quote ${data.quote.quote_number_display}` : 'Quote'}</title>
+	<title
+		>{data.quote
+			? `${data.quote.org_name} — Quote ${data.quote.quote_number_display}`
+			: 'Quote'}</title
+	>
 </svelte:head>
 
 <div class="min-h-screen bg-background px-4 py-8 md:py-16">
@@ -142,7 +140,9 @@
 		{:else if action === 'accepted'}
 			<div class="space-y-4">
 				<div class="rounded-2xl border border-border bg-card p-8 text-center">
-					<div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
+					<div
+						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
+					>
 						<Check class="h-6 w-6" />
 					</div>
 					<h1 class="mt-4 text-lg font-semibold">Quote accepted</h1>
@@ -158,7 +158,9 @@
 							<p class="text-sm font-semibold">Deposit owed</p>
 						</div>
 						<p class="mt-2 text-sm text-amber-800/90 dark:text-amber-200/80">
-							A deposit of <span class="font-semibold">{formatCurrency(data.quote.deposit_amount)}</span>
+							A deposit of <span class="font-semibold"
+								>{formatCurrency(data.quote.deposit_amount)}</span
+							>
 							is requested to start. You can pay it now or later.
 						</p>
 						{#if data.quote.deposit_payment_available}
@@ -197,7 +199,9 @@
 			</div>
 		{:else if action === 'declined'}
 			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+				<div
+					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
+				>
 					<X class="h-6 w-6" />
 				</div>
 				<h1 class="mt-4 text-lg font-semibold">Quote declined</h1>
@@ -207,7 +211,9 @@
 			</div>
 		{:else if action === 'changes_requested'}
 			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+				<div
+					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
+				>
 					<MessageSquare class="h-6 w-6" />
 				</div>
 				<h1 class="mt-4 text-lg font-semibold">Request received</h1>
@@ -224,7 +230,9 @@
 				</header>
 
 				{#if alreadyChangesRequested}
-					<div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300">
+					<div
+						class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"
+					>
 						<p class="font-medium">Your change request was received</p>
 						<p class="mt-1 text-amber-700/90 dark:text-amber-300/80">
 							{data.quote.org_name} will review your request and send an updated quote shortly.
@@ -233,7 +241,9 @@
 				{/if}
 
 				<div class="rounded-2xl border border-border bg-card">
-					<div class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground">
+					<div
+						class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground"
+					>
 						<div class="grid grid-cols-12">
 							<div class="col-span-7">Item</div>
 							<div class="col-span-2 text-right">Qty</div>
@@ -265,7 +275,9 @@
 						<dd class="tabular-nums">{formatCurrency(data.quote.total)}</dd>
 					</div>
 					{#if data.quote.deposit_required && data.quote.deposit_amount}
-						<div class="mt-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+						<div
+							class="mt-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
+						>
 							A deposit of {formatCurrency(data.quote.deposit_amount)} is required to start.
 						</div>
 					{/if}
@@ -311,7 +323,11 @@
 							<div class="rounded-xl border border-border bg-card p-3 text-sm">
 								<p class="text-muted-foreground">Decline this quote?</p>
 								<div class="mt-2 grid grid-cols-2 gap-2">
-									<Button variant="outline" onclick={() => (confirmingDecline = false)} disabled={busy !== null}>
+									<Button
+										variant="outline"
+										onclick={() => (confirmingDecline = false)}
+										disabled={busy !== null}
+									>
 										Cancel
 									</Button>
 									<JetEngineButton

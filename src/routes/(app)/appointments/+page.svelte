@@ -3,26 +3,27 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
 	import { CalendarPlus, ChevronLeft, ChevronRight, CalendarDays } from '@lucide/svelte';
 	import AppointmentCard from '$lib/components/appointments/AppointmentCard.svelte';
 	import CalendarDayList from '$lib/components/appointments/CalendarDayList.svelte';
 	import CalendarWeekGrid from '$lib/components/appointments/CalendarWeekGrid.svelte';
 	import ViewToggle from '$lib/components/appointments/ViewToggle.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import { sessionStore } from '$lib/stores/session.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { addDays, startOfDay, startOfWeekMonday, formatDayLabel } from '$lib/utils/calendar';
-	import type {
-		AppointmentStatus,
-		AppointmentView,
-		CalendarRange
-	} from '$lib/types/appointments';
+	import type { AppointmentStatus, AppointmentView, CalendarRange } from '$lib/types/appointments';
 
 	const member = getMemberContext();
 	const canViewAll = $derived(member().can_view_all_appointments);
 	const canCreate = $derived(member().can_create_appointments);
 
-	let view = $state<AppointmentView>('list');
+	let view = $state<AppointmentView>('calendar');
 	let range = $state<CalendarRange>('week');
+
+	const dayStartHour = $derived(sessionStore.data?.org.calendar_day_start_hour ?? 7);
+	const dayEndHour = $derived(sessionStore.data?.org.calendar_day_end_hour ?? 19);
 	let anchor = $state<Date>(startOfWeekMonday(new Date()));
 	let statusFilter = $state<AppointmentStatus | 'all'>('all');
 	let assignedToFilter = $state<string | null>(null);
@@ -41,7 +42,9 @@
 
 	function goToday() {
 		anchor =
-			view === 'calendar' && range === 'day' ? startOfDay(new Date()) : startOfWeekMonday(new Date());
+			view === 'calendar' && range === 'day'
+				? startOfDay(new Date())
+				: startOfWeekMonday(new Date());
 	}
 
 	const windowDays = $derived(view === 'list' ? 30 : range === 'day' ? 1 : 7);
@@ -104,38 +107,44 @@
 		<div class="grid gap-2 sm:grid-cols-2">
 			<div>
 				<label for="status-filter" class="sr-only">Status</label>
-				<select
-					id="status-filter"
-					bind:value={statusFilter}
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<option value="all">All statuses</option>
-					<option value="scheduled">Scheduled</option>
-					<option value="completed">Completed</option>
-					<option value="cancelled">Cancelled</option>
-					<option value="no_show">No-show</option>
-				</select>
+				<Select.Root bind:value={statusFilter}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="all">All statuses</Select.Item>
+						<Select.Item value="scheduled">Scheduled</Select.Item>
+						<Select.Item value="completed">Completed</Select.Item>
+						<Select.Item value="cancelled">Cancelled</Select.Item>
+						<Select.Item value="no_show">No-show</Select.Item>
+					</Select.Content>
+				</Select.Root>
 			</div>
 			{#if canViewAll}
 				<div>
 					<label for="assignee-filter" class="sr-only">Assignee</label>
-					<select
-						id="assignee-filter"
+					<Select.Root
 						value={assignedToFilter ?? ''}
-						onchange={(e) => (assignedToFilter = (e.currentTarget as HTMLSelectElement).value || null)}
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						onValueChange={(v) => (assignedToFilter = v || null)}
 					>
-						<option value="">All assignees</option>
-						{#each assignees as a (a.id)}
-							<option value={a.id}>{a.full_name}</option>
-						{/each}
-					</select>
+						<Select.Trigger class="h-11 w-full">
+							<Select.Value />
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="">All assignees</Select.Item>
+							{#each assignees as a (a.id)}
+								<Select.Item value={a.id}>{a.full_name}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</div>
 			{/if}
 		</div>
 
 		{#if view === 'calendar'}
-			<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+			<div
+				class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
+			>
 				<div class="flex items-center gap-1">
 					<Button variant="ghost" size="icon" class="h-9 w-9" onclick={() => shiftAnchor(-1)}>
 						<ChevronLeft class="h-4 w-4" />
@@ -153,14 +162,14 @@
 						variant={range === 'day' ? 'default' : 'ghost'}
 						size="sm"
 						class="h-8"
-						onclick={() => setRange('day')}
-					>Day</Button>
+						onclick={() => setRange('day')}>Day</Button
+					>
 					<Button
 						variant={range === 'week' ? 'default' : 'ghost'}
 						size="sm"
 						class="h-8"
-						onclick={() => setRange('week')}
-					>Week</Button>
+						onclick={() => setRange('week')}>Week</Button
+					>
 				</div>
 			</div>
 		{/if}
@@ -193,7 +202,7 @@
 				<CalendarDayList {anchor} days={7} {items} />
 			</div>
 			<div class="hidden md:block">
-				<CalendarWeekGrid {anchor} {items} />
+				<CalendarWeekGrid {anchor} {items} {dayStartHour} {dayEndHour} {canCreate} />
 			</div>
 		{/if}
 	</div>

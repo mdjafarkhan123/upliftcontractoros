@@ -15,6 +15,7 @@
 	import type { ThreadMessage } from '$lib/stores/inbox.svelte';
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import MessageMedia from './MessageMedia.svelte';
 	import { cn } from '$lib/utils/cn';
 
 	let { message: m, canRetry = false }: { message: ThreadMessage; canRetry?: boolean } = $props();
@@ -151,6 +152,11 @@
 			<p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
 				{m.body}
 			</p>
+			{#if m.media && m.media.length > 0}
+				<div class="mt-3">
+					<MessageMedia media={m.media} align="start" />
+				</div>
+			{/if}
 			{#if !isInbound}
 				<div class={cn('mt-2 flex items-center justify-end gap-1 text-[10px]', toneClass)}>
 					<display.icon class={cn('h-3 w-3', display.spin && 'animate-spin')} />

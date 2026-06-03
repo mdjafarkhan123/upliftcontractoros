@@ -29,3 +29,35 @@ export async function hasOverlap(
 	`);
 	return (rows as unknown as { id: string }[]).length > 0;
 }
+
+// Multi-assignee variant. Returns the first member_id that has a conflicting
+// appointment in the requested window. NULL = clear schedule.
+export async function findConflictingAssignee(
+	exec: DbOrTx,
+	args: {
+		orgId: string;
+		assigneeIds: string[];
+		start: Date;
+		end: Date;
+		excludeId?: string;
+	}
+): Promise<string | null> {
+	const { orgId, assigneeIds, start, end, excludeId } = args;
+	if (assigneeIds.length === 0) return null;
+	const rows = await exec.execute<{ member_id: string }>(sql`
+		SELECT aa.member_id
+		FROM appointment_assignees aa
+		INNER JOIN appointments a ON a.id = aa.appointment_id
+		WHERE aa.org_id = ${orgId}
+			AND aa.member_id = ANY(${assigneeIds}::uuid[])
+			AND a.status = 'scheduled'
+			AND a.deleted_at IS NULL
+			AND a.scheduled_end IS NOT NULL
+			AND tstzrange(a.scheduled_start, a.scheduled_end, '[)')
+				&& tstzrange(${start.toISOString()}::timestamptz, ${end.toISOString()}::timestamptz, '[)')
+			${excludeId ? sql`AND a.id <> ${excludeId}` : sql``}
+		LIMIT 1
+	`);
+	const arr = rows as unknown as { member_id: string }[];
+	return arr.length > 0 ? arr[0]!.member_id : null;
+}

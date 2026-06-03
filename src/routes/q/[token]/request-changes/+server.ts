@@ -2,15 +2,8 @@ import { json } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	outboxEvents,
-	quoteChangeRequests,
-	quotes
-} from '$lib/server/db/schema';
-import {
-	clientIpFrom,
-	sha256Hex
-} from '$lib/server/quotes/publicAccess';
+import { outboxEvents, quoteChangeRequests, quotes } from '$lib/server/db/schema';
+import { clientIpFrom, sha256Hex } from '$lib/server/quotes/publicAccess';
 import { hashToken, constantTimeEqualHex } from '$lib/server/quotes/token';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { quoteChangesRequestedEvent } from '$lib/server/quotes/events';
@@ -37,13 +30,19 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const rawMessage =
-		body && typeof body === 'object' && 'message' in body && typeof (body as { message: unknown }).message === 'string'
+		body &&
+		typeof body === 'object' &&
+		'message' in body &&
+		typeof (body as { message: unknown }).message === 'string'
 			? (body as { message: string }).message
 			: '';
 	const clean = sanitizePlainText(rawMessage);
 	if (!clean) {
 		return json(
-			{ error: 'Please tell us what you would like to change', field_errors: { message: 'Required' } },
+			{
+				error: 'Please tell us what you would like to change',
+				field_errors: { message: 'Required' }
+			},
 			{ status: 422 }
 		);
 	}
@@ -77,7 +76,8 @@ export const POST: RequestHandler = async (event) => {
 		if (!row) return { kind: 'unavailable' as const };
 		if (!constantTimeEqualHex(row.stored_hash, tokenHash)) return { kind: 'unavailable' as const };
 		if (row.deleted_at) return { kind: 'unavailable' as const };
-		if (row.expires_at && row.expires_at.getTime() < Date.now()) return { kind: 'unavailable' as const };
+		if (row.expires_at && row.expires_at.getTime() < Date.now())
+			return { kind: 'unavailable' as const };
 
 		// Idempotent: already in changes_requested — return success without re-emitting.
 		if (row.status === 'changes_requested') return { kind: 'already' as const };

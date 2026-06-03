@@ -2,11 +2,7 @@
 	import { Dialog as DialogPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils/cn';
 
-	let {
-		class: className,
-		ref = $bindable(null),
-		...rest
-	}: DialogPrimitive.OverlayProps = $props();
+	let { class: className, ref = $bindable(null), ...rest }: DialogPrimitive.OverlayProps = $props();
 </script>
 
 <DialogPrimitive.Overlay

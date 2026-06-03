@@ -71,7 +71,9 @@
 		<div class="space-y-4">
 			<div class="rounded-lg bg-muted/50 p-3 text-sm">
 				<p class="font-medium">{contactName}</p>
-				<p class="text-muted-foreground">{contactPhone}{contactEmail ? ` · ${contactEmail}` : ''}</p>
+				<p class="text-muted-foreground">
+					{contactPhone}{contactEmail ? ` · ${contactEmail}` : ''}
+				</p>
 			</div>
 
 			<div class="space-y-2">
@@ -81,7 +83,9 @@
 
 			{#if emailPreview}
 				<div class="space-y-2">
-					<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email subject</p>
+					<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						Email subject
+					</p>
 					<p class="rounded-lg border border-border bg-card p-3 text-sm">{emailPreview}</p>
 				</div>
 			{:else}

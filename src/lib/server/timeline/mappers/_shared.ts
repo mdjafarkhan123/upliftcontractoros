@@ -9,7 +9,10 @@ const MAX_PREVIEW = 120;
 
 export function makePreview(input: string | null | undefined): string {
 	if (!input) return '';
-	const collapsed = input.replace(/\r\n?|\n+/g, ' ').replace(/\s+/g, ' ').trim();
+	const collapsed = input
+		.replace(/\r\n?|\n+/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 	if (collapsed.length <= MAX_PREVIEW) return collapsed;
 	return collapsed.slice(0, MAX_PREVIEW - 1).trimEnd() + '…';
 }

@@ -31,7 +31,8 @@
 			<Receipt class="h-4 w-4 text-muted-foreground" />
 			<span class="text-sm font-semibold">Payment history</span>
 			<span class="text-xs text-muted-foreground">
-				{payments.length} {payments.length === 1 ? 'payment' : 'payments'} · {formatCurrency(total)}
+				{payments.length}
+				{payments.length === 1 ? 'payment' : 'payments'} · {formatCurrency(total)}
 			</span>
 		</div>
 		{#if expanded}

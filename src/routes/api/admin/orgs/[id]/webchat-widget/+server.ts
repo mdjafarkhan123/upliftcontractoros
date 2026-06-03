@@ -80,7 +80,9 @@ export async function PATCH({ params, request }) {
 			.update(webchatWidgets)
 			.set({
 				...(parsed.data.display_name !== undefined && { display_name: parsed.data.display_name }),
-				...(parsed.data.intro_message !== undefined && { intro_message: parsed.data.intro_message }),
+				...(parsed.data.intro_message !== undefined && {
+					intro_message: parsed.data.intro_message
+				}),
 				...(parsed.data.offline_message !== undefined && {
 					offline_message: parsed.data.offline_message
 				}),

@@ -15,36 +15,36 @@ client-side SvelteKit navigation. This layout guard covers navigation.
 ```svelte
 <!-- src/routes/(app)/+layout.svelte -->
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
-  import { setMemberContext, setOrgContext } from '$lib/context/member';
-  import Toaster from '$lib/components/shared/Toaster.svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { setMemberContext, setOrgContext } from '$lib/context/member';
+	import Toaster from '$lib/components/shared/Toaster.svelte';
 
-  let { data, children } = $props();
+	let { data, children } = $props();
 
-  setMemberContext(data.member);
-  setOrgContext(data.org);
+	setMemberContext(data.member);
+	setOrgContext(data.org);
 
-  // $effect runs on mount AND on every client-side navigation.
-  // Reactive dependencies: page.url.pathname, data.session, data.org
-  // NOTE: page is from $app/state — use page.x directly, NOT $page.x
-  $effect(() => {
-    const path = page.url.pathname;
+	// $effect runs on mount AND on every client-side navigation.
+	// Reactive dependencies: page.url.pathname, data.session, data.org
+	// NOTE: page is from $app/state — use page.x directly, NOT $page.x
+	$effect(() => {
+		const path = page.url.pathname;
 
-    if (!data.session) {
-      goto('/auth/login');
-      return;
-    }
+		if (!data.session) {
+			goto('/auth/login');
+			return;
+		}
 
-    if (data.org && !data.org.is_setup_complete) {
-      if (!path.startsWith('/setup')) goto('/setup');
-      return;
-    }
+		if (data.org && !data.org.is_setup_complete) {
+			if (!path.startsWith('/setup')) goto('/setup');
+			return;
+		}
 
-    if (data.org?.status === 'suspended') {
-      goto('/auth/suspended');
-    }
-  });
+		if (data.org?.status === 'suspended') {
+			goto('/auth/suspended');
+		}
+	});
 </script>
 
 {@render children()}
@@ -68,37 +68,37 @@ Never scatter raw `member.can_*` checks across templates. One helper, fully type
 import type { OrgMember } from '$lib/types';
 
 type PermissionKey = keyof Pick<
-  OrgMember,
-  | 'can_view_dashboard'
-  | 'can_view_all_conversations'
-  | 'can_view_assigned_conversations'
-  | 'can_view_all_contacts'
-  | 'can_manage_contacts'
-  | 'can_view_full_pipeline'
-  | 'can_view_assigned_jobs'
-  | 'can_view_all_quotes'
-  | 'can_manage_quotes'
-  | 'can_view_all_invoices'
-  | 'can_manage_invoices'
-  | 'can_view_all_appointments'
-  | 'can_view_assigned_appointments'
-  | 'can_view_reviews'
-  | 'can_view_growth_feed'
-  | 'can_view_team_members'
-  | 'can_manage_team_members'
-  | 'can_manage_org_settings'
+	OrgMember,
+	| 'can_view_dashboard'
+	| 'can_view_all_conversations'
+	| 'can_view_assigned_conversations'
+	| 'can_view_all_contacts'
+	| 'can_manage_contacts'
+	| 'can_view_full_pipeline'
+	| 'can_view_assigned_jobs'
+	| 'can_view_all_quotes'
+	| 'can_manage_quotes'
+	| 'can_view_all_invoices'
+	| 'can_manage_invoices'
+	| 'can_view_all_appointments'
+	| 'can_view_assigned_appointments'
+	| 'can_view_reviews'
+	| 'can_view_growth_feed'
+	| 'can_view_team_members'
+	| 'can_manage_team_members'
+	| 'can_manage_org_settings'
 >;
 
 export function can(member: OrgMember, permission: PermissionKey): boolean {
-  return member[permission] === true;
+	return member[permission] === true;
 }
 
 export function canAny(member: OrgMember, permissions: PermissionKey[]): boolean {
-  return permissions.some(p => member[p] === true);
+	return permissions.some((p) => member[p] === true);
 }
 
 export function canAll(member: OrgMember, permissions: PermissionKey[]): boolean {
-  return permissions.every(p => member[p] === true);
+	return permissions.every((p) => member[p] === true);
 }
 ```
 
@@ -106,13 +106,13 @@ Usage:
 
 ```svelte
 <script lang="ts">
-  import { getMemberContext } from '$lib/context/member';
-  import { can, canAny } from '$lib/permissions';
-  const member = getMemberContext();
+	import { getMemberContext } from '$lib/context/member';
+	import { can, canAny } from '$lib/permissions';
+	const member = getMemberContext();
 </script>
 
 {#if canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations'])}
-  <a href="/inbox">Inbox</a>
+	<a href="/inbox">Inbox</a>
 {/if}
 ```
 
@@ -125,58 +125,58 @@ Never show locked/disabled states — if no access, the item is absent.
 
 ```svelte
 <script lang="ts">
-  import { getMemberContext } from '$lib/context/member';
-  import { can, canAny } from '$lib/permissions';
-  import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
+	import { getMemberContext } from '$lib/context/member';
+	import { can, canAny } from '$lib/permissions';
+	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 
-  let showMore = $state(false);
-  const member = getMemberContext();
+	let showMore = $state(false);
+	const member = getMemberContext();
 </script>
 
 <!-- Bottom nav (mobile) — max 5 primary items -->
 <nav class="bottom-nav">
-  <a href="/dashboard" class="nav-item">Dashboard</a>
+	<a href="/dashboard" class="nav-item">Dashboard</a>
 
-  {#if canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations'])}
-    <a href="/inbox" class="nav-item">Inbox</a>
-  {/if}
+	{#if canAny(member, ['can_view_all_conversations', 'can_view_assigned_conversations'])}
+		<a href="/inbox" class="nav-item">Inbox</a>
+	{/if}
 
-  {#if can(member, 'can_view_all_contacts')}
-    <a href="/contacts" class="nav-item">Contacts</a>
-  {/if}
+	{#if can(member, 'can_view_all_contacts')}
+		<a href="/contacts" class="nav-item">Contacts</a>
+	{/if}
 
-  {#if can(member, 'can_view_full_pipeline')}
-    <a href="/pipeline" class="nav-item">Pipeline</a>
-  {/if}
+	{#if can(member, 'can_view_full_pipeline')}
+		<a href="/pipeline" class="nav-item">Pipeline</a>
+	{/if}
 
-  {#if canAny(member, ['can_view_full_pipeline', 'can_view_assigned_jobs'])}
-    <a href="/jobs" class="nav-item">Jobs</a>
-  {/if}
+	{#if canAny(member, ['can_view_full_pipeline', 'can_view_assigned_jobs'])}
+		<a href="/jobs" class="nav-item">Jobs</a>
+	{/if}
 
-  <button class="nav-item" onclick={() => (showMore = true)}>More</button>
+	<button class="nav-item" onclick={() => (showMore = true)}>More</button>
 </nav>
 
 <!-- Secondary items in BottomSheet (mobile) / sidebar (desktop) -->
 <!-- BottomSheet must declare `open` as $bindable() in its $props() — see runes-and-reactivity.md -->
 <BottomSheet bind:open={showMore}>
-  {#if can(member, 'can_view_all_quotes')}
-    <a href="/quotes">Quotes</a>
-  {/if}
-  {#if can(member, 'can_view_all_invoices')}
-    <a href="/invoices">Invoices</a>
-  {/if}
-  {#if canAny(member, ['can_view_all_appointments', 'can_view_assigned_appointments'])}
-    <a href="/appointments">Appointments</a>
-  {/if}
-  {#if can(member, 'can_view_reviews')}
-    <a href="/reputation">Reputation</a>
-  {/if}
-  {#if can(member, 'can_view_growth_feed')}
-    <a href="/growth">Growth</a>
-  {/if}
-  {#if can(member, 'can_view_team_members')}
-    <a href="/settings/team">Team</a>
-  {/if}
+	{#if can(member, 'can_view_all_quotes')}
+		<a href="/quotes">Quotes</a>
+	{/if}
+	{#if can(member, 'can_view_all_invoices')}
+		<a href="/invoices">Invoices</a>
+	{/if}
+	{#if canAny(member, ['can_view_all_appointments', 'can_view_assigned_appointments'])}
+		<a href="/appointments">Appointments</a>
+	{/if}
+	{#if can(member, 'can_view_reviews')}
+		<a href="/reputation">Reputation</a>
+	{/if}
+	{#if can(member, 'can_view_growth_feed')}
+		<a href="/growth">Growth</a>
+	{/if}
+	{#if can(member, 'can_view_team_members')}
+		<a href="/settings/team">Team</a>
+	{/if}
 </BottomSheet>
 ```
 
@@ -190,19 +190,19 @@ Provide one inside the `(app)` group so errors inherit the app layout.
 ```svelte
 <!-- src/routes/(app)/+error.svelte -->
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
-  import EmptyState from '$lib/components/shared/EmptyState.svelte';
-  import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import EmptyState from '$lib/components/shared/EmptyState.svelte';
+	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 </script>
 
 <PageWrapper title="Error">
-  <EmptyState
-    title={page.status === 404 ? 'Page not found' : 'Something went wrong'}
-    description={page.error?.message ?? 'An unexpected error occurred.'}
-    actionLabel="Go to Dashboard"
-    onAction={() => goto('/dashboard')}
-  />
+	<EmptyState
+		title={page.status === 404 ? 'Page not found' : 'Something went wrong'}
+		description={page.error?.message ?? 'An unexpected error occurred.'}
+		actionLabel="Go to Dashboard"
+		onAction={() => goto('/dashboard')}
+	/>
 </PageWrapper>
 ```
 
@@ -211,12 +211,12 @@ Root-level fallback for errors outside the `(app)` group:
 ```svelte
 <!-- src/routes/+error.svelte -->
 <script lang="ts">
-  import { page } from '$app/state';
+	import { page } from '$app/state';
 </script>
 
 <div class="error-page">
-  <h1>{page.status}</h1>
-  <p>{page.error?.message ?? 'Something went wrong.'}</p>
-  <a href="/">Back to home</a>
+	<h1>{page.status}</h1>
+	<p>{page.error?.message ?? 'Something went wrong.'}</p>
+	<a href="/">Back to home</a>
 </div>
 ```

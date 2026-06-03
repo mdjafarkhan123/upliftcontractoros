@@ -9,12 +9,12 @@ process.env.WORKER_RUNTIME = 'true';
 
 // Colorize logs by [worker-name] prefix — no external deps.
 const WORKER_COLORS: Record<string, string> = {
-	outbox: '\x1b[36m',       // cyan
-	automation: '\x1b[32m',   // green
+	outbox: '\x1b[36m', // cyan
+	automation: '\x1b[32m', // green
 	notification: '\x1b[33m', // yellow
-	email: '\x1b[35m',        // magenta
-	sms: '\x1b[34m',          // blue
-	worker: '\x1b[1m',        // bold (for this file's own logs)
+	email: '\x1b[35m', // magenta
+	sms: '\x1b[34m', // blue
+	worker: '\x1b[1m' // bold (for this file's own logs)
 };
 const RESET = '\x1b[0m';
 
@@ -38,8 +38,11 @@ import './src/lib/server/workers/automationWorker';
 import './src/lib/server/workers/notificationWorker';
 import './src/lib/server/workers/emailWorker';
 import './src/lib/server/workers/smsWorker';
+import './src/lib/server/workers/mediaWorker';
 import { registerCronJobs } from './src/lib/server/cron';
 
 registerCronJobs();
 
-console.log('[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m + cron active');
+console.log(
+	'[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m + cron active'
+);

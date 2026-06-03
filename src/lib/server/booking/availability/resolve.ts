@@ -65,10 +65,7 @@ export async function resolveAvailabilityForDate(
 
 // Lightweight Tier 1 check — does this date have any weekly window OR a
 // non-blocked override? Does NOT compute slots.
-export async function hasAnyWindowForDate(
-	bookingLinkId: string,
-	date: IsoDate
-): Promise<boolean> {
+export async function hasAnyWindowForDate(bookingLinkId: string, date: IsoDate): Promise<boolean> {
 	const resolved = await resolveAvailabilityForDate(bookingLinkId, date);
 	if (resolved.blocked) return false;
 	return resolved.windows.length > 0;

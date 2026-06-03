@@ -12,6 +12,7 @@ import {
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { moveStageSchema } from '$lib/server/pipeline/schemas';
+import { canViewOpportunity } from '$lib/server/pipeline/permissions';
 
 export const PATCH: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -35,7 +36,7 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
-	const { stage_id, lost_reason } = parsed.data;
+	const { stage_id, from_stage_id, move_request_id, lost_reason } = parsed.data;
 
 	const [opp] = await db
 		.select()
@@ -49,6 +50,19 @@ export const PATCH: RequestHandler = async (event) => {
 		)
 		.limit(1);
 	if (!opp) error(404, 'Opportunity not found');
+	if (!canViewOpportunity(auth.member, opp)) error(404, 'Opportunity not found');
+
+	// Optimistic concurrency: client must know the true current stage.
+	if (opp.stage_id !== from_stage_id) {
+		return json(
+			{
+				error: 'This opportunity has already moved.',
+				code: 'STAGE_CONFLICT',
+				current_stage_id: opp.stage_id
+			},
+			{ status: 409 }
+		);
+	}
 
 	const [stage] = await db
 		.select()
@@ -69,6 +83,13 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ opportunity: opp, job: null });
 	}
 
+	const [fromStage] = await db
+		.select({ name: pipelineStages.name })
+		.from(pipelineStages)
+		.where(eq(pipelineStages.id, opp.stage_id))
+		.limit(1);
+	const fromStageName = fromStage?.name ?? null;
+
 	if (stage.is_lost && !lost_reason) {
 		return json(
 			{ error: 'A reason is required when marking lost.', code: 'LOST_REASON_REQUIRED' },
@@ -84,9 +105,10 @@ export const PATCH: RequestHandler = async (event) => {
 
 				const [updatedOpp] = await tx
 					.update(opportunities)
-					.set({ stage_id, closed_at: now, updated_at: now })
-					.where(eq(opportunities.id, id))
+					.set({ stage_id, closed_at: now, updated_at: now, stage_entered_at: now })
+					.where(and(eq(opportunities.id, id), eq(opportunities.stage_id, from_stage_id)))
 					.returning();
+				if (!updatedOpp) return null;
 
 				// Snapshot primary service address (fall back to any primary)
 				const [primaryService] = await tx
@@ -147,12 +169,17 @@ export const PATCH: RequestHandler = async (event) => {
 						resource_type: 'opportunity',
 						resource_id: updatedOpp.id,
 						payload: {
+							event_version: 1,
 							opportunity_id: updatedOpp.id,
 							org_id: auth.orgId,
+							contact_id: updatedOpp.contact_id,
+							assigned_to: updatedOpp.assigned_to ?? null,
 							from_stage_id: opp.stage_id,
-							to_stage_id: stage_id
+							to_stage_id: stage_id,
+							from_stage_name: fromStageName,
+							to_stage_name: stage.name
 						},
-						idempotency_key: `opportunity.stage_changed:${updatedOpp.id}:${stage_id}`
+						idempotency_key: `opportunity.stage_changed:${move_request_id}`
 					},
 					{
 						org_id: auth.orgId,
@@ -160,9 +187,12 @@ export const PATCH: RequestHandler = async (event) => {
 						resource_type: 'opportunity',
 						resource_id: updatedOpp.id,
 						payload: {
+							event_version: 1,
 							opportunity_id: updatedOpp.id,
 							org_id: auth.orgId,
 							contact_id: updatedOpp.contact_id,
+							title: updatedOpp.title,
+							assigned_to: updatedOpp.assigned_to ?? null,
 							value: updatedOpp.value
 						},
 						idempotency_key: `opportunity.won:${updatedOpp.id}`
@@ -173,6 +203,7 @@ export const PATCH: RequestHandler = async (event) => {
 						resource_type: 'job',
 						resource_id: insertedJob.id,
 						payload: {
+							event_version: 1,
 							job_id: insertedJob.id,
 							org_id: auth.orgId,
 							opportunity_id: insertedJob.opportunity_id,
@@ -188,6 +219,7 @@ export const PATCH: RequestHandler = async (event) => {
 						resource_type: 'contact',
 						resource_id: updatedOpp.contact_id,
 						payload: {
+							event_version: 1,
 							contact_id: updatedOpp.contact_id,
 							org_id: auth.orgId,
 							new_status: 'customer',
@@ -199,6 +231,22 @@ export const PATCH: RequestHandler = async (event) => {
 
 				return { opportunity: updatedOpp, job: insertedJob };
 			});
+
+			if (!result) {
+				const [fresh] = await db
+					.select({ stage_id: opportunities.stage_id })
+					.from(opportunities)
+					.where(eq(opportunities.id, id))
+					.limit(1);
+				return json(
+					{
+						error: 'This opportunity has already moved.',
+						code: 'STAGE_CONFLICT',
+						current_stage_id: fresh?.stage_id ?? null
+					},
+					{ status: 409 }
+				);
+			}
 
 			return json(result);
 		} catch (e) {
@@ -231,10 +279,12 @@ export const PATCH: RequestHandler = async (event) => {
 					stage_id,
 					closed_at: now,
 					lost_reason: lost_reason!,
-					updated_at: now
+					updated_at: now,
+					stage_entered_at: now
 				})
-				.where(eq(opportunities.id, id))
+				.where(and(eq(opportunities.id, id), eq(opportunities.stage_id, from_stage_id)))
 				.returning();
+			if (!updated) return null;
 
 			await tx.insert(outboxEvents).values([
 				{
@@ -243,12 +293,18 @@ export const PATCH: RequestHandler = async (event) => {
 					resource_type: 'opportunity',
 					resource_id: updated.id,
 					payload: {
+						event_version: 1,
 						opportunity_id: updated.id,
 						org_id: auth.orgId,
+						contact_id: updated.contact_id,
+						assigned_to: updated.assigned_to ?? null,
 						from_stage_id: opp.stage_id,
-						to_stage_id: stage_id
+						to_stage_id: stage_id,
+						from_stage_name: fromStageName,
+						to_stage_name: stage.name,
+						changed_by_member_id: auth.member.id
 					},
-					idempotency_key: `opportunity.stage_changed:${updated.id}:${stage_id}`
+					idempotency_key: `opportunity.stage_changed:${move_request_id}`
 				},
 				{
 					org_id: auth.orgId,
@@ -256,8 +312,13 @@ export const PATCH: RequestHandler = async (event) => {
 					resource_type: 'opportunity',
 					resource_id: updated.id,
 					payload: {
+						event_version: 1,
 						opportunity_id: updated.id,
 						org_id: auth.orgId,
+						contact_id: updated.contact_id,
+						title: updated.title,
+						assigned_to: updated.assigned_to ?? null,
+						value: updated.value,
 						lost_reason: updated.lost_reason
 					},
 					idempotency_key: `opportunity.lost:${updated.id}`
@@ -266,6 +327,22 @@ export const PATCH: RequestHandler = async (event) => {
 
 			return updated;
 		});
+
+		if (!result) {
+			const [fresh] = await db
+				.select({ stage_id: opportunities.stage_id })
+				.from(opportunities)
+				.where(eq(opportunities.id, id))
+				.limit(1);
+			return json(
+				{
+					error: 'This opportunity has already moved.',
+					code: 'STAGE_CONFLICT',
+					current_stage_id: fresh?.stage_id ?? null
+				},
+				{ status: 409 }
+			);
+		}
 
 		return json({ opportunity: result, job: null });
 	}
@@ -280,10 +357,12 @@ export const PATCH: RequestHandler = async (event) => {
 				stage_id,
 				closed_at: null,
 				lost_reason: null,
-				updated_at: now
+				updated_at: now,
+				stage_entered_at: now
 			})
-			.where(eq(opportunities.id, id))
+			.where(and(eq(opportunities.id, id), eq(opportunities.stage_id, from_stage_id)))
 			.returning();
+		if (!updated) return null;
 
 		await tx.insert(outboxEvents).values({
 			org_id: auth.orgId,
@@ -291,16 +370,37 @@ export const PATCH: RequestHandler = async (event) => {
 			resource_type: 'opportunity',
 			resource_id: updated.id,
 			payload: {
+				event_version: 1,
 				opportunity_id: updated.id,
 				org_id: auth.orgId,
+				contact_id: updated.contact_id,
+				assigned_to: updated.assigned_to ?? null,
 				from_stage_id: opp.stage_id,
-				to_stage_id: stage_id
+				to_stage_id: stage_id,
+				from_stage_name: fromStageName,
+				to_stage_name: stage.name
 			},
-			idempotency_key: `opportunity.stage_changed:${updated.id}:${stage_id}`
+			idempotency_key: `opportunity.stage_changed:${move_request_id}`
 		});
 
 		return updated;
 	});
+
+	if (!result) {
+		const [fresh] = await db
+			.select({ stage_id: opportunities.stage_id })
+			.from(opportunities)
+			.where(eq(opportunities.id, id))
+			.limit(1);
+		return json(
+			{
+				error: 'This opportunity has already moved.',
+				code: 'STAGE_CONFLICT',
+				current_stage_id: fresh?.stage_id ?? null
+			},
+			{ status: 409 }
+		);
+	}
 
 	return json({ opportunity: result, job: null });
 };

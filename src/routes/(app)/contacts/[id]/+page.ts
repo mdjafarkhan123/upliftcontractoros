@@ -9,9 +9,11 @@ export type ContactDetailResponse = {
 		full_name: string;
 		email: string | null;
 		phone: string;
+		alt_phone: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		lead_source: string;
 		assigned_to: string | null;
+		referred_by_contact_id: string | null;
 		sms_opt_out: boolean;
 		sms_opt_out_at: string | null;
 		sms_opt_out_source: string | null;
@@ -26,6 +28,9 @@ export type ContactDetailResponse = {
 		created_at: string;
 		updated_at: string;
 	};
+	assignee: { id: string; name: string } | null;
+	referrer: { id: string; name: string } | null;
+	referral_count: number;
 	addresses: Array<{
 		id: string;
 		label: 'billing' | 'service' | 'mailing' | 'other';
@@ -35,6 +40,7 @@ export type ContactDetailResponse = {
 		state: string;
 		zip: string;
 		is_primary: boolean;
+		updated_at: string;
 	}>;
 	notes: Array<{
 		id: string;

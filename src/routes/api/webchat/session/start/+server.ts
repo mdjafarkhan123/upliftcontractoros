@@ -46,10 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const result = startSchema.safeParse(body);
 		if (!result.success) {
 			const issue = result.error.issues[0];
-			return json(
-				{ error: issue?.message ?? 'Invalid input' },
-				{ status: 400 }
-			);
+			return json({ error: issue?.message ?? 'Invalid input' }, { status: 400 });
 		}
 		parsed = result.data;
 	} catch {
@@ -81,10 +78,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		})
 		.from(organizations)
 		.where(
-			and(
-				eq(organizations.widget_token, parsed.widget_token),
-				isNull(organizations.deleted_at)
-			)
+			and(eq(organizations.widget_token, parsed.widget_token), isNull(organizations.deleted_at))
 		)
 		.limit(1);
 

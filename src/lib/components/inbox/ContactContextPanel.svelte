@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { User2, GitBranch, FileText, Receipt, Phone } from '@lucide/svelte';
+	import {
+		User2,
+		GitBranch,
+		FileText,
+		Receipt,
+		Phone,
+		Sparkles,
+		CalendarClock
+	} from '@lucide/svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
 	import { formatCurrency } from '$lib/utils/format';
@@ -30,12 +38,40 @@
 		if (s === 'sent' || s === 'partial') return 'info';
 		return 'default';
 	});
+
+	const LEAD_SOURCE_LABELS: Record<string, string> = {
+		manual: 'Manual',
+		missed_call: 'Missed Call',
+		website_form: 'Website Form',
+		webchat: 'Web Chat',
+		booking_link: 'Booking Link',
+		referral: 'Referral',
+		import: 'Import',
+		google_business: 'Google Business',
+		facebook: 'Facebook',
+		other: 'Other'
+	};
+	const leadSourceLabel = $derived(
+		contact?.lead_source ? (LEAD_SOURCE_LABELS[contact.lead_source] ?? contact.lead_source) : null
+	);
+
+	function fmtDateTime(iso: string): string {
+		const d = new Date(iso);
+		return d.toLocaleString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit'
+		});
+	}
 </script>
 
 <div class="space-y-4">
 	{#if contact}
 		<section class="space-y-2">
-			<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+			<div
+				class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+			>
 				<User2 class="h-3.5 w-3.5" />
 				Contact
 			</div>
@@ -57,8 +93,50 @@
 		</section>
 	{/if}
 
+	{#if leadSourceLabel}
+		<section class="space-y-2">
+			<div
+				class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+			>
+				<Sparkles class="h-3.5 w-3.5" />
+				Lead Source
+			</div>
+			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
+				<Badge label={leadSourceLabel} variant="info" />
+			</div>
+		</section>
+	{/if}
+
 	<section class="space-y-2">
-		<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+		<div
+			class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+		>
+			<CalendarClock class="h-3.5 w-3.5" />
+			Next Appointment
+		</div>
+		<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
+			{#if context?.next_appointment}
+				<a
+					href={`/appointments/${context.next_appointment.id}`}
+					class="block transition-colors hover:text-primary"
+				>
+					<div class="text-sm font-medium text-foreground">
+						{fmtDateTime(context.next_appointment.scheduled_start)}
+					</div>
+					<div class="mt-1 text-xs text-muted-foreground">
+						{context.next_appointment.title ?? context.next_appointment.type}
+					</div>
+				</a>
+			{:else}
+				<span class="text-xs text-muted-foreground">No upcoming appointments</span>
+			{/if}
+		</div>
+	</section>
+
+	<section class="space-y-2">
+		<div
+			class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+		>
 			<GitBranch class="h-3.5 w-3.5" />
 			Pipeline
 		</div>
@@ -72,7 +150,9 @@
 	</section>
 
 	<section class="space-y-2">
-		<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+		<div
+			class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+		>
 			<FileText class="h-3.5 w-3.5" />
 			Latest quote
 		</div>
@@ -97,7 +177,9 @@
 	</section>
 
 	<section class="space-y-2">
-		<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+		<div
+			class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+		>
 			<Receipt class="h-3.5 w-3.5" />
 			Latest invoice
 		</div>

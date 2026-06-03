@@ -51,8 +51,10 @@ export const POST: RequestHandler = async (event) => {
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Invoice not found');
-		if (existing.status === 'cancelled') throw error(422, 'Cancelled invoice cannot receive payments');
-		if (existing.status === 'draft') throw error(422, 'Send the invoice before recording a payment');
+		if (existing.status === 'cancelled')
+			throw error(422, 'Cancelled invoice cannot receive payments');
+		if (existing.status === 'draft')
+			throw error(422, 'Send the invoice before recording a payment');
 
 		const amountStr = input.amount.toFixed(2);
 		if (Number(amountStr) > Number(existing.amount_due) + 0.001) {

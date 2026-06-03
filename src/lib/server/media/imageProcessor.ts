@@ -25,19 +25,23 @@ type OutputSpec = { reEncode: ReEncodeFormat; ext: string; mime: string };
  * Every other format maps to itself to preserve transparency and avoid unnecessary conversion.
  */
 const FORMAT_MAP: Record<string, OutputSpec> = {
-	jpeg: { reEncode: 'jpeg', ext: 'jpg',  mime: 'image/jpeg' },
-	png:  { reEncode: 'png',  ext: 'png',  mime: 'image/png'  },
+	jpeg: { reEncode: 'jpeg', ext: 'jpg', mime: 'image/jpeg' },
+	png: { reEncode: 'png', ext: 'png', mime: 'image/png' },
 	webp: { reEncode: 'webp', ext: 'webp', mime: 'image/webp' },
-	gif:  { reEncode: 'gif',  ext: 'gif',  mime: 'image/gif'  },
-	heif: { reEncode: 'jpeg', ext: 'jpg',  mime: 'image/jpeg' }, // covers both HEIC and HEIF
+	gif: { reEncode: 'gif', ext: 'gif', mime: 'image/gif' },
+	heif: { reEncode: 'jpeg', ext: 'jpg', mime: 'image/jpeg' } // covers both HEIC and HEIF
 };
 
 function applyEncode(pipeline: ReturnType<typeof sharp>, fmt: ReEncodeFormat) {
 	switch (fmt) {
-		case 'jpeg': return pipeline.jpeg({ quality: 85, mozjpeg: true });
-		case 'png':  return pipeline.png({ compressionLevel: 8 });
-		case 'webp': return pipeline.webp({ quality: 85 });
-		case 'gif':  return pipeline.gif();
+		case 'jpeg':
+			return pipeline.jpeg({ quality: 85, mozjpeg: true });
+		case 'png':
+			return pipeline.png({ compressionLevel: 8 });
+		case 'webp':
+			return pipeline.webp({ quality: 85 });
+		case 'gif':
+			return pipeline.gif();
 	}
 }
 

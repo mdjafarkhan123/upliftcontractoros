@@ -58,6 +58,36 @@ export function toCents(value: string | number): number {
 	return Math.round(n * 100);
 }
 
+export async function createInvoicePaymentLink(args: {
+	stripe: Stripe;
+	invoiceId: string;
+	orgId: string;
+	invoiceNumberDisplay: string;
+	amountDueCents: number;
+}): Promise<{ id: string; url: string }> {
+	const metadata = {
+		kind: 'invoice_payment_link',
+		invoice_id: args.invoiceId,
+		org_id: args.orgId,
+		invoice_number_display: args.invoiceNumberDisplay
+	};
+	const price = await args.stripe.prices.create({
+		currency: 'usd',
+		unit_amount: args.amountDueCents,
+		product_data: { name: `Invoice ${args.invoiceNumberDisplay}` }
+	});
+	const link = await args.stripe.paymentLinks.create({
+		line_items: [{ price: price.id, quantity: 1 }],
+		metadata,
+		payment_intent_data: { metadata }
+	});
+	return { id: link.id, url: link.url };
+}
+
+export async function deactivatePaymentLink(stripe: Stripe, paymentLinkId: string): Promise<void> {
+	await stripe.paymentLinks.update(paymentLinkId, { active: false });
+}
+
 export async function createQuoteDepositCheckoutSession(args: {
 	stripe: Stripe;
 	quoteId: string;

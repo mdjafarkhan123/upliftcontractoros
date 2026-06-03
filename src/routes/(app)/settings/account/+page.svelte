@@ -8,6 +8,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getBrowserSupabase } from '$lib/supabase/browser';
+	import { Lock } from '@lucide/svelte';
 
 	type Account = {
 		id: string;
@@ -30,7 +31,8 @@
 	let dirty = $derived(
 		original !== null &&
 			form !== null &&
-			(form.full_name !== original.full_name || form.email.toLowerCase() !== original.email.toLowerCase())
+			(form.full_name !== original.full_name ||
+				form.email.toLowerCase() !== original.email.toLowerCase())
 	);
 
 	onMount(() => {
@@ -125,7 +127,7 @@
 
 <UnsavedChangesGuard {dirty} />
 
-<PageWrapper title="Account" subtitle="Your name, email, and password">
+<PageWrapper title="Account" subtitle="Your name, email, and password" back="/settings">
 	{#if loading || !form}
 		<SkeletonLoader lines={6} label="Loading account" height="48px" />
 	{:else}
@@ -174,12 +176,27 @@
 			</footer>
 		</form>
 
-		<section class="mt-8 rounded-xl border border-border bg-card p-4 md:p-5">
-			<h3 class="text-base font-semibold text-foreground">Change password</h3>
-			<p class="text-xs text-muted-foreground">At least 8 characters.</p>
+		<p class="mt-10 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+			Security
+		</p>
+
+		<section class="mt-3 rounded-xl border border-border bg-card p-5 shadow-sm">
+			<div class="mb-4 flex items-start gap-3">
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-500/10 dark:text-slate-400"
+				>
+					<Lock class="h-5 w-5" />
+				</div>
+				<div>
+					<h3 class="text-sm font-semibold text-foreground">Change password</h3>
+					<p class="text-xs text-muted-foreground">
+						Use at least 8 characters. Choose something strong you haven't used elsewhere.
+					</p>
+				</div>
+			</div>
 
 			<form
-				class="mt-4 flex flex-col gap-3"
+				class="flex flex-col gap-3"
 				onsubmit={(e) => {
 					e.preventDefault();
 					void changePassword();

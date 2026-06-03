@@ -126,7 +126,10 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (conflict) {
 		return json(
-			{ error: 'That email is already in use in this organization.', field_errors: { email: 'Already in use.' } },
+			{
+				error: 'That email is already in use in this organization.',
+				field_errors: { email: 'Already in use.' }
+			},
 			{ status: 409 }
 		);
 	}

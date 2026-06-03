@@ -25,8 +25,7 @@
 		const routeId = page.route.id ?? '';
 		const needsSession = routeId.startsWith('/(app)');
 		const status = sessionStore.status;
-		const sessionResolved =
-			status === 'ready' || status === 'unauthorized' || status === 'error';
+		const sessionResolved = status === 'ready' || status === 'unauthorized' || status === 'error';
 		if (needsSession && !sessionResolved) return;
 
 		void (async () => {

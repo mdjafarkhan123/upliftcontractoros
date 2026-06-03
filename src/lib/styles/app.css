@@ -36,7 +36,7 @@
 
 		--border: 220 13% 91%;
 		--input: 220 13% 91%;
-		--ring: 239 84% 60%;
+		--ring: 151 62% 40%;
 
 		/* Button surfaces & edges — gradient/border shades for raised buttons */
 		--primary-deep: 150 57% 27%; /* gradient end for primary button */
@@ -93,8 +93,8 @@
 		--destructive: 0 72% 51%;
 		--destructive-foreground: 0 0% 100%;
 
-		--border: 220 14% 22%;
-		--input: 220 14% 22%;
+		--border: 220 14% 30%;
+		--input: 220 14% 30%;
 		--ring: 151 62% 46%;
 
 		--status-active: 142 71% 45%;
@@ -307,4 +307,65 @@ html:not(.dark) .skeleton-shimmer {
 }
 .progress-bar-fill-red {
 	@apply bg-red-500;
+}
+
+/* ─── Snake glow border (hover) ───────────────────────────────────── */
+@property --snake-angle {
+	syntax: '<angle>';
+	initial-value: 0deg;
+	inherits: false;
+}
+
+@keyframes snake-spin {
+	to {
+		--snake-angle: 360deg;
+	}
+}
+
+.snake-glow {
+	position: relative;
+	z-index: 0;
+	overflow: visible;
+}
+
+.snake-glow::before {
+	content: '';
+	position: absolute;
+	pointer-events: none;
+	z-index: -2;
+	inset: 0;
+	margin: -1px;
+	border-radius: inherit;
+	background: conic-gradient(
+		from var(--snake-angle) at 50% 50%,
+		transparent 40deg,
+		hsl(var(--brand-light)) 65deg,
+		hsl(var(--brand-primary)) 85deg,
+		transparent 115deg,
+		transparent 240deg,
+		hsl(var(--brand-light)) 275deg,
+		hsl(var(--brand-primary)) 295deg,
+		transparent 335deg
+	);
+	opacity: 0;
+	animation: snake-spin 4s linear infinite;
+}
+
+.snake-glow::after {
+	content: '';
+	position: absolute;
+	pointer-events: none;
+	z-index: -1;
+	inset: 0;
+	border-radius: inherit;
+	background: inherit;
+}
+
+.snake-glow:hover::before {
+	opacity: 1;
+	transition: opacity 0.35s ease;
+}
+
+.snake-glow:hover {
+	box-shadow: 0 0 8px 1px hsl(var(--brand-light) / 0.18);
 }

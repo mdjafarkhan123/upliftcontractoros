@@ -6,6 +6,12 @@ export type OrgRow = {
 	trade_type: string;
 	is_setup_complete: boolean;
 	created_at: string;
+	google_review_link: string | null;
+	last_known_review_count: number;
+	last_review_check_at: string | null;
+	sms_balance: number;
+	sms_monthly_allowance: number;
+	sms_topup_this_month: number;
 };
 
 export type DeadLetterRow = {
@@ -108,5 +114,13 @@ export const jafarDashboardStore = {
 
 	async refresh(): Promise<void> {
 		await run(true);
+	},
+
+	patchOrg(id: string, patch: Partial<OrgRow>): void {
+		const idx = orgs.findIndex((o) => o.id === id);
+		if (idx < 0) return;
+		const next = orgs.slice();
+		next[idx] = { ...next[idx], ...patch };
+		orgs = next;
 	}
 };

@@ -50,12 +50,14 @@ Before writing code for a specific domain, read the relevant reference file in
 | Conversations, inbox, messaging, SMS, Twilio                                                                                                                                            | `references/05-communication.md`                 |
 | Quotes, quote line items, quote templates, quote views                                                                                                                                  | `references/06-revenue-quotes.md`                |
 | Invoices, invoice line items, payments, Stripe                                                                                                                                          | `references/07-revenue-invoices.md`              |
-| Appointments, scheduling, reminders                                                                                                                                                     | `references/08.appoinments.md`                  |
+| Appointments, scheduling, reminders                                                                                                                                                     | `references/08.appoinments.md`                   |
 | Review requests, reviews, private feedback                                                                                                                                              | `references/09.reputation.md`                    |
 | Media, file uploads, R2 storage                                                                                                                                                         | `references/10-files-and-media.md`               |
-| Growth feed, activity log, notifications                                                                                                                                                | `references/11-growth-automations-systems.md`             |
+| Growth feed, activity log, notifications                                                                                                                                                | `references/11-growth-automations-systems.md`    |
 | Automation jobs, outbox events, org counters                                                                                                                                            | `references/11-growth-automations-systems.md`    |
 | Any cross-domain query or multi-table join                                                                                                                                              | `references/12-cross-domain-map.md`              |
+| Know the project structure if needs                                                                                                                                                     | `references/project-structure.md`                |
+| Full project stack used                                                                                                                                                                 | `references/stack.md`                            |
 
 If the task spans multiple concerns (e.g. "record a payment" involves business rules
 for invoice status transitions AND automation for notification dispatch), read both.
@@ -118,19 +120,23 @@ Default behavior: `WHERE deleted_at IS NULL` on every query unless auditing dele
 
 19 tables have `deleted_at`. The following 11 tables intentionally do NOT:
 
-| Table                   | Reason                                        |
-| ----------------------- | --------------------------------------------- |
-| `payments`              | Financial immutability — never edited/deleted |
-| `quote_views`           | Append-only view tracking log                 |
-| `reviews`               | Immutable public review record                |
-| `growth_feed_items`     | Permanent agency work log                     |
-| `internal_activity_log` | Append-only audit log                         |
-| `notifications`         | Purged by cron at 90 days — no soft delete    |
-| `messages`              | Immutable communication record                |
-| `automation_jobs`       | Permanent automation audit trail              |
-| `outbox_events`         | Permanent dispatch audit trail                |
-| `automation_settings`   | One row per org — never independently deleted |
-| `org_counters`          | One row per org — never independently deleted |
+| Table                         | Reason                                                      |
+| ----------------------------- | ----------------------------------------------------------- |
+| `payments`                    | Financial immutability — never edited/deleted               |
+| `quote_views`                 | Append-only view tracking log                               |
+| `reviews`                     | Immutable public review record                              |
+| `growth_feed_items`           | Permanent agency work log                                   |
+| `internal_activity_log`       | Append-only audit log                                       |
+| `notifications`               | Purged by cron at 90 days — no soft delete                  |
+| `member_notification_prefs`   | Per-member delivery settings                                |
+| `push_subscriptions`          | Web Push device tokens                                      |
+| `notification_delivery_state` | Internal throttling state (push spam)                       |
+| `messages`                    | Immutable communication record                              |
+| `automation_jobs`             | Permanent automation audit trail                            |
+| `outbox_events`               | Permanent dispatch audit trail                              |
+| `activity_events`             | Append-only dashboard feed log — populated by outbox worker |
+| `automation_settings`         | One row per org — never independently deleted               |
+| `org_counters`                | One row per org — never independently deleted               |
 
 ### U3 — Permission Source of Truth (Rule 3)
 

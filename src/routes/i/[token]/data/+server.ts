@@ -2,7 +2,13 @@ import { json } from '@sveltejs/kit';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { invoiceLineItems, invoiceViews, invoices, outboxEvents, payments } from '$lib/server/db/schema';
+import {
+	invoiceLineItems,
+	invoiceViews,
+	invoices,
+	outboxEvents,
+	payments
+} from '$lib/server/db/schema';
 import {
 	clientIpFrom,
 	lookupValidInvoiceByToken,
@@ -95,10 +101,7 @@ export const GET: RequestHandler = async (event) => {
 		})
 		.from(invoiceLineItems)
 		.where(
-			and(
-				eq(invoiceLineItems.invoice_id, invoice.id),
-				sql`${invoiceLineItems.deleted_at} IS NULL`
-			)
+			and(eq(invoiceLineItems.invoice_id, invoice.id), sql`${invoiceLineItems.deleted_at} IS NULL`)
 		)
 		.orderBy(invoiceLineItems.position);
 

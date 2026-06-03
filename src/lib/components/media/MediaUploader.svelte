@@ -6,13 +6,15 @@
 	let {
 		purposeTag,
 		parentFk,
+		label = 'Add photos',
 		onUploaded,
 		onOptimisticAdd,
 		onOptimisticRemove,
 		disabled = false
 	}: {
 		purposeTag: string;
-		parentFk: { job_id?: string; quote_id?: string; invoice_id?: string };
+		parentFk: { contact_id?: string; job_id?: string; quote_id?: string; invoice_id?: string };
+		label?: string;
 		onUploaded: (item: LocalMediaItem) => void;
 		onOptimisticAdd: (item: LocalMediaItem) => void;
 		onOptimisticRemove: (localId: string) => void;
@@ -57,6 +59,7 @@
 				const formData = new FormData();
 				formData.append('file', file);
 				formData.append('purpose_tag', purposeTag);
+				if (parentFk.contact_id) formData.append('contact_id', parentFk.contact_id);
 				if (parentFk.job_id) formData.append('job_id', parentFk.job_id);
 				if (parentFk.quote_id) formData.append('quote_id', parentFk.quote_id);
 				if (parentFk.invoice_id) formData.append('invoice_id', parentFk.invoice_id);
@@ -133,7 +136,7 @@
 	class="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:border-primary/50 hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
 >
 	<Upload class="h-4 w-4" />
-	Add photos
+	{label}
 </button>
 
 <input

@@ -3,9 +3,15 @@ export type DashboardActivityIcon =
 	| 'quote_accepted'
 	| 'quote_viewed'
 	| 'quote_declined'
+	| 'quote_sent'
+	| 'opportunity_created'
+	| 'opportunity_stage_changed'
+	| 'opportunity_assignee_changed'
 	| 'opportunity_won'
+	| 'opportunity_lost'
 	| 'job_completed'
 	| 'lead'
+	| 'contact_became_customer'
 	| 'review_received';
 
 export type DashboardActivityTone = 'neutral' | 'positive' | 'attention' | 'negative';
@@ -33,6 +39,15 @@ export type DashboardPipelineStage = {
 	value: string;
 };
 
+export type DashboardReputation = {
+	funnel_enabled: boolean;
+	total_reviews: number;
+	avg_rating: number | null;
+	reviews_this_month: number;
+	reviews_last_month: number;
+	requests_this_month: number;
+};
+
 export type DashboardSummary = {
 	generated_at: string;
 	timezone: string;
@@ -49,6 +64,7 @@ export type DashboardSummary = {
 	};
 	pipeline_snapshot: DashboardPipelineStage[] | null;
 	recent_activity: DashboardActivityRow[];
+	reputation: DashboardReputation | null;
 	locks: {
 		revenue_locked: boolean;
 		pipeline_locked: boolean;

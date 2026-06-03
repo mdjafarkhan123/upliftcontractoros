@@ -17,7 +17,11 @@ export const createAppointmentSchema = z
 	.object({
 		contact_id: z.string().uuid(),
 		job_id: z.string().uuid().nullable().optional(),
+		// Legacy single-assignee field — still accepted, treated as a crew of one.
 		assigned_to: z.string().uuid().nullable().optional(),
+		// New multi-assignee shape. If omitted, falls back to `assigned_to`.
+		assignee_ids: z.array(z.string().uuid()).max(20).optional(),
+		lead_member_id: z.string().uuid().nullable().optional(),
 		type: z.enum(APPOINTMENT_TYPES),
 		title: z.string().trim().min(1).max(200),
 		scheduled_start: datetime,
@@ -33,6 +37,8 @@ export const createAppointmentSchema = z
 export const updateAppointmentSchema = z
 	.object({
 		assigned_to: z.string().uuid().nullable().optional(),
+		assignee_ids: z.array(z.string().uuid()).max(20).optional(),
+		lead_member_id: z.string().uuid().nullable().optional(),
 		type: z.enum(APPOINTMENT_TYPES).optional(),
 		title: z.string().trim().min(1).max(200).optional(),
 		scheduled_start: datetimeOptional,

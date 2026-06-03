@@ -3,11 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { outboxEvents, quotes } from '$lib/server/db/schema';
-import {
-	clientIpFrom,
-	lookupQuoteForAction,
-	sha256Hex
-} from '$lib/server/quotes/publicAccess';
+import { clientIpFrom, lookupQuoteForAction, sha256Hex } from '$lib/server/quotes/publicAccess';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { quoteDeclinedEvent } from '$lib/server/quotes/events';
 

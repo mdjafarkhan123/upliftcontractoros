@@ -5,6 +5,14 @@ Enums used: `contact_status`, `address_label`, `lead_source_type`
 
 ---
 
+## Known gaps (as of 2026-05-28)
+
+- **`next_follow_up_at` reminder — BUILT (2026-05-29).** The `follow-up-due-sweep` cron (`src/lib/server/cron/followUpDueSweep.ts`, every 15 min) claims contacts where `next_follow_up_at <= now()` that are active and **assigned**, clears the field in the same transaction, and emits `contact.follow_up_due`. The outbox worker routes it to the notification queue → in-app notification to the assigned member (deep-link `/contacts/{id}`, type `contact_follow_up_due`). Single-fire (field cleared on claim); re-dating arms a fresh reminder. Unassigned contacts are skipped (no recipient) and stay pending until assigned. In-app only — no SMS/email to the contractor by design.
+- **No `referred_by_contact_id` self-FK.** `lead_source='referral'` exists but the referrer is not recorded.
+- **No merge-duplicates flow.** Same-phone dedup on create is the only mechanism; same-person/different-phone is not handled.
+
+---
+
 ## `contacts`
 
 Unified lead and customer record. All contacts begin as leads.

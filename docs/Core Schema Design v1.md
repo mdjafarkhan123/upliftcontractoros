@@ -789,6 +789,7 @@ CREATE INDEX idx_quotes_status ON quotes (org_id, status);
 - `total` is a denormalized computed value: `subtotal + tax_amount`. Always recalculated when line items change.
 
 **Token Lifecycle:**
+
 - Public quote links use cryptographically secure random tokens.
 - Only the SHA-256 hash of the token is stored in the database.
 - The client-facing URL contains the raw token.
@@ -1490,19 +1491,19 @@ UPDATE org_counters
 
 # 12. Table & Column Count Summary
 
-|Domain|Tables|Notes|
-|---|---|---|
-|Domain 1 — Org & Identity|3|`organizations`, `org_members`, `automation_settings`|
-|Domain 2 — Contacts|3|`contacts`, `contact_addresses`, `contact_notes`|
-|Domain 3 — Pipeline|2|`pipeline_stages`, `opportunities`|
-|Domain 4 — Jobs|1|`jobs`|
-|Domain 5 — Communication|2|`conversations`, `messages`|
-|Domain 6 — Revenue|8|`quotes`, `quote_line_items`, `quote_views`, `quote_templates`, `quote_template_line_items`, `invoices`, `invoice_line_items`, `payments`|
-|Domain 7 — Appointments|1|`appointments`|
-|Domain 8 — Reputation|3|`review_requests`, `reviews`, `private_feedback`|
-|Domain 9 — Files & Media|1|`media`|
-|Domain 10 — Growth, Automation & System|6|`growth_feed_items`, `internal_activity_log`, `notifications`, `automation_jobs`, `outbox_events`, `org_counters`|
-|**Total**|**30**||
+| Domain                                  | Tables | Notes                                                                                                                                     |
+| --------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain 1 — Org & Identity               | 3      | `organizations`, `org_members`, `automation_settings`                                                                                     |
+| Domain 2 — Contacts                     | 3      | `contacts`, `contact_addresses`, `contact_notes`                                                                                          |
+| Domain 3 — Pipeline                     | 2      | `pipeline_stages`, `opportunities`                                                                                                        |
+| Domain 4 — Jobs                         | 1      | `jobs`                                                                                                                                    |
+| Domain 5 — Communication                | 2      | `conversations`, `messages`                                                                                                               |
+| Domain 6 — Revenue                      | 8      | `quotes`, `quote_line_items`, `quote_views`, `quote_templates`, `quote_template_line_items`, `invoices`, `invoice_line_items`, `payments` |
+| Domain 7 — Appointments                 | 1      | `appointments`                                                                                                                            |
+| Domain 8 — Reputation                   | 3      | `review_requests`, `reviews`, `private_feedback`                                                                                          |
+| Domain 9 — Files & Media                | 1      | `media`                                                                                                                                   |
+| Domain 10 — Growth, Automation & System | 6      | `growth_feed_items`, `internal_activity_log`, `notifications`, `automation_jobs`, `outbox_events`, `org_counters`                         |
+| **Total**                               | **30** |                                                                                                                                           |
 
 **`org_members` permission columns:** 39 boolean columns — all NOT NULL.
 
@@ -1510,41 +1511,41 @@ UPDATE org_counters
 
 # 13. Tables Without Soft Delete (Intentional)
 
-|Table|Reason|
-|---|---|
-|`payments`|Financial immutability. No refunds in v1.|
-|`quote_views`|Append-only log. Immutable tracking record.|
-|`reviews`|Immutable public review record.|
-|`growth_feed_items`|Permanent agency work log. Never deleted.|
-|`internal_activity_log`|Append-only audit log.|
-|`notifications`|Purged by cron at 90 days. Soft delete unnecessary.|
+| Table                   | Reason                                              |
+| ----------------------- | --------------------------------------------------- |
+| `payments`              | Financial immutability. No refunds in v1.           |
+| `quote_views`           | Append-only log. Immutable tracking record.         |
+| `reviews`               | Immutable public review record.                     |
+| `growth_feed_items`     | Permanent agency work log. Never deleted.           |
+| `internal_activity_log` | Append-only audit log.                              |
+| `notifications`         | Purged by cron at 90 days. Soft delete unnecessary. |
 
 ---
 
 # 14. Gaps Resolved by This Document
 
-|Gap|Resolution|
-|---|---|
-|`invoices.status` partial payment state|`partially_paid` added to `invoice_status` enum|
-|Quote public token|`quotes.public_token_hash TEXT NOT NULL UNIQUE` — SHA-256 only, no raw token stored|
-|Token validity|Derived from `status`, `expires_at`, `deleted_at` — no separate token expiry column|
-|Invoice status transitions|Fully documented including partial payment paths|
-|Reminder reset on reschedule|`reminder_24h_sent` and `reminder_1h_sent` reset to FALSE — documented in appointments notes|
-|Sequential number generation|`org_counters` + `SELECT FOR UPDATE` pattern documented|
-|Outbox worker polling|Composite index on `(status, available_at) WHERE status = 'pending'`|
+| Gap                                     | Resolution                                                                                   |
+| --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `invoices.status` partial payment state | `partially_paid` added to `invoice_status` enum                                              |
+| Quote public token                      | `quotes.public_token_hash TEXT NOT NULL UNIQUE` — SHA-256 only, no raw token stored          |
+| Token validity                          | Derived from `status`, `expires_at`, `deleted_at` — no separate token expiry column          |
+| Invoice status transitions              | Fully documented including partial payment paths                                             |
+| Reminder reset on reschedule            | `reminder_24h_sent` and `reminder_1h_sent` reset to FALSE — documented in appointments notes |
+| Sequential number generation            | `org_counters` + `SELECT FOR UPDATE` pattern documented                                      |
+| Outbox worker polling                   | Composite index on `(status, available_at) WHERE status = 'pending'`                         |
 
 ---
 
 # 15. What This Document Unlocks
 
-|Next Phase|Unblocked By|
-|---|---|
-|RLS Policy Matrix|All table shapes confirmed. `org_id` on every table. `assigned_to` columns defined. `auth.users` relationship clear.|
-|Drizzle Schema File|All column types, constraints, enums, and indexes defined. Ready for direct translation.|
-|API Boundary Spec|All FK relationships and nullable rules documented. Transaction boundaries for number generation and outbox insertion clear.|
-|BullMQ Worker Implementation|`automation_jobs` shape confirmed. `outbox_events` polling index defined.|
-|Seed Data Script|`automation_settings` defaults documented. Permission seeding rules documented.|
-|Constraint & Index Review|All partial unique indexes, CHECK constraints, and composite indexes defined.|
+| Next Phase                   | Unblocked By                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| RLS Policy Matrix            | All table shapes confirmed. `org_id` on every table. `assigned_to` columns defined. `auth.users` relationship clear.         |
+| Drizzle Schema File          | All column types, constraints, enums, and indexes defined. Ready for direct translation.                                     |
+| API Boundary Spec            | All FK relationships and nullable rules documented. Transaction boundaries for number generation and outbox insertion clear. |
+| BullMQ Worker Implementation | `automation_jobs` shape confirmed. `outbox_events` polling index defined.                                                    |
+| Seed Data Script             | `automation_settings` defaults documented. Permission seeding rules documented.                                              |
+| Constraint & Index Review    | All partial unique indexes, CHECK constraints, and composite indexes defined.                                                |
 
 ---
 

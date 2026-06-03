@@ -13,11 +13,16 @@ export type PermissionKey = {
 	[K in keyof OrgMember]: K extends `can_${string}` ? K : never;
 }[keyof OrgMember];
 
+// Includes both `feature_*` capability flags AND `*_sms_allowed` channel
+// allowances (jafar layer for SMS gating per automation). Both are treated
+// uniformly by the /jafar UI and plan template seeding.
 export type FeatureFlagKey = {
-	[K in keyof Organization]: K extends `feature_${string}`
-		? Organization[K] extends boolean
+	[K in keyof Organization]: Organization[K] extends boolean
+		? K extends `feature_${string}`
 			? K
-			: never
+			: K extends `${string}_sms_allowed`
+				? K
+				: never
 		: never;
 }[keyof Organization];
 

@@ -16,7 +16,7 @@
 	}
 </script>
 
-<Tabs.Root value={value} onValueChange={(v: string) => set(v as JobsFilterStatus)}>
+<Tabs.Root {value} onValueChange={(v: string) => set(v as JobsFilterStatus)}>
 	<Tabs.List class="w-full">
 		<Tabs.Trigger value="all">All</Tabs.Trigger>
 		<Tabs.Trigger value="scheduled">Scheduled</Tabs.Trigger>

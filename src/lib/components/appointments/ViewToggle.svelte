@@ -3,9 +3,7 @@
 	import { List, CalendarDays } from '@lucide/svelte';
 	import type { AppointmentView } from '$lib/types/appointments';
 
-	let {
-		view = $bindable('list')
-	}: { view?: AppointmentView } = $props();
+	let { view = $bindable('list') }: { view?: AppointmentView } = $props();
 </script>
 
 <div class="inline-flex rounded-md border border-border bg-card p-0.5">

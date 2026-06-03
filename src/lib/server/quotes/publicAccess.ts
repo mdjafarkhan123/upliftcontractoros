@@ -27,9 +27,7 @@ export type ValidQuoteRow = {
 	expires_at: Date | null;
 };
 
-export type LookupResult =
-	| { ok: true; quote: ValidQuoteRow }
-	| { ok: false };
+export type LookupResult = { ok: true; quote: ValidQuoteRow } | { ok: false };
 
 export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupResult> {
 	if (!rawToken || rawToken.length < 16) return { ok: false };
@@ -73,8 +71,7 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 	// able to return to /q/[token] to pay the deposit after acceptance.
 	if (row.status === 'declined' || row.status === 'expired') return { ok: false };
 	if (row.status === 'accepted') {
-		const owesDeposit =
-			row.deposit_required && row.deposit_paid_amount === 0;
+		const owesDeposit = row.deposit_required && row.deposit_paid_amount === 0;
 		if (!owesDeposit) return { ok: false };
 	}
 	if (row.expires_at && row.expires_at.getTime() < Date.now()) return { ok: false };

@@ -1,14 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import {
-	contacts,
-	conversations,
-	messages,
-	organizations,
-	type Conversation
-} from '$lib/server/db/schema';
+import { contacts, conversations, messages, type Conversation } from '$lib/server/db/schema';
 
-const env = process.env;
 const ALIAS_RE = /^r_[a-z0-9]{12}$/;
 
 export type CorrelationMatch = {
@@ -51,56 +44,65 @@ export function parseMessageIds(raw: string | null | undefined): string[] {
 	return Array.from(raw.matchAll(/<([^<>\s]+)>/g)).map((m) => m[1]);
 }
 
-/**
- * From a message-id like `<abc@resend.dev>` extract just the local part.
- * Resend assigns its provider message id as the SMTP Message-ID local part,
- * so we can match it back against messages.email_provider_message_id.
- */
-export function messageIdLocalPart(id: string): string {
-	const at = id.indexOf('@');
-	return at === -1 ? id : id.slice(0, at);
+// Expand a bracket-stripped message-id into the variants we might have stored.
+// Brevo returns its messageId wrapped in angle brackets (`<id@host>`) and we
+// persist it verbatim, while In-Reply-To/References parse to the bare id — so we
+// match against both forms.
+function messageIdVariants(id: string): string[] {
+	return [id, `<${id}>`];
 }
 
 function extractAliasCandidates(toAndCc: ParsedAddress[]): string[] {
-	const domain = env.EMAIL_REPLY_DOMAIN?.toLowerCase() ?? null;
+	// Org is already known from the receiving domain, and the alias is scoped to
+	// that org by a unique index — so we accept any local part matching the alias
+	// format regardless of the host it arrived on.
 	const out: string[] = [];
 	for (const addr of toAndCc) {
 		const at = addr.address.indexOf('@');
 		if (at <= 0) continue;
 		const local = addr.address.slice(0, at);
-		const host = addr.address.slice(at + 1);
-		if (domain && host !== domain) continue;
 		if (ALIAS_RE.test(local)) out.push(local);
 	}
 	return out;
 }
 
 /**
- * Resolve an inbound email to (org, conversation, contact) using the documented
- * priority order. Returns null when nothing matches — caller must log + drop.
+ * Resolve an inbound email to (conversation, contact) WITHIN a known org. The
+ * org is determined upstream from the receiving domain (canonical routing rule:
+ * inbound_domain → org), so correlation only threads to the right conversation.
+ * Returns null when nothing matches — caller must log + drop.
  *
  * Priority:
- *   1. reply_alias in any To/Cc local part on EMAIL_REPLY_DOMAIN
- *   2. In-Reply-To / References → messages.email_provider_message_id (then org-scoped contact match)
+ *   1. reply_alias in any To/Cc local part (org-scoped)
+ *   2. In-Reply-To / References → messages.email_provider_message_id (org-scoped)
  *   3. From address matches contacts.email; reuse open conversation or open a new one.
  */
 export async function correlateInbound(input: {
+	orgId: string;
 	from: ParsedAddress | null;
 	toAndCc: ParsedAddress[];
 	inReplyTo: string | null;
 	references: string | null;
 }): Promise<CorrelationMatch | null> {
-	// 1. Reply alias
+	const { orgId } = input;
+
+	// 1. Reply alias (scoped to org).
 	const aliases = extractAliasCandidates(input.toAndCc);
 	for (const alias of aliases) {
 		const [conv] = await db
 			.select()
 			.from(conversations)
-			.where(and(eq(conversations.reply_alias, alias), isNull(conversations.deleted_at)))
+			.where(
+				and(
+					eq(conversations.org_id, orgId),
+					eq(conversations.reply_alias, alias),
+					isNull(conversations.deleted_at)
+				)
+			)
 			.limit(1);
 		if (conv) {
 			return {
-				orgId: conv.org_id,
+				orgId,
 				conversation: conv,
 				contactId: conv.contact_id,
 				matchedBy: 'alias',
@@ -109,21 +111,19 @@ export async function correlateInbound(input: {
 		}
 	}
 
-	// 2. Threading headers
+	// 2. Threading headers (scoped to org).
 	const candidateIds = [
 		...parseMessageIds(input.inReplyTo),
 		...parseMessageIds(input.references)
-	].map(messageIdLocalPart);
+	].flatMap(messageIdVariants);
 
 	if (candidateIds.length) {
 		const [prior] = await db
-			.select({
-				org_id: messages.org_id,
-				conversation_id: messages.conversation_id
-			})
+			.select({ conversation_id: messages.conversation_id })
 			.from(messages)
 			.where(
 				and(
+					eq(messages.org_id, orgId),
 					eq(messages.channel, 'email'),
 					inArray(messages.email_provider_message_id, candidateIds)
 				)
@@ -138,14 +138,14 @@ export async function correlateInbound(input: {
 				.where(
 					and(
 						eq(conversations.id, prior.conversation_id),
-						eq(conversations.org_id, prior.org_id),
+						eq(conversations.org_id, orgId),
 						isNull(conversations.deleted_at)
 					)
 				)
 				.limit(1);
 			if (conv) {
 				return {
-					orgId: conv.org_id,
+					orgId,
 					conversation: conv,
 					contactId: conv.contact_id,
 					matchedBy: 'header',
@@ -155,74 +155,51 @@ export async function correlateInbound(input: {
 		}
 	}
 
-	// 3. Contact email fallback — only when we can also identify the org. We
-	// identify the org via the recipient: any To/Cc address whose local part is
-	// an org `email_sender_local` on a Resend-verified sending domain. If we
-	// cannot resolve the org, we cannot create rows safely.
+	// 3. Contact email fallback (scoped to org).
 	if (!input.from) return null;
 	const fromEmail = input.from.address;
 
-	const candidateLocals = input.toAndCc.map((a) => {
-		const at = a.address.indexOf('@');
-		return at > 0 ? a.address.slice(0, at) : null;
-	}).filter((v): v is string => !!v);
+	const [contact] = await db
+		.select({ id: contacts.id })
+		.from(contacts)
+		.where(
+			and(eq(contacts.org_id, orgId), eq(contacts.email, fromEmail), isNull(contacts.deleted_at))
+		)
+		.limit(1);
+	if (!contact) return null;
 
-	if (!candidateLocals.length) return null;
-
-	const candidateOrgs = await db
+	// Reuse open conversation if any. Conversation creation is left to the
+	// processor's tx so the message insert is atomic with conversation creation;
+	// here we return a sentinel that the processor handles.
+	const [open] = await db
 		.select()
-		.from(organizations)
-		.where(inArray(organizations.email_sender_local, candidateLocals));
-
-	for (const org of candidateOrgs) {
-		const [contact] = await db
-			.select()
-			.from(contacts)
-			.where(
-				and(
-					eq(contacts.org_id, org.id),
-					eq(contacts.email, fromEmail),
-					isNull(contacts.deleted_at)
-				)
+		.from(conversations)
+		.where(
+			and(
+				eq(conversations.org_id, orgId),
+				eq(conversations.contact_id, contact.id),
+				eq(conversations.status, 'open'),
+				isNull(conversations.deleted_at)
 			)
-			.limit(1);
-		if (!contact) continue;
+		)
+		.limit(1);
 
-		// Reuse open conversation if any. Conversation creation is left to the
-		// processor's tx so the message insert is atomic with conversation
-		// creation; here we return a sentinel that the processor handles.
-		const [open] = await db
-			.select()
-			.from(conversations)
-			.where(
-				and(
-					eq(conversations.org_id, org.id),
-					eq(conversations.contact_id, contact.id),
-					eq(conversations.status, 'open'),
-					isNull(conversations.deleted_at)
-				)
-			)
-			.limit(1);
-
-		if (open) {
-			return {
-				orgId: org.id,
-				conversation: open,
-				contactId: contact.id,
-				matchedBy: 'contact_fallback',
-				createdConversation: false
-			};
-		}
-
-		// Signal to processor: org + contact known, but no open conversation yet.
+	if (open) {
 		return {
-			orgId: org.id,
-			conversation: null as unknown as Conversation,
+			orgId,
+			conversation: open,
 			contactId: contact.id,
 			matchedBy: 'contact_fallback',
-			createdConversation: true
+			createdConversation: false
 		};
 	}
 
-	return null;
+	// Signal to processor: org + contact known, but no open conversation yet.
+	return {
+		orgId,
+		conversation: null as unknown as Conversation,
+		contactId: contact.id,
+		matchedBy: 'contact_fallback',
+		createdConversation: true
+	};
 }

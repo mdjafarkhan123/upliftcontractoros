@@ -2,7 +2,13 @@ import { json } from '@sveltejs/kit';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, invoiceLineItems, invoices, organizations, payments } from '$lib/server/db/schema';
+import {
+	contacts,
+	invoiceLineItems,
+	invoices,
+	organizations,
+	payments
+} from '$lib/server/db/schema';
 import {
 	clientIpFrom,
 	lookupValidInvoiceByToken,

@@ -1,7 +1,10 @@
 import type {
+	FunnelPeriod,
+	FunnelSummary,
 	PrivateFeedbackDetail,
 	PrivateFeedbackListItem,
 	ReputationSummary,
+	ReviewEventListItem,
 	ReviewListItem,
 	ReviewRequestListItem
 } from '$lib/types/reputation';
@@ -129,6 +132,117 @@ export const reputationSummaryStore = {
 			summaryController.abort();
 			summaryController = null;
 		}
+	}
+};
+
+// Funnel summary, keyed by period. Each period caches independently so
+// switching back to a previously-viewed window is instant.
+type FunnelEntry = { data: FunnelSummary; fetchedAt: number };
+const funnelMap = $state<Record<FunnelPeriod, FunnelEntry | null>>({
+	'7d': null,
+	'30d': null,
+	'90d': null
+});
+const funnelStatus = $state<Record<FunnelPeriod, Status>>({
+	'7d': 'idle',
+	'30d': 'idle',
+	'90d': 'idle'
+});
+const funnelError = $state<Record<FunnelPeriod, string | null>>({
+	'7d': null,
+	'30d': null,
+	'90d': null
+});
+const funnelControllers: Record<FunnelPeriod, AbortController | null> = {
+	'7d': null,
+	'30d': null,
+	'90d': null
+};
+
+export const reputationFunnelStore = {
+	get(period: FunnelPeriod): FunnelSummary | null {
+		return funnelMap[period]?.data ?? null;
+	},
+	getStatus(period: FunnelPeriod): Status {
+		return funnelStatus[period];
+	},
+	getError(period: FunnelPeriod): string | null {
+		return funnelError[period];
+	},
+	async load(period: FunnelPeriod, force = false): Promise<void> {
+		const entry = funnelMap[period];
+		const fresh = entry && Date.now() - entry.fetchedAt < TTL_MS;
+		if (fresh && !force) {
+			funnelStatus[period] = 'ready';
+			funnelError[period] = null;
+			return;
+		}
+		funnelControllers[period]?.abort();
+		const controller = new AbortController();
+		funnelControllers[period] = controller;
+		funnelStatus[period] = entry ? 'revalidating' : 'loading';
+		funnelError[period] = null;
+		try {
+			const res = await fetch(`/api/reputation/funnel?period=${period}`, {
+				signal: controller.signal
+			});
+			if (!res.ok) throw new Error(`Failed (${res.status})`);
+			const body = (await res.json()) as { data: FunnelSummary };
+			funnelMap[period] = { data: body.data, fetchedAt: Date.now() };
+			funnelStatus[period] = 'ready';
+		} catch (e) {
+			if ((e as { name?: string })?.name === 'AbortError') return;
+			funnelError[period] = e instanceof Error ? e.message : 'Failed to load';
+			funnelStatus[period] = funnelMap[period] ? 'ready' : 'error';
+		} finally {
+			if (funnelControllers[period] === controller) funnelControllers[period] = null;
+		}
+	}
+};
+
+// Per-request event log. Cached per review_request_id; lazily loaded when a
+// row is expanded so the list page stays light.
+const eventsMap = $state<Record<string, ReviewEventListItem[]>>({});
+const eventsStatus = $state<Record<string, Status>>({});
+const eventsError = $state<Record<string, string | null>>({});
+
+export const reviewEventsStore = {
+	get(id: string): ReviewEventListItem[] {
+		return eventsMap[id] ?? [];
+	},
+	getStatus(id: string): Status {
+		return eventsStatus[id] ?? 'idle';
+	},
+	getError(id: string): string | null {
+		return eventsError[id] ?? null;
+	},
+	async load(id: string, force = false): Promise<void> {
+		if (eventsMap[id] && !force) {
+			eventsStatus[id] = 'ready';
+			eventsError[id] = null;
+			return;
+		}
+		eventsStatus[id] = eventsMap[id] ? 'revalidating' : 'loading';
+		eventsError[id] = null;
+		try {
+			const res = await fetch(`/api/review-requests/${id}/events`);
+			if (!res.ok) {
+				eventsError[id] = res.status === 404 ? 'Not found' : 'Failed to load';
+				eventsStatus[id] = eventsMap[id] ? 'ready' : 'error';
+				return;
+			}
+			const body = (await res.json()) as { items: ReviewEventListItem[] };
+			eventsMap[id] = body.items;
+			eventsStatus[id] = 'ready';
+		} catch (e) {
+			eventsError[id] = e instanceof Error ? e.message : 'Failed to load';
+			eventsStatus[id] = eventsMap[id] ? 'ready' : 'error';
+		}
+	},
+	invalidate(id: string): void {
+		delete eventsMap[id];
+		delete eventsStatus[id];
+		delete eventsError[id];
 	}
 };
 

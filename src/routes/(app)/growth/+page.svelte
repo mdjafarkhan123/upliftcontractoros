@@ -19,9 +19,7 @@
 
 	let canSee = $derived(flags.feature_growth_feed && m.can_view_growth_feed);
 
-	let monthlySummaries = $derived(
-		growthFeedStore.items.filter((i) => i.is_monthly_summary)
-	);
+	let monthlySummaries = $derived(growthFeedStore.items.filter((i) => i.is_monthly_summary));
 	let regularItems = $derived(growthFeedStore.items.filter((i) => !i.is_monthly_summary));
 
 	onMount(() => {
@@ -76,9 +74,7 @@
 
 			{#if growthFeedStore.nextCursor}
 				<div class="flex justify-center pt-2">
-					<Button variant="outline" onclick={() => growthFeedStore.loadMore()}>
-						Load more
-					</Button>
+					<Button variant="outline" onclick={() => growthFeedStore.loadMore()}>Load more</Button>
 				</div>
 			{/if}
 		</div>

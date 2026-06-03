@@ -18,8 +18,18 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { isEffectivelyOverdue } from '$lib/utils/invoices';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { getMemberContext } from '$lib/context/member';
-	import { AlertCircle, Ban, Check, CreditCard, Download, Link as LinkIcon, Save, Send } from '@lucide/svelte';
+	import {
+		AlertCircle,
+		Ban,
+		Check,
+		CreditCard,
+		Download,
+		Link as LinkIcon,
+		Save,
+		Send
+	} from '@lucide/svelte';
 	import { formatCurrency, formatDate } from '$lib/utils/format';
 	import type { PageData } from './$types';
 	import type { InvoiceDetail, InvoiceLineItemRow } from '$lib/types/invoices';
@@ -82,9 +92,7 @@
 		invoice && !isDraft && !isCancelled && !isPaid && Number(invoice.amount_due) > 0
 	);
 	const overdue = $derived(
-		invoice
-			? isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due)
-			: false
+		invoice ? isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due) : false
 	);
 	const depositPayment = $derived(
 		invoice?.payments?.find(
@@ -236,7 +244,7 @@
 <svelte:head><title>{invoice ? invoice.invoice_number_display : 'Invoice'}</title></svelte:head>
 
 {#if showSkeleton}
-	<PageWrapper title="Invoice">
+	<PageWrapper title="Invoice" back="/invoices">
 		<div class="grid gap-4">
 			<div class="rounded-xl border border-border bg-card p-4">
 				<SkeletonLoader lines={3} />
@@ -250,12 +258,12 @@
 		</div>
 	</PageWrapper>
 {:else if !invoice}
-	<PageWrapper title="Invoice">
+	<PageWrapper title="Invoice" back="/invoices">
 		<p class="text-sm text-destructive">{detailError ?? 'Not found'}</p>
 	</PageWrapper>
 {:else}
 	{@const inv = invoice}
-	<PageWrapper title={inv.invoice_number_display}>
+	<PageWrapper title={inv.invoice_number_display} back="/invoices">
 		{#snippet actions()}
 			{#if isDraft}
 				<JetEngineButton
@@ -298,12 +306,17 @@
 						<div class="flex flex-wrap items-center gap-2">
 							<InvoiceStatusBadge status={inv.status} />
 							{#if overdue}
-								<span class="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-600 dark:text-rose-400">
+								<span
+									class="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-600 dark:text-rose-400"
+								>
 									<AlertCircle class="h-3 w-3" />Overdue
 								</span>
 							{/if}
 							{#if inv.due_date && !isPaid && !isCancelled}
-								<span class={'text-xs ' + (overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
+								<span
+									class={'text-xs ' +
+										(overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}
+								>
 									Due {new Date(inv.due_date).toLocaleDateString('en-US')}
 								</span>
 							{/if}
@@ -345,13 +358,8 @@
 						/>
 					</div>
 					<div class="grid gap-2">
-						<Label for="invoice-due" class="mt-2">Due date</Label>
-						<Input
-							id="invoice-due"
-							type="date"
-							bind:value={dueDateDraft}
-							disabled={!isDraft}
-						/>
+						<Label class="mt-2">Due date</Label>
+						<Calendar bind:value={dueDateDraft} placeholder="Pick due date" disabled={!isDraft} />
 					</div>
 				</div>
 				<Label for="invoice-notes" class="mt-2">Notes</Label>
@@ -366,7 +374,9 @@
 			{#if depositPayment}
 				<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
 					<div class="flex items-start gap-3">
-						<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+						<div
+							class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+						>
 							<Check class="h-4 w-4" />
 						</div>
 						<div class="min-w-0 flex-1">
@@ -374,7 +384,9 @@
 								Deposit applied
 							</p>
 							<p class="mt-1 text-sm text-emerald-900/90 dark:text-emerald-100/90">
-								{formatCurrency(depositPayment.amount)} · collected {formatDate(depositPayment.paid_at)} · via Stripe
+								{formatCurrency(depositPayment.amount)} · collected {formatDate(
+									depositPayment.paid_at
+								)} · via Stripe
 							</p>
 						</div>
 					</div>

@@ -1,10 +1,18 @@
 <script lang="ts">
-	import { Send, StickyNote } from '@lucide/svelte';
+	import { Send, StickyNote, Zap, Paperclip, X, FileText, Loader2 } from '@lucide/svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Input } from '$lib/components/ui/input';
+	import * as Popover from '$lib/components/ui/popover';
 	import ChannelSelector from './ChannelSelector.svelte';
 	import { cn } from '$lib/utils/cn';
 	import type { OutboundChannel } from '$lib/stores/inbox.svelte';
+
+	export type QuickReplyItem = {
+		id: string;
+		title: string;
+		body: string;
+		channel: 'sms' | 'email' | 'webchat' | 'any';
+	};
 
 	let {
 		availableChannels,
@@ -13,7 +21,13 @@
 		canSend = true,
 		smsOptOut = false,
 		isClosed = false,
-		onSend
+		smsQuota = null,
+		quickReplies = [],
+		contactName = '',
+		orgName = '',
+		contactId = '',
+		onSend,
+		onTyping
 	}: {
 		availableChannels: OutboundChannel[];
 		suggestedChannel: OutboundChannel | null;
@@ -21,17 +35,154 @@
 		canSend?: boolean;
 		smsOptOut?: boolean;
 		isClosed?: boolean;
+		smsQuota?: { used: number; limit: number } | null;
+		quickReplies?: QuickReplyItem[];
+		contactName?: string;
+		orgName?: string;
+		/** Contact the conversation belongs to — required to upload attachments. */
+		contactId?: string;
 		onSend: (
 			body: string,
-			opts: { isInternalNote: boolean; channel?: OutboundChannel; emailSubject?: string }
+			opts: {
+				isInternalNote: boolean;
+				channel?: OutboundChannel;
+				emailSubject?: string;
+				interpolate?: boolean;
+				mediaIds?: string[];
+			}
 		) => Promise<void> | void;
+		onTyping?: (isTyping: boolean) => void;
 	} = $props();
+
+	type Attachment = {
+		localId: string;
+		status: 'uploading' | 'done' | 'error';
+		id?: string;
+		media_type?: 'photo' | 'pdf' | 'attachment';
+		original_filename: string;
+		previewUrl?: string;
+		errorMsg?: string;
+	};
+	let attachments = $state<Attachment[]>([]);
+	let fileInput = $state<HTMLInputElement | null>(null);
+
+	const doneAttachments = $derived(attachments.filter((a) => a.status === 'done' && a.id));
+	const uploading = $derived(attachments.some((a) => a.status === 'uploading'));
+
+	async function onFilesPicked(fileList: FileList | null) {
+		if (!fileList || !contactId) return;
+		for (const file of Array.from(fileList)) {
+			const localId =
+				typeof crypto !== 'undefined' && crypto.randomUUID
+					? crypto.randomUUID()
+					: `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+			attachments = [
+				...attachments,
+				{ localId, status: 'uploading', original_filename: file.name, previewUrl }
+			];
+			const form = new FormData();
+			form.append('file', file);
+			form.append('purpose_tag', 'contact_attachment');
+			form.append('contact_id', contactId);
+			try {
+				const res = await fetch('/api/media/upload', { method: 'POST', body: form });
+				const body = (await res.json().catch(() => ({}))) as {
+					data?: {
+						id: string;
+						media_type: 'photo' | 'pdf' | 'attachment';
+						original_filename: string;
+					};
+					error?: string;
+				};
+				if (!res.ok || !body.data) {
+					attachments = attachments.map((a) =>
+						a.localId === localId
+							? { ...a, status: 'error', errorMsg: body.error ?? 'Upload failed' }
+							: a
+					);
+					continue;
+				}
+				const rec = body.data;
+				attachments = attachments.map((a) =>
+					a.localId === localId
+						? { ...a, status: 'done', id: rec.id, media_type: rec.media_type }
+						: a
+				);
+			} catch {
+				attachments = attachments.map((a) =>
+					a.localId === localId ? { ...a, status: 'error', errorMsg: 'Upload failed' } : a
+				);
+			}
+		}
+		if (fileInput) fileInput.value = '';
+	}
+
+	function removeAttachment(localId: string) {
+		const target = attachments.find((a) => a.localId === localId);
+		attachments = attachments.filter((a) => a.localId !== localId);
+		if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+		// Delete the now-unused contact attachment so we don't leave a stray file.
+		if (target?.status === 'done' && target.id) {
+			void fetch(`/api/media/${target.id}`, { method: 'DELETE' }).catch(() => {});
+		}
+	}
+
+	function clearAttachments() {
+		for (const a of attachments) {
+			if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+		}
+		attachments = [];
+	}
 
 	let body = $state('');
 	let emailSubjectInput = $state<string | null>(null);
 	let isInternalNote = $state(false);
 	let sending = $state(false);
 	let channelOverride = $state<OutboundChannel | null>(null);
+	let usedQuickReply = $state(false);
+	let quickReplyOpen = $state(false);
+	let typingTimer: ReturnType<typeof setTimeout> | null = null;
+	let isTyping = $state(false);
+
+	function handleTyping() {
+		if (!onTyping) return;
+		if (!isTyping && body.trim().length > 0 && !isInternalNote) {
+			isTyping = true;
+			onTyping(true);
+		}
+		if (typingTimer) clearTimeout(typingTimer);
+		typingTimer = setTimeout(() => {
+			isTyping = false;
+			typingTimer = null;
+			onTyping(false);
+		}, 2500);
+	}
+
+	function stopTyping() {
+		if (typingTimer) clearTimeout(typingTimer);
+		typingTimer = null;
+		if (isTyping && onTyping) {
+			isTyping = false;
+			onTyping(false);
+		}
+	}
+
+	function previewInterpolation(text: string): string {
+		return text
+			.replaceAll('{contact_name}', contactName || '{contact_name}')
+			.replaceAll('{org_name}', orgName || '{org_name}');
+	}
+
+	const visibleQuickReplies = $derived(
+		quickReplies.filter((q) => q.channel === 'any' || q.channel === channel)
+	);
+
+	function applyQuickReply(q: QuickReplyItem) {
+		body = previewInterpolation(q.body);
+		usedQuickReply = q.body.includes('{contact_name}') || q.body.includes('{org_name}');
+		quickReplyOpen = false;
+	}
 
 	const channel = $derived<OutboundChannel>(
 		channelOverride && availableChannels.includes(channelOverride)
@@ -43,22 +194,34 @@
 
 	const emailSubject = $derived(emailSubjectInput ?? emailSubjectDefault);
 
+	const smsQuotaExceeded = $derived(
+		!!smsQuota && smsQuota.limit > 0 && smsQuota.used >= smsQuota.limit
+	);
+
 	const channelBlocked = $derived.by(() => {
 		if (isInternalNote) return null;
-		if (isClosed) return 'Reopen this conversation to send a message.';
 		if (channel === 'sms' && smsOptOut) return 'Contact has opted out of SMS.';
+		if (channel === 'sms' && smsQuotaExceeded) return 'SMS limit reached for this month';
 		if (availableChannels.length === 0) return 'No channels available for this contact.';
 		return null;
 	});
 
+	// Closed threads are no longer hard-blocked — sending auto-reopens the
+	// conversation server-side. Surface a gentle hint instead.
+	const reopenHint = $derived(
+		isClosed && !isInternalNote && channelBlocked === null
+			? 'Sending will reopen this conversation.'
+			: null
+	);
+
 	const trimmed = $derived(body.trim());
 	const trimmedSubject = $derived(emailSubject.trim());
-	const subjectRequired = $derived(
-		!isInternalNote && channel === 'email' && !emailSubjectDefault
-	);
+	const subjectRequired = $derived(!isInternalNote && channel === 'email' && !emailSubjectDefault);
+	const hasContent = $derived(trimmed.length > 0 || doneAttachments.length > 0);
 	const submitDisabled = $derived(
 		sending ||
-			trimmed.length === 0 ||
+			uploading ||
+			!hasContent ||
 			(channelBlocked !== null && !isInternalNote) ||
 			!canSend ||
 			(subjectRequired && trimmedSubject.length === 0)
@@ -66,19 +229,25 @@
 
 	async function submit() {
 		if (submitDisabled) return;
+		stopTyping();
 		sending = true;
 		try {
+			const mediaIds = doneAttachments.map((a) => a.id!).filter(Boolean);
 			await onSend(trimmed, {
 				isInternalNote,
 				channel: isInternalNote ? undefined : channel,
 				emailSubject:
 					!isInternalNote && channel === 'email'
 						? trimmedSubject || emailSubjectDefault
-						: undefined
+						: undefined,
+				interpolate: usedQuickReply,
+				mediaIds: mediaIds.length > 0 ? mediaIds : undefined
 			});
 			body = '';
 			emailSubjectInput = null;
 			isInternalNote = false;
+			usedQuickReply = false;
+			clearAttachments();
 		} finally {
 			sending = false;
 		}
@@ -117,12 +286,7 @@
 					: 'border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
 			)}
 		>
-			<input
-				type="checkbox"
-				class="sr-only"
-				bind:checked={isInternalNote}
-				disabled={sending}
-			/>
+			<input type="checkbox" class="sr-only" bind:checked={isInternalNote} disabled={sending} />
 			<StickyNote class="h-3.5 w-3.5" />
 			Internal note
 		</label>
@@ -138,6 +302,75 @@
 
 		{#if channelBlocked && !isInternalNote}
 			<span class="truncate text-xs text-destructive">{channelBlocked}</span>
+		{:else if reopenHint}
+			<span class="truncate text-xs text-muted-foreground">{reopenHint}</span>
+		{/if}
+
+		{#if !isInternalNote}
+			<Popover.Root bind:open={quickReplyOpen}>
+				<Popover.Trigger>
+					{#snippet child({ props })}
+						<button
+							{...props}
+							type="button"
+							class="group ml-auto inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							aria-label="Insert quick reply"
+						>
+							<Zap class="h-3.5 w-3.5 animate-spark-flash group-hover:animate-none" />
+							Quick reply
+						</button>
+					{/snippet}
+				</Popover.Trigger>
+				<Popover.Content align="end" class="w-72 p-2">
+					{#if quickReplies.length === 0}
+						<div class="px-2.5 py-3 text-center">
+							<Zap class="mx-auto h-5 w-5 text-muted-foreground/60" />
+							<p class="mt-2 text-sm font-medium text-foreground">No quick replies yet</p>
+							<p class="mt-1 text-xs text-muted-foreground">
+								Save common responses to send them in one tap.
+							</p>
+							<a
+								href="/settings/quick-replies"
+								class="mt-2.5 inline-flex h-8 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
+							>
+								Create your first one
+							</a>
+						</div>
+					{:else if visibleQuickReplies.length === 0}
+						<div class="px-2 py-2 text-xs text-muted-foreground">
+							No quick replies for this channel.
+							<a href="/settings/quick-replies" class="text-primary hover:underline"> Add one → </a>
+						</div>
+					{:else}
+						<ul class="max-h-72 space-y-1 overflow-y-auto">
+							{#each visibleQuickReplies as q (q.id)}
+								<li>
+									<button
+										type="button"
+										class="w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+										onclick={() => applyQuickReply(q)}
+									>
+										<div class="truncate text-sm font-medium text-foreground">{q.title}</div>
+										<div class="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+											{previewInterpolation(q.body)}
+										</div>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					{#if quickReplies.length > 0}
+						<div class="mt-1 border-t border-border/60 pt-1.5">
+							<a
+								href="/settings/quick-replies"
+								class="block rounded-lg px-2.5 py-1.5 text-xs text-primary hover:bg-muted"
+							>
+								Manage quick replies →
+							</a>
+						</div>
+					{/if}
+				</Popover.Content>
+			</Popover.Root>
 		{/if}
 	</div>
 
@@ -152,15 +385,78 @@
 		/>
 	{/if}
 
+	{#if attachments.length > 0}
+		<div class="flex flex-wrap gap-2">
+			{#each attachments as att (att.localId)}
+				<div
+					class={cn(
+						'group relative flex items-center gap-2 rounded-lg border border-border/60 bg-background p-1.5 pr-7',
+						att.status === 'error' && 'border-destructive/50'
+					)}
+				>
+					{#if att.previewUrl}
+						<img
+							src={att.previewUrl}
+							alt={att.original_filename}
+							class="h-9 w-9 shrink-0 rounded object-cover"
+						/>
+					{:else}
+						<span
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
+						>
+							<FileText class="h-4 w-4" />
+						</span>
+					{/if}
+					<span class="max-w-[120px] truncate text-xs text-foreground">{att.original_filename}</span
+					>
+					{#if att.status === 'uploading'}
+						<Loader2 class="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+					{:else if att.status === 'error'}
+						<span class="shrink-0 text-[10px] font-medium text-destructive">Failed</span>
+					{/if}
+					<button
+						type="button"
+						onclick={() => removeAttachment(att.localId)}
+						class="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+						aria-label="Remove attachment"
+					>
+						<X class="h-3 w-3" />
+					</button>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	<input
+		bind:this={fileInput}
+		type="file"
+		accept="image/*,application/pdf"
+		multiple
+		class="hidden"
+		onchange={(e) => onFilesPicked((e.currentTarget as HTMLInputElement).files)}
+	/>
+
 	<div
 		class={cn(
 			'flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-card transition-all duration-150 focus-within:border-primary/50 focus-within:shadow-dropdown',
 			composerBorderClass
 		)}
 	>
+		{#if contactId && !isInternalNote}
+			<button
+				type="button"
+				onclick={() => fileInput?.click()}
+				disabled={sending || !canSend || attachments.length >= 10}
+				class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+				aria-label="Attach a photo or file"
+			>
+				<Paperclip class="h-5 w-5" />
+			</button>
+		{/if}
 		<Textarea
 			bind:value={body}
 			onkeydown={handleKey}
+			oninput={handleTyping}
 			placeholder={isInternalNote
 				? 'Private note — only visible to your team'
 				: channelBlocked

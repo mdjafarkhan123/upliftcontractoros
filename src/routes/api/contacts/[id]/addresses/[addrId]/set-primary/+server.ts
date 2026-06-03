@@ -41,10 +41,7 @@ export const PATCH: RequestHandler = async (event) => {
 			.update(contactAddresses)
 			.set({ is_primary: true, updated_at: new Date() })
 			.where(
-				and(
-					eq(contactAddresses.org_id, auth.orgId),
-					eq(contactAddresses.id, event.params.addrId)
-				)
+				and(eq(contactAddresses.org_id, auth.orgId), eq(contactAddresses.id, event.params.addrId))
 			)
 			.returning();
 		return row;

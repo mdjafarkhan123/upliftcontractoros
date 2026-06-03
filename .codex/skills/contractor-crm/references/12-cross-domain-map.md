@@ -12,12 +12,12 @@ building Drizzle relations, or verifying which tables connect.
 
 ### Domain 1 — Org & Identity
 
-| Source Table          | Column                     | References         | Nullable | Notes       |
-| --------------------- | -------------------------- | ------------------ | -------- | ----------- |
-| `organizations`       | `feature_flags_updated_by` | `org_members.id`   | YES      | Audit trail |
-| `org_members`         | `org_id`                   | `organizations.id` | NO       | Tenant FK   |
-| `automation_settings` | `org_id`                   | `organizations.id` | NO       | One-to-one  |
-| `org_email_settings`  | `org_id`                   | `organizations.id` | NO       | One-to-one  |
+| Source Table          | Column                     | References         | Nullable | Notes                             |
+| --------------------- | -------------------------- | ------------------ | -------- | --------------------------------- |
+| `organizations`       | `feature_flags_updated_by` | `org_members.id`   | YES      | Audit trail                       |
+| `org_members`         | `org_id`                   | `organizations.id` | NO       | Tenant FK                         |
+| `automation_settings` | `org_id`                   | `organizations.id` | NO       | One-to-one                        |
+| `org_email_settings`  | `org_id`                   | `organizations.id` | NO       | One-to-one                        |
 | `org_usage`           | `org_id`                   | `organizations.id` | NO       | Usage counters; ON DELETE CASCADE |
 
 ### Domain 2 — Contacts
@@ -65,23 +65,23 @@ building Drizzle relations, or verifying which tables connect.
 
 ### Domain 6 — Revenue: Quotes
 
-| Source Table                | Column           | References           | Nullable | Notes                        |
-| --------------------------- | ---------------- | -------------------- | -------- | ---------------------------- |
-| `quotes`                    | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quotes`                    | `contact_id`     | `contacts.id`        | NO       |                              |
-| `quotes`                    | `opportunity_id` | `opportunities.id`   | YES      | Quotes can exist without opp |
-| `quotes`                    | `issued_by`      | `org_members.id`     | YES      |                              |
-| `quotes`                    | `deposit_applied_invoice_id` | `invoices.id` | YES | ON DELETE SET NULL; API must enforce same org |
-| `quote_line_items`          | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quote_line_items`          | `quote_id`       | `quotes.id`          | NO       |                              |
-| `quote_views`               | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quote_views`               | `quote_id`       | `quotes.id`          | NO       |                              |
-| `quote_change_requests`     | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quote_change_requests`     | `quote_id`       | `quotes.id`          | NO       |                              |
-| `quote_templates`           | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quote_templates`           | `created_by`     | `org_members.id`     | YES      |                              |
-| `quote_template_line_items` | `org_id`         | `organizations.id`   | NO       | Tenant FK                    |
-| `quote_template_line_items` | `template_id`    | `quote_templates.id` | NO       |                              |
+| Source Table                | Column                       | References           | Nullable | Notes                                         |
+| --------------------------- | ---------------------------- | -------------------- | -------- | --------------------------------------------- |
+| `quotes`                    | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quotes`                    | `contact_id`                 | `contacts.id`        | NO       |                                               |
+| `quotes`                    | `opportunity_id`             | `opportunities.id`   | YES      | Quotes can exist without opp                  |
+| `quotes`                    | `issued_by`                  | `org_members.id`     | YES      |                                               |
+| `quotes`                    | `deposit_applied_invoice_id` | `invoices.id`        | YES      | ON DELETE SET NULL; API must enforce same org |
+| `quote_line_items`          | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quote_line_items`          | `quote_id`                   | `quotes.id`          | NO       |                                               |
+| `quote_views`               | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quote_views`               | `quote_id`                   | `quotes.id`          | NO       |                                               |
+| `quote_change_requests`     | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quote_change_requests`     | `quote_id`                   | `quotes.id`          | NO       |                                               |
+| `quote_templates`           | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quote_templates`           | `created_by`                 | `org_members.id`     | YES      |                                               |
+| `quote_template_line_items` | `org_id`                     | `organizations.id`   | NO       | Tenant FK                                     |
+| `quote_template_line_items` | `template_id`                | `quote_templates.id` | NO       |                                               |
 
 ### Domain 7 — Revenue: Invoices & Payments
 
@@ -197,25 +197,25 @@ notifications → org_members
 These UNIQUE constraints prevent duplicate creation from concurrent operations,
 webhook retries, and automation replays:
 
-| Table             | Constraint                                 | Type                               |
-| ----------------- | ------------------------------------------ | ---------------------------------- |
-| `jobs`            | `UNIQUE(opportunity_id)`                   | Hard (no WHERE)                    |
-| `review_requests` | `UNIQUE(job_id)`                           | Hard (no WHERE)                    |
-| `contacts`        | `UNIQUE(org_id, phone)`                    | Hard (no WHERE)                    |
-| `quotes`          | `UNIQUE(org_id, quote_number)`             | Hard (no WHERE)                    |
-| `quotes`          | `UNIQUE(deposit_stripe_payment_intent_id)` | Partial (WHERE NOT NULL)           |
-| `quote_change_requests` | `UNIQUE(quote_id)`                    | Partial (WHERE resolved_at IS NULL)|
-| `invoices`        | `UNIQUE(org_id, invoice_number)`           | Hard (no WHERE)                    |
-| `payments`        | `UNIQUE(stripe_payment_intent_id)`         | Partial (WHERE NOT NULL)           |
-| `messages`        | `UNIQUE(twilio_message_sid)`               | Partial (WHERE NOT NULL)           |
-| `outbox_events`   | `UNIQUE(idempotency_key)`                  | Hard (no WHERE)                    |
-| `conversations`   | `UNIQUE(org_id, reply_alias)`              | Partial (WHERE NOT NULL)           |
-| `org_email_settings`| `UNIQUE(org_id)`                         | Hard (no WHERE)                    |
-| `org_email_settings`| `UNIQUE(reply_domain)`                   | Partial (WHERE NOT NULL)           |
-| `org_usage`         | `PRIMARY KEY(org_id, period_start_date, metric)` | Hard (no WHERE)             |
-| `pipeline_stages` | `UNIQUE(org_id)` WHERE is_won/lost/default | Partial (one each)                 |
-| `org_members`     | `UNIQUE(supabase_user_id)`                 | Hard (no WHERE)                    |
-| `org_members`     | `UNIQUE(org_id, email)`                    | Partial (WHERE not deleted)        |
+| Table                   | Constraint                                       | Type                                |
+| ----------------------- | ------------------------------------------------ | ----------------------------------- |
+| `jobs`                  | `UNIQUE(opportunity_id)`                         | Hard (no WHERE)                     |
+| `review_requests`       | `UNIQUE(job_id)`                                 | Hard (no WHERE)                     |
+| `contacts`              | `UNIQUE(org_id, phone)`                          | Hard (no WHERE)                     |
+| `quotes`                | `UNIQUE(org_id, quote_number)`                   | Hard (no WHERE)                     |
+| `quotes`                | `UNIQUE(deposit_stripe_payment_intent_id)`       | Partial (WHERE NOT NULL)            |
+| `quote_change_requests` | `UNIQUE(quote_id)`                               | Partial (WHERE resolved_at IS NULL) |
+| `invoices`              | `UNIQUE(org_id, invoice_number)`                 | Hard (no WHERE)                     |
+| `payments`              | `UNIQUE(stripe_payment_intent_id)`               | Partial (WHERE NOT NULL)            |
+| `messages`              | `UNIQUE(twilio_message_sid)`                     | Partial (WHERE NOT NULL)            |
+| `outbox_events`         | `UNIQUE(idempotency_key)`                        | Hard (no WHERE)                     |
+| `conversations`         | `UNIQUE(org_id, reply_alias)`                    | Partial (WHERE NOT NULL)            |
+| `org_email_settings`    | `UNIQUE(org_id)`                                 | Hard (no WHERE)                     |
+| `org_email_settings`    | `UNIQUE(reply_domain)`                           | Partial (WHERE NOT NULL)            |
+| `org_usage`             | `PRIMARY KEY(org_id, period_start_date, metric)` | Hard (no WHERE)                     |
+| `pipeline_stages`       | `UNIQUE(org_id)` WHERE is_won/lost/default       | Partial (one each)                  |
+| `org_members`           | `UNIQUE(supabase_user_id)`                       | Hard (no WHERE)                     |
+| `org_members`           | `UNIQUE(org_id, email)`                          | Partial (WHERE not deleted)         |
 
 ---
 

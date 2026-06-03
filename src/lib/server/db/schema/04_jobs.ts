@@ -11,15 +11,15 @@ export const jobStatusEnum = pgEnum('job_status', [
 	'cancelled'
 ]);
 
+export const jobSourceEnum = pgEnum('job_source', ['opportunity', 'manual']);
+
 export const jobs = pgTable('jobs', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	org_id: uuid('org_id')
 		.notNull()
 		.references(() => organizations.id),
-	opportunity_id: uuid('opportunity_id')
-		.notNull()
-		.unique()
-		.references(() => opportunities.id),
+	opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
+	source: jobSourceEnum('source').notNull().default('opportunity'),
 	contact_id: uuid('contact_id')
 		.notNull()
 		.references(() => contacts.id),

@@ -3,7 +3,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
 	import type { JobDetail } from '$lib/types/jobs';
 
 	type Assignee = { id: string; full_name: string };
@@ -103,37 +105,28 @@
 			{#if canEditAssignee}
 				<div class="space-y-1.5">
 					<Label for="j-assignee">Assigned to</Label>
-					<select
-						id="j-assignee"
-						bind:value={assignedTo}
-						class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					>
-						<option value="">Unassigned</option>
-						{#each assignees as a (a.id)}
-							<option value={a.id}>{a.full_name}</option>
-						{/each}
-					</select>
+					<Select.Root bind:value={assignedTo}>
+						<Select.Trigger class="h-11 w-full">
+							<Select.Value />
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="">Unassigned</Select.Item>
+							{#each assignees as a (a.id)}
+								<Select.Item value={a.id}>{a.full_name}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</div>
 			{/if}
 
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div class="space-y-1.5">
 					<Label for="j-start">Scheduled start</Label>
-					<input
-						id="j-start"
-						type="datetime-local"
-						bind:value={scheduledStart}
-						class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
+					<DateTimePicker bind:value={scheduledStart} placeholder="Pick start date & time" />
 				</div>
 				<div class="space-y-1.5">
 					<Label for="j-end">Scheduled end</Label>
-					<input
-						id="j-end"
-						type="datetime-local"
-						bind:value={scheduledEnd}
-						class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
+					<DateTimePicker bind:value={scheduledEnd} placeholder="Pick end date & time" />
 				</div>
 			</div>
 

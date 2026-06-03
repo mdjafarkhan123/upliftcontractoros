@@ -1,11 +1,21 @@
-export const ALLOWED_TEMPLATE_VARIABLES = ['contact_name', 'org_name', 'amount'] as const;
+export const ALLOWED_TEMPLATE_VARIABLES = [
+	'contact_name',
+	'org_name',
+	'amount',
+	'review_link',
+	'appointment_datetime',
+	'appointment_date',
+	'appointment_time',
+	'appointment_type',
+	'location',
+	'location_block',
+	'manage_link'
+] as const;
 export type AllowedTemplateVariable = (typeof ALLOWED_TEMPLATE_VARIABLES)[number];
 
 const VAR_RE = /\{([a-zA-Z0-9_]+)\}/g;
 
-export type TemplateValidation =
-	| { ok: true }
-	| { ok: false; unknown: string[] };
+export type TemplateValidation = { ok: true } | { ok: false; unknown: string[] };
 
 export function validateTemplateVariables(template: string): TemplateValidation {
 	const found = new Set<string>();

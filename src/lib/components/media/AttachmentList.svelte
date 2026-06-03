@@ -11,11 +11,15 @@
 	let {
 		parentFk,
 		purposeTag,
+		title = 'Attachments',
+		uploadLabel = 'Add photos',
 		canUpload = false,
 		canDelete = false
 	}: {
-		parentFk: { job_id?: string; quote_id?: string; invoice_id?: string };
-		purposeTag: 'quote_attachment' | 'invoice_attachment';
+		parentFk: { contact_id?: string; job_id?: string; quote_id?: string; invoice_id?: string };
+		purposeTag: 'quote_attachment' | 'invoice_attachment' | 'contact_attachment';
+		title?: string;
+		uploadLabel?: string;
 		canUpload?: boolean;
 		canDelete?: boolean;
 	} = $props();
@@ -28,13 +32,15 @@
 	let downloadingId = $state<string | null>(null);
 
 	const queryParam = $derived(
-		parentFk.quote_id
-			? `quote_id=${parentFk.quote_id}`
-			: parentFk.invoice_id
-				? `invoice_id=${parentFk.invoice_id}`
-				: parentFk.job_id
-					? `job_id=${parentFk.job_id}`
-					: ''
+		parentFk.contact_id
+			? `contact_id=${parentFk.contact_id}`
+			: parentFk.quote_id
+				? `quote_id=${parentFk.quote_id}`
+				: parentFk.invoice_id
+					? `invoice_id=${parentFk.invoice_id}`
+					: parentFk.job_id
+						? `job_id=${parentFk.job_id}`
+						: ''
 	);
 
 	async function load() {
@@ -117,7 +123,7 @@
 		try {
 			const res = await fetch(`/api/media/${item.id}`, { method: 'DELETE' });
 			if (!res.ok) {
-				const body = await res.json().catch(() => ({})) as { error?: string };
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
 				toast.error(body.error ?? 'Failed to delete');
 				return;
 			}
@@ -145,12 +151,18 @@
 	<div class="mb-3 flex items-center justify-between gap-3">
 		<div class="flex items-center gap-1.5">
 			<Paperclip class="h-4 w-4 text-muted-foreground" />
-			<h2 class="text-sm font-semibold text-foreground">Attachments</h2>
+			<h2 class="text-sm font-semibold text-foreground">{title}</h2>
+			{#if !loading}
+				<span class="text-xs text-muted-foreground"
+					>({items.filter((i) => i.status !== 'error').length})</span
+				>
+			{/if}
 		</div>
 		{#if canUpload}
 			<MediaUploader
 				{purposeTag}
 				{parentFk}
+				label={uploadLabel}
 				{onOptimisticAdd}
 				{onOptimisticRemove}
 				{onUploaded}
@@ -165,7 +177,10 @@
 			{/each}
 		</div>
 	{:else if items.length === 0}
-		<EmptyState title="No attachments" description={canUpload ? 'Tap "Add photos" to attach a file.' : 'No attachments yet.'} />
+		<EmptyState
+			title="No attachments"
+			description={canUpload ? `Tap "${uploadLabel}" to attach a file.` : 'No attachments yet.'}
+		/>
 	{:else}
 		<ul class="space-y-2">
 			{#each items as item (item.localId)}
@@ -177,7 +192,9 @@
 				>
 					<!-- Icon / inline preview -->
 					{#if item.media_type === 'pdf' || item.mime_type === 'application/pdf'}
-						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-rose-500/10">
+						<div
+							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-rose-500/10"
+						>
 							<FileText class="h-5 w-5 text-rose-500" />
 						</div>
 					{:else if item.previewUrl ?? item.thumbnailUrl}
@@ -241,7 +258,10 @@
 							{#if canDelete}
 								<button
 									class="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-									onclick={() => { deleteTarget = item.localId; deleteOpen = true; }}
+									onclick={() => {
+										deleteTarget = item.localId;
+										deleteOpen = true;
+									}}
 									aria-label="Delete attachment"
 								>
 									<Trash2 class="h-4 w-4" />

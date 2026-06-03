@@ -7,15 +7,79 @@
 	import { Button } from '$lib/components/ui/button';
 	import JobCard from '$lib/components/jobs/JobCard.svelte';
 	import JobFilterTabs from '$lib/components/jobs/JobFilterTabs.svelte';
+	import JobStatsCards, { type JobStatsKey } from '$lib/components/jobs/JobStatsCards.svelte';
+	import NewJobSheet from '$lib/components/jobs/NewJobSheet.svelte';
 	import { jobsStore } from '$lib/stores/jobs.svelte';
-	import type { JobsFilterStatus } from '$lib/types/jobs';
-	import { Briefcase, X } from '@lucide/svelte';
+	import type { JobsFilterScope, JobsFilterStatus, JobsStats } from '$lib/types/jobs';
+	import { Briefcase, Plus, X } from '@lucide/svelte';
+	import { getMemberContext } from '$lib/context/member';
+	import { onMount } from 'svelte';
+
+	const member = getMemberContext();
+	const canCreate = $derived(member().can_view_full_pipeline);
 
 	let statusFilter = $state<JobsFilterStatus>('all');
+	let scopeFilter = $state<JobsFilterScope | null>(null);
+	let newOpen = $state(false);
+	let assignees = $state<{ id: string; full_name: string }[]>([]);
+	let stats = $state<JobsStats | null>(null);
+	let statsLoading = $state(true);
+
+	async function loadStats() {
+		statsLoading = stats === null;
+		try {
+			const res = await fetch('/api/jobs/stats');
+			if (res.ok) {
+				const body = (await res.json()) as { data: JobsStats };
+				stats = body.data;
+			}
+		} finally {
+			statsLoading = false;
+		}
+	}
+
+	onMount(async () => {
+		void loadStats();
+		if (!canCreate) return;
+		const res = await fetch('/api/contacts/assignees');
+		if (res.ok) {
+			const a = (await res.json()) as { assignees: { id: string; full_name: string }[] };
+			assignees = a.assignees;
+		}
+	});
+
+	const activeStatsKey = $derived<JobStatsKey | null>(
+		scopeFilter ?? (statusFilter === 'in_progress' ? 'in_progress' : null)
+	);
+
+	function selectStatsCard(next: JobStatsKey) {
+		if (activeStatsKey === next) {
+			scopeFilter = null;
+			statusFilter = 'all';
+			return;
+		}
+		if (next === 'in_progress') {
+			scopeFilter = null;
+			statusFilter = 'in_progress';
+		} else {
+			scopeFilter = next;
+			statusFilter = 'all';
+		}
+	}
+
+	function onStatusChange(next: JobsFilterStatus) {
+		statusFilter = next;
+		scopeFilter = null;
+	}
+
+	function openNewJob() {
+		newOpen = true;
+	}
 
 	const contactId = $derived(page.url.searchParams.get('contact_id'));
 	const filters = $derived({
 		status: statusFilter,
+		scope: scopeFilter,
 		assignedTo: null,
 		contactId: contactId ?? null
 	});
@@ -53,6 +117,13 @@
 		? 'Showing jobs related to this contact'
 		: 'Track work from scheduled to complete'}
 >
+	{#snippet actions()}
+		{#if canCreate}
+			<Button onclick={openNewJob} class="h-10 gap-1.5">
+				<Plus class="h-4 w-4" /> New job
+			</Button>
+		{/if}
+	{/snippet}
 	<div class="space-y-4">
 		{#if contactId && filterContext}
 			<div
@@ -75,7 +146,16 @@
 			</div>
 		{/if}
 
-		<JobFilterTabs bind:value={statusFilter} />
+		{#if !contactId}
+			<JobStatsCards
+				{stats}
+				loading={statsLoading}
+				activeKey={activeStatsKey}
+				onSelect={selectStatsCard}
+			/>
+		{/if}
+
+		<JobFilterTabs bind:value={statusFilter} onChange={onStatusChange} />
 
 		{#if showSkeleton}
 			<SkeletonLoader lines={6} height="92px" label="Loading jobs" />
@@ -95,8 +175,10 @@
 					icon={Briefcase}
 					title="No jobs yet"
 					description={statusFilter === 'all'
-						? 'Jobs are created automatically when an opportunity moves to Won.'
+						? 'Jobs are created automatically when an opportunity is Won. You can also create one manually.'
 						: 'No jobs match this filter right now.'}
+					actionLabel={canCreate && statusFilter === 'all' ? 'New job' : undefined}
+					onAction={canCreate && statusFilter === 'all' ? openNewJob : undefined}
 				/>
 			{/if}
 		{:else}
@@ -115,4 +197,11 @@
 			{/if}
 		{/if}
 	</div>
+
+	<NewJobSheet
+		bind:open={newOpen}
+		{assignees}
+		canEditAssignee={canCreate}
+		onClose={() => (newOpen = false)}
+	/>
 </PageWrapper>

@@ -1,21 +1,25 @@
 import { Worker, type Job } from 'bullmq';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
 	conversations,
+	media,
 	messages,
 	organizations,
 	outboxEvents
 } from '$lib/server/db/schema';
 import { SMS_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { sendSms } from '$lib/server/twilio/sendSms';
+import { r2Presign } from '$lib/server/media/r2';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
 import {
-	assertAndIncrementUsage,
-	UsageLimitExceededError
-} from '$lib/server/usage/assertAndIncrementUsage';
+	reserveSmsCredit,
+	refundSmsCredit,
+	getCreditState,
+	InsufficientCreditError
+} from '$lib/server/sms/credit';
 
 const env = process.env;
 const log = createLogger('sms.worker');
@@ -152,8 +156,7 @@ async function processSmsSend(job: Job<SmsJobData>) {
 
 	const [org] = await db
 		.select({
-			twilio_phone_number: organizations.twilio_phone_number,
-			max_monthly_sms: organizations.max_monthly_sms
+			twilio_phone_number: organizations.twilio_phone_number
 		})
 		.from(organizations)
 		.where(eq(organizations.id, msg.org_id))
@@ -171,34 +174,49 @@ async function processSmsSend(job: Job<SmsJobData>) {
 		return;
 	}
 
-	// Authoritative usage check: atomic increment in tx. If the limit is
-	// exceeded, the throw rolls back the counter and we mark the message as
-	// undeliverable. The increment is NOT refunded on Twilio failures —
-	// counts authorized sends, close enough to "sent" for quota purposes.
+	const credit = await getCreditState(db, msg.org_id);
+	if (!credit) {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason: 'Organization has no SMS credit account',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
+	const costStr = credit.per_sms_cost.toFixed(4);
+
+	// Authoritative credit reservation: atomic guarded decrement, committed
+	// BEFORE the Twilio call so the balance can never go negative under
+	// concurrency. Idempotent on message_id — a retry that already reserved
+	// returns 'already_charged' and does not double-deduct. On insufficient
+	// credit the throw rolls back (nothing applied) and we mark undeliverable.
 	try {
 		await db.transaction(async (tx) => {
-			await assertAndIncrementUsage(tx, {
+			await reserveSmsCredit(tx, {
 				orgId: msg.org_id,
-				metric: 'sms_sent',
-				limit: org.max_monthly_sms,
-				increment: 1
+				messageId,
+				cost: costStr,
+				monthlyIncludedCredit: credit.monthly_included_credit
 			});
 		});
 	} catch (err) {
-		if (err instanceof UsageLimitExceededError) {
+		if (err instanceof InsufficientCreditError) {
 			log.warn({
-				phase: 'limit_exceeded',
+				phase: 'insufficient_credit',
 				message_id: messageId,
 				org_id: msg.org_id,
-				metric: err.metric,
-				current: err.current,
-				max: err.max
+				balance: err.balance,
+				cost: err.cost
 			});
 			await db
 				.update(messages)
 				.set({
 					status: 'undeliverable',
-					failure_reason: `Monthly SMS limit reached (${err.max}).`,
+					failure_reason: 'Insufficient SMS credit. Top up to keep sending.',
 					failed_at: new Date(),
 					updated_at: new Date()
 				})
@@ -208,9 +226,30 @@ async function processSmsSend(job: Job<SmsJobData>) {
 		throw err;
 	}
 
+	// Outbound MMS: attach this message's media as publicly-fetchable presigned
+	// R2 URLs (Twilio fetches them at send time). Prefer the resized web variant
+	// for photos to keep MMS payloads small; fall back to the original.
+	const mediaRows = await db
+		.select({
+			r2_key: media.r2_key,
+			web_key: media.web_key,
+			media_type: media.media_type
+		})
+		.from(media)
+		.where(and(eq(media.message_id, messageId), isNull(media.deleted_at)));
+	const mediaUrl =
+		mediaRows.length > 0
+			? await Promise.all(
+					mediaRows.map((mm) =>
+						r2Presign(mm.media_type === 'photo' && mm.web_key ? mm.web_key : mm.r2_key, 3600)
+					)
+				)
+			: undefined;
+
 	try {
 		const sid = await sendSms(org.twilio_phone_number, contact.phone, msg.body ?? '', {
-			statusCallback: statusCallbackUrl()
+			statusCallback: statusCallbackUrl(),
+			mediaUrl
 		});
 
 		await db.transaction(async (tx) => {
@@ -219,6 +258,7 @@ async function processSmsSend(job: Job<SmsJobData>) {
 				.set({
 					status: 'sent',
 					twilio_message_sid: sid ?? undefined,
+					sms_cost: costStr,
 					sent_at: new Date(),
 					updated_at: new Date()
 				})
@@ -250,32 +290,72 @@ async function processSmsSend(job: Job<SmsJobData>) {
 			message_id: messageId,
 			attempt: attemptNumber,
 			permanent,
+			has_media: mediaRows.length > 0,
 			error: reason
 		});
 
+		// MMS: fail immediately (no auto-retry), refund the reserved credit, and let
+		// the contractor retry manually. We don't throw, so BullMQ won't re-attempt.
+		if (mediaRows.length > 0) {
+			await db.transaction(async (tx) => {
+				await tx
+					.update(messages)
+					.set({
+						status: 'failed',
+						failure_reason: reason,
+						failed_at: new Date(),
+						updated_at: new Date()
+					})
+					.where(eq(messages.id, messageId));
+				await refundSmsCredit(tx, {
+					orgId: msg.org_id,
+					messageId,
+					note: 'MMS send failed'
+				});
+			});
+			return;
+		}
+
 		if (permanent) {
-			await db
-				.update(messages)
-				.set({
-					status: 'undeliverable',
-					failure_reason: reason,
-					failed_at: new Date(),
-					updated_at: new Date()
-				})
-				.where(eq(messages.id, messageId));
+			// Reserved credit was never spent — refund so the contractor isn't
+			// charged for a send Twilio rejected. Idempotent on message_id.
+			await db.transaction(async (tx) => {
+				await tx
+					.update(messages)
+					.set({
+						status: 'undeliverable',
+						failure_reason: reason,
+						failed_at: new Date(),
+						updated_at: new Date()
+					})
+					.where(eq(messages.id, messageId));
+				await refundSmsCredit(tx, {
+					orgId: msg.org_id,
+					messageId,
+					note: 'Permanent send failure'
+				});
+			});
 			return;
 		}
 
 		if (attemptNumber >= (job.opts.attempts ?? 3)) {
-			await db
-				.update(messages)
-				.set({
-					status: 'failed',
-					failure_reason: reason,
-					failed_at: new Date(),
-					updated_at: new Date()
-				})
-				.where(eq(messages.id, messageId));
+			// All retries exhausted — refund the reservation.
+			await db.transaction(async (tx) => {
+				await tx
+					.update(messages)
+					.set({
+						status: 'failed',
+						failure_reason: reason,
+						failed_at: new Date(),
+						updated_at: new Date()
+					})
+					.where(eq(messages.id, messageId));
+				await refundSmsCredit(tx, {
+					orgId: msg.org_id,
+					messageId,
+					note: 'Send retries exhausted'
+				});
+			});
 		}
 		throw err;
 	}

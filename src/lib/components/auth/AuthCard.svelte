@@ -61,25 +61,18 @@
 						opacity="0.55"
 						transform="translate(0,3)"
 					/>
-					<path
-						d="M3 17 L12 8 L21 17"
-						stroke="white"
-						stroke-width="2.6"
-						opacity="0.95"
-					/>
+					<path d="M3 17 L12 8 L21 17" stroke="white" stroke-width="2.6" opacity="0.95" />
 					<circle cx="12" cy="8" r="1.6" fill="hsl(var(--brand-light))" />
 				</svg>
 			</div>
-			<p
-				class="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground"
-			>
+			<p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
 				Contractor OS
 			</p>
 		</div>
 
 		<!-- Glass card -->
 		<div
-			class="relative rounded-2xl border border-white/5 bg-card/80 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] backdrop-blur-xl overflow-hidden"
+			class="relative rounded-2xl border border-white/5 bg-card shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] overflow-hidden"
 		>
 			<!-- top hairline glow -->
 			<div

@@ -18,7 +18,9 @@ let subscribedAt = 0;
 
 const STALE_MS = 30_000;
 
-async function fetchList(signal: AbortSignal): Promise<{ items: NotificationItem[]; unread_count: number }> {
+async function fetchList(
+	signal: AbortSignal
+): Promise<{ items: NotificationItem[]; unread_count: number }> {
 	const res = await fetch('/api/notifications', { signal });
 	if (!res.ok) throw new Error('Failed to load notifications');
 	const body = (await res.json()) as { data: { items: NotificationItem[]; unread_count: number } };

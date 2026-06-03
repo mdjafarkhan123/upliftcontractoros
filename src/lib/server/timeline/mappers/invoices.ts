@@ -20,7 +20,12 @@ export const invoiceSentRegistry: TimelineRegistryEntry = {
 			icon_key: 'invoice-sent',
 			tone: 'neutral',
 			description: `Invoice ${num} sent — ${fmtMoney(d.total)}`,
-			metadata: { invoice_number: d.invoice_number, total: d.total, invoice_id: d.invoice_id, kind: 'sent' },
+			metadata: {
+				invoice_number: d.invoice_number,
+				total: d.total,
+				invoice_id: d.invoice_id,
+				kind: 'sent'
+			},
 			link: `/invoices/${d.invoice_id}`
 		};
 	}
@@ -39,7 +44,12 @@ export const invoicePaidRegistry: TimelineRegistryEntry = {
 			icon_key: 'invoice-paid',
 			tone: 'positive',
 			description: `Invoice ${num} paid in full`,
-			metadata: { invoice_number: d.invoice_number, total: d.total, invoice_id: d.invoice_id, kind: 'paid' },
+			metadata: {
+				invoice_number: d.invoice_number,
+				total: d.total,
+				invoice_id: d.invoice_id,
+				kind: 'paid'
+			},
 			link: `/invoices/${d.invoice_id}`
 		};
 	}

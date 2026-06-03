@@ -96,7 +96,11 @@
 
 <svelte:head><title>Quote templates</title></svelte:head>
 
-<PageWrapper title="Quote templates" subtitle="Reusable line items for faster quoting">
+<PageWrapper
+	title="Quote templates"
+	subtitle="Reusable line items for faster quoting"
+	back="/quotes"
+>
 	{#snippet actions()}
 		<Button variant="outline" onclick={() => goto('/quotes')}>Back to quotes</Button>
 		{#if canManage}

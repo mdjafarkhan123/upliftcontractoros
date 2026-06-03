@@ -25,12 +25,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			feature_webchat: organizations.feature_webchat
 		})
 		.from(organizations)
-		.where(
-			and(
-				eq(organizations.widget_token, token),
-				isNull(organizations.deleted_at)
-			)
-		)
+		.where(and(eq(organizations.widget_token, token), isNull(organizations.deleted_at)))
 		.limit(1);
 
 	if (!org || org.status !== 'active' || !org.feature_webchat) {

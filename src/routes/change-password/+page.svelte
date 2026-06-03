@@ -4,7 +4,9 @@
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import AuthField from '$lib/components/auth/AuthField.svelte';
 
-	let { form }: {
+	let {
+		form
+	}: {
 		form?: { error?: string };
 	} = $props();
 
@@ -26,7 +28,9 @@
 			</div>
 		{/if}
 
-		<div class="mb-5 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3.5">
+		<div
+			class="mb-5 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3.5"
+		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="16"
@@ -40,9 +44,9 @@
 				class="mt-0.5 shrink-0 text-blue-600"
 				aria-hidden="true"
 			>
-				<circle cx="12" cy="12" r="10"/>
-				<line x1="12" y1="16" x2="12" y2="12"/>
-				<line x1="12" y1="8" x2="12.01" y2="8"/>
+				<circle cx="12" cy="12" r="10" />
+				<line x1="12" y1="16" x2="12" y2="12" />
+				<line x1="12" y1="8" x2="12.01" y2="8" />
 			</svg>
 			<p class="text-sm text-blue-700 leading-relaxed">
 				Your password must be at least 8 characters long.
@@ -87,9 +91,25 @@
 			>
 				{#if loading}
 					<span class="inline-flex items-center justify-center gap-2">
-						<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+						<svg
+							class="animate-spin h-4 w-4"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+						>
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+							></path>
 						</svg>
 						Updating…
 					</span>

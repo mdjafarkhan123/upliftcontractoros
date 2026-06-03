@@ -1,14 +1,19 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		Building2,
 		Bot,
 		CreditCard,
 		UserCircle,
 		CalendarClock,
-		ChevronRight,
+		Users,
+		Bell,
+		Zap,
+		MessageSquare,
 		Lock
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
+	import { cn } from '$lib/utils/cn';
 
 	let {
 		role,
@@ -22,113 +27,192 @@
 		featureOnlineBooking: boolean;
 	} = $props();
 
+	function isActive(href: string): boolean {
+		const path = page.url.pathname;
+		return path === href || path.startsWith(href + '/');
+	}
+
 	type Item = {
 		href: string;
 		label: string;
 		description: string;
 		icon: Component;
-		adminOnly: boolean;
 		locked: boolean;
 		lockedReason?: string;
+		iconBg: string;
+		iconColor: string;
 	};
 
-	let items: Item[] = $derived([
+	let orgItems: Item[] = $derived([
 		{
 			href: '/settings/org',
 			label: 'Business',
-			description: 'Business name, address, branding',
+			description: 'Name, address, brand colors, logo',
 			icon: Building2,
-			adminOnly: true,
 			locked: role !== 'admin',
-			lockedReason: role !== 'admin' ? 'Admin only' : undefined
+			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
+			iconBg: 'bg-emerald-50 dark:bg-emerald-500/10',
+			iconColor: 'text-emerald-600 dark:text-emerald-400'
 		},
 		{
 			href: '/settings/automation',
 			label: 'Automation',
 			description: 'Auto-replies, follow-ups, reminders',
 			icon: Bot,
-			adminOnly: true,
 			locked: role !== 'admin' || !featureAutomation,
 			lockedReason:
-				role !== 'admin'
-					? 'Admin only'
-					: !featureAutomation
-						? 'Not enabled for your plan'
-						: undefined
+				role !== 'admin' ? 'Admin only' : !featureAutomation ? 'Not on your plan' : undefined,
+			iconBg: 'bg-violet-50 dark:bg-violet-500/10',
+			iconColor: 'text-violet-600 dark:text-violet-400'
 		},
 		{
 			href: '/settings/stripe',
-			label: 'Stripe',
+			label: 'Payments',
 			description: 'Connect Stripe to accept invoice payments',
 			icon: CreditCard,
-			adminOnly: true,
 			locked: role !== 'admin' || !featureStripe,
 			lockedReason:
-				role !== 'admin' ? 'Admin only' : !featureStripe ? 'Not enabled for your plan' : undefined
+				role !== 'admin' ? 'Admin only' : !featureStripe ? 'Not on your plan' : undefined,
+			iconBg: 'bg-blue-50 dark:bg-blue-500/10',
+			iconColor: 'text-blue-600 dark:text-blue-400'
 		},
 		{
 			href: '/settings/booking',
-			label: 'Booking Availability',
-			description: 'Customer self-booking links and weekly hours',
+			label: 'Booking',
+			description: 'Self-booking links and availability',
 			icon: CalendarClock,
-			adminOnly: true,
 			locked: role !== 'admin' || !featureOnlineBooking,
 			lockedReason:
-				role !== 'admin'
-					? 'Admin only'
-					: !featureOnlineBooking
-						? 'Not enabled for your plan'
-						: undefined
+				role !== 'admin' ? 'Admin only' : !featureOnlineBooking ? 'Not on your plan' : undefined,
+			iconBg: 'bg-amber-50 dark:bg-amber-500/10',
+			iconColor: 'text-amber-600 dark:text-amber-400'
 		},
+		{
+			href: '/settings/team',
+			label: 'Team',
+			description: 'Members, roles, and permissions',
+			icon: Users,
+			locked: role !== 'admin',
+			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
+			iconBg: 'bg-primary/10',
+			iconColor: 'text-primary'
+		},
+		{
+			href: '/settings/sms-credit',
+			label: 'SMS Credits',
+			description: 'Text balance, usage, and activity',
+			icon: MessageSquare,
+			locked: role !== 'admin',
+			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
+			iconBg: 'bg-sky-50 dark:bg-sky-500/10',
+			iconColor: 'text-sky-600 dark:text-sky-400'
+		},
+		{
+			href: '/settings/quick-replies',
+			label: 'Quick Replies',
+			description: 'Saved message templates for your inbox',
+			icon: Zap,
+			locked: false,
+			iconBg: 'bg-yellow-50 dark:bg-yellow-500/10',
+			iconColor: 'text-yellow-600 dark:text-yellow-400'
+		}
+	]);
+
+	let personalItems: Item[] = $derived([
 		{
 			href: '/settings/account',
 			label: 'Account',
-			description: 'Your name, email, password',
+			description: 'Your name, email, and password',
 			icon: UserCircle,
-			adminOnly: false,
-			locked: false
+			locked: false,
+			iconBg: 'bg-slate-100 dark:bg-slate-500/10',
+			iconColor: 'text-slate-600 dark:text-slate-400'
+		},
+		{
+			href: '/settings/notifications',
+			label: 'Notifications',
+			description: 'Choose what buzzes your phone',
+			icon: Bell,
+			locked: false,
+			iconBg: 'bg-amber-50 dark:bg-amber-500/10',
+			iconColor: 'text-amber-600 dark:text-amber-400'
 		}
 	]);
 </script>
 
-<nav class="flex flex-col gap-2">
-	{#each items as item (item.href)}
-		{#if item.locked}
+<div class="flex flex-col gap-7">
+	<!-- Organization section -->
+	<div class="flex flex-col gap-3">
+		<p class="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+			Organization
+		</p>
+		<div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+			{#each orgItems as item (item.href)}
+				{@render navItem(item)}
+			{/each}
+		</div>
+	</div>
+
+	<!-- Personal section -->
+	<div class="flex flex-col gap-3">
+		<p class="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+			Personal
+		</p>
+		<div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+			{#each personalItems as item (item.href)}
+				{@render navItem(item)}
+			{/each}
+		</div>
+	</div>
+</div>
+
+{#snippet navItem(item: Item)}
+	{@const active = isActive(item.href)}
+	{#if item.locked}
+		<div
+			class="group relative flex flex-col items-center gap-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-5 opacity-60"
+			aria-disabled="true"
+		>
 			<div
-				class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 p-4 opacity-80"
-				aria-disabled="true"
+				class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"
 			>
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-				>
-					<item.icon class="h-5 w-5" />
-				</div>
-				<div class="flex-1 min-w-0">
-					<div class="flex items-center gap-2">
-						<h3 class="text-sm font-semibold text-foreground">{item.label}</h3>
-						<Lock class="h-3 w-3 text-muted-foreground" />
-					</div>
-					<p class="truncate text-xs text-muted-foreground">{item.lockedReason}</p>
-				</div>
+				<item.icon class="h-6 w-6" />
 			</div>
-		{:else}
-			<a
-				href={item.href}
-				class="group flex min-h-[64px] items-center gap-3 rounded-lg border border-border/60 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-border hover:bg-muted/40 hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
+			<div class="flex flex-col items-center gap-1 min-w-0">
+				<p class="text-sm font-medium text-foreground text-center">{item.label}</p>
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
 				>
-					<item.icon class="h-5 w-5" />
-				</div>
-				<div class="flex-1 min-w-0">
-					<h3 class="text-sm font-semibold text-foreground">{item.label}</h3>
-					<p class="truncate text-xs text-muted-foreground">{item.description}</p>
-				</div>
-				<ChevronRight
-					class="h-4 w-4 text-muted-foreground/60 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted-foreground"
-				/>
-			</a>
-		{/if}
-	{/each}
-</nav>
+					<Lock class="h-2.5 w-2.5" />
+					{item.lockedReason}
+				</span>
+			</div>
+		</div>
+	{:else}
+		<a
+			href={item.href}
+			class={cn(
+				'group relative flex flex-col items-center gap-3 rounded-xl border px-3 py-5 shadow-card transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+				active
+					? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20'
+					: 'border-border/60 bg-card hover:border-border hover:bg-muted/30 hover:shadow-dropdown'
+			)}
+		>
+			<div
+				class={cn(
+					'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-150 group-hover:scale-105',
+					item.iconBg,
+					item.iconColor
+				)}
+			>
+				<item.icon class="h-6 w-6" />
+			</div>
+			<div class="flex flex-col items-center min-w-0">
+				<p class="text-sm font-medium text-foreground text-center">{item.label}</p>
+				<p class="mt-0.5 text-xs text-muted-foreground text-center leading-tight">
+					{item.description}
+				</p>
+			</div>
+		</a>
+	{/if}
+{/snippet}

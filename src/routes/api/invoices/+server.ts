@@ -1,5 +1,18 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	or,
+	sql,
+	type SQL
+} from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -22,14 +35,7 @@ import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/eve
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 
 const PAGE_SIZE = 30;
-const ALL_STATUSES = [
-	'draft',
-	'sent',
-	'partially_paid',
-	'paid',
-	'overdue',
-	'cancelled'
-] as const;
+const ALL_STATUSES = ['draft', 'sent', 'partially_paid', 'paid', 'overdue', 'cancelled'] as const;
 const OPEN_STATUSES = ['sent', 'partially_paid', 'overdue'] as const;
 const CLOSED_STATUSES = ['paid', 'cancelled'] as const;
 
@@ -294,7 +300,11 @@ export const POST: RequestHandler = async (event) => {
 
 				await recalcInvoiceTotals(tx, inserted.id);
 
-				const [after] = await tx.execute<{ status: string; total: string; invoice_number: number }>(sql`
+				const [after] = await tx.execute<{
+					status: string;
+					total: string;
+					invoice_number: number;
+				}>(sql`
 					SELECT status, total, invoice_number FROM invoices WHERE id = ${inserted.id}
 				`);
 

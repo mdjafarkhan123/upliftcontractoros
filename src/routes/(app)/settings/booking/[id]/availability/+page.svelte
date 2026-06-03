@@ -44,7 +44,11 @@
 				enabled: false,
 				windows: []
 			}));
-			for (const w of body.data.windows as Array<{ day_of_week: number; start_time: string; end_time: string }>) {
+			for (const w of body.data.windows as Array<{
+				day_of_week: number;
+				start_time: string;
+				end_time: string;
+			}>) {
 				fresh[w.day_of_week].enabled = true;
 				fresh[w.day_of_week].windows.push({ start: toHHMM(w.start_time), end: toHHMM(w.end_time) });
 			}
@@ -113,7 +117,7 @@
 							day_of_week: d.day_of_week,
 							start_time: w.start,
 							end_time: w.end
-					  }))
+						}))
 					: []
 			);
 			const res = await fetch(`/api/booking-links/${data.id}/availability/windows`, {

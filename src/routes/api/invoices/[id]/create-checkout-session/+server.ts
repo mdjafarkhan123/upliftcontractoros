@@ -2,19 +2,10 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	contacts,
-	invoiceLineItems,
-	invoices,
-	organizations
-} from '$lib/server/db/schema';
+import { contacts, invoiceLineItems, invoices, organizations } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canSendInvoice } from '$lib/server/invoices/permissions';
-import {
-	createCheckoutSession,
-	getOrgStripeClient,
-	toCents
-} from '$lib/server/invoices/stripe';
+import { createCheckoutSession, getOrgStripeClient, toCents } from '$lib/server/invoices/stripe';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
 
 export const POST: RequestHandler = async (event) => {
@@ -39,9 +30,7 @@ export const POST: RequestHandler = async (event) => {
 		.from(invoices)
 		.innerJoin(contacts, eq(contacts.id, invoices.contact_id))
 		.innerJoin(organizations, eq(organizations.id, invoices.org_id))
-		.where(
-			and(eq(invoices.id, id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at))
-		)
+		.where(and(eq(invoices.id, id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at)))
 		.limit(1);
 
 	if (!row) error(404, 'Invoice not found');
@@ -73,10 +62,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const stripe = getOrgStripeClient(row.stripe_secret_key);
 
-	const subtotalCents = lineRows.reduce(
-		(s, li) => s + toCents(li.total),
-		0
-	);
+	const subtotalCents = lineRows.reduce((s, li) => s + toCents(li.total), 0);
 	const taxAmountCents = toCents(row.tax_amount);
 
 	const stripeLines = lineRows.map((li) => ({

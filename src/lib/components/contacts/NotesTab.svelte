@@ -18,14 +18,15 @@
 	let {
 		contactId,
 		notes = $bindable<Note[]>([]),
-		canEdit
+		canEdit,
+		composerOpen = $bindable(false)
 	}: {
 		contactId: string;
 		notes?: Note[];
 		canEdit: boolean;
+		composerOpen?: boolean;
 	} = $props();
 
-	let composerOpen = $state(false);
 	let draft = $state('');
 	let saving = $state(false);
 	let errorMsg = $state<string | null>(null);

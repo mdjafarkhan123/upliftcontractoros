@@ -43,6 +43,23 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (!existing) error(404, 'Address not found');
 
+	// Optimistic concurrency — client sends the updated_at it last read. A
+	// mismatch means another team member edited this address in the meantime.
+	if (data.updated_at !== undefined) {
+		const clientStamp = new Date(data.updated_at).getTime();
+		const serverStamp = existing.updated_at.getTime();
+		if (clientStamp !== serverStamp) {
+			return json(
+				{
+					error: 'This address was changed by someone else. Reload and try again.',
+					code: 'STALE_UPDATE',
+					current_updated_at: existing.updated_at.toISOString()
+				},
+				{ status: 409 }
+			);
+		}
+	}
+
 	const next: Record<string, unknown> = { updated_at: new Date() };
 	if (data.label !== undefined) next.label = data.label;
 	if (data.address_line_1 !== undefined) next.address_line_1 = data.address_line_1;
@@ -73,10 +90,7 @@ export const PATCH: RequestHandler = async (event) => {
 			.update(contactAddresses)
 			.set(next)
 			.where(
-				and(
-					eq(contactAddresses.org_id, auth.orgId),
-					eq(contactAddresses.id, event.params.addrId)
-				)
+				and(eq(contactAddresses.org_id, auth.orgId), eq(contactAddresses.id, event.params.addrId))
 			)
 			.returning();
 		return row;
@@ -119,10 +133,7 @@ export const DELETE: RequestHandler = async (event) => {
 		.update(contactAddresses)
 		.set({ deleted_at: new Date(), updated_at: new Date(), is_primary: false })
 		.where(
-			and(
-				eq(contactAddresses.org_id, auth.orgId),
-				eq(contactAddresses.id, event.params.addrId)
-			)
+			and(eq(contactAddresses.org_id, auth.orgId), eq(contactAddresses.id, event.params.addrId))
 		);
 
 	return json({ ok: true });

@@ -32,9 +32,7 @@
 
 	let busy = $state(false);
 
-	const dueLabel = $derived(
-		dueDate ? new Date(dueDate).toLocaleDateString('en-US') : null
-	);
+	const dueLabel = $derived(dueDate ? new Date(dueDate).toLocaleDateString('en-US') : null);
 	const smsPreview = $derived(
 		`Hi ${contactName}, your invoice ${invoiceNumberDisplay} for ${formatCurrency(total)} is ready${dueLabel ? ` (due ${dueLabel})` : ''}. Pay or view: [link]`
 	);
@@ -76,9 +74,7 @@
 			</div>
 
 			<div class="space-y-2">
-				<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					SMS preview
-				</p>
+				<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">SMS preview</p>
 				<p class="rounded-lg border border-border bg-card p-3 text-sm">{smsPreview}</p>
 			</div>
 

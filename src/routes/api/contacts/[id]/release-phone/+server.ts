@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, outboxEvents } from '$lib/server/db/schema';
+import { contacts, internalActivityLog, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { releasePhoneSchema } from '$lib/server/contacts/schemas';
 import { buildReleasedPhone, isReleasedPhone } from '$lib/utils/phone';
@@ -48,7 +48,8 @@ export const POST: RequestHandler = async (event) => {
 	if (!parsed.success) {
 		return json(
 			{
-				error: parsed.error.issues[0]?.message ?? 'A reason and explicit confirmation are required.',
+				error:
+					parsed.error.issues[0]?.message ?? 'A reason and explicit confirmation are required.',
 				code: 'VALIDATION_ERROR'
 			},
 			{ status: 422 }
@@ -92,6 +93,22 @@ export const POST: RequestHandler = async (event) => {
 			.update(contacts)
 			.set({ phone: released, updated_at: new Date() })
 			.where(and(eq(contacts.org_id, auth.orgId), eq(contacts.id, target.id)));
+
+		// Admin audit trail. This is a sensitive owner-only override, so it is
+		// recorded in internal_activity_log (the canonical admin audit table)
+		// inside the same transaction — not left to the outbox event alone.
+		await tx.insert(internalActivityLog).values({
+			org_id: auth.orgId,
+			author_id: auth.member.id,
+			activity_type: 'contact.phone_released',
+			title: 'Released reserved phone',
+			body: parsed.data.reason,
+			metadata: {
+				contact_id: target.id,
+				original_phone: original,
+				released_value: released
+			}
+		});
 
 		await tx.insert(outboxEvents).values({
 			org_id: auth.orgId,

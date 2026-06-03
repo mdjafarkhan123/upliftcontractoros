@@ -64,32 +64,72 @@ BEGIN TRANSACTION
   → UPDATE opportunities SET stage_id = won_stage_id, closed_at = now()
   → INSERT jobs (opportunity_id, contact_id, title, status = 'scheduled')
   → UPDATE contacts SET status = 'customer'
-  → INSERT outbox_events (
-        event_type:   'opportunity.won',
-        sequence:     1,
-        idempotency:  'opportunity.won:{opportunity_id}',
-        payload:      { opportunity_id, org_id, contact_id, job_id }
-    )
-  → INSERT outbox_events (
-        event_type:   'job.created',
-        sequence:     2,
-        idempotency:  'job.created:{job_id}',
-        payload:      { job_id, org_id, contact_id, opportunity_id }
-    )
+  → INSERT outbox_events × 4 (single batch):
+        1. opportunity.stage_changed  idempotency: stage_changed:{move_request_id}
+                                       payload includes from/to_stage_name, contact_id, assigned_to
+        2. opportunity.won            idempotency: opportunity.won:{opp_id}
+                                       payload includes contact_id, title, value, assigned_to
+        3. job.created                idempotency: job.created:{job_id}
+        4. contact.status_changed     idempotency: status_changed:{contact_id}:{opp_id}
+                                       payload: { new_status: 'customer', triggered_by_opportunity_id }
 COMMIT
 
 NOTE: Jobs are ONLY created by the Won stage trigger. No other path creates a job.
 
-OUTBOX WORKER
-→ Claims both events (ordered by sequence ASC)
-→ Dispatches to queue:notification-dispatch
+OUTBOX WORKER (single tick, single tx)
+→ Claims all 4 events (ordered by sequence ASC)
+→ opportunity.stage_changed → no queue (feed-only); INSERT activity_events
+→ opportunity.won           → queue:notification-dispatch; INSERT activity_events
+→ job.created               → queue:notification-dispatch; INSERT activity_events
+→ contact.status_changed    → no queue (feed-only); INSERT activity_events
+→ Marks all 4 outbox rows processed
 
-BULLMQ WORKER
-→ INSERTs notifications row (type: 'new_job')
+BULLMQ NOTIFICATION WORKER
+→ opportunity.won: assignee (or admin/manager) — type 'opportunity.won'
+→ job.created:    admin + manager — type 'job.created'
 
 SUPABASE REALTIME
-→ Contractor sees "New job created" notification
+→ Contractor sees "Opportunity won" and "New job created" notifications
+→ Dashboard Recent Activity feed populates with 4 entries (one per event)
 ```
+
+---
+
+### Flow 2b — Opportunity Created / Assigned / Stage Move / Lost
+
+Smaller pipeline flows that share the same outbox → activity_events
+machinery as Flow 2 above.
+
+```
+opportunity.created
+  Producer: POST /api/pipeline/opportunities, public booking webhook
+  Routing:  queue:notification-dispatch + activity_events
+  Notify:   assignee if set; else admin + manager
+  Idempotency: opportunity.created:{opp_id}
+
+opportunity.assignee_changed   (NEW — replaces opportunity.updated)
+  Producer: PATCH /api/pipeline/opportunities/[id] when assigned_to actually diffs
+  Routing:  queue:notification-dispatch + activity_events
+  Notify:   new assignee ONLY; self-assignment is silent
+  Idempotency: opportunity.assignee_changed:{opp_id}:{new_assigned_to|null}
+  Same-target reassignment is idempotent; reassigning to someone new is a fresh event.
+
+opportunity.stage_changed
+  Producer: PATCH /api/pipeline/opportunities/[id]/stage (every move, including won/lost)
+  Routing:  activity_events ONLY — no notification, no queue
+  Idempotency: opportunity.stage_changed:{move_request_id}  (client UUID, double-click safe)
+  Payload includes from/to_stage_name so the feed can render "moved to {stage}" without joins.
+
+opportunity.lost
+  Producer: Stage move into is_lost stage (always co-emitted with stage_changed)
+  Routing:  queue:notification-dispatch + activity_events
+  Notify:   assignee if set; else admin + manager
+  Idempotency: opportunity.lost:{opp_id}
+```
+
+The `opportunity.updated` event was removed. Title/value edits emit no
+event. If you need an edit audit trail later, model it as a dedicated
+table — do **not** revive `opportunity.updated`.
 
 ---
 
@@ -218,26 +258,106 @@ COMMIT
 
 OUTBOX WORKER
 → Claims 'job.completed' event
-→ Dispatches to queue:review-request
+→ Dispatches automation job 'review.send'
   (with delay = automation_settings.review_funnel_delay_hours)
 
-BULLMQ WORKER (executes after delay)
-→ Checks automation_jobs.status (cancel guard)
-→ Checks UNIQUE(job_id) on review_requests — guards against retry duplicates
-→ Checks contacts.sms_opt_out
-→ Checks automation_settings.review_funnel_enabled
-→ INSERTs review_requests row (status = 'sent')
-→ Sends review request SMS via Twilio
-→ Records automation_jobs row (status: 'completed')
+BULLMQ 'review.send' (after delay)
+→ Re-reads settings + opt-out
+→ INSERT review_requests (status='sent', sent_at=now()) ON CONFLICT (job_id) DO NOTHING
+→ INSERT review_events (type='sent')
+→ INSERT outbox_events ('review_request.sent')   ─┐
+→ Sends review request SMS via Twilio              │
+                                                   ▼
+OUTBOX WORKER routes 'review_request.sent' to TWO pre-scheduled jobs:
+  • 'review.unengaged'  (delay = 72h) — reminder if still status='sent'
+  • 'review.expire'     (delay = 14d) — terminal flip to 'expired'
 
-CONTACT RESPONDS
-→ score ≥ 4: POST /api/review-response/:token { score: 5 }
-             → INSERT reviews row
-             → Send Google review link SMS (from automation_settings.google_review_link)
-→ score ≤ 3: POST /api/review-response/:token { score: 2 }
-             → INSERT private_feedback row
-             → INSERT outbox_events ('private_feedback.received')
-             → Contractor notified via notifications
+CONTACT OPENS LINK
+GET /api/r/:token
+→ INSERT review_events (type='link_opened')      [pure telemetry; no state change]
+
+CONTACT SUBMITS RATING
+POST /api/r/:token { score, body? }
+
+  ┌─ score ≥ 4 (engaged) ─────────────────────────────────────────────┐
+  │ transitionToEngaged() in one transaction:                         │
+  │   UPDATE review_requests                                          │
+  │     SET status='engaged', submitted_rating=N,                     │
+  │         engaged_at=now(), redirected_to_google_at=now()           │
+  │     WHERE id=$1 AND status='sent' AND submitted_rating IS NULL    │
+  │   INSERT review_events (rating_submitted)                         │
+  │   INSERT review_events (redirected_to_google)                     │
+  │   Internal conversation note: "Customer rated N★ via review link" │
+  │   Internal conversation note: "Customer was redirected to Google" │
+  │   INSERT outbox_events ('review_request.engaged')   ──┐           │
+  └───────────────────────────────────────────────────────┼───────────┘
+                                                          ▼
+   OUTBOX routes 'review_request.engaged' to TWO pre-scheduled jobs:
+     • 'review.nudge_1' (delay = 24h, fires only if nudge_count=0 → bumps to 1)
+     • 'review.nudge_2' (delay = 72h, fires only if nudge_count=1 → bumps to 2)
+   Response: { state: 'recorded', google_review_link }
+   Client redirects to Google review page.
+
+  ┌─ score ≤ 3 (completed_internal) ──────────────────────────────────┐
+  │ transitionToCompletedInternal() in one transaction:               │
+  │   UPDATE review_requests SET status='completed_internal',         │
+  │     submitted_rating=N, completed_at=now()                        │
+  │     WHERE id=$1 AND status='sent' AND submitted_rating IS NULL    │
+  │   INSERT review_events (rating_submitted)                         │
+  │   Internal conversation note: "Customer rated N★ — left internal  │
+  │     feedback"                                                     │
+  │   INSERT private_feedback row                                     │
+  │   INSERT outbox_events ('private_feedback.received')              │
+  └───────────────────────────────────────────────────────────────────┘
+   Terminal — no further automation.
+
+ATTRIBUTION (admin-driven, SYNCHRONOUS — no outbox/BullMQ)
+POST /api/review-requests/reconcile-count { new_count }           (contractor admin)
+POST /api/admin/orgs/[id]/reconcile-review-count { new_count }    (jafar)
+→ db.transaction(tx => runAttribution(tx, org_id, new_count))
+    Δ = new_count - organizations.last_known_review_count
+    if Δ ≤ 0 → just bump baseline + last_review_check_at
+    else:
+      SELECT … WHERE status='engaged'
+                 AND submitted_rating >= 4
+                 AND attributed_at IS NULL
+                 AND engaged_at >= now() - INTERVAL '72 hours'
+        ORDER BY engaged_at DESC LIMIT Δ
+      For each candidate, atomic UPDATE → status='likely_reviewed'
+        (re-enforces triple guard for race-safety)
+        confidence: 0.9 / 0.6 / 0.3
+      INSERT review_events (type='attributed') per matched row
+      UPDATE organizations SET last_known_review_count, last_review_check_at
+```
+
+---
+
+### Lifecycle State Machine
+
+```
+                       ┌─────────────┐
+job.completed ─────────►  scheduled  │
+                       └──────┬──────┘
+                              │ review.send fires
+                              ▼
+                       ┌─────────────┐  72h no engagement
+                       │     sent    ├─────────► review.unengaged (one-shot reminder)
+                       └──┬───┬──┬───┘
+            rating ≥ 4    │   │  │   rating ≤ 3
+              ┌───────────┘   │  └───────────┐
+              ▼               │              ▼
+        ┌──────────┐          │       ┌──────────────────┐
+        │ engaged  │          │       │ completed_internal│ (terminal)
+        └──┬───┬──┬┘          │       └──────────────────┘
+   24h    │   │  │ 72h        │
+nudge_1   │   │  │ nudge_2    │
+       attribution.engine     │
+              ▼               ▼
+       ┌──────────────┐   sent_at + 14d
+       │ likely_      │   ┌──────────┐
+       │  reviewed    │   │ expired  │ (terminal)
+       └──────────────┘   └──────────┘
+       (terminal)
 ```
 
 ---
@@ -335,6 +455,18 @@ Webhook acknowledged — no duplicate `quote.deposit_paid` event and no double d
 
 Worker checks for existing row before inserting.
 If it exists, worker exits cleanly — no duplicate SMS sent.
+
+---
+
+### Race 7 — Notification Batching/Duplicates
+
+**Scenario:** Concurrent events (e.g. multiple team members moving a lead) attempt to create
+the same unread notification for a member.
+
+**Solution:** `UNIQUE(member_id, type, resource_id) WHERE read_at IS NULL` on `notifications`.
+
+Blocks duplicate unread rows for the same entity. The worker can then increment
+`aggregation_count` on the existing row instead of inserting a new one.
 
 ---
 

@@ -8,12 +8,14 @@ import {
 	contacts,
 	invoices,
 	organizations,
+	outboxEvents,
 	quotes,
 	reviewRequests,
 	type AutomationJob
 } from '$lib/server/db/schema';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
+import { deactivatePaymentLink, getOrgStripeClient } from '$lib/server/invoices/stripe';
 import {
 	AUTOMATION_QUEUE,
 	addJob,
@@ -21,6 +23,10 @@ import {
 	redisConnection
 } from '$lib/server/queue/bullmq';
 import { interpolate } from './templates';
+import { generateReviewToken, reviewTokenExpiry } from '$lib/server/reputation/token';
+import { buildReviewLink } from '$lib/server/reputation/reviewLink';
+import { buildManageLink } from '$lib/server/tokens/appointmentManageToken';
+import { emitReviewEvent, transitionToExpired } from '$lib/server/reputation/lifecycle';
 import { featureForAutomationJob } from '$lib/permissions/featureMap';
 import type { FeatureFlagKey } from '$lib/types';
 
@@ -61,12 +67,24 @@ async function loadContact(orgId: string, contactId: string) {
 	const [contact] = await db
 		.select()
 		.from(contacts)
-		.where(and(eq(contacts.id, contactId), eq(contacts.org_id, orgId), isNull(contacts.deleted_at)));
+		.where(
+			and(eq(contacts.id, contactId), eq(contacts.org_id, orgId), isNull(contacts.deleted_at))
+		);
 	return contact ?? null;
 }
 
 async function insertAutomationJob(
-	row: Omit<AutomationJob, 'id' | 'created_at' | 'updated_at' | 'attempts' | 'last_error' | 'started_at' | 'completed_at' | 'failed_at'> & { bull_job_id: string }
+	row: Omit<
+		AutomationJob,
+		| 'id'
+		| 'created_at'
+		| 'updated_at'
+		| 'attempts'
+		| 'last_error'
+		| 'started_at'
+		| 'completed_at'
+		| 'failed_at'
+	> & { bull_job_id: string }
 ) {
 	const [inserted] = await db
 		.insert(automationJobs)
@@ -146,7 +164,12 @@ async function cancelPendingJobs(
 	await db
 		.update(automationJobs)
 		.set({ status: 'cancelled', updated_at: new Date() })
-		.where(inArray(automationJobs.id, pending.map((r) => r.id)));
+		.where(
+			inArray(
+				automationJobs.id,
+				pending.map((r) => r.id)
+			)
+		);
 }
 
 // ---- Handlers ----
@@ -397,7 +420,8 @@ async function handleQuoteFollowup(job: Job, data: EventJobData) {
 		if (automationJobRow) await markJobCompleted(automationJobRow.id);
 
 		if (followupNumber === 1) {
-			const delta = (settings.quote_followup_delay_2_hours - settings.quote_followup_delay_1_hours) * 3600_000;
+			const delta =
+				(settings.quote_followup_delay_2_hours - settings.quote_followup_delay_1_hours) * 3600_000;
 			if (delta > 0) {
 				await scheduleQuoteFollowup(data.org_id, quote.id, 2, delta);
 			}
@@ -421,6 +445,7 @@ async function handleInvoiceDispatch(data: EventJobData) {
 	const invoiceNumberDisplay = (data.payload.invoice_number_display as string | undefined) ?? '';
 	const hasEmail = Boolean(data.payload.has_email);
 	const dueDate = data.payload.due_date as string | null | undefined;
+	const paymentLinkUrl = (data.payload.payment_link_url as string | null | undefined) ?? null;
 	if (!contactId) return;
 
 	const contact = await loadContact(orgId, contactId);
@@ -428,10 +453,16 @@ async function handleInvoiceDispatch(data: EventJobData) {
 
 	if (rawToken) {
 		const url = publicInvoiceUrl(rawToken);
-		const dueLine = dueDate ? ` Due ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.` : '';
+		const dueLine = dueDate
+			? ` Due ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`
+			: '';
 
 		if (!contact.sms_opt_out) {
-			const smsBody = `Hi ${contact.full_name}, ${org.name} sent you invoice ${invoiceNumberDisplay} for ${totalFormatted}.${dueLine} Pay here: ${url}`;
+			// Primary link first; fallback labeled explicitly so it's clearly secondary.
+			const fallbackSms = paymentLinkUrl
+				? `\nBackup payment link (original amount only): ${paymentLinkUrl}`
+				: '';
+			const smsBody = `Hi ${contact.full_name}, ${org.name} sent you invoice ${invoiceNumberDisplay} for ${totalFormatted}.${dueLine} Pay here: ${url}${fallbackSms}`;
 			try {
 				await queueAutomationSms(db, {
 					orgId,
@@ -446,12 +477,17 @@ async function handleInvoiceDispatch(data: EventJobData) {
 
 		if (hasEmail && contact.email) {
 			try {
+				const fallbackEmail = paymentLinkUrl
+					? `\n\nBackup payment link (use only if the link above is unavailable):
+${paymentLinkUrl}
+Note: this backup link charges the original invoice amount and does not reflect any later edits or partial payments. The link above always shows the current balance.`
+					: '';
 				const emailBody = `Hi ${contact.full_name},
 
 ${org.name} has sent you invoice ${invoiceNumberDisplay} for ${amountDueFormatted}.${dueDate ? `\n\nDue date: ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
 
 View and pay your invoice:
-${url}`;
+${url}${fallbackEmail}`;
 				await queueAutomationEmail(db, {
 					orgId,
 					contactId: contact.id,
@@ -465,35 +501,71 @@ ${url}`;
 			}
 		}
 	}
+
+	// Pre-schedule the multi-step dunning cadence (Day 0/3/7/14 past due).
+	// Cancelled in bulk by handleInvoicePaidCancel when the invoice is paid.
+	await scheduleInvoiceDunning(orgId, data.resource_id, dueDate ?? null);
 }
 
-async function handleInvoiceReminderSetup(data: EventJobData) {
-	if (!data.org_id) return;
-	const { settings } = await loadContext(data.org_id);
+// Dunning cadence offsets in days, anchored to the invoice's due_date.
+// Day 0 fires at the moment the invoice becomes overdue; subsequent steps
+// escalate at 3, 7, and 14 days past due. If the invoice is sent past its
+// due_date, earlier steps fire immediately (delay clamps to 0).
+const DUNNING_STEP_DAYS = [0, 3, 7, 14] as const;
+
+async function scheduleInvoiceDunning(
+	orgId: string,
+	invoiceId: string,
+	dueDate: string | null | undefined
+) {
+	if (!dueDate) return;
+	const { settings } = await loadContext(orgId);
 	if (!settings || !settings.invoice_reminder_enabled) return;
-	const delayMs = settings.invoice_reminder_delay_days * 24 * 3600_000;
-	const bullJob = await addJob(
-		automationQueue(),
-		'invoice_reminder',
-		{
-			outbox_event_id: `invoice_reminder:${data.resource_id}`,
-			event_type: 'invoice.reminder',
-			org_id: data.org_id,
-			resource_type: 'invoice',
-			resource_id: data.resource_id,
-			payload: {}
-		},
-		{ delay: delayMs }
-	);
-	await insertAutomationJob({
-		org_id: data.org_id,
-		type: 'invoice_reminder',
-		resource_type: 'invoice',
-		resource_id: data.resource_id,
-		bull_job_id: String(bullJob.id),
-		status: 'pending',
-		scheduled_for: new Date(Date.now() + delayMs)
-	});
+
+	// Treat due_date as UTC midnight, matching the cron's CURRENT_DATE semantics.
+	const dueAtMs = new Date(dueDate + 'T00:00:00Z').getTime();
+	if (!Number.isFinite(dueAtMs)) return;
+	const now = Date.now();
+
+	// Clear any prior schedule for this invoice (e.g., a previous send before
+	// the customer was re-invoiced). cancelPendingJobs removes BullMQ jobs and
+	// marks the automation_jobs rows as 'cancelled'.
+	await cancelPendingJobs(orgId, 'invoice_reminder', invoiceId);
+
+	for (const day of DUNNING_STEP_DAYS) {
+		const fireAtMs = dueAtMs + day * 86_400_000;
+		const delay = Math.max(0, fireAtMs - now);
+		const bullJobId = `invoice_reminder:${invoiceId}:day${day}`;
+		try {
+			const bullJob = await addJob(
+				automationQueue(),
+				'invoice_reminder',
+				{
+					outbox_event_id: bullJobId,
+					event_type: 'invoice.dunning',
+					org_id: orgId,
+					resource_type: 'invoice',
+					resource_id: invoiceId,
+					payload: { dunning_day: day }
+				},
+				{ delay, jobId: bullJobId }
+			);
+			await insertAutomationJob({
+				org_id: orgId,
+				type: 'invoice_reminder',
+				resource_type: 'invoice',
+				resource_id: invoiceId,
+				bull_job_id: String(bullJob.id),
+				status: 'pending',
+				scheduled_for: new Date(fireAtMs)
+			});
+		} catch (err) {
+			console.error(
+				`[automation] failed to schedule dunning day ${day} for invoice ${invoiceId}:`,
+				err
+			);
+		}
+	}
 }
 
 async function handleInvoiceReminder(job: Job, data: EventJobData) {
@@ -543,17 +615,36 @@ async function handleInvoiceReminder(job: Job, data: EventJobData) {
 	}
 }
 
-async function handleReviewRequestSetup(data: EventJobData) {
+// ============================================================================
+// Review lifecycle handlers — 5 jobs, all gated by feature_review_funnel.
+//
+// Topology (see outboxWorker.ts + .claude/skills/contractor-crm/references/09.reputation.md):
+//   job.completed              → review.send       (delay = settings.review_funnel_delay_hours)
+//   review_request.sent        → review.unengaged  (delay = 72h)
+//                              → review.expire     (delay = 14d)
+//   review_request.engaged     → review.nudge_1    (delay = 24h)
+//                              → review.nudge_2    (delay = 72h)
+//
+// Attribution (Google review count reconcile) is NOT in this topology — it
+// runs synchronously inside the reconcile endpoints via runAttribution().
+//
+// Every handler re-reads automation_settings + the row and exits if any guard
+// fails. Pre-scheduling without runtime guards would double-send on retry.
+// ============================================================================
+
+// `job.completed` setup: schedule the eventual `review.send` after the
+// contractor-configured delay (default 2h).
+async function handleReviewSendSetup(data: EventJobData) {
 	if (!data.org_id) return;
 	const { settings } = await loadContext(data.org_id);
 	if (!settings || !settings.review_funnel_enabled) return;
 	const delayMs = settings.review_funnel_delay_hours * 3600_000;
 	const bullJob = await addJob(
 		automationQueue(),
-		'review_request',
+		'review.send',
 		{
-			outbox_event_id: `review_request:${data.resource_id}`,
-			event_type: 'review.request',
+			outbox_event_id: `review.send:${data.resource_id}`,
+			event_type: 'review.send',
 			org_id: data.org_id,
 			resource_type: 'job',
 			resource_id: data.resource_id,
@@ -572,7 +663,9 @@ async function handleReviewRequestSetup(data: EventJobData) {
 	});
 }
 
-async function handleReviewRequest(job: Job, data: EventJobData) {
+// `review.send`: create the review_request row in `sent` status, queue the SMS,
+// emit `review_request.sent` so the outbox pre-schedules unengaged + expire.
+async function handleReviewSend(job: Job, data: EventJobData) {
 	if (!data.org_id) return;
 	const [automationJobRow] = await db
 		.select()
@@ -599,8 +692,12 @@ async function handleReviewRequest(job: Job, data: EventJobData) {
 
 	if (automationJobRow) await markJobStarted(automationJobRow.id);
 	try {
-		await db.transaction(async (tx) => {
-			await tx
+		const token = await generateReviewToken();
+		const reviewLink = buildReviewLink(token);
+		const now = new Date();
+
+		const inserted = await db.transaction<{ id: string; token: string } | null>(async (tx) => {
+			const [row] = await tx
 				.insert(reviewRequests)
 				.values({
 					org_id: data.org_id!,
@@ -608,20 +705,262 @@ async function handleReviewRequest(job: Job, data: EventJobData) {
 					contact_id: contact.id,
 					status: 'sent',
 					sent_by_automation: true,
-					sent_at: new Date()
+					sent_at: now,
+					token,
+					token_expires_at: reviewTokenExpiry()
 				})
-				.onConflictDoNothing({ target: reviewRequests.job_id });
+				.onConflictDoNothing({ target: reviewRequests.job_id })
+				.returning({ id: reviewRequests.id, token: reviewRequests.token });
+			if (!row || !row.token) return null;
+
+			await emitReviewEvent(tx, {
+				org_id: data.org_id!,
+				review_request_id: row.id,
+				type: 'sent'
+			});
+
+			// Pre-schedule the unengaged reminder (+72h) and the absolute expiry
+			// (+14d) via the outbox. Both fire-time handlers re-read state.
+			await tx.insert(outboxEvents).values({
+				org_id: data.org_id!,
+				event_type: 'review_request.sent',
+				resource_type: 'review_request',
+				resource_id: row.id,
+				payload: {
+					review_request_id: row.id,
+					org_id: data.org_id!,
+					job_id: data.resource_id,
+					contact_id: contact.id
+				},
+				idempotency_key: `review_request.sent:${row.id}`
+			});
+			return { id: row.id, token: row.token };
 		});
+
+		// Conflict: a review request already exists for this job (manual send
+		// or earlier worker run). Skip silently.
+		if (!inserted) {
+			if (automationJobRow) await markJobCompleted(automationJobRow.id);
+			return;
+		}
 
 		const body = interpolate(settings.review_funnel_message, {
 			contact_name: contact.full_name,
-			org_name: org.name
+			org_name: org.name,
+			review_link: reviewLink
 		});
 		await queueAutomationSms(db, {
 			orgId: data.org_id,
 			contactId: contact.id,
 			body,
-			source: 'automation.review_request'
+			source: 'automation.review.send'
+		});
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+	} catch (err) {
+		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
+		throw err;
+	}
+}
+
+// Shared loader: returns null and marks job complete if any precondition fails.
+async function loadActiveReviewRequest(
+	orgId: string,
+	reviewRequestId: string,
+	allowed: ReadonlyArray<'sent' | 'engaged'>
+) {
+	const [rr] = await db
+		.select()
+		.from(reviewRequests)
+		.where(and(eq(reviewRequests.id, reviewRequestId), isNull(reviewRequests.deleted_at)));
+	if (!rr || !rr.token) return null;
+	if (!allowed.includes(rr.status as 'sent' | 'engaged')) return null;
+	if (rr.org_id !== orgId) return null;
+	return rr;
+}
+
+// `review.unengaged`: 72h after sent, if still `sent`, send the reminder copy.
+async function handleReviewUnengaged(job: Job, data: EventJobData) {
+	if (!data.org_id) return;
+	const [automationJobRow] = await db
+		.select()
+		.from(automationJobs)
+		.where(eq(automationJobs.bull_job_id, String(job.id)));
+	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
+
+	const reviewRequestId = (data.payload.review_request_id as string | undefined) ?? null;
+	if (!reviewRequestId) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	const rr = await loadActiveReviewRequest(data.org_id, reviewRequestId, ['sent']);
+	const { org, settings } = await loadContext(data.org_id);
+	if (
+		!rr ||
+		!org?.twilio_phone_number ||
+		!settings?.review_funnel_enabled ||
+		!settings.review_funnel_reminder_enabled
+	) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	const contact = await loadContact(data.org_id, rr.contact_id);
+	if (!contact || contact.sms_opt_out) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	if (automationJobRow) await markJobStarted(automationJobRow.id);
+	try {
+		const reviewLink = buildReviewLink(rr.token!);
+		const body = interpolate(settings.review_funnel_reminder_message, {
+			contact_name: contact.full_name,
+			org_name: org.name,
+			review_link: reviewLink
+		});
+		await db.transaction(async (tx) => {
+			await queueAutomationSms(tx, {
+				orgId: data.org_id!,
+				contactId: contact.id,
+				body,
+				source: 'automation.review.unengaged'
+			});
+			await emitReviewEvent(tx, {
+				org_id: data.org_id!,
+				review_request_id: rr.id,
+				type: 'reminder_sent'
+			});
+		});
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+	} catch (err) {
+		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
+		throw err;
+	}
+}
+
+// Shared nudge handler. `expectedCount` is the value of `nudge_count` we
+// require BEFORE this nudge fires; the UPDATE bumps it to expectedCount + 1.
+// The `WHERE nudge_count = expectedCount` guard makes retries safe.
+async function runNudge(
+	job: Job,
+	data: EventJobData,
+	nudgeNumber: 1 | 2,
+	expectedCount: 0 | 1,
+	pickTemplate: (settings: {
+		review_funnel_nudge_1_message: string;
+		review_funnel_nudge_2_message: string;
+	}) => string
+) {
+	if (!data.org_id) return;
+	const [automationJobRow] = await db
+		.select()
+		.from(automationJobs)
+		.where(eq(automationJobs.bull_job_id, String(job.id)));
+	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
+
+	const reviewRequestId = (data.payload.review_request_id as string | undefined) ?? null;
+	if (!reviewRequestId) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	const rr = await loadActiveReviewRequest(data.org_id, reviewRequestId, ['engaged']);
+	const { org, settings } = await loadContext(data.org_id);
+	if (
+		!rr ||
+		!org?.twilio_phone_number ||
+		!settings?.review_funnel_enabled ||
+		rr.nudge_count !== expectedCount
+	) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	const contact = await loadContact(data.org_id, rr.contact_id);
+	if (!contact || contact.sms_opt_out) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	if (automationJobRow) await markJobStarted(automationJobRow.id);
+	try {
+		const reviewLink = buildReviewLink(rr.token!);
+		const body = interpolate(pickTemplate(settings), {
+			contact_name: contact.full_name,
+			org_name: org.name,
+			review_link: reviewLink
+		});
+
+		// Atomic guard: only proceed if nudge_count is still at the expected
+		// value. A concurrent retry trying to fire the same nudge gets 0 rows.
+		const claimed = await db.transaction<boolean>(async (tx) => {
+			const updated = await tx
+				.update(reviewRequests)
+				.set({ nudge_count: expectedCount + 1, updated_at: new Date() })
+				.where(
+					and(
+						eq(reviewRequests.id, rr.id),
+						eq(reviewRequests.status, 'engaged'),
+						eq(reviewRequests.nudge_count, expectedCount)
+					)
+				)
+				.returning({ id: reviewRequests.id });
+			if (updated.length === 0) return false;
+
+			await queueAutomationSms(tx, {
+				orgId: data.org_id!,
+				contactId: contact.id,
+				body,
+				source: `automation.review.nudge_${nudgeNumber}`
+			});
+			await emitReviewEvent(tx, {
+				org_id: data.org_id!,
+				review_request_id: rr.id,
+				type: 'nudge_sent',
+				nudge_number: nudgeNumber
+			});
+			return true;
+		});
+
+		if (!claimed) {
+			if (automationJobRow) await markJobCompleted(automationJobRow.id);
+			return;
+		}
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+	} catch (err) {
+		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
+		throw err;
+	}
+}
+
+async function handleReviewNudge1(job: Job, data: EventJobData) {
+	return runNudge(job, data, 1, 0, (s) => s.review_funnel_nudge_1_message);
+}
+
+async function handleReviewNudge2(job: Job, data: EventJobData) {
+	return runNudge(job, data, 2, 1, (s) => s.review_funnel_nudge_2_message);
+}
+
+// `review.expire`: 14d after sent, force-terminate any still-active row.
+async function handleReviewExpire(job: Job, data: EventJobData) {
+	if (!data.org_id) return;
+	const [automationJobRow] = await db
+		.select()
+		.from(automationJobs)
+		.where(eq(automationJobs.bull_job_id, String(job.id)));
+	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
+
+	const reviewRequestId = (data.payload.review_request_id as string | undefined) ?? null;
+	if (!reviewRequestId) {
+		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+		return;
+	}
+
+	if (automationJobRow) await markJobStarted(automationJobRow.id);
+	try {
+		await db.transaction(async (tx) => {
+			await transitionToExpired(tx, reviewRequestId);
 		});
 		if (automationJobRow) await markJobCompleted(automationJobRow.id);
 	} catch (err) {
@@ -697,17 +1036,138 @@ async function handleAppointmentReminderSetup(data: EventJobData) {
 	}
 }
 
+// Format a JS Date for the org's timezone using Intl. We intentionally split
+// date + time so contractors can use {appointment_datetime}, {appointment_date},
+// or {appointment_time} independently inside their templates.
+function formatAppointmentForOrg(d: Date, timezone: string) {
+	const datetime = new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone,
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		timeZoneName: 'short'
+	}).format(d);
+	const date = new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone,
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric'
+	}).format(d);
+	const time = new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone,
+		hour: 'numeric',
+		minute: '2-digit',
+		timeZoneName: 'short'
+	}).format(d);
+	return { datetime, date, time };
+}
+
+// Sent immediately when a customer self-books via a public booking link.
+// Internal/staff-created appointments are intentionally skipped — the
+// contractor already knows about those.
+async function handleAppointmentConfirmation(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const appointmentId = data.resource_id;
+
+	const [appointment] = await db
+		.select()
+		.from(appointments)
+		.where(and(eq(appointments.id, appointmentId), isNull(appointments.deleted_at)));
+	if (!appointment || appointment.status !== 'scheduled') return;
+	if (appointment.booking_source !== 'booking_link') return;
+
+	const { org, settings } = await loadContext(orgId);
+	if (!org || !settings || !settings.appointment_confirmation_enabled) return;
+
+	const contact = await loadContact(orgId, appointment.contact_id);
+	if (!contact) return;
+
+	const bullJobId = `appt_confirm:${appointmentId}`;
+	const automationJob = await insertAutomationJob({
+		org_id: orgId,
+		type: 'appointment_confirmation',
+		resource_type: 'appointment',
+		resource_id: appointmentId,
+		bull_job_id: bullJobId,
+		status: 'processing',
+		scheduled_for: new Date()
+	});
+
+	try {
+		const formatted = formatAppointmentForOrg(appointment.scheduled_start, org.timezone);
+		const apptType = appointment.type.replaceAll('_', ' ');
+		const location = appointment.location ?? '';
+		const locationBlock = location ? `Where: ${location}\n\n` : '';
+
+		const templateVars = {
+			contact_name: contact.full_name,
+			org_name: org.name,
+			appointment_datetime: formatted.datetime,
+			appointment_date: formatted.date,
+			appointment_time: formatted.time,
+			appointment_type: apptType,
+			location,
+			location_block: locationBlock,
+			manage_link: buildManageLink({
+				appointmentId: appointment.id,
+				updatedAt: appointment.updated_at,
+				scheduledStart: appointment.scheduled_start
+			})
+		};
+
+		// SMS — best-effort. Skip when contact opted out, has no phone, or org
+		// has no Twilio number configured.
+		if (contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+			try {
+				const smsBody = interpolate(settings.appointment_confirmation_sms_message, templateVars);
+				await queueAutomationSms(db, {
+					orgId,
+					contactId: contact.id,
+					body: smsBody,
+					source: 'automation.appointment_confirmation'
+				});
+			} catch (err) {
+				console.error('[automation] appointment confirmation SMS failed:', err);
+			}
+		}
+
+		// Email — also best-effort; the .ics attachment lives downstream in
+		// emailWorker via the appointmentId carried on the outbox payload.
+		if (contact.email) {
+			try {
+				const subject = interpolate(settings.appointment_confirmation_email_subject, templateVars);
+				const body = interpolate(settings.appointment_confirmation_email_message, templateVars);
+				await queueAutomationEmail(db, {
+					orgId,
+					contactId: contact.id,
+					contactEmail: contact.email,
+					subject,
+					body,
+					source: 'automation.appointment_confirmation',
+					appointmentId
+				});
+			} catch (err) {
+				console.error('[automation] appointment confirmation email failed:', err);
+			}
+		}
+
+		await markJobCompleted(automationJob.id);
+	} catch (err) {
+		await markJobFailed(automationJob.id, err);
+		throw err;
+	}
+}
+
 async function handleAppointmentRescheduled(data: EventJobData) {
 	if (!data.org_id) return;
 	await cancelPendingJobs(data.org_id, 'appointment_reminder', data.resource_id);
 	await handleAppointmentReminderSetup(data);
 }
 
-async function handleAppointmentReminder(
-	job: Job,
-	data: EventJobData,
-	variant: '24h' | '1h'
-) {
+async function handleAppointmentReminder(job: Job, data: EventJobData, variant: '24h' | '1h') {
 	if (!data.org_id) return;
 	const [automationJobRow] = await db
 		.select()
@@ -809,6 +1269,35 @@ async function handleQuoteChangesRequestedCancel(data: EventJobData) {
 async function handleInvoicePaidCancel(data: EventJobData) {
 	if (!data.org_id) return;
 	await cancelPendingJobs(data.org_id, 'invoice_reminder', data.resource_id);
+	await deactivateInvoicePaymentLink(data.org_id, data.resource_id);
+}
+
+// Disable the static Stripe Payment Link once the invoice is settled so a
+// customer can't double-pay via the fallback link. Best-effort: a Stripe
+// failure must not block the rest of the paid-event side effects.
+async function deactivateInvoicePaymentLink(orgId: string, invoiceId: string) {
+	try {
+		const [row] = await db
+			.select({
+				stripe_payment_link_id: invoices.stripe_payment_link_id
+			})
+			.from(invoices)
+			.where(and(eq(invoices.id, invoiceId), eq(invoices.org_id, orgId)))
+			.limit(1);
+		if (!row?.stripe_payment_link_id) return;
+
+		const [orgRow] = await db
+			.select({ stripe_restricted_key: organizations.stripe_restricted_key })
+			.from(organizations)
+			.where(eq(organizations.id, orgId))
+			.limit(1);
+		if (!orgRow?.stripe_restricted_key) return;
+
+		const stripe = getOrgStripeClient(orgRow.stripe_restricted_key);
+		await deactivatePaymentLink(stripe, row.stripe_payment_link_id);
+	} catch (err) {
+		console.error('[automation] Payment Link deactivation failed:', err);
+	}
 }
 
 // ---- Worker ----
@@ -835,13 +1324,22 @@ export const automationWorker = new Worker<EventJobData>(
 				if (data.event_type === 'quote.sent') return handleQuoteFollowupSetup(data);
 				return handleQuoteFollowup(job, data);
 			case 'invoice_reminder':
-				if (data.event_type === 'invoice.overdue') return handleInvoiceReminderSetup(data);
 				return handleInvoiceReminder(job, data);
-			case 'review_request':
-				if (data.event_type === 'job.completed') return handleReviewRequestSetup(data);
-				return handleReviewRequest(job, data);
+			case 'review.send':
+				if (data.event_type === 'job.completed') return handleReviewSendSetup(data);
+				return handleReviewSend(job, data);
+			case 'review.unengaged':
+				return handleReviewUnengaged(job, data);
+			case 'review.nudge_1':
+				return handleReviewNudge1(job, data);
+			case 'review.nudge_2':
+				return handleReviewNudge2(job, data);
+			case 'review.expire':
+				return handleReviewExpire(job, data);
 			case 'appointment_reminder':
 				return handleAppointmentReminderSetup(data);
+			case 'appointment_confirmation':
+				return handleAppointmentConfirmation(data);
 			case 'appointment_reschedule':
 				return handleAppointmentRescheduled(data);
 			case 'appointment_reminder_24h':

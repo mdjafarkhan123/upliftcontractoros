@@ -20,11 +20,7 @@ export function assertIsoDate(value: string, field = 'date'): IsoDate {
 	}
 	const [y, m, d] = value.split('-').map(Number);
 	const dt = new Date(Date.UTC(y, m - 1, d));
-	if (
-		dt.getUTCFullYear() !== y ||
-		dt.getUTCMonth() !== m - 1 ||
-		dt.getUTCDate() !== d
-	) {
+	if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
 		throw new BookingValidationError('Invalid calendar date', field);
 	}
 	return value;
@@ -53,11 +49,7 @@ export function nowUtc(): Date {
 
 // Convert a (date YYYY-MM-DD, time HH:mm[:ss]) pair in the org tz to a UTC Date.
 // DST-safe: fromZonedTime resolves the wall-clock instant in the named zone.
-export function zonedDateTimeToUtc(
-	date: IsoDate,
-	time: string,
-	timezone: string
-): Date {
+export function zonedDateTimeToUtc(date: IsoDate, time: string, timezone: string): Date {
 	const match = TIME_RE.exec(time);
 	if (!match) throw new BookingValidationError(`Invalid time: ${time}`);
 	const hh = match[1];

@@ -1,8 +1,6 @@
 import { sendEmail, type EmailAttachment } from './client';
 import { contractorFromAddress } from './senderAddresses';
 
-const env = process.env;
-
 function escapeHtml(s: string): string {
 	return s
 		.replaceAll('&', '&amp;')
@@ -13,17 +11,16 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Opaque reply-to address. Format: <r_xxxxxxxxxxxx>@<EMAIL_REPLY_DOMAIN>.
+ * Opaque reply-to address. Format: <r_xxxxxxxxxxxx>@<inbound domain>.
  * The alias is a per-conversation token from conversations.reply_alias —
- * caller is responsible for ensuring one exists (ensureReplyAlias()).
+ * caller is responsible for ensuring one exists (ensureReplyAlias()). The
+ * inbound domain is the org's Brevo receiving subdomain (email_domains.inbound_domain).
  *
  * Inbound webhooks look up conversations by alias scoped to org. No internal
  * IDs ever leak to the recipient's mail headers.
  */
-export function replyToAddress(replyAlias: string): string {
-	const domain = env.EMAIL_REPLY_DOMAIN;
-	if (!domain) throw new Error('EMAIL_REPLY_DOMAIN is required to send conversation email.');
-	return `${replyAlias}@${domain}`;
+export function replyToAddress(replyAlias: string, inboundDomain: string): string {
+	return `${replyAlias}@${inboundDomain}`;
 }
 
 export type ConversationEmailOrg = {
@@ -34,6 +31,10 @@ export type ConversationEmailOrg = {
 
 export type SendConversationEmailInput = {
 	org: ConversationEmailOrg;
+	/** Org's Brevo-verified sending subdomain (email_domains.domain). */
+	sendingDomain: string;
+	/** Org's Brevo receiving subdomain (email_domains.inbound_domain). */
+	inboundDomain: string;
 	replyAlias: string;
 	to: string;
 	subject: string;
@@ -45,7 +46,7 @@ export type SendConversationEmailInput = {
 };
 
 export type SendConversationEmailResult = {
-	provider: 'resend';
+	provider: 'brevo';
 	providerMessageId: string | null;
 	fromAddress: string;
 	replyToAddress: string;
@@ -69,8 +70,8 @@ function bodyHtml(body: string): string {
 export async function sendConversationEmail(
 	input: SendConversationEmailInput
 ): Promise<SendConversationEmailResult> {
-	const fromAddress = contractorFromAddress(input.org);
-	const reply = replyToAddress(input.replyAlias);
+	const fromAddress = contractorFromAddress(input.org, input.sendingDomain);
+	const reply = replyToAddress(input.replyAlias, input.inboundDomain);
 
 	const headers: Record<string, string> = {};
 	if (input.inReplyTo) headers['In-Reply-To'] = input.inReplyTo;
@@ -92,7 +93,7 @@ export async function sendConversationEmail(
 	});
 
 	return {
-		provider: 'resend',
+		provider: 'brevo',
 		providerMessageId: id,
 		fromAddress,
 		replyToAddress: reply

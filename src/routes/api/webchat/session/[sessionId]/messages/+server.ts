@@ -21,6 +21,7 @@ import { recordInboundMessage } from '$lib/server/conversations';
 import { validateOrigin } from '$lib/server/webchat/validateOrigin';
 import { checkMessageRateLimit, checkPollRateLimit } from '$lib/server/webchat/rateLimit';
 import { sanitizeMessageBody } from '$lib/server/webchat/sanitize';
+import { isContractorTyping } from '$lib/server/webchat/typingStore';
 import { createLogger } from '$lib/server/log';
 
 const log = createLogger('webchat.message.insert');
@@ -58,12 +59,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 	const [session] = await db
 		.select()
 		.from(webchatSessions)
-		.where(
-			and(
-				eq(webchatSessions.id, sessionId),
-				eq(webchatSessions.session_token, sessionToken)
-			)
-		)
+		.where(and(eq(webchatSessions.id, sessionId), eq(webchatSessions.session_token, sessionToken)))
 		.limit(1);
 
 	if (!session) return json({ error: 'Session not found' }, { status: 404 });
@@ -85,8 +81,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 
 	const sinceParam = url.searchParams.get('since');
 	const parsedSince = sinceParam ? new Date(sinceParam) : null;
-	const since =
-		parsedSince && !Number.isNaN(parsedSince.getTime()) ? parsedSince : new Date(0);
+	const since = parsedSince && !Number.isNaN(parsedSince.getTime()) ? parsedSince : new Date(0);
 
 	const rows = await db
 		.select({
@@ -115,7 +110,8 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 				body: r.body ?? '',
 				created_at: r.created_at.toISOString(),
 				sent_at: r.sent_at?.toISOString() ?? r.created_at.toISOString()
-			}))
+			})),
+			contractor_is_typing: isContractorTyping(session.conversation_id)
 		}
 	});
 };
@@ -141,12 +137,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	const [session] = await db
 		.select()
 		.from(webchatSessions)
-		.where(
-			and(
-				eq(webchatSessions.id, sessionId),
-				eq(webchatSessions.session_token, sessionToken)
-			)
-		)
+		.where(and(eq(webchatSessions.id, sessionId), eq(webchatSessions.session_token, sessionToken)))
 		.limit(1);
 
 	if (!session) return json({ error: 'Session not found' }, { status: 404 });

@@ -34,6 +34,8 @@ Load them when relevant — do not load all at once.
 | **Files & Media**, R2 uploads                     | `references/10-files-and-media.md`            |
 | **Systems & Automations**, activity logs          | `references/11-growth-automations-systems.md` |
 | **Cross-Domain Map**, multi-table queries         | `references/12-cross-domain-map.md`           |
+| **Project structure**,                            | `references/project-structure.md`             |
+| **Project Tech Stack**, stack                     | `references/stack.md`                         |
 
 ### UI Design & Aesthetics (`contractor-crm-design-reference`)
 
@@ -70,110 +72,12 @@ npm run check:watch   # type checking in watch mode
 npm run lint          # prettier --check + eslint
 npm run format        # prettier --write
 
-npx tsx worker.ts     # start standalone worker process (separate terminal)
+npm run worker        # start standalone worker process (separate terminal; loads .env)
 
 npx drizzle-kit generate   # generate migration from schema changes
 npx drizzle-kit migrate    # run pending migrations
 npx drizzle-kit studio     # open Drizzle Studio GUI
 ```
-
----
-
-## Stack
-
-| Layer            | Technology                                           |
-| ---------------- | ---------------------------------------------------- |
-| Framework        | SvelteKit 2 + Svelte 5 (runes)                       |
-| Rendering        | CSR only — `ssr = false` globally                    |
-| Database         | PostgreSQL via Supabase + Drizzle ORM + postgres.js  |
-| Auth             | Supabase SSR + JWT + bcryptjs + otplib (TOTP)        |
-| Queue            | BullMQ + ioredis (Redis)                             |
-| Cron             | node-cron                                            |
-| Email            | Resend                                               |
-| SMS              | Twilio                                               |
-| Storage          | Cloudflare R2 (S3-compatible — `@aws-sdk/client-s3`) |
-| Image processing | Sharp                                                |
-| PDF              | Puppeteer                                            |
-| UI primitives    | Shadcn Svelte                                        |
-| Validation       | Zod                                                  |
-| Styling          | Tailwind CSS + Custom CSS                            |
-
----
-
-## Project Structure
-
-```
-project root
-  worker.ts                   ← Standalone worker process. Never touched by SvelteKit.
-  tailwind.config.ts          ← Tailwind config — extends Shadcn Svelte defaults
-  components.json             ← Shadcn Svelte CLI config (paths, aliases, style)
-
-src/
-src/
-  lib/
-    server/                   ← Server-only. Never imported in .svelte files.
-      db/
-        schema/               ← Drizzle schema files (one per domain)
-        client.ts             ← Drizzle client
-      auth/                   ← Session helpers
-      permissions/            ← checkPermission utility + PermissionKey type
-      queue/                  ← BullMQ connection + queue definitions
-      workers/                ← outboxWorker, automationWorker, notificationWorker
-      cron/                   ← Cron job registrations
-      media/                  ← R2 upload/delete helpers
-      org/                    ← Org deletion cascade
-    components/               ← Feature components, one folder per domain
-      shared/                 ← SkeletonLoader, EmptyState, PageWrapper, Badge, etc.
-    styles/
-      app.css                 ← Tailwind base imports + CSS custom properties (colors, spacing, bottom-nav height, touch target minimum)
-    types/                    ← Shared TypeScript types
-    utils/
-      phone.ts                ← E.164 normalization
-      format.ts               ← Currency, date, quote/invoice number formatters
-      hash.ts                 ← SHA-256 helper
-  routes/
-    (app)/                    ← Protected contractor routes
-    jafar/                    ← Super admin (fully isolated)
-    api/                      ← All API server routes
-    auth/                     ← Login, logout, forgot-password
-    q/                        ← Public quote routes (no auth)
-    change-password/
-
-worker.ts                     ← Standalone worker process entry point (project root)
-drizzle.config.ts             ← Points to schema/index.ts and DATABASE_URL
-
-```
-
----
-
-## Deployment — Vercel + Railway
-
-- **Vercel** serves the SvelteKit app (routes, API, static assets including `static/webchat-widget.js`).
-- **Railway** runs the standalone worker (`worker.ts`) on the free tier — build minutes are scarce.
-- Railway's **Watch Paths** are configured to redeploy ONLY when worker-relevant code changes. Current watch list:
-  ```
-  worker.ts
-  src/lib/server/workers/**
-  src/lib/server/cron/**
-  src/lib/server/queue/**
-  src/lib/server/db/**
-  src/lib/server/email/**
-  src/lib/server/media/**
-  src/lib/server/r2/**
-  src/lib/server/twilio/**
-  src/lib/server/org/**
-  src/lib/server/log.ts
-  package.json
-  package-lock.json
-  tsconfig.json
-  drizzle.config.ts
-  nixpacks.toml
-  railway.json
-  railway.toml
-  Dockerfile
-  ```
-- **IMPORTANT:** If you add a new `$lib/server/...` import inside any worker, cron job, or queue module, you MUST add that path to Railway's Watch Paths — otherwise the worker will run against stale code. Flag this to the user whenever such an import is introduced.
-- UI-only, route-only, widget-only, and business-logic-only changes (contacts, pipeline, quotes, jobs, invoices, etc. — anything NOT imported by workers) should never trigger a Railway rebuild.
 
 ---
 
@@ -187,11 +91,12 @@ Full patterns and code examples live in skills — these are the guardrails.
 3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
 4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
 5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
-6. **Workers run standalone** — `npx tsx worker.ts` in a separate terminal. Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
+6. **Workers run standalone** — `npm run worker` in a separate terminal (runs `node --env-file=.env --import tsx worker.ts`; plain `npx tsx worker.ts` fails with `DATABASE_URL is required` because it skips `.env`). Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
 7. **All permission checks go through `checkPermission()`** — the 40 booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
 8. **Transaction boundary law** — business mutations + `outbox_events` INSERT inside the transaction. BullMQ enqueue, Twilio, Resend, any external call OUTSIDE (via outbox worker only). Never call external services inside a transaction.
 9. **Tenant isolation absolute** — every table has `org_id`, every query filters by it. RLS enforces at DB layer. API layer also enforces.
 10. **Schema is authoritative** — do not invent columns, tables, or enums. If something seems missing, ask. Read the relevant schema section before writing any DB logic.
+    - **You own the migration lifecycle.** Any time you edit a file under `src/lib/server/db/schema/**`, you must — in the same turn, without waiting for the user to ask — run `npx drizzle-kit generate` to produce the migration SQL, review it, then run `npx drizzle-kit migrate` to apply it. Never leave a schema change uncommitted to the DB and never instruct the user to "run the migration" themselves. If `generate` produces nothing or `migrate` fails, surface the error and stop — do not ship the feature claiming success while the DB is out of sync with the code.
 11. **Outbox pattern non-negotiable** — business events flow through `outbox_events` → outbox worker → BullMQ. Never trigger automations, SMS, or emails directly from route handlers.
 12. **`/jafar` completely isolated** — separate `jafarSession` cookie, no `org_id`, no `org_members` row, no Supabase auth. Never check jafar session in contractor middleware. Never mix.
 13. **Client-side auth guard mandatory** — `hooks.server.ts` protects initial load + API routes. `/(app)/+layout.svelte` protects client-side navigation. Both required. Neither replaces the other.
@@ -209,21 +114,6 @@ Full patterns and code examples live in skills — these are the guardrails.
     toast messages and `field_errors` to map to inline field errors.
 15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
 16. You are an Expert Engineer who has build industry led CRM dozen times. You should always care about performance and code that way but not overengineering. If you have any suggestion you first present to the user then if permission granted then code that way
-
----
-
-## Architecture Contracts
-
-### Two Session Systems — Never Mixed
-
-| Session        | Path       | Auth mechanism             | DB identity          |
-| -------------- | ---------- | -------------------------- | -------------------- |
-| Contractor     | `/(app)/*` | Supabase Auth cookie       | `org_members` row    |
-| Platform Owner | `/jafar/*` | Custom httpOnly JWT cookie | None — env vars only |
-
-Three-layer architecture (DB → outbox+BullMQ → Realtime) and the RLS
-responsibility split are defined in the `contractor-crm` skill.
-Load `references/automation-events.md` or `references/permissions-auth.md` for detail.
 
 ---
 

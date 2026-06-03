@@ -1,14 +1,15 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import AppointmentStatusBadge from './AppointmentStatusBadge.svelte';
-	import { addDays, dayKey, formatDayLabel, formatTime, isSameDay } from '$lib/utils/calendar';
+	import { addDays, dayKey, formatDayLabel, isSameDay } from '$lib/utils/calendar';
+	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
+	import { sessionStore } from '$lib/stores/session.svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 	import { SvelteMap } from 'svelte/reactivity';
-	let {
-		anchor,
-		days,
-		items
-	}: { anchor: Date; days: number; items: AppointmentListItem[] } = $props();
+
+	const orgTz = $derived(sessionStore.data?.org.timezone);
+	let { anchor, days, items }: { anchor: Date; days: number; items: AppointmentListItem[] } =
+		$props();
 
 	const today = new Date();
 
@@ -45,7 +46,9 @@
 				{/if}
 			</h3>
 			{#if bucket.items.length === 0}
-				<p class="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
+				<p
+					class="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-xs text-muted-foreground"
+				>
 					Nothing scheduled.
 				</p>
 			{:else}
@@ -57,7 +60,7 @@
 								class="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40 active:bg-accent/60"
 							>
 								<div class="w-16 shrink-0 text-xs font-medium text-muted-foreground">
-									{formatTime(item.scheduled_start)}
+									{formatTimeInOrgTz(item.scheduled_start, orgTz)}
 								</div>
 								<div class="min-w-0 flex-1">
 									<p class="truncate text-sm font-semibold text-foreground">{item.title}</p>

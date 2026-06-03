@@ -16,7 +16,9 @@ export type ContactListItem = {
 
 export type ContactsFilters = {
 	q: string;
-	statusFilter: 'all' | 'leads' | 'customers';
+	statusFilter: 'all' | 'leads' | 'customers' | 'archived';
+	tag: string;
+	scope: 'mine' | 'team' | 'unassigned';
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
@@ -36,13 +38,15 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: ContactsFilters): string {
-	return `${f.q.trim()}|${f.statusFilter}`;
+	return `${f.q.trim()}|${f.statusFilter}|${f.tag}|${f.scope}`;
 }
 
 function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams {
 	const params = new URLSearchParams();
 	if (f.q.trim()) params.set('q', f.q.trim());
 	if (f.statusFilter !== 'all') params.set('status', f.statusFilter);
+	if (f.tag) params.set('tag', f.tag);
+	if (f.scope !== 'team') params.set('scope', f.scope);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }
@@ -145,6 +149,15 @@ export const contactsStore = {
 		for (const [k, entry] of cache) {
 			if (entry.items.some((i) => i.id === id)) {
 				cache.set(k, { ...entry, items: entry.items.filter((i) => i.id !== id) });
+			}
+		}
+	},
+
+	removeMany(ids: string[]): void {
+		const idSet = new Set(ids);
+		for (const [k, entry] of cache) {
+			if (entry.items.some((i) => idSet.has(i.id))) {
+				cache.set(k, { ...entry, items: entry.items.filter((i) => !idSet.has(i.id)) });
 			}
 		}
 	},

@@ -28,12 +28,7 @@ export const DELETE: RequestHandler = async (event) => {
 	await db
 		.update(contactNotes)
 		.set({ deleted_at: new Date(), updated_at: new Date() })
-		.where(
-			and(
-				eq(contactNotes.org_id, auth.orgId),
-				eq(contactNotes.id, event.params.noteId)
-			)
-		);
+		.where(and(eq(contactNotes.org_id, auth.orgId), eq(contactNotes.id, event.params.noteId)));
 
 	return json({ ok: true });
 };

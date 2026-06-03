@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { media, jobs, quotes, invoices } from '$lib/server/db/schema';
+import { media, jobs, quotes, invoices, contacts } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { checkUploadRateLimit } from '$lib/server/media/rateLimiter';
@@ -29,6 +29,7 @@ const ALLOWED_PURPOSE_TAGS = [
 	'marketing_asset',
 	'quote_attachment',
 	'invoice_attachment',
+	'contact_attachment',
 	'org_logo'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
@@ -37,6 +38,7 @@ const JOB_PURPOSE_TAGS: PurposeTag[] = ['job_photo', 'before', 'after', 'marketi
 
 const uploadSchema = z.object({
 	purpose_tag: z.enum(ALLOWED_PURPOSE_TAGS),
+	contact_id: z.string().uuid().optional(),
 	job_id: z.string().uuid().optional(),
 	quote_id: z.string().uuid().optional(),
 	invoice_id: z.string().uuid().optional()
@@ -53,7 +55,10 @@ export const POST: RequestHandler = async (event) => {
 	// Rate limiting — truly atomic via Lua script
 	const allowed = await checkUploadRateLimit(auth.orgId);
 	if (!allowed) {
-		return json({ error: 'Upload rate limit exceeded. Maximum 20 uploads per minute.' }, { status: 429 });
+		return json(
+			{ error: 'Upload rate limit exceeded. Maximum 20 uploads per minute.' },
+			{ status: 429 }
+		);
 	}
 
 	let formData: FormData;
@@ -74,6 +79,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const parsed = uploadSchema.safeParse({
 		purpose_tag: formData.get('purpose_tag'),
+		contact_id: formData.get('contact_id') || undefined,
 		job_id: formData.get('job_id') || undefined,
 		quote_id: formData.get('quote_id') || undefined,
 		invoice_id: formData.get('invoice_id') || undefined
@@ -81,7 +87,7 @@ export const POST: RequestHandler = async (event) => {
 	if (!parsed.success) {
 		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
-	const { purpose_tag, job_id, quote_id, invoice_id } = parsed.data;
+	const { purpose_tag, contact_id, job_id, quote_id, invoice_id } = parsed.data;
 
 	const isOrgLogo = purpose_tag === 'org_logo';
 
@@ -114,10 +120,22 @@ export const POST: RequestHandler = async (event) => {
 		if (auth.member.role !== 'admin') {
 			error(403, 'Forbidden: admin role required to upload org logo');
 		}
-		if (job_id || quote_id || invoice_id) {
+		if (contact_id || job_id || quote_id || invoice_id) {
 			return json({ error: 'org_logo uploads must not include a parent FK' }, { status: 422 });
 		}
 	} else {
+		if (purpose_tag === 'contact_attachment') {
+			if (!contact_id) {
+				return json({ error: 'contact_id is required for contact_attachment' }, { status: 422 });
+			}
+			// Contact attachments are standalone — DB CHECK enforces exactly one parent.
+			if (job_id || quote_id || invoice_id) {
+				return json(
+					{ error: 'contact_attachment must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
 		if (purpose_tag === 'quote_attachment' && !quote_id) {
 			return json({ error: 'quote_id is required for quote_attachment' }, { status: 422 });
 		}
@@ -127,12 +145,33 @@ export const POST: RequestHandler = async (event) => {
 		if (JOB_PURPOSE_TAGS.includes(purpose_tag) && !job_id) {
 			return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
 		}
-		if (!job_id && !quote_id && !invoice_id) {
-			return json({ error: 'At least one of job_id, quote_id, invoice_id is required' }, { status: 422 });
+		if (!contact_id && !job_id && !quote_id && !invoice_id) {
+			return json(
+				{ error: 'At least one of contact_id, job_id, quote_id, invoice_id is required' },
+				{ status: 422 }
+			);
 		}
 	}
 
 	// Validate parent FK belongs to this org
+	if (contact_id) {
+		const [c] = await db
+			.select({ id: contacts.id, assigned_to: contacts.assigned_to })
+			.from(contacts)
+			.where(
+				and(
+					eq(contacts.id, contact_id),
+					eq(contacts.org_id, auth.orgId),
+					isNull(contacts.deleted_at)
+				)
+			)
+			.limit(1);
+		// 404 (not 403) when the member can't see this contact — don't leak existence.
+		if (!c) return json({ error: 'Contact not found' }, { status: 404 });
+		if (!auth.member.can_view_all_contacts && c.assigned_to !== auth.member.id) {
+			return json({ error: 'Contact not found' }, { status: 404 });
+		}
+	}
 	if (job_id) {
 		const [j] = await db
 			.select({ id: jobs.id })
@@ -153,7 +192,13 @@ export const POST: RequestHandler = async (event) => {
 		const [inv] = await db
 			.select({ id: invoices.id })
 			.from(invoices)
-			.where(and(eq(invoices.id, invoice_id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at)))
+			.where(
+				and(
+					eq(invoices.id, invoice_id),
+					eq(invoices.org_id, auth.orgId),
+					isNull(invoices.deleted_at)
+				)
+			)
 			.limit(1);
 		if (!inv) return json({ error: 'Invoice not found' }, { status: 404 });
 	}
@@ -164,7 +209,10 @@ export const POST: RequestHandler = async (event) => {
 	// Validate MIME type vs claimed Content-Type and magic bytes
 	const claimedMime = file.type || '';
 	if (!isAllowedMimeType(claimedMime)) {
-		return json({ error: 'File type not allowed. Accepted: images (JPEG, PNG, WebP, GIF, HEIC) and PDF.' }, { status: 422 });
+		return json(
+			{ error: 'File type not allowed. Accepted: images (JPEG, PNG, WebP, GIF, HEIC) and PDF.' },
+			{ status: 422 }
+		);
 	}
 
 	if (isOrgLogo && !ORG_LOGO_ALLOWED_MIME.has(claimedMime)) {
@@ -221,7 +269,9 @@ export const POST: RequestHandler = async (event) => {
 			await Promise.all([
 				r2Upload(r2Key, variants.original, 'image/jpeg').then(() => uploadedKeys.push(r2Key)),
 				r2Upload(webKey, variants.web, 'image/jpeg').then(() => uploadedKeys.push(webKey!)),
-				r2Upload(thumbnailKey, variants.thumb, 'image/jpeg').then(() => uploadedKeys.push(thumbnailKey!))
+				r2Upload(thumbnailKey, variants.thumb, 'image/jpeg').then(() =>
+					uploadedKeys.push(thumbnailKey!)
+				)
 			]);
 
 			uploadedFileSize = variants.original.length;
@@ -248,6 +298,7 @@ export const POST: RequestHandler = async (event) => {
 				.values({
 					org_id: auth.orgId,
 					uploaded_by: auth.member.id,
+					contact_id: contact_id ?? null,
 					job_id: job_id ?? null,
 					quote_id: quote_id ?? null,
 					invoice_id: invoice_id ?? null,

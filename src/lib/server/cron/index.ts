@@ -18,6 +18,9 @@ import { runOrgLifecycleAdvance } from './orgLifecycleAdvance';
 import { runMonthlyGrowthSummary } from './monthlyGrowthSummary';
 import { runWebchatSessionCleanup } from './webchatSessionCleanup';
 import { runUnsnoozeConversations } from './unsnoozeConversations';
+import { runUnreadCountReconcile } from './unreadCountReconcile';
+import { runFollowUpDueSweep } from './followUpDueSweep';
+import { runSmsMonthlyGrant } from './smsMonthlyGrant';
 
 const log = createLogger('cron');
 
@@ -86,7 +89,10 @@ const JOBS: CronSpec[] = [
 	{ name: 'notification-purge', schedule: '0 3 * * *', run: runNotificationPurge },
 	{ name: 'monthly-growth-summary', schedule: '0 6 1 * *', run: runMonthlyGrowthSummary },
 	{ name: 'webchat-session-cleanup', schedule: '0 4 * * *', run: runWebchatSessionCleanup },
-	{ name: 'unsnooze-conversations', schedule: '*/5 * * * *', run: runUnsnoozeConversations }
+	{ name: 'unsnooze-conversations', schedule: '*/5 * * * *', run: runUnsnoozeConversations },
+	{ name: 'unread-count-reconcile', schedule: '0 * * * *', run: runUnreadCountReconcile },
+	{ name: 'follow-up-due-sweep', schedule: '*/15 * * * *', run: runFollowUpDueSweep },
+	{ name: 'sms-monthly-grant', schedule: '0 5 1 * *', run: runSmsMonthlyGrant }
 ];
 
 let registered = false;

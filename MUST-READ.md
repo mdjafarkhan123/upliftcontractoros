@@ -49,37 +49,37 @@ import { env } from '$env/dynamic/private';
 **Find (around the bottom of the `POST` handler):**
 
 ```ts
-	const origin = event.url.origin;
-	const invoiceNumberDisplay = formatInvoiceNumber(row.invoice_number);
+const origin = event.url.origin;
+const invoiceNumberDisplay = formatInvoiceNumber(row.invoice_number);
 
-	const session = await createCheckoutSession({
-		stripe,
-		invoiceId: row.id,
-		orgId: auth.orgId,
-		invoiceNumberDisplay,
-		customerEmail: row.contact_email,
-		lineItems: stripeLines,
-		successUrl: `${origin}/invoices/${row.id}?paid=1`,
-		cancelUrl: `${origin}/invoices/${row.id}?paid=0`
-	});
+const session = await createCheckoutSession({
+	stripe,
+	invoiceId: row.id,
+	orgId: auth.orgId,
+	invoiceNumberDisplay,
+	customerEmail: row.contact_email,
+	lineItems: stripeLines,
+	successUrl: `${origin}/invoices/${row.id}?paid=1`,
+	cancelUrl: `${origin}/invoices/${row.id}?paid=0`
+});
 ```
 
 **Replace with:**
 
 ```ts
-	const baseUrl = (env.APP_URL ?? event.url.origin).replace(/\/$/, '');
-	const invoiceNumberDisplay = formatInvoiceNumber(row.invoice_number);
+const baseUrl = (env.APP_URL ?? event.url.origin).replace(/\/$/, '');
+const invoiceNumberDisplay = formatInvoiceNumber(row.invoice_number);
 
-	const session = await createCheckoutSession({
-		stripe,
-		invoiceId: row.id,
-		orgId: auth.orgId,
-		invoiceNumberDisplay,
-		customerEmail: row.contact_email,
-		lineItems: stripeLines,
-		successUrl: `${baseUrl}/invoices/${row.id}?paid=1`,
-		cancelUrl: `${baseUrl}/invoices/${row.id}?paid=0`
-	});
+const session = await createCheckoutSession({
+	stripe,
+	invoiceId: row.id,
+	orgId: auth.orgId,
+	invoiceNumberDisplay,
+	customerEmail: row.contact_email,
+	lineItems: stripeLines,
+	successUrl: `${baseUrl}/invoices/${row.id}?paid=1`,
+	cancelUrl: `${baseUrl}/invoices/${row.id}?paid=0`
+});
 ```
 
 Behavior: `APP_URL` is preferred; falls back to request origin only if the env var

@@ -27,7 +27,15 @@ export const featureFlagsSchema = z.object({
 	feature_api_access: z.boolean(),
 	feature_webhooks: z.boolean(),
 	feature_client_portal: z.boolean(),
-	feature_webchat: z.boolean()
+	feature_webchat: z.boolean(),
+	feature_payment_receipt: z.boolean(),
+	feature_quote_followup: z.boolean(),
+	feature_speed_to_lead: z.boolean(),
+	payment_receipt_sms_allowed: z.boolean(),
+	quote_followup_sms_allowed: z.boolean(),
+	appointment_reminder_sms_allowed: z.boolean(),
+	invoice_reminder_sms_allowed: z.boolean(),
+	review_funnel_sms_allowed: z.boolean()
 }) satisfies z.ZodType<FeatureFlags>;
 
 const limit = z.number().int().min(0).max(1_000_000);
@@ -78,7 +86,15 @@ const STARTER: PlanTemplate = {
 		feature_api_access: false,
 		feature_webhooks: false,
 		feature_client_portal: false,
-		feature_webchat: false
+		feature_webchat: false,
+		feature_payment_receipt: true,
+		feature_quote_followup: false,
+		feature_speed_to_lead: false,
+		payment_receipt_sms_allowed: false,
+		quote_followup_sms_allowed: false,
+		appointment_reminder_sms_allowed: false,
+		invoice_reminder_sms_allowed: false,
+		review_funnel_sms_allowed: false
 	},
 	limits: {
 		max_team_members: 3,
@@ -117,7 +133,15 @@ const GROWTH: PlanTemplate = {
 		feature_api_access: false,
 		feature_webhooks: false,
 		feature_client_portal: true,
-		feature_webchat: false
+		feature_webchat: false,
+		feature_payment_receipt: true,
+		feature_quote_followup: true,
+		feature_speed_to_lead: true,
+		payment_receipt_sms_allowed: true,
+		quote_followup_sms_allowed: true,
+		appointment_reminder_sms_allowed: true,
+		invoice_reminder_sms_allowed: true,
+		review_funnel_sms_allowed: true
 	},
 	limits: {
 		max_team_members: 10,
@@ -156,7 +180,15 @@ const ELITE: PlanTemplate = {
 		feature_api_access: true,
 		feature_webhooks: true,
 		feature_client_portal: true,
-		feature_webchat: true
+		feature_webchat: true,
+		feature_payment_receipt: true,
+		feature_quote_followup: true,
+		feature_speed_to_lead: true,
+		payment_receipt_sms_allowed: true,
+		quote_followup_sms_allowed: true,
+		appointment_reminder_sms_allowed: true,
+		invoice_reminder_sms_allowed: true,
+		review_funnel_sms_allowed: true
 	},
 	limits: {
 		max_team_members: 50,

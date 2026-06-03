@@ -18,7 +18,11 @@
 
 <div
 	role="alert"
-	class={cn('relative w-full rounded-lg border px-4 py-3 text-sm', variantClasses[variant], className)}
+	class={cn(
+		'relative w-full rounded-lg border px-4 py-3 text-sm',
+		variantClasses[variant],
+		className
+	)}
 >
 	{@render children?.()}
 </div>

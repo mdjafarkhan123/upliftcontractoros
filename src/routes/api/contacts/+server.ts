@@ -6,18 +6,23 @@ import { contacts, outboxEvents, orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { toE164, isReleasedPhone, PhoneInvalidError } from '$lib/utils/phone';
 import { createContactSchema } from '$lib/server/contacts/schemas';
-import { findContactByPhone, isAssigneeValid } from '$lib/server/contacts/contactRepo';
+import {
+	findContactByPhone,
+	isAssigneeValid,
+	isReferrerValid
+} from '$lib/server/contacts/contactRepo';
 
 const PAGE_SIZE = 25;
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
-	if (!auth.member.can_view_all_contacts) error(403, 'Forbidden');
 
 	const url = event.url;
 	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const statusFilter = url.searchParams.get('status') ?? 'all';
+	const tagFilter = (url.searchParams.get('tag') ?? '').trim();
+	const scope = url.searchParams.get('scope');
 	const cursor = url.searchParams.get('cursor');
 
 	const conditions: SQL[] = [
@@ -26,9 +31,31 @@ export const GET: RequestHandler = async (event) => {
 		sql`${contacts.phone} NOT LIKE 'RELEASED:%'`
 	];
 
+	// Restricted members (no can_view_all_contacts) see only contacts assigned
+	// to them. `scope` is ignored server-side for these users — the toggle is
+	// hidden in the UI for them, but a hand-crafted URL must not widen access.
+	const restricted = !auth.member.can_view_all_contacts;
+	if (restricted) {
+		conditions.push(eq(contacts.assigned_to, auth.member.id));
+	}
+
 	if (statusFilter === 'leads') conditions.push(eq(contacts.status, 'lead'));
 	else if (statusFilter === 'customers') conditions.push(eq(contacts.status, 'customer'));
 	else if (statusFilter === 'archived') conditions.push(eq(contacts.status, 'archived'));
+
+	if (tagFilter.length > 0 && tagFilter.length <= 50) {
+		conditions.push(sql`${tagFilter} = ANY(${contacts.tags})`);
+	}
+
+	// Scope filter is only honored for full-access users. Restricted members
+	// already have `assigned_to = <self>` enforced above.
+	if (!restricted) {
+		if (scope === 'mine') {
+			conditions.push(eq(contacts.assigned_to, auth.member.id));
+		} else if (scope === 'unassigned') {
+			conditions.push(isNull(contacts.assigned_to));
+		}
+	}
 
 	if (searchRaw.length > 0) {
 		let e164: string | null = null;
@@ -44,8 +71,10 @@ export const GET: RequestHandler = async (event) => {
 		];
 		if (e164) {
 			searchClauses.push(eq(contacts.phone, e164));
+			searchClauses.push(eq(contacts.alt_phone, e164));
 		} else if (digits.length >= 3) {
 			searchClauses.push(ilike(contacts.phone, `%${digits}%`));
+			searchClauses.push(ilike(contacts.alt_phone, `%${digits}%`));
 		}
 		const combined = or(...searchClauses);
 		if (combined) conditions.push(combined);
@@ -128,7 +157,23 @@ export const POST: RequestHandler = async (event) => {
 		const ok = await isAssigneeValid(auth.orgId, input.assigned_to);
 		if (!ok) {
 			return json(
-				{ error: 'Assignee is not an active member of this organization.', code: 'INVALID_ASSIGNEE' },
+				{
+					error: 'Assignee is not an active member of this organization.',
+					code: 'INVALID_ASSIGNEE'
+				},
+				{ status: 422 }
+			);
+		}
+	}
+
+	if (input.referred_by_contact_id) {
+		const ok = await isReferrerValid(auth.orgId, input.referred_by_contact_id);
+		if (!ok) {
+			return json(
+				{
+					error: 'Referrer is not a valid contact in this organization.',
+					code: 'INVALID_REFERRER'
+				},
 				{ status: 422 }
 			);
 		}
@@ -150,6 +195,10 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const result = await db.transaction(async (tx) => {
+			const effectiveLeadSource = input.referred_by_contact_id
+				? 'referral'
+				: (input.lead_source ?? 'manual');
+
 			const [inserted] = await tx
 				.insert(contacts)
 				.values({
@@ -157,8 +206,9 @@ export const POST: RequestHandler = async (event) => {
 					full_name: input.full_name,
 					phone: e164,
 					email: input.email ?? null,
-					lead_source: input.lead_source ?? 'manual',
+					lead_source: effectiveLeadSource,
 					assigned_to: input.assigned_to ?? null,
+					referred_by_contact_id: input.referred_by_contact_id ?? null,
 					notes: input.notes ?? null,
 					tags: input.tags ?? []
 				})
@@ -176,7 +226,9 @@ export const POST: RequestHandler = async (event) => {
 					phone: inserted.phone,
 					email: inserted.email,
 					lead_source: inserted.lead_source,
-					assigned_to: inserted.assigned_to
+					assigned_to: inserted.assigned_to,
+					referred_by_contact_id: inserted.referred_by_contact_id,
+					tags: inserted.tags
 				},
 				idempotency_key: `contact.created:${inserted.id}`
 			});

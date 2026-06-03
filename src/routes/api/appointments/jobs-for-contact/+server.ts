@@ -4,7 +4,10 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { jobs } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import { canCreateAppointment, canRescheduleAppointment } from '$lib/server/appointments/permissions';
+import {
+	canCreateAppointment,
+	canRescheduleAppointment
+} from '$lib/server/appointments/permissions';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -25,11 +28,7 @@ export const GET: RequestHandler = async (event) => {
 		})
 		.from(jobs)
 		.where(
-			and(
-				eq(jobs.org_id, auth.orgId),
-				eq(jobs.contact_id, contactId),
-				isNull(jobs.deleted_at)
-			)
+			and(eq(jobs.org_id, auth.orgId), eq(jobs.contact_id, contactId), isNull(jobs.deleted_at))
 		)
 		.orderBy(desc(jobs.created_at))
 		.limit(50);

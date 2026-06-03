@@ -5,11 +5,15 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import UnsavedChangesGuard from '$lib/components/settings/UnsavedChangesGuard.svelte';
 	import OrgLogoUploader from '$lib/components/settings/OrgLogoUploader.svelte';
+	import TimezoneCombobox from '$lib/components/shared/TimezoneCombobox.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Popover from '$lib/components/ui/popover';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { sessionStore } from '$lib/stores/session.svelte';
 	import { getMemberContext } from '$lib/context/member';
+	import { cn } from '$lib/utils/cn';
 
 	type OrgSettingsApi = {
 		name: string;
@@ -21,6 +25,9 @@
 		zip: string | null;
 		primary_color: string | null;
 		logo_url: string | null;
+		google_review_link: string | null;
+		calendar_day_start_hour: number;
+		calendar_day_end_hour: number;
 	};
 
 	type OrgForm = {
@@ -32,6 +39,9 @@
 		state: string;
 		zip: string;
 		primary_color: string;
+		google_review_link: string;
+		calendar_day_start_hour: number;
+		calendar_day_end_hour: number;
 	};
 
 	function apiToForm(d: OrgSettingsApi): OrgForm {
@@ -43,9 +53,49 @@
 			city: d.city ?? '',
 			state: d.state ?? '',
 			zip: d.zip ?? '',
-			primary_color: d.primary_color ?? ''
+			primary_color: d.primary_color ?? '',
+			google_review_link: d.google_review_link ?? '',
+			calendar_day_start_hour: d.calendar_day_start_hour,
+			calendar_day_end_hour: d.calendar_day_end_hour
 		};
 	}
+
+	const HOUR_OPTIONS = Array.from({ length: 25 }, (_, h) => ({
+		value: h,
+		label:
+			h === 0
+				? '12:00 AM'
+				: h < 12
+					? `${h}:00 AM`
+					: h === 12
+						? '12:00 PM'
+						: h === 24
+							? '12:00 AM (next day)'
+							: `${h - 12}:00 PM`
+	}));
+
+	const SWATCHES = [
+		'#ef4444',
+		'#f97316',
+		'#f59e0b',
+		'#eab308',
+		'#84cc16',
+		'#22c55e',
+		'#10b981',
+		'#14b8a6',
+		'#06b6d4',
+		'#0ea5e9',
+		'#3b82f6',
+		'#6366f1',
+		'#8b5cf6',
+		'#a855f7',
+		'#d946ef',
+		'#ec4899',
+		'#f43f5e',
+		'#64748b',
+		'#475569',
+		'#0f172a'
+	];
 
 	const member = getMemberContext();
 	let m = $derived(member());
@@ -58,9 +108,7 @@
 	let fieldErrors = $state<Record<string, string>>({});
 
 	let dirty = $derived(
-		original !== null &&
-			form !== null &&
-			JSON.stringify(original) !== JSON.stringify(form)
+		original !== null && form !== null && JSON.stringify(original) !== JSON.stringify(form)
 	);
 
 	onMount(() => {
@@ -100,7 +148,8 @@
 				'city',
 				'state',
 				'zip',
-				'primary_color'
+				'primary_color',
+				'google_review_link'
 			]);
 			const payload: Record<string, unknown> = {};
 			for (const k of Object.keys(form) as (keyof OrgForm)[]) {
@@ -135,6 +184,8 @@
 				original = formed;
 				form = { ...formed };
 				logoUrl = body.data.logo_url;
+				sessionStore.invalidate();
+				void sessionStore.load(true);
 				toast.success('Organization settings saved');
 			}
 		} catch {
@@ -149,7 +200,7 @@
 
 <UnsavedChangesGuard {dirty} />
 
-<PageWrapper title="Organization" subtitle="Business details and branding">
+<PageWrapper title="Organization" subtitle="Business details and branding" back="/settings">
 	{#if loading || !form}
 		<SkeletonLoader lines={8} label="Loading organization settings" />
 	{:else}
@@ -179,11 +230,17 @@
 
 				<div class="flex flex-col gap-1.5 md:col-span-2">
 					<Label for="timezone">Timezone <span class="text-destructive">*</span></Label>
-					<Input id="timezone" bind:value={form.timezone} placeholder="America/Chicago" required />
+					<TimezoneCombobox
+						id="timezone"
+						bind:value={form.timezone}
+						invalid={Boolean(fieldErrors.timezone)}
+					/>
 					{#if fieldErrors.timezone}
 						<p class="text-xs text-destructive">{fieldErrors.timezone}</p>
 					{:else}
-						<p class="text-xs text-muted-foreground">IANA timezone, e.g. America/Chicago.</p>
+						<p class="text-xs text-muted-foreground">
+							Used for booking links, reminders, and all date formatting.
+						</p>
 					{/if}
 				</div>
 			</section>
@@ -212,6 +269,71 @@
 				</div>
 			</section>
 
+			<section class="grid gap-4 md:grid-cols-2">
+				<div class="flex flex-col gap-1.5 md:col-span-2">
+					<Label for="google_review_link">Google Business Profile review link</Label>
+					<Input
+						id="google_review_link"
+						type="url"
+						bind:value={form.google_review_link}
+						placeholder="https://g.page/r/..."
+						maxlength={500}
+					/>
+					{#if fieldErrors.google_review_link}
+						<p class="text-xs text-destructive">{fieldErrors.google_review_link}</p>
+					{:else}
+						<p class="text-xs text-muted-foreground">
+							Used in review-request messages as the <code class="text-[11px]"
+								>{'{review_link}'}</code
+							>
+							variable. Find this in your Google Business Profile under "Get more reviews".
+						</p>
+					{/if}
+				</div>
+			</section>
+
+			<section class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4">
+				<div>
+					<h3 class="text-sm font-semibold text-foreground">Calendar visible hours</h3>
+					<p class="text-xs text-muted-foreground">
+						Sets the time range shown on your Appointments calendar. Bookings outside this range
+						still appear — off-hours are just dimmed.
+					</p>
+				</div>
+				<div class="grid grid-cols-2 gap-3">
+					<div class="flex flex-col gap-1.5">
+						<Label for="calendar_day_start_hour">Day starts</Label>
+						<select
+							id="calendar_day_start_hour"
+							class="h-11 rounded-lg border border-input bg-background px-3 text-sm"
+							bind:value={form.calendar_day_start_hour}
+						>
+							{#each HOUR_OPTIONS.slice(0, 24) as opt (opt.value)}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+						{#if fieldErrors.calendar_day_start_hour}
+							<p class="text-xs text-destructive">{fieldErrors.calendar_day_start_hour}</p>
+						{/if}
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<Label for="calendar_day_end_hour">Day ends</Label>
+						<select
+							id="calendar_day_end_hour"
+							class="h-11 rounded-lg border border-input bg-background px-3 text-sm"
+							bind:value={form.calendar_day_end_hour}
+						>
+							{#each HOUR_OPTIONS.slice(1) as opt (opt.value)}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+						{#if fieldErrors.calendar_day_end_hour}
+							<p class="text-xs text-destructive">{fieldErrors.calendar_day_end_hour}</p>
+						{/if}
+					</div>
+				</div>
+			</section>
+
 			<section class="grid gap-6 md:grid-cols-2">
 				<div class="flex flex-col gap-1.5">
 					<Label for="primary_color">Brand color</Label>
@@ -223,31 +345,84 @@
 							maxlength={7}
 							class="font-mono"
 						/>
-						{#if form.primary_color}
-							<div
-								class="h-9 w-9 rounded-md border border-border"
-								style:background-color={form.primary_color}
-								aria-hidden="true"
-							></div>
-						{/if}
+						<Popover.Root>
+							<Popover.Trigger
+								type="button"
+								aria-label="Open color picker"
+								class={cn(
+									'h-9 w-9 overflow-hidden rounded-md border border-border transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background'
+								)}
+								style={`background-color: ${form.primary_color || 'transparent'}`}
+							>
+								{#if !form.primary_color}
+									<span
+										class="block h-full w-full bg-gradient-to-br from-rose-400 via-amber-300 to-sky-400 opacity-60"
+									></span>
+								{/if}
+							</Popover.Trigger>
+							<Popover.Content class="w-64 p-3">
+								<div class="grid grid-cols-5 gap-2">
+									{#each SWATCHES as swatch (swatch)}
+										<button
+											type="button"
+											aria-label={swatch}
+											class={cn(
+												'h-8 w-8 rounded-md border transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-popover',
+												form.primary_color?.toLowerCase() === swatch
+													? 'border-foreground ring-2 ring-ring'
+													: 'border-border'
+											)}
+											style:background-color={swatch}
+											onclick={() => form && (form.primary_color = swatch)}
+										></button>
+									{/each}
+								</div>
+								<div class="mt-3 flex items-center gap-2 border-t border-border pt-3">
+									<label
+										class="relative h-8 w-8 cursor-pointer overflow-hidden rounded-md border border-border"
+										aria-label="Pick a custom color"
+									>
+										<input
+											type="color"
+											class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+											value={form.primary_color || '#3b82f6'}
+											oninput={(e) => {
+												if (form) form.primary_color = (e.currentTarget as HTMLInputElement).value;
+											}}
+										/>
+										<span
+											class="block h-full w-full"
+											style:background-color={form.primary_color || '#3b82f6'}
+										></span>
+									</label>
+									<span class="text-xs text-muted-foreground">Custom hex</span>
+									{#if form.primary_color}
+										<button
+											type="button"
+											class="ml-auto text-xs text-muted-foreground hover:text-foreground"
+											onclick={() => form && (form.primary_color = '')}
+										>
+											Clear
+										</button>
+									{/if}
+								</div>
+							</Popover.Content>
+						</Popover.Root>
 					</div>
 					{#if fieldErrors.primary_color}
 						<p class="text-xs text-destructive">{fieldErrors.primary_color}</p>
 					{:else}
 						<p class="text-xs text-muted-foreground">
 							Brand color applies to customer-facing experiences such as invoices, quotes,
-							reminders, portals, and public-facing assets. It does not change the CRM
-							interface theme.
+							reminders, portals, and public-facing assets. It does not change the CRM interface
+							theme.
 						</p>
 					{/if}
 				</div>
 
 				<div class="flex flex-col gap-1.5">
 					<Label>Logo</Label>
-					<OrgLogoUploader
-						currentLogoUrl={logoUrl}
-						onChange={(next) => (logoUrl = next)}
-					/>
+					<OrgLogoUploader currentLogoUrl={logoUrl} onChange={(next) => (logoUrl = next)} />
 				</div>
 			</section>
 

@@ -1,7 +1,38 @@
-import { relations } from "drizzle-orm/relations";
-import { orgMembers, opportunities, contacts, organizations, pipelineStages, automationSettings, contactAddresses, contactNotes, jobs, conversations, messages, quotes, quoteLineItems, quoteViews, quoteTemplates, quoteTemplateLineItems, invoices, invoiceLineItems, payments, appointments, reviewRequests, reviews, privateFeedback, media, growthFeedItems, internalActivityLog, automationJobs, outboxEvents, orgCounters, notifications } from "./schema";
+import { relations } from 'drizzle-orm/relations';
+import {
+	orgMembers,
+	opportunities,
+	contacts,
+	organizations,
+	pipelineStages,
+	automationSettings,
+	contactAddresses,
+	contactNotes,
+	jobs,
+	conversations,
+	messages,
+	quotes,
+	quoteLineItems,
+	quoteViews,
+	quoteTemplates,
+	quoteTemplateLineItems,
+	invoices,
+	invoiceLineItems,
+	payments,
+	appointments,
+	reviewRequests,
+	reviews,
+	privateFeedback,
+	media,
+	growthFeedItems,
+	internalActivityLog,
+	automationJobs,
+	outboxEvents,
+	orgCounters,
+	notifications
+} from './schema';
 
-export const opportunitiesRelations = relations(opportunities, ({one, many}) => ({
+export const opportunitiesRelations = relations(opportunities, ({ one, many }) => ({
 	orgMember: one(orgMembers, {
 		fields: [opportunities.assignedTo],
 		references: [orgMembers.id]
@@ -20,10 +51,10 @@ export const opportunitiesRelations = relations(opportunities, ({one, many}) => 
 	}),
 	jobs: many(jobs),
 	quotes: many(quotes),
-	invoices: many(invoices),
+	invoices: many(invoices)
 }));
 
-export const orgMembersRelations = relations(orgMembers, ({one, many}) => ({
+export const orgMembersRelations = relations(orgMembers, ({ one, many }) => ({
 	opportunities: many(opportunities),
 	organization: one(organizations, {
 		fields: [orgMembers.orgId],
@@ -42,10 +73,10 @@ export const orgMembersRelations = relations(orgMembers, ({one, many}) => ({
 	reviewRequests: many(reviewRequests),
 	privateFeedbacks: many(privateFeedback),
 	media: many(media),
-	notifications: many(notifications),
+	notifications: many(notifications)
 }));
 
-export const contactsRelations = relations(contacts, ({one, many}) => ({
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
 	opportunities: many(opportunities),
 	contactAddresses: many(contactAddresses),
 	orgMember: one(orgMembers, {
@@ -64,10 +95,10 @@ export const contactsRelations = relations(contacts, ({one, many}) => ({
 	appointments: many(appointments),
 	reviewRequests: many(reviewRequests),
 	reviews: many(reviews),
-	privateFeedbacks: many(privateFeedback),
+	privateFeedbacks: many(privateFeedback)
 }));
 
-export const organizationsRelations = relations(organizations, ({many}) => ({
+export const organizationsRelations = relations(organizations, ({ many }) => ({
 	opportunities: many(opportunities),
 	automationSettings: many(automationSettings),
 	contactAddresses: many(contactAddresses),
@@ -96,25 +127,25 @@ export const organizationsRelations = relations(organizations, ({many}) => ({
 	automationJobs: many(automationJobs),
 	outboxEvents: many(outboxEvents),
 	orgCounters: many(orgCounters),
-	notifications: many(notifications),
+	notifications: many(notifications)
 }));
 
-export const pipelineStagesRelations = relations(pipelineStages, ({one, many}) => ({
+export const pipelineStagesRelations = relations(pipelineStages, ({ one, many }) => ({
 	opportunities: many(opportunities),
 	organization: one(organizations, {
 		fields: [pipelineStages.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const automationSettingsRelations = relations(automationSettings, ({one}) => ({
+export const automationSettingsRelations = relations(automationSettings, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [automationSettings.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const contactAddressesRelations = relations(contactAddresses, ({one}) => ({
+export const contactAddressesRelations = relations(contactAddresses, ({ one }) => ({
 	contact: one(contacts, {
 		fields: [contactAddresses.contactId],
 		references: [contacts.id]
@@ -122,10 +153,10 @@ export const contactAddressesRelations = relations(contactAddresses, ({one}) => 
 	organization: one(organizations, {
 		fields: [contactAddresses.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const contactNotesRelations = relations(contactNotes, ({one}) => ({
+export const contactNotesRelations = relations(contactNotes, ({ one }) => ({
 	orgMember: one(orgMembers, {
 		fields: [contactNotes.authorId],
 		references: [orgMembers.id]
@@ -137,10 +168,10 @@ export const contactNotesRelations = relations(contactNotes, ({one}) => ({
 	organization: one(organizations, {
 		fields: [contactNotes.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const jobsRelations = relations(jobs, ({one, many}) => ({
+export const jobsRelations = relations(jobs, ({ one, many }) => ({
 	orgMember: one(orgMembers, {
 		fields: [jobs.assignedTo],
 		references: [orgMembers.id]
@@ -162,10 +193,10 @@ export const jobsRelations = relations(jobs, ({one, many}) => ({
 	reviewRequests: many(reviewRequests),
 	reviews: many(reviews),
 	privateFeedbacks: many(privateFeedback),
-	media: many(media),
+	media: many(media)
 }));
 
-export const conversationsRelations = relations(conversations, ({one, many}) => ({
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
 	orgMember: one(orgMembers, {
 		fields: [conversations.assignedTo],
 		references: [orgMembers.id]
@@ -178,10 +209,10 @@ export const conversationsRelations = relations(conversations, ({one, many}) => 
 		fields: [conversations.orgId],
 		references: [organizations.id]
 	}),
-	messages: many(messages),
+	messages: many(messages)
 }));
 
-export const messagesRelations = relations(messages, ({one}) => ({
+export const messagesRelations = relations(messages, ({ one }) => ({
 	conversation: one(conversations, {
 		fields: [messages.conversationId],
 		references: [conversations.id]
@@ -193,10 +224,10 @@ export const messagesRelations = relations(messages, ({one}) => ({
 	orgMember: one(orgMembers, {
 		fields: [messages.sentBy],
 		references: [orgMembers.id]
-	}),
+	})
 }));
 
-export const quotesRelations = relations(quotes, ({one, many}) => ({
+export const quotesRelations = relations(quotes, ({ one, many }) => ({
 	contact: one(contacts, {
 		fields: [quotes.contactId],
 		references: [contacts.id]
@@ -216,10 +247,10 @@ export const quotesRelations = relations(quotes, ({one, many}) => ({
 	quoteLineItems: many(quoteLineItems),
 	quoteViews: many(quoteViews),
 	invoices: many(invoices),
-	media: many(media),
+	media: many(media)
 }));
 
-export const quoteLineItemsRelations = relations(quoteLineItems, ({one}) => ({
+export const quoteLineItemsRelations = relations(quoteLineItems, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [quoteLineItems.orgId],
 		references: [organizations.id]
@@ -227,10 +258,10 @@ export const quoteLineItemsRelations = relations(quoteLineItems, ({one}) => ({
 	quote: one(quotes, {
 		fields: [quoteLineItems.quoteId],
 		references: [quotes.id]
-	}),
+	})
 }));
 
-export const quoteViewsRelations = relations(quoteViews, ({one}) => ({
+export const quoteViewsRelations = relations(quoteViews, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [quoteViews.orgId],
 		references: [organizations.id]
@@ -238,10 +269,10 @@ export const quoteViewsRelations = relations(quoteViews, ({one}) => ({
 	quote: one(quotes, {
 		fields: [quoteViews.quoteId],
 		references: [quotes.id]
-	}),
+	})
 }));
 
-export const quoteTemplatesRelations = relations(quoteTemplates, ({one, many}) => ({
+export const quoteTemplatesRelations = relations(quoteTemplates, ({ one, many }) => ({
 	orgMember: one(orgMembers, {
 		fields: [quoteTemplates.createdBy],
 		references: [orgMembers.id]
@@ -250,10 +281,10 @@ export const quoteTemplatesRelations = relations(quoteTemplates, ({one, many}) =
 		fields: [quoteTemplates.orgId],
 		references: [organizations.id]
 	}),
-	quoteTemplateLineItems: many(quoteTemplateLineItems),
+	quoteTemplateLineItems: many(quoteTemplateLineItems)
 }));
 
-export const quoteTemplateLineItemsRelations = relations(quoteTemplateLineItems, ({one}) => ({
+export const quoteTemplateLineItemsRelations = relations(quoteTemplateLineItems, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [quoteTemplateLineItems.orgId],
 		references: [organizations.id]
@@ -261,10 +292,10 @@ export const quoteTemplateLineItemsRelations = relations(quoteTemplateLineItems,
 	quoteTemplate: one(quoteTemplates, {
 		fields: [quoteTemplateLineItems.templateId],
 		references: [quoteTemplates.id]
-	}),
+	})
 }));
 
-export const invoicesRelations = relations(invoices, ({one, many}) => ({
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
 	contact: one(contacts, {
 		fields: [invoices.contactId],
 		references: [contacts.id]
@@ -291,10 +322,10 @@ export const invoicesRelations = relations(invoices, ({one, many}) => ({
 	}),
 	invoiceLineItems: many(invoiceLineItems),
 	payments: many(payments),
-	media: many(media),
+	media: many(media)
 }));
 
-export const invoiceLineItemsRelations = relations(invoiceLineItems, ({one}) => ({
+export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) => ({
 	invoice: one(invoices, {
 		fields: [invoiceLineItems.invoiceId],
 		references: [invoices.id]
@@ -302,10 +333,10 @@ export const invoiceLineItemsRelations = relations(invoiceLineItems, ({one}) => 
 	organization: one(organizations, {
 		fields: [invoiceLineItems.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const paymentsRelations = relations(payments, ({one}) => ({
+export const paymentsRelations = relations(payments, ({ one }) => ({
 	invoice: one(invoices, {
 		fields: [payments.invoiceId],
 		references: [invoices.id]
@@ -317,10 +348,10 @@ export const paymentsRelations = relations(payments, ({one}) => ({
 	orgMember: one(orgMembers, {
 		fields: [payments.recordedBy],
 		references: [orgMembers.id]
-	}),
+	})
 }));
 
-export const appointmentsRelations = relations(appointments, ({one}) => ({
+export const appointmentsRelations = relations(appointments, ({ one }) => ({
 	orgMember: one(orgMembers, {
 		fields: [appointments.assignedTo],
 		references: [orgMembers.id]
@@ -336,10 +367,10 @@ export const appointmentsRelations = relations(appointments, ({one}) => ({
 	organization: one(organizations, {
 		fields: [appointments.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const reviewRequestsRelations = relations(reviewRequests, ({one, many}) => ({
+export const reviewRequestsRelations = relations(reviewRequests, ({ one, many }) => ({
 	contact: one(contacts, {
 		fields: [reviewRequests.contactId],
 		references: [contacts.id]
@@ -357,10 +388,10 @@ export const reviewRequestsRelations = relations(reviewRequests, ({one, many}) =
 		references: [orgMembers.id]
 	}),
 	reviews: many(reviews),
-	privateFeedbacks: many(privateFeedback),
+	privateFeedbacks: many(privateFeedback)
 }));
 
-export const reviewsRelations = relations(reviews, ({one}) => ({
+export const reviewsRelations = relations(reviews, ({ one }) => ({
 	contact: one(contacts, {
 		fields: [reviews.contactId],
 		references: [contacts.id]
@@ -376,10 +407,10 @@ export const reviewsRelations = relations(reviews, ({one}) => ({
 	reviewRequest: one(reviewRequests, {
 		fields: [reviews.reviewRequestId],
 		references: [reviewRequests.id]
-	}),
+	})
 }));
 
-export const privateFeedbackRelations = relations(privateFeedback, ({one}) => ({
+export const privateFeedbackRelations = relations(privateFeedback, ({ one }) => ({
 	contact: one(contacts, {
 		fields: [privateFeedback.contactId],
 		references: [contacts.id]
@@ -399,10 +430,10 @@ export const privateFeedbackRelations = relations(privateFeedback, ({one}) => ({
 	reviewRequest: one(reviewRequests, {
 		fields: [privateFeedback.reviewRequestId],
 		references: [reviewRequests.id]
-	}),
+	})
 }));
 
-export const mediaRelations = relations(media, ({one}) => ({
+export const mediaRelations = relations(media, ({ one }) => ({
 	invoice: one(invoices, {
 		fields: [media.invoiceId],
 		references: [invoices.id]
@@ -422,45 +453,45 @@ export const mediaRelations = relations(media, ({one}) => ({
 	orgMember: one(orgMembers, {
 		fields: [media.uploadedBy],
 		references: [orgMembers.id]
-	}),
+	})
 }));
 
-export const growthFeedItemsRelations = relations(growthFeedItems, ({one}) => ({
+export const growthFeedItemsRelations = relations(growthFeedItems, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [growthFeedItems.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const internalActivityLogRelations = relations(internalActivityLog, ({one}) => ({
+export const internalActivityLogRelations = relations(internalActivityLog, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [internalActivityLog.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const automationJobsRelations = relations(automationJobs, ({one}) => ({
+export const automationJobsRelations = relations(automationJobs, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [automationJobs.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const outboxEventsRelations = relations(outboxEvents, ({one}) => ({
+export const outboxEventsRelations = relations(outboxEvents, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [outboxEvents.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const orgCountersRelations = relations(orgCounters, ({one}) => ({
+export const orgCountersRelations = relations(orgCounters, ({ one }) => ({
 	organization: one(organizations, {
 		fields: [orgCounters.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));
 
-export const notificationsRelations = relations(notifications, ({one}) => ({
+export const notificationsRelations = relations(notifications, ({ one }) => ({
 	orgMember: one(orgMembers, {
 		fields: [notifications.memberId],
 		references: [orgMembers.id]
@@ -468,5 +499,5 @@ export const notificationsRelations = relations(notifications, ({one}) => ({
 	organization: one(organizations, {
 		fields: [notifications.orgId],
 		references: [organizations.id]
-	}),
+	})
 }));

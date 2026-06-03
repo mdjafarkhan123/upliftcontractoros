@@ -13,13 +13,7 @@ export const ADDRESS_LABELS = ['billing', 'service', 'mailing', 'other'] as cons
 
 export const CONTACT_STATUSES = ['lead', 'customer', 'archived'] as const;
 
-export const PREFERRED_CONTACT_METHODS = [
-	'sms',
-	'call',
-	'email',
-	'whatsapp',
-	'messenger'
-] as const;
+export const PREFERRED_CONTACT_METHODS = ['sms', 'call', 'email', 'whatsapp', 'messenger'] as const;
 
 const trimmedString = (max: number) =>
 	z
@@ -46,6 +40,7 @@ export const createContactSchema = z.object({
 		.or(z.literal('').transform(() => undefined)),
 	lead_source: z.enum(LEAD_SOURCES).optional(),
 	assigned_to: z.string().uuid().nullish(),
+	referred_by_contact_id: z.string().uuid().nullish(),
 	notes: optionalTrimmedString(2000),
 	tags: z.array(z.string().max(50)).max(20).optional()
 });
@@ -66,6 +61,7 @@ export const updateContactSchema = z
 		lead_source: z.enum(LEAD_SOURCES).optional(),
 		status: z.enum(CONTACT_STATUSES).optional(),
 		assigned_to: z.string().uuid().nullable().optional(),
+		referred_by_contact_id: z.string().uuid().nullable().optional(),
 		notes: z
 			.string()
 			.max(2000)
@@ -103,7 +99,12 @@ export const addressSchema = z.object({
 
 export type AddressInput = z.infer<typeof addressSchema>;
 
-export const addressUpdateSchema = addressSchema.partial();
+export const addressUpdateSchema = addressSchema.partial().extend({
+	// Optimistic concurrency token — the updated_at the client last read. When
+	// present and stale, the PATCH is rejected with 409 so a concurrent edit by
+	// another team member is never silently overwritten.
+	updated_at: z.string().datetime({ offset: true }).optional()
+});
 export type AddressUpdateInput = z.infer<typeof addressUpdateSchema>;
 
 export const noteSchema = z.object({
@@ -118,3 +119,41 @@ export const releasePhoneSchema = z.object({
 });
 
 export type ReleasePhoneInput = z.infer<typeof releasePhoneSchema>;
+
+// Merge: [id] route param is the survivor; `source_id` is the contact absorbed
+// into it (reparented then soft-deleted). Equality is rejected by the route.
+export const mergeContactSchema = z.object({
+	source_id: z.string().uuid()
+});
+
+export type MergeContactInput = z.infer<typeof mergeContactSchema>;
+
+// Bulk list actions. Discriminated on `action`. `contact_ids` is capped to keep
+// a single admin tap from running an unbounded transaction.
+const BULK_MAX = 100;
+const contactIds = z.array(z.string().uuid()).min(1).max(BULK_MAX);
+const bulkTags = z.array(z.string().max(50)).min(1).max(20);
+
+export const bulkContactActionSchema = z.discriminatedUnion('action', [
+	z.object({
+		action: z.literal('assign'),
+		contact_ids: contactIds,
+		assigned_to: z.string().uuid().nullable()
+	}),
+	z.object({
+		action: z.literal('tag_add'),
+		contact_ids: contactIds,
+		tags: bulkTags
+	}),
+	z.object({
+		action: z.literal('tag_remove'),
+		contact_ids: contactIds,
+		tags: bulkTags
+	}),
+	z.object({
+		action: z.literal('archive'),
+		contact_ids: contactIds
+	})
+]);
+
+export type BulkContactActionInput = z.infer<typeof bulkContactActionSchema>;

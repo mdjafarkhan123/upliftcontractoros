@@ -10,11 +10,7 @@ import {
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	canDeleteQuote,
-	canEditQuote,
-	canViewAnyQuote
-} from '$lib/server/quotes/permissions';
+import { canDeleteQuote, canEditQuote, canViewAnyQuote } from '$lib/server/quotes/permissions';
 import { updateQuoteSchema } from '$lib/server/quotes/schemas';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { computeLineTotal, recalcQuoteTotals } from '$lib/server/quotes/recalc';
@@ -207,9 +203,7 @@ export const PATCH: RequestHandler = async (event) => {
 			await tx
 				.update(quoteLineItems)
 				.set({ deleted_at: new Date(), updated_at: new Date() })
-				.where(
-					and(eq(quoteLineItems.quote_id, id), isNull(quoteLineItems.deleted_at))
-				);
+				.where(and(eq(quoteLineItems.quote_id, id), isNull(quoteLineItems.deleted_at)));
 			if (input.line_items.length > 0) {
 				await tx.insert(quoteLineItems).values(
 					input.line_items.map((li, idx) => ({
@@ -252,9 +246,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const result = await db
 		.update(quotes)
 		.set({ deleted_at: new Date(), updated_at: new Date() })
-		.where(
-			and(eq(quotes.id, id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at))
-		)
+		.where(and(eq(quotes.id, id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
 		.returning({ id: quotes.id });
 
 	if (result.length === 0) error(404, 'Quote not found');

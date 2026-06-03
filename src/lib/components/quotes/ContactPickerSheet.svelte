@@ -50,7 +50,12 @@
 			<Sheet.Title>Choose contact</Sheet.Title>
 		</Sheet.Header>
 		<div class="space-y-3 py-3">
-			<Input bind:value={query} oninput={onQueryChange} placeholder="Search name or phone" autocomplete="off" />
+			<Input
+				bind:value={query}
+				oninput={onQueryChange}
+				placeholder="Search name or phone"
+				autocomplete="off"
+			/>
 			<div class="max-h-[55vh] space-y-2 overflow-y-auto">
 				{#if loading}
 					<div class="flex items-center justify-center py-6 text-muted-foreground">
@@ -68,7 +73,9 @@
 								open = false;
 							}}
 						>
-							<div class="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+							<div
+								class="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
+							>
 								<User class="h-4 w-4" />
 							</div>
 							<div class="min-w-0 flex-1">

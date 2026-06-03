@@ -21,12 +21,16 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: JobsFilters): string {
-	return `${f.status}|${f.assignedTo ?? ''}|${f.contactId ?? ''}`;
+	return `${f.status}|${f.scope ?? ''}|${f.assignedTo ?? ''}|${f.contactId ?? ''}`;
 }
 
 function buildParams(f: JobsFilters, cursor: string | null): URLSearchParams {
 	const params = new URLSearchParams();
-	if (f.status !== 'all') params.set('status', f.status);
+	if (f.scope) {
+		params.set('scope', f.scope);
+	} else if (f.status !== 'all') {
+		params.set('status', f.status);
+	}
 	if (f.assignedTo) params.set('assigned_to', f.assignedTo);
 	if (f.contactId) params.set('contact_id', f.contactId);
 	if (cursor) params.set('cursor', cursor);

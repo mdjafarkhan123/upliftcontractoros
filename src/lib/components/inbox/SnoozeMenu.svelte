@@ -27,34 +27,30 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
-			<Button
-				{...props}
-				variant="ghost"
-				size="sm"
-				disabled={disabled}
-				class="min-h-[36px] gap-1.5"
-			>
+			<Button {...props} variant="ghost" size="sm" {disabled} class="min-h-[36px] gap-1.5">
 				<Clock class="h-4 w-4" />
 				{isSnoozed ? 'Snoozed' : 'Snooze'}
 			</Button>
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="w-48">
-		<DropdownMenu.Label>Snooze until</DropdownMenu.Label>
-		<DropdownMenu.Separator />
-		{#each PRESETS as preset (preset.key)}
-			<DropdownMenu.Item onclick={() => void onSnooze(preset.key)}>
-				<div class="flex w-full items-center justify-between">
-					<span>{preset.label}</span>
-					{#if preset.hint}
-						<span class="text-xs text-muted-foreground">{preset.hint}</span>
-					{/if}
-				</div>
-			</DropdownMenu.Item>
-		{/each}
-		{#if isSnoozed && onUnsnooze}
+		<DropdownMenu.Group>
+			<DropdownMenu.Label>Snooze until</DropdownMenu.Label>
 			<DropdownMenu.Separator />
-			<DropdownMenu.Item onclick={() => void onUnsnooze()}>Unsnooze now</DropdownMenu.Item>
-		{/if}
+			{#each PRESETS as preset (preset.key)}
+				<DropdownMenu.Item onclick={() => void onSnooze(preset.key)}>
+					<div class="flex w-full items-center justify-between">
+						<span>{preset.label}</span>
+						{#if preset.hint}
+							<span class="text-xs text-muted-foreground">{preset.hint}</span>
+						{/if}
+					</div>
+				</DropdownMenu.Item>
+			{/each}
+			{#if isSnoozed && onUnsnooze}
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item onclick={() => void onUnsnooze()}>Unsnooze now</DropdownMenu.Item>
+			{/if}
+		</DropdownMenu.Group>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

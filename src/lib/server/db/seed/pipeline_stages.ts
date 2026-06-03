@@ -10,7 +10,9 @@ const DEFAULT_STAGES = [
 		position: 1,
 		is_default: true,
 		is_won: false,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: 2,
+		probability: 10
 	},
 	{
 		name: 'Contacted',
@@ -18,7 +20,9 @@ const DEFAULT_STAGES = [
 		position: 2,
 		is_default: false,
 		is_won: false,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: 3,
+		probability: 25
 	},
 	{
 		name: 'Estimate Scheduled',
@@ -26,7 +30,9 @@ const DEFAULT_STAGES = [
 		position: 3,
 		is_default: false,
 		is_won: false,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: 5,
+		probability: 40
 	},
 	{
 		name: 'Quoted',
@@ -34,7 +40,9 @@ const DEFAULT_STAGES = [
 		position: 4,
 		is_default: false,
 		is_won: false,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: 5,
+		probability: 60
 	},
 	{
 		name: 'Follow-Up',
@@ -42,7 +50,9 @@ const DEFAULT_STAGES = [
 		position: 5,
 		is_default: false,
 		is_won: false,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: 5,
+		probability: 75
 	},
 	{
 		name: 'Won',
@@ -50,7 +60,9 @@ const DEFAULT_STAGES = [
 		position: 6,
 		is_default: false,
 		is_won: true,
-		is_lost: false
+		is_lost: false,
+		stale_after_days: null,
+		probability: 100
 	},
 	{
 		name: 'Lost',
@@ -58,7 +70,9 @@ const DEFAULT_STAGES = [
 		position: 7,
 		is_default: false,
 		is_won: false,
-		is_lost: true
+		is_lost: true,
+		stale_after_days: null,
+		probability: 0
 	}
 ] as const;
 

@@ -82,10 +82,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			date
 		});
 
-		return json(
-			{ data: { slots: slots.map((d) => d.toISOString()) } },
-			{ headers: NO_STORE }
-		);
+		return json({ data: { slots: slots.map((d) => d.toISOString()) } }, { headers: NO_STORE });
 	} catch (err) {
 		if (err instanceof BookingValidationError) {
 			return json(

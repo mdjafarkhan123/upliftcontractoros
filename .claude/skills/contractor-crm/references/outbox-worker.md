@@ -133,6 +133,7 @@ updated_at
 ```
 
 Key constraints:
+
 - `idempotency_key` is `UNIQUE` — duplicate event inserts fail gracefully
 - `sequence` ordering guarantees multi-event transactions process in correct order
 - `available_at > now()` enables delayed processing (review funnel delay, quote follow-up)
@@ -145,15 +146,15 @@ Key constraints:
 
 These are NOT interchangeable. Both must exist. Neither replaces the other.
 
-| Concern            | `outbox_events`                          | `automation_jobs`                         |
-| ------------------ | ---------------------------------------- | ----------------------------------------- |
-| Responsibility     | Dispatch guarantee (infrastructure)      | Execution audit trail (observability)     |
-| Question answered  | "Did this event get delivered?"          | "What did the automation do?"             |
-| Written when       | Inside DB transaction with business mutation | Before BullMQ job is enqueued         |
-| Updated by         | Outbox worker                            | BullMQ worker as job progresses           |
-| Retry semantics    | Worker retry with dead-letter            | BullMQ built-in retry (max 3)             |
-| Contains           | Event payload (JSONB)                    | Resource reference + bull_job_id          |
-| Deleted            | Never                                    | Never                                     |
+| Concern           | `outbox_events`                              | `automation_jobs`                     |
+| ----------------- | -------------------------------------------- | ------------------------------------- |
+| Responsibility    | Dispatch guarantee (infrastructure)          | Execution audit trail (observability) |
+| Question answered | "Did this event get delivered?"              | "What did the automation do?"         |
+| Written when      | Inside DB transaction with business mutation | Before BullMQ job is enqueued         |
+| Updated by        | Outbox worker                                | BullMQ worker as job progresses       |
+| Retry semantics   | Worker retry with dead-letter                | BullMQ built-in retry (max 3)         |
+| Contains          | Event payload (JSONB)                        | Resource reference + bull_job_id      |
+| Deleted           | Never                                        | Never                                 |
 
 ---
 
@@ -206,6 +207,8 @@ For each claimed row:
      (see bullmq-workers.md for queue name → event_type routing)
   2. Add idempotency_key to BullMQ job options
   3. Enqueue job with payload
+  4. If event_type ∈ ACTIVITY_ALLOWLIST:
+       INSERT INTO activity_events (...)   -- same transaction as step 5
 
   On success:
     UPDATE outbox_events
@@ -223,6 +226,35 @@ For each claimed row:
         dead_lettered_at = NOW(),
         last_error = error_message
 ```
+
+### Feed-Only Events
+
+Some event types have **no downstream queue** but are still meaningful for
+the dashboard Recent Activity feed:
+
+- `opportunity.stage_changed`
+- `contact.status_changed`
+
+`routeEvent()` returns `[]` for these (suppressing the "no route" warning),
+the dispatcher treats the row as `routed` via the `FEED_ONLY_EVENTS` set,
+and the activity persistence step still runs because `event_type` is in
+`ACTIVITY_ALLOWLIST`. Result: outbox row → `processed`, activity_events row
+created, zero BullMQ jobs enqueued.
+
+To register a new feed-only event:
+
+1. Add it to `FEED_ONLY_EVENTS` in `outboxWorker.ts`.
+2. Add a registry entry in `activityRegistry.ts` (which extends `ACTIVITY_ALLOWLIST`).
+3. Do **not** add it to `routeEvent()`'s case list.
+
+### Activity Persistence Atomicity
+
+The activity_events INSERT happens inside the same `db.transaction()` that
+flips outbox rows from `processing` → `processed`. If the INSERT throws,
+the transaction rolls back — outbox rows return to `pending` and will be
+retried (so activity is never "lost" without the outbox being lost too).
+There is **no separate activity queue** — persistence is synchronous inside
+the outbox tick.
 
 ### Exponential Backoff Schedule
 
@@ -319,12 +351,14 @@ Supabase Realtime is a UI delivery layer. It is NOT an event bus.
 Business-critical automation never depends on Realtime.
 
 **Realtime IS used for:**
+
 - Live in-app notification delivery (notification bell)
 - Inbox real-time message updates
 - Dashboard live count refreshes
 - UI state synchronisation
 
 **Realtime is NEVER used for:**
+
 - Durable automation processing
 - Business-critical orchestration
 - Retry guarantees

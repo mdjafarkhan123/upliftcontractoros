@@ -4,6 +4,7 @@
 	import AttentionList from '$lib/components/dashboard/AttentionList.svelte';
 	import PipelineSnapshot from '$lib/components/dashboard/PipelineSnapshot.svelte';
 	import RecentActivity from '$lib/components/dashboard/RecentActivity.svelte';
+	import ReputationSnapshot from '$lib/components/dashboard/ReputationSnapshot.svelte';
 	import { dashboardStore } from '$lib/stores/dashboard.svelte';
 	import { getOrgContext } from '$lib/context/org';
 	import { formatCurrency } from '$lib/utils/format';
@@ -30,10 +31,10 @@
 
 <PageWrapper title="Dashboard" subtitle={`Welcome back to ${org().name}`}>
 	{#if showSkeleton}
-		<div class="space-y-4">
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<div class="space-y-4 md:space-y-6">
+			<div class="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
 				{#each Array(4) as _, i (i)}
-					<div class="h-[112px] animate-pulse rounded-2xl bg-muted"></div>
+					<div class="h-[150px] animate-pulse rounded-2xl bg-muted md:h-[170px]"></div>
 				{/each}
 			</div>
 			<div class="h-[200px] animate-pulse rounded-2xl bg-muted"></div>
@@ -65,15 +66,16 @@
 			</div>
 
 			<!-- KPI grid: 4 cards by question -->
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+			<div class="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
 				<KpiCard
 					label="Leads this month"
 					value={String(kpis.leads.new_this_month)}
 					hint={kpis.leads.conversion_rate !== null
 						? `${pct(kpis.leads.conversion_rate)} converted`
-						: 'No leads yet — share your number'}
+						: 'Share your number to start'}
 					icon={UserPlus}
 					tone="default"
+					featured
 					href="/contacts"
 				/>
 				<KpiCard
@@ -87,9 +89,7 @@
 				<KpiCard
 					label="Revenue this month"
 					value={kpis.revenue ? formatCurrency(kpis.revenue.this_month) : '$0.00'}
-					hint={kpis.revenue
-						? 'Payments received'
-						: 'Revenue requires permission'}
+					hint={kpis.revenue ? 'Payments received' : 'Revenue requires permission'}
 					icon={DollarSign}
 					tone="success"
 					locked={locks.revenue_locked}
@@ -99,9 +99,7 @@
 				<KpiCard
 					label="Outstanding"
 					value={kpis.revenue ? formatCurrency(kpis.revenue.outstanding) : '$0.00'}
-					hint={kpis.revenue
-						? 'Sent + partially paid'
-						: 'Revenue requires permission'}
+					hint={kpis.revenue ? 'Sent + partially paid' : 'Revenue requires permission'}
 					icon={Wallet}
 					tone="warning"
 					locked={locks.revenue_locked}
@@ -115,13 +113,24 @@
 				<AttentionList attention={summary.attention} />
 			</div>
 
-			<!-- Pipeline + Recent activity side by side on desktop -->
-			<div class="grid gap-4 lg:grid-cols-2">
-				<PipelineSnapshot
-					stages={summary.pipeline_snapshot}
-					locked={summary.locks.pipeline_locked}
-				/>
+			<!-- Bottom grid: left stacks Pipeline + Reputation, right is Activity full-height -->
+			<div class="grid gap-4 lg:grid-cols-[5fr_7fr]">
+				<div class="flex flex-col gap-4">
+					<PipelineSnapshot
+						stages={summary.pipeline_snapshot}
+						locked={summary.locks.pipeline_locked}
+					/>
+					<!-- Reputation: desktop placement (under Pipeline) -->
+					<div class="hidden lg:block">
+						<ReputationSnapshot reputation={summary.reputation} />
+					</div>
+				</div>
 				<RecentActivity rows={summary.recent_activity} />
+			</div>
+
+			<!-- Reputation: mobile placement (last, lowest priority) -->
+			<div class="lg:hidden">
+				<ReputationSnapshot reputation={summary.reputation} />
 			</div>
 		</div>
 	{/if}

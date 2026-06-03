@@ -17,6 +17,7 @@
 		state: string;
 		zip: string;
 		is_primary: boolean;
+		updated_at: string;
 	};
 
 	let {
@@ -97,7 +98,10 @@
 			city: draft.city,
 			state: draft.state,
 			zip: draft.zip,
-			is_primary: draft.is_primary
+			is_primary: draft.is_primary,
+			// Optimistic concurrency token (edits only) so a concurrent change by
+			// another team member is surfaced instead of silently overwritten.
+			...(editing ? { updated_at: editing.updated_at } : {})
 		};
 		try {
 			const res = editing
@@ -105,12 +109,12 @@
 						method: 'PATCH',
 						headers: { 'content-type': 'application/json' },
 						body: JSON.stringify(payload)
-				  })
+					})
 				: await fetch(`/api/contacts/${contactId}/addresses`, {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
 						body: JSON.stringify(payload)
-				  });
+					});
 
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
@@ -193,7 +197,10 @@
 									variant={a.is_primary ? 'success' : 'default'}
 									label={a.label[0].toUpperCase() + a.label.slice(1)}
 								/>
-								{#if a.is_primary}<span class="inline-flex items-center gap-1 text-xs font-medium text-green-700"><Star class="h-3 w-3" /> Primary</span>{/if}
+								{#if a.is_primary}<span
+										class="inline-flex items-center gap-1 text-xs font-medium text-green-700"
+										><Star class="h-3 w-3" /> Primary</span
+									>{/if}
 							</div>
 							<p class="mt-2 text-sm text-foreground">{a.address_line_1}</p>
 							{#if a.address_line_2}<p class="text-sm text-foreground">{a.address_line_2}</p>{/if}
@@ -241,7 +248,9 @@
 		<AddressForm value={draft} disabled={saving} />
 		{#if errorMsg}<p class="text-sm text-destructive">{errorMsg}</p>{/if}
 		<div class="flex justify-end gap-2">
-			<Button variant="outline" disabled={saving} onclick={() => (editorOpen = false)}>Cancel</Button>
+			<Button variant="outline" disabled={saving} onclick={() => (editorOpen = false)}
+				>Cancel</Button
+			>
 			<JetEngineButton
 				label="Save address"
 				loadingLabel="Saving…"

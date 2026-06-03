@@ -12,6 +12,7 @@ export type AppointmentListItem = {
 	job_id: string | null;
 	assigned_to: string | null;
 	assignee_name: string | null;
+	assignee_count: number;
 	type: AppointmentType;
 	status: AppointmentStatus;
 	title: string;
@@ -19,6 +20,12 @@ export type AppointmentListItem = {
 	scheduled_end: string | null;
 	location: string | null;
 	booking_source: BookingSource;
+};
+
+export type AppointmentAssigneeRow = {
+	id: string;
+	full_name: string;
+	is_lead: boolean;
 };
 
 export type AppointmentDetail = {
@@ -29,6 +36,7 @@ export type AppointmentDetail = {
 	job_title: string | null;
 	assigned_to: string | null;
 	assignee_name: string | null;
+	assignees: AppointmentAssigneeRow[];
 	type: AppointmentType;
 	status: AppointmentStatus;
 	title: string;

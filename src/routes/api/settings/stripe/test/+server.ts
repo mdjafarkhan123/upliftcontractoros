@@ -58,7 +58,8 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const account = await stripe.accounts.retrieve(null);
 		accountId = account.id ?? null;
-		accountName = account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null;
+		accountName =
+			account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null;
 		accountEmail = account.email ?? null;
 	} catch {
 		// Account metadata is best-effort; ignore.

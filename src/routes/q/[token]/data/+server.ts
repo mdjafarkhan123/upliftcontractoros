@@ -9,11 +9,7 @@ import {
 	quoteViews,
 	quotes
 } from '$lib/server/db/schema';
-import {
-	clientIpFrom,
-	lookupValidQuoteByToken,
-	sha256Hex
-} from '$lib/server/quotes/publicAccess';
+import { clientIpFrom, lookupValidQuoteByToken, sha256Hex } from '$lib/server/quotes/publicAccess';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteViewedEvent } from '$lib/server/quotes/events';
@@ -73,9 +69,7 @@ export const GET: RequestHandler = async (event) => {
 
 				await tx
 					.insert(outboxEvents)
-					.values(
-						quoteViewedEvent({ orgId: quote.org_id, quoteId: quote.id, viewId: view.id })
-					)
+					.values(quoteViewedEvent({ orgId: quote.org_id, quoteId: quote.id, viewId: view.id }))
 					.onConflictDoNothing({ target: outboxEvents.idempotency_key });
 			}
 		});
@@ -93,12 +87,7 @@ export const GET: RequestHandler = async (event) => {
 			position: quoteLineItems.position
 		})
 		.from(quoteLineItems)
-		.where(
-			and(
-				eq(quoteLineItems.quote_id, quote.id),
-				sql`${quoteLineItems.deleted_at} IS NULL`
-			)
-		)
+		.where(and(eq(quoteLineItems.quote_id, quote.id), sql`${quoteLineItems.deleted_at} IS NULL`))
 		.orderBy(quoteLineItems.position);
 
 	const [orgRow] = await db

@@ -1,3 +1,7 @@
+// `status` is the lifecycle (lead | customer | archived).
+// `tags` are operational descriptors (homeowner, company, vip, hot, …).
+// Never put lifecycle values inside `tags` — UI vocabulary lives in
+// $lib/contacts/tags.ts.
 import { pgTable, pgEnum, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -5,21 +9,10 @@ import { organizations, orgMembers } from './01_org_identity';
 
 export const contactStatusEnum = pgEnum('contact_status', ['lead', 'customer', 'archived']);
 
-export const PREFERRED_CONTACT_METHODS = [
-	'sms',
-	'call',
-	'email',
-	'whatsapp',
-	'messenger'
-] as const;
+export const PREFERRED_CONTACT_METHODS = ['sms', 'call', 'email', 'whatsapp', 'messenger'] as const;
 export type PreferredContactMethod = (typeof PREFERRED_CONTACT_METHODS)[number];
 
-export const addressLabelEnum = pgEnum('address_label', [
-	'billing',
-	'service',
-	'mailing',
-	'other'
-]);
+export const addressLabelEnum = pgEnum('address_label', ['billing', 'service', 'mailing', 'other']);
 
 export const leadSourceTypeEnum = pgEnum('lead_source_type', [
 	'website_form',
@@ -38,12 +31,18 @@ export const contacts = pgTable('contacts', {
 	full_name: text('full_name').notNull(),
 	email: text('email'),
 	phone: text('phone').notNull(),
+	// Secondary callable/searchable number. Populated by the merge-duplicates
+	// flow when the absorbed (source) contact had a different phone than the
+	// survivor, so the second number is never lost. Not subject to the
+	// (org_id, phone) uniqueness constraint — only `phone` is the dedup key.
+	alt_phone: text('alt_phone'),
 	tags: text('tags')
 		.array()
 		.notNull()
 		.default(sql`'{}'`),
 	status: contactStatusEnum('status').notNull().default('lead'),
 	assigned_to: uuid('assigned_to').references(() => orgMembers.id),
+	referred_by_contact_id: uuid('referred_by_contact_id'),
 	sms_opt_out: boolean('sms_opt_out').notNull().default(false),
 	sms_opt_out_at: timestamp('sms_opt_out_at', { withTimezone: true }),
 	sms_opt_out_source: text('sms_opt_out_source'),

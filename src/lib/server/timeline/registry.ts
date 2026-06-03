@@ -14,11 +14,7 @@ import {
 	appointmentCompletedRegistry,
 	appointmentScheduledRegistry
 } from './mappers/appointments';
-import {
-	jobCancelledRegistry,
-	jobCompletedRegistry,
-	jobCreatedRegistry
-} from './mappers/jobs';
+import { jobCancelledRegistry, jobCompletedRegistry, jobCreatedRegistry } from './mappers/jobs';
 import { reviewRequestSentRegistry } from './mappers/review_requests';
 import { reviewRegistry } from './mappers/reviews';
 import { privateFeedbackRegistry } from './mappers/private_feedback';

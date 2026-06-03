@@ -1,10 +1,4 @@
-export type InvoiceStatus =
-	| 'draft'
-	| 'sent'
-	| 'partially_paid'
-	| 'paid'
-	| 'overdue'
-	| 'cancelled';
+export type InvoiceStatus = 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
 
 export type PaymentMethod = 'stripe' | 'cash' | 'check' | 'bank_transfer' | 'other';
 

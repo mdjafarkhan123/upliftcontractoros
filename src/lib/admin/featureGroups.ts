@@ -50,65 +50,133 @@ export const FEATURE_FLAG_GROUPS: FeatureFlagGroup[] = [
 			{
 				key: 'feature_one_way_sms',
 				label: 'One-way SMS',
-				description: 'Outbound transactional SMS (quotes, invoices).',
+				description:
+					'Outbound-only transactional SMS sends (quote/invoice links, ad-hoc messages). No inbound delivery.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_two_way_sms',
 				label: 'Two-way SMS',
-				description: 'Conversational inbound + outbound replies.',
+				description:
+					'Full conversational SMS — inbound replies land in the inbox and can be responded to.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_bulk_sms',
 				label: 'Bulk SMS',
-				description: 'Broadcast campaigns to contact segments.',
+				description:
+					'Broadcast SMS campaigns to contact segments. Rate-limited by the bulk-per-day cap.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_conversations',
 				label: 'Conversations inbox',
-				description: 'Unified inbox UI for SMS threads.'
+				description: 'Unified inbox UI for SMS, email, and webchat threads.'
 			},
 			{
 				key: 'feature_missed_call_textback',
 				label: 'Missed call textback',
-				description: 'Auto-reply when a tenant misses an inbound call.',
+				description:
+					'Auto-replies an SMS the moment the org misses an inbound call. SMS-only — this gate is also the SMS allowance.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_webchat',
 				label: 'Web chat widget',
-				description: 'Embeddable website chat widget with async messaging.'
+				description:
+					'Embeddable website chat widget that drops conversations into the inbox asynchronously.'
 			}
 		]
 	},
 	{
 		id: 'automation',
 		title: 'Automation',
-		description: 'Background workflows and reminders.',
+		description:
+			'Background workflows, reminders, and receipts. Capability gates — flip off to disable the entire automation for the org, regardless of contractor toggles.',
 		flags: [
 			{
 				key: 'feature_automation_engine',
 				label: 'Automation engine',
-				description: 'BullMQ-driven multi-step automations.'
+				description:
+					'Master switch for the BullMQ automation runtime. Required by every automation below.'
 			},
 			{
 				key: 'feature_review_funnel',
 				label: 'Review funnel',
-				description: 'NPS-style follow-up and review routing.',
+				description: 'Post-job NPS-style follow-up that routes happy customers to Google reviews.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_appointment_reminders',
 				label: 'Appointment reminders',
-				description: 'Pre-appointment SMS reminders.',
+				description: 'Pre-appointment reminders sent ~24h and 1h before the slot.',
 				requires: 'twilio'
 			},
 			{
 				key: 'feature_invoice_reminders',
 				label: 'Invoice reminders',
 				description: 'Past-due nudges for outstanding invoices.',
+				requires: 'twilio'
+			},
+			{
+				key: 'feature_payment_receipt',
+				label: 'Payment receipts',
+				description:
+					'Send a receipt to the customer after each recorded payment. Capability covers both email and SMS channels.'
+			},
+			{
+				key: 'feature_quote_followup',
+				label: 'Quote follow-up',
+				description: 'Two-stage nudge to customers who received a quote but haven’t responded.',
+				requires: 'twilio'
+			},
+			{
+				key: 'feature_speed_to_lead',
+				label: 'Speed to lead',
+				description: 'Auto-reply within seconds of a new inbound lead to maximize contact rate.',
+				requires: 'twilio'
+			}
+		]
+	},
+	{
+		id: 'sms-allowances',
+		title: 'SMS Channel Allowances',
+		description:
+			'Per-automation SMS channel gates. SMS-only automations (missed call textback, speed to lead) use their capability flag above as the SMS gate. These flags only affect the SMS variant — email always sends when the capability is on.',
+		flags: [
+			{
+				key: 'payment_receipt_sms_allowed',
+				label: 'Payment receipt — SMS',
+				description:
+					'Allow sending payment receipts as SMS in addition to email. Disable to keep receipts email-only and cap Twilio cost.',
+				requires: 'twilio'
+			},
+			{
+				key: 'quote_followup_sms_allowed',
+				label: 'Quote follow-up — SMS',
+				description:
+					'Allow quote follow-up nudges via SMS. Requires the Quote follow-up capability.',
+				requires: 'twilio'
+			},
+			{
+				key: 'appointment_reminder_sms_allowed',
+				label: 'Appointment reminders — SMS',
+				description:
+					'Allow appointment reminders via SMS. Requires the Appointment reminders capability.',
+				requires: 'twilio'
+			},
+			{
+				key: 'invoice_reminder_sms_allowed',
+				label: 'Invoice reminders — SMS',
+				description:
+					'Allow past-due invoice nudges via SMS. Requires the Invoice reminders capability.',
+				requires: 'twilio'
+			},
+			{
+				key: 'review_funnel_sms_allowed',
+				label: 'Review funnel — SMS',
+				description:
+					'Allow review-funnel follow-ups via SMS. Requires the Review funnel capability.',
 				requires: 'twilio'
 			}
 		]

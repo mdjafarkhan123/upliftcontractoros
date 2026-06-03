@@ -63,9 +63,7 @@
 		<div class="flex items-start gap-3">
 			<CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 			<div class="min-w-0">
-				<dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					Converted
-				</dt>
+				<dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Converted</dt>
 				<dd class="mt-0.5 text-sm text-foreground">
 					{converted_at ? formatDateTime(converted_at) : '—'}
 				</dd>

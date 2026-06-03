@@ -34,7 +34,7 @@ export type LocalMediaItem = {
 	created_at?: string;
 
 	// Client-side URLs
-	previewUrl?: string;     // local blob URL for optimistic preview
-	thumbnailUrl?: string;   // presigned R2 URL (fetched lazily)
-	webUrl?: string;         // presigned R2 URL for lightbox
+	previewUrl?: string; // local blob URL for optimistic preview
+	thumbnailUrl?: string; // presigned R2 URL (fetched lazily)
+	webUrl?: string; // presigned R2 URL for lightbox
 };

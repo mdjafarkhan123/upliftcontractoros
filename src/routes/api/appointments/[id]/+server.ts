@@ -3,6 +3,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	appointmentAssignees,
 	appointments,
 	contacts,
 	jobs,
@@ -11,18 +12,25 @@ import {
 	type Appointment
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	canRescheduleAppointment,
-	canViewAppointment
-} from '$lib/server/appointments/permissions';
+import { canRescheduleAppointment, canViewAppointment } from '$lib/server/appointments/permissions';
 import { updateAppointmentSchema } from '$lib/server/appointments/schemas';
-import { hasOverlap } from '$lib/server/appointments/overlap';
+import { findConflictingAssignee } from '$lib/server/appointments/overlap';
+import {
+	loadAssignees,
+	resolveAssigneeInput,
+	syncAppointmentAssignees,
+	validateAssigneesBelongToOrg,
+	type AssigneeRow
+} from '$lib/server/appointments/assignees';
 
-function serialize(row: Appointment & {
-	contact_name: string;
-	assignee_name: string | null;
-	job_title: string | null;
-}) {
+function serialize(
+	row: Appointment & {
+		contact_name: string;
+		assignee_name: string | null;
+		job_title: string | null;
+	},
+	assignees: AssigneeRow[]
+) {
 	return {
 		id: row.id,
 		contact_id: row.contact_id,
@@ -31,6 +39,7 @@ function serialize(row: Appointment & {
 		job_title: row.job_title,
 		assigned_to: row.assigned_to,
 		assignee_name: row.assignee_name,
+		assignees,
 		type: row.type,
 		status: row.status,
 		title: row.title,
@@ -66,11 +75,7 @@ async function loadDetail(orgId: string, id: string) {
 		.leftJoin(orgMembers, eq(orgMembers.id, appointments.assigned_to))
 		.leftJoin(jobs, eq(jobs.id, appointments.job_id))
 		.where(
-			and(
-				eq(appointments.id, id),
-				eq(appointments.org_id, orgId),
-				isNull(appointments.deleted_at)
-			)
+			and(eq(appointments.id, id), eq(appointments.org_id, orgId), isNull(appointments.deleted_at))
 		)
 		.limit(1);
 	if (!row) return null;
@@ -93,7 +98,8 @@ export const GET: RequestHandler = async (event) => {
 		error(403, 'Forbidden');
 	}
 
-	return json({ data: serialize(row) });
+	const assignees = await loadAssignees(db, id);
+	return json({ data: serialize(row, assignees) });
 };
 
 export const PATCH: RequestHandler = async (event) => {
@@ -124,21 +130,34 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 	const input = parsed.data;
 
-	if (input.assigned_to) {
-		const [assignee] = await db
-			.select({ id: orgMembers.id })
-			.from(orgMembers)
-			.where(
-				and(
-					eq(orgMembers.id, input.assigned_to),
-					eq(orgMembers.org_id, auth.orgId),
-					eq(orgMembers.is_active, true),
-					isNull(orgMembers.deleted_at)
-				)
-			)
-			.limit(1);
-		if (!assignee) {
-			return json({ error: 'Assignee is not an active member.' }, { status: 422 });
+	// Did the caller try to change the crew at all? (Any of the three keys present.)
+	const assigneesProvided =
+		input.assignee_ids !== undefined ||
+		input.lead_member_id !== undefined ||
+		input.assigned_to !== undefined;
+
+	let crew: { assigneeIds: string[]; leadMemberId: string | null } | null = null;
+	if (assigneesProvided) {
+		const resolution = resolveAssigneeInput({
+			assignee_ids: input.assignee_ids,
+			lead_member_id: input.lead_member_id,
+			assigned_to: input.assigned_to
+		});
+		if ('field' in resolution) {
+			return json(
+				{ error: resolution.message, field_errors: { [resolution.field]: resolution.message } },
+				{ status: 422 }
+			);
+		}
+		crew = { assigneeIds: resolution.assigneeIds, leadMemberId: resolution.leadMemberId };
+		if (crew.assigneeIds.length > 0) {
+			const orgErr = await validateAssigneesBelongToOrg(db, auth.orgId, crew.assigneeIds);
+			if (orgErr) {
+				return json(
+					{ error: orgErr.message, field_errors: { [orgErr.field]: orgErr.message } },
+					{ status: 422 }
+				);
+			}
 		}
 	}
 
@@ -167,35 +186,42 @@ export const PATCH: RequestHandler = async (event) => {
 			(input.scheduled_start.getTime() !== existing.scheduled_start.getTime() ||
 				input.scheduled_end.getTime() !== (existing.scheduled_end?.getTime() ?? -1));
 
-		const nextAssignee =
-			input.assigned_to !== undefined ? input.assigned_to : existing.assigned_to;
 		const nextStart = input.scheduled_start ?? existing.scheduled_start;
 		const nextEnd = input.scheduled_end ?? existing.scheduled_end;
 
-		if (nextAssignee && nextStart && nextEnd) {
-			const startChanged =
-				input.scheduled_start !== undefined &&
-				input.scheduled_start.getTime() !== existing.scheduled_start.getTime();
-			const endChanged =
-				input.scheduled_end !== undefined &&
-				input.scheduled_end.getTime() !== (existing.scheduled_end?.getTime() ?? -1);
-			const assigneeChanged =
-				input.assigned_to !== undefined && input.assigned_to !== existing.assigned_to;
+		// Resolve the effective crew for overlap checking. If the caller didn't
+		// touch assignees, use the existing crew from the join table.
+		let effectiveCrew: string[];
+		if (crew) {
+			effectiveCrew = crew.assigneeIds;
+		} else {
+			const rows = await tx
+				.select({ id: appointmentAssignees.member_id })
+				.from(appointmentAssignees)
+				.where(eq(appointmentAssignees.appointment_id, id));
+			effectiveCrew = rows.map((r) => r.id);
+		}
 
-			if (startChanged || endChanged || assigneeChanged) {
-				const conflict = await hasOverlap(tx, {
-					orgId: auth.orgId,
-					assignedTo: nextAssignee,
-					start: nextStart,
-					end: nextEnd,
-					excludeId: id
-				});
-				if (conflict) return { kind: 'conflict' as const };
-			}
+		const startChanged =
+			input.scheduled_start !== undefined &&
+			input.scheduled_start.getTime() !== existing.scheduled_start.getTime();
+		const endChanged =
+			input.scheduled_end !== undefined &&
+			input.scheduled_end.getTime() !== (existing.scheduled_end?.getTime() ?? -1);
+		const crewChanged = crew !== null;
+
+		if ((startChanged || endChanged || crewChanged) && effectiveCrew.length > 0 && nextEnd) {
+			const conflictMember = await findConflictingAssignee(tx, {
+				orgId: auth.orgId,
+				assigneeIds: effectiveCrew,
+				start: nextStart,
+				end: nextEnd,
+				excludeId: id
+			});
+			if (conflictMember) return { kind: 'conflict' as const };
 		}
 
 		const updates: Record<string, unknown> = { updated_at: new Date() };
-		if (input.assigned_to !== undefined) updates.assigned_to = input.assigned_to;
 		if (input.type !== undefined) updates.type = input.type;
 		if (input.title !== undefined) updates.title = input.title;
 		if (input.scheduled_start !== undefined) updates.scheduled_start = input.scheduled_start;
@@ -214,7 +240,19 @@ export const PATCH: RequestHandler = async (event) => {
 			.where(eq(appointments.id, id))
 			.returning();
 
+		// Sync the crew AFTER the main UPDATE so the helper's own write to
+		// assigned_to wins (this is a no-op if crew unchanged).
+		if (crew) {
+			await syncAppointmentAssignees(tx, {
+				orgId: auth.orgId,
+				appointmentId: id,
+				assigneeIds: crew.assigneeIds,
+				leadMemberId: crew.leadMemberId
+			});
+		}
+
 		if (isReschedule) {
+			const finalLead = crew ? crew.leadMemberId : row.assigned_to;
 			await tx.insert(outboxEvents).values({
 				org_id: auth.orgId,
 				event_type: 'appointment.rescheduled',
@@ -225,7 +263,8 @@ export const PATCH: RequestHandler = async (event) => {
 					org_id: auth.orgId,
 					contact_id: row.contact_id,
 					job_id: row.job_id,
-					assigned_to: row.assigned_to,
+					assigned_to: finalLead,
+					assignee_ids: effectiveCrew,
 					old_start_at: existing.scheduled_start.toISOString(),
 					new_start_at: row.scheduled_start.toISOString(),
 					reminder_flags_reset: true
@@ -239,10 +278,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (updated.kind === 'notFound') error(404, 'Appointment not found');
 	if (updated.kind === 'terminal') {
-		return json(
-			{ error: `Cannot edit a ${updated.status} appointment.` },
-			{ status: 422 }
-		);
+		return json({ error: `Cannot edit a ${updated.status} appointment.` }, { status: 422 });
 	}
 	if (updated.kind === 'conflict') {
 		return json({ error: 'Time conflict' }, { status: 409 });
@@ -250,5 +286,6 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const detail = await loadDetail(auth.orgId, id);
 	if (!detail) error(404, 'Appointment not found');
-	return json({ data: serialize(detail) });
+	const assignees = await loadAssignees(db, id);
+	return json({ data: serialize(detail, assignees) });
 };

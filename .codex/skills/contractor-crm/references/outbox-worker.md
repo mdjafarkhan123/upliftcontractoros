@@ -133,6 +133,7 @@ updated_at
 ```
 
 Key constraints:
+
 - `idempotency_key` is `UNIQUE` — duplicate event inserts fail gracefully
 - `sequence` ordering guarantees multi-event transactions process in correct order
 - `available_at > now()` enables delayed processing (review funnel delay, quote follow-up)
@@ -145,15 +146,15 @@ Key constraints:
 
 These are NOT interchangeable. Both must exist. Neither replaces the other.
 
-| Concern            | `outbox_events`                          | `automation_jobs`                         |
-| ------------------ | ---------------------------------------- | ----------------------------------------- |
-| Responsibility     | Dispatch guarantee (infrastructure)      | Execution audit trail (observability)     |
-| Question answered  | "Did this event get delivered?"          | "What did the automation do?"             |
-| Written when       | Inside DB transaction with business mutation | Before BullMQ job is enqueued         |
-| Updated by         | Outbox worker                            | BullMQ worker as job progresses           |
-| Retry semantics    | Worker retry with dead-letter            | BullMQ built-in retry (max 3)             |
-| Contains           | Event payload (JSONB)                    | Resource reference + bull_job_id          |
-| Deleted            | Never                                    | Never                                     |
+| Concern           | `outbox_events`                              | `automation_jobs`                     |
+| ----------------- | -------------------------------------------- | ------------------------------------- |
+| Responsibility    | Dispatch guarantee (infrastructure)          | Execution audit trail (observability) |
+| Question answered | "Did this event get delivered?"              | "What did the automation do?"         |
+| Written when      | Inside DB transaction with business mutation | Before BullMQ job is enqueued         |
+| Updated by        | Outbox worker                                | BullMQ worker as job progresses       |
+| Retry semantics   | Worker retry with dead-letter                | BullMQ built-in retry (max 3)         |
+| Contains          | Event payload (JSONB)                        | Resource reference + bull_job_id      |
+| Deleted           | Never                                        | Never                                 |
 
 ---
 
@@ -319,12 +320,14 @@ Supabase Realtime is a UI delivery layer. It is NOT an event bus.
 Business-critical automation never depends on Realtime.
 
 **Realtime IS used for:**
+
 - Live in-app notification delivery (notification bell)
 - Inbox real-time message updates
 - Dashboard live count refreshes
 - UI state synchronisation
 
 **Realtime is NEVER used for:**
+
 - Durable automation processing
 - Business-critical orchestration
 - Retry guarantees

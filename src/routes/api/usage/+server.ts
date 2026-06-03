@@ -4,10 +4,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	getCurrentUsage,
-	BYTES_PER_GB
-} from '$lib/server/usage/assertAndIncrementUsage';
+import { getCurrentUsage, BYTES_PER_GB } from '$lib/server/usage/assertAndIncrementUsage';
 
 type UsagePayload = {
 	sms_sent: { current: number; max: number; period: 'monthly' };

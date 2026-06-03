@@ -29,10 +29,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const parsed = transitionStatusSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
-			{ error: parsed.error.issues[0]?.message ?? 'Invalid input' },
-			{ status: 422 }
-		);
+		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
 	const next = parsed.data.status;
 
@@ -86,10 +83,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (result.kind === 'notFound') error(404, 'Appointment not found');
 	if (result.kind === 'terminal') {
-		return json(
-			{ error: `Appointment is already ${result.status}.` },
-			{ status: 422 }
-		);
+		return json({ error: `Appointment is already ${result.status}.` }, { status: 422 });
 	}
 
 	return json({

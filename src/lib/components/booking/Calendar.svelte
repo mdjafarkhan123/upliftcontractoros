@@ -66,9 +66,7 @@
 	const daysInMonth = $derived(
 		new Date(Date.UTC(parsed.year, parsed.monthIndex + 1, 0)).getUTCDate()
 	);
-	const firstWeekday = $derived(
-		new Date(Date.UTC(parsed.year, parsed.monthIndex, 1)).getUTCDay()
-	);
+	const firstWeekday = $derived(new Date(Date.UTC(parsed.year, parsed.monthIndex, 1)).getUTCDay());
 
 	const cells = $derived.by(() => {
 		const out: Array<{ iso: string; day: number } | null> = [];
@@ -129,7 +127,9 @@
 
 	<div class="mb-2 grid grid-cols-7 gap-1">
 		{#each WEEKDAYS as wd (wd)}
-			<div class="py-2 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+			<div
+				class="py-2 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
+			>
 				{wd}
 			</div>
 		{/each}
@@ -154,8 +154,9 @@
 						'group relative aspect-square min-h-[44px] rounded-xl text-sm font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
 						isSelected &&
 							'bg-primary text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--brand-primary)/0.6)]',
-						!isSelected && isAvailable &&
-							'bg-card/60 text-foreground hover:bg-accent hover:shadow-[0_4px_14px_-6px_hsl(var(--brand-primary)/0.4)]',
+						!isSelected &&
+							isAvailable &&
+							'bg-muted text-foreground hover:bg-accent hover:shadow-[0_4px_14px_-6px_hsl(var(--brand-primary)/0.4)]',
 						!isAvailable && !isPast && !loading && 'text-muted-foreground/30',
 						isPast && 'text-muted-foreground/20',
 						loading && !isSelected && 'animate-pulse bg-muted/40 text-transparent'

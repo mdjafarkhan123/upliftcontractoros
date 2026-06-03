@@ -1,6 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
 
-try { process.loadEnvFile(); } catch {}
+try {
+	process.loadEnvFile();
+} catch {}
 
 export default defineConfig({
 	schema: './src/lib/server/db/schema/index.ts',

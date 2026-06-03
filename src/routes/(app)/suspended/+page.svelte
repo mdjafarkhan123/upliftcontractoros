@@ -95,8 +95,8 @@
 					<p
 						class="mx-auto mt-4 max-w-[360px] text-center text-[14px] leading-relaxed text-muted-foreground"
 					>
-						Your organization's access has been temporarily restricted. Please contact support
-						or resolve your billing issue to restore access.
+						Your organization's access has been temporarily restricted. Please contact support or
+						resolve your billing issue to restore access.
 					</p>
 					<p class="mt-2 text-center text-[12px] text-muted-foreground/80">
 						Your data has not been deleted.

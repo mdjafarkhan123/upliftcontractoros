@@ -2,11 +2,7 @@
 	import { Avatar as AvatarPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils/cn';
 
-	let {
-		class: className,
-		ref = $bindable(null),
-		...rest
-	}: AvatarPrimitive.ImageProps = $props();
+	let { class: className, ref = $bindable(null), ...rest }: AvatarPrimitive.ImageProps = $props();
 </script>
 
 <AvatarPrimitive.Image

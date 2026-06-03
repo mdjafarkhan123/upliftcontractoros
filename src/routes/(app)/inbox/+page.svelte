@@ -17,12 +17,16 @@
 		type AssigneeFilter,
 		type ThreadMessage
 	} from '$lib/stores/inbox.svelte';
-	import { getBrowserSupabase, realtimeAuthReady } from '$lib/supabase/browser';
+	import { createRealtimeManager } from '$lib/stores/realtimeReconnect';
 
-	let {
-		data
-	} = $props<{
-		data: { status: StatusFilter; assignee: AssigneeFilter; unread: boolean; q: string };
+	let { data } = $props<{
+		data: {
+			status: StatusFilter;
+			assignee: AssigneeFilter;
+			unread: boolean;
+			q: string;
+			tag: string;
+		};
 	}>();
 
 	const member = getMemberContext();
@@ -35,8 +39,14 @@
 	let assignee = $state<AssigneeFilter>(data.assignee);
 	let unread = $state<boolean>(data.unread);
 	let search = $state(data.q);
+	let tag = $state(data.tag);
 
-	const filters = $derived({ status, assignee, unread, q: search });
+	const filters = $derived({ status, assignee, unread, q: search, tag });
+	const orgTags = $derived.by(() => {
+		// Touch items so $derived recomputes when the list cache updates.
+		void inboxStore.items.length;
+		return inboxStore.getOrgTags();
+	});
 
 	$effect(() => {
 		if (!canView) return;
@@ -55,6 +65,8 @@
 		else url.searchParams.delete('unread');
 		if (search.trim()) url.searchParams.set('q', search.trim());
 		else url.searchParams.delete('q');
+		if (tag.trim()) url.searchParams.set('tag', tag.trim());
+		else url.searchParams.delete('tag');
 		if (searchTimer) clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => {
 			void goto(url.pathname + url.search, { replaceState: true, keepFocus: true, noScroll: true });
@@ -76,47 +88,91 @@
 		loadingMore = false;
 	}
 
+	let isRealtimeConnected = $state(true);
+	let realtimeFailed = $state(false);
+
+	// ── Message body search (debounced) ────────────────────────────────────
+	type MessageSearchHit = {
+		id: string;
+		contact_id: string;
+		contact_name: string;
+		contact_phone: string;
+		matched_body: string | null;
+		matched_at: string;
+		unread_count: number;
+	};
+	let messageHits = $state<MessageSearchHit[]>([]);
+	let messageSearchLoading = $state(false);
+	let messageSearchOpen = $state(false);
+	let messageSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const searchTrimmed = $derived(search.trim());
+
+	$effect(() => {
+		const q = searchTrimmed;
+		if (messageSearchTimer) {
+			clearTimeout(messageSearchTimer);
+			messageSearchTimer = null;
+		}
+		if (!messageSearchOpen || q.length < 3) {
+			messageHits = [];
+			messageSearchLoading = false;
+			return;
+		}
+		messageSearchLoading = true;
+		messageSearchTimer = setTimeout(async () => {
+			try {
+				const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(q)}`);
+				if (!res.ok) {
+					messageHits = [];
+					return;
+				}
+				const body = (await res.json()) as { data: { items: MessageSearchHit[] } };
+				messageHits = body.data.items;
+			} catch {
+				messageHits = [];
+			} finally {
+				messageSearchLoading = false;
+			}
+		}, 300);
+	});
+
 	onMount(() => {
 		if (!canView) return;
-		const supabase = getBrowserSupabase();
-		let cancelled = false;
-		let channel: ReturnType<typeof supabase.channel> | null = null;
-		void realtimeAuthReady().then(() => {
-			if (cancelled) return;
-			channel = supabase
-				.channel(`inbox:org:${member().org_id}`)
-				.on(
-					'postgres_changes',
-					{
-						event: 'INSERT',
-						schema: 'public',
-						table: 'messages',
-						filter: `org_id=eq.${member().org_id}`
-					},
-					(payload: { new: ThreadMessage }) => {
-						console.log('[realtime:inbox] INSERT', payload.new);
-						inboxStore.applyRealtimeMessageInsert(payload.new);
-					}
-				)
-				.on(
-					'postgres_changes',
-					{
-						event: 'UPDATE',
-						schema: 'public',
-						table: 'messages',
-						filter: `org_id=eq.${member().org_id}`
-					},
-					(payload: { new: ThreadMessage }) => {
-						console.log('[realtime:inbox] UPDATE', payload.new);
-						inboxStore.applyRealtimeMessageUpdate(payload.new);
-					}
-				)
-				.subscribe((status, err) => console.log('[realtime:inbox] status', status, err));
+		const orgId = member().org_id;
+		const manager = createRealtimeManager({
+			build: (supabase) =>
+				supabase
+					.channel(`inbox:org:${orgId}`)
+					.on(
+						'postgres_changes',
+						{
+							event: 'INSERT',
+							schema: 'public',
+							table: 'messages',
+							filter: `org_id=eq.${orgId}`
+						},
+						(payload: { new: ThreadMessage }) => {
+							inboxStore.applyRealtimeMessageInsert(payload.new);
+						}
+					)
+					.on(
+						'postgres_changes',
+						{
+							event: 'UPDATE',
+							schema: 'public',
+							table: 'messages',
+							filter: `org_id=eq.${orgId}`
+						},
+						(payload: { new: ThreadMessage }) => {
+							inboxStore.applyRealtimeMessageUpdate(payload.new);
+						}
+					),
+			onStatusChange: (c) => (isRealtimeConnected = c),
+			onPermanentFailure: () => (realtimeFailed = true),
+			onReconnect: () => inboxStore.revalidateList()
 		});
-		return () => {
-			cancelled = true;
-			if (channel) void supabase.removeChannel(channel);
-		};
+		return () => manager.destroy();
 	});
 
 	const emptyTitle = $derived.by(() => {
@@ -147,6 +203,19 @@
 		/>
 	{:else}
 		<div class="mx-auto flex max-w-4xl flex-col gap-4">
+			{#if realtimeFailed}
+				<div
+					class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-center text-xs font-medium text-amber-700 dark:text-amber-300"
+				>
+					Connection lost — refresh the page to reconnect.
+				</div>
+			{:else if !isRealtimeConnected}
+				<div
+					class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-center text-xs text-amber-700 dark:text-amber-300"
+				>
+					Live updates paused — reconnecting…
+				</div>
+			{/if}
 			<div class="rounded-xl border border-border/60 bg-card p-3 shadow-card">
 				<div class="relative">
 					<Search
@@ -161,9 +230,73 @@
 					/>
 				</div>
 
+				{#if searchTrimmed.length >= 3}
+					<div class="mt-2 flex items-center justify-between">
+						<button
+							type="button"
+							class="text-xs font-medium text-primary hover:underline"
+							onclick={() => (messageSearchOpen = !messageSearchOpen)}
+						>
+							{messageSearchOpen ? 'Hide' : 'Search messages'} for "{searchTrimmed}"
+						</button>
+						{#if messageSearchOpen && messageSearchLoading}
+							<span class="text-xs text-muted-foreground">Searching…</span>
+						{/if}
+					</div>
+					{#if messageSearchOpen && !messageSearchLoading && messageHits.length > 0}
+						<ul class="mt-2 grid gap-1.5">
+							{#each messageHits as h (h.id)}
+								<li>
+									<a
+										href={`/inbox/${h.id}`}
+										class="block rounded-lg border border-border/60 bg-background p-3 transition-colors hover:bg-muted"
+									>
+										<div class="flex items-center justify-between gap-2">
+											<span class="truncate text-sm font-semibold">{h.contact_name}</span>
+											{#if h.unread_count > 0}
+												<span
+													class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
+													>{h.unread_count}</span
+												>
+											{/if}
+										</div>
+										{#if h.matched_body}
+											<div class="mt-1 line-clamp-2 text-xs text-muted-foreground">
+												{h.matched_body}
+											</div>
+										{/if}
+									</a>
+								</li>
+							{/each}
+						</ul>
+					{:else if messageSearchOpen && !messageSearchLoading}
+						<div class="mt-2 text-xs text-muted-foreground">No matching messages.</div>
+					{/if}
+				{/if}
+
 				<div class="mt-3 flex flex-col gap-2">
 					<InboxFilters bind:value={status} />
-					<InboxQuickFilters bind:assignee={assignee} bind:unread={unread} canViewAll={canViewAll} />
+					<InboxQuickFilters bind:assignee bind:unread {canViewAll} />
+					{#if orgTags.length > 0}
+						<div class="flex flex-wrap items-center gap-1.5 pt-1">
+							<button
+								type="button"
+								class={`inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium transition-colors ${tag === '' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border/60 bg-background text-muted-foreground hover:bg-muted'}`}
+								onclick={() => (tag = '')}
+							>
+								All tags
+							</button>
+							{#each orgTags as t (t)}
+								<button
+									type="button"
+									class={`inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium transition-colors ${tag === t ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border/60 bg-background text-muted-foreground hover:bg-muted'}`}
+									onclick={() => (tag = t)}
+								>
+									#{t}
+								</button>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</div>
 
@@ -172,7 +305,9 @@
 					<SkeletonLoader lines={6} height="72px" label="Loading conversations" />
 				</div>
 			{:else if showError}
-				<div class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card">
+				<div
+					class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card"
+				>
 					{errorMsg}
 				</div>
 			{:else if items.length === 0}

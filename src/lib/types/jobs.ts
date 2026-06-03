@@ -1,9 +1,11 @@
 export type JobStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type JobSource = 'opportunity' | 'manual';
 
 export type JobListItem = {
 	id: string;
 	title: string;
 	status: JobStatus;
+	source: JobSource;
 	contact_id: string;
 	contact_name: string;
 	assigned_to: string | null;
@@ -23,7 +25,8 @@ export type JobDetail = {
 	contact_name: string;
 	contact_phone: string;
 	contact_email: string | null;
-	opportunity_id: string;
+	opportunity_id: string | null;
+	source: JobSource;
 	assigned_to: string | null;
 	assignee_name: string | null;
 	notes: string | null;
@@ -46,8 +49,18 @@ export type JobDetail = {
 
 export type JobsFilterStatus = 'all' | 'scheduled' | 'in_progress' | 'completed';
 
+export type JobsFilterScope = 'today' | 'awaiting_review' | 'unscheduled';
+
 export type JobsFilters = {
 	status: JobsFilterStatus;
+	scope: JobsFilterScope | null;
 	assignedTo: string | null;
 	contactId: string | null;
+};
+
+export type JobsStats = {
+	today: number;
+	in_progress: number;
+	awaiting_review: number;
+	unscheduled: number;
 };

@@ -80,6 +80,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 				key: 'can_delete_contacts',
 				label: 'Delete contacts',
 				description: 'Soft delete contacts.'
+			},
+			{
+				key: 'can_merge_contacts',
+				label: 'Merge contacts',
+				description: 'Combine duplicate contacts into a single record.'
 			}
 		]
 	},
@@ -89,8 +94,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 		permissions: [
 			{
 				key: 'can_view_full_pipeline',
-				label: 'View full pipeline',
-				description: 'See all opportunities across stages.'
+				label: 'View every opportunity',
+				description: 'See the full pipeline including teammates’ deals and total stage revenue.'
+			},
+			{
+				key: 'can_view_assigned_opportunities',
+				label: 'View only their assigned opportunities',
+				description:
+					'See just the deals assigned to them — totals and other reps’ cards stay hidden.'
 			},
 			{
 				key: 'can_move_pipeline_stages',

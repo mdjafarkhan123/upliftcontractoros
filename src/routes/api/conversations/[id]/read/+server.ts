@@ -1,13 +1,17 @@
 import { json } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { conversations, messages } from '$lib/server/db/schema';
+import { conversations } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 
 function canAccess(
 	conv: { assigned_to: string | null },
-	member: { id: string; can_view_all_conversations: boolean; can_view_assigned_conversations: boolean }
+	member: {
+		id: string;
+		can_view_all_conversations: boolean;
+		can_view_assigned_conversations: boolean;
+	}
 ): boolean {
 	if (member.can_view_all_conversations) return true;
 	if (member.can_view_assigned_conversations && conv.assigned_to === member.id) return true;
@@ -33,22 +37,30 @@ export const PATCH: RequestHandler = async (event) => {
 	if (!conv) return json({ error: 'Conversation not found.' }, { status: 404 });
 	if (!canAccess(conv, auth.member)) return json({ error: 'Forbidden.' }, { status: 403 });
 
-	await db.transaction(async (tx) => {
-		await tx
-			.update(messages)
-			.set({ read_at: new Date(), updated_at: new Date() })
-			.where(
-				and(
-					eq(messages.conversation_id, id),
-					eq(messages.direction, 'inbound'),
-					isNull(messages.read_at)
-				)
-			);
-		await tx
-			.update(conversations)
-			.set({ unread_count: 0, updated_at: new Date() })
-			.where(eq(conversations.id, id));
-	});
+	// Atomic mark-read + drift-safe recount in a single statement (P2-D Part 1).
+	await db.execute(sql`
+		WITH updated AS (
+			UPDATE messages
+			SET read_at = NOW()
+			WHERE conversation_id = ${id}
+				AND direction = 'inbound'
+				AND read_at IS NULL
+			RETURNING id
+		),
+		actual AS (
+			SELECT COUNT(*)::int AS cnt
+			FROM messages
+			WHERE conversation_id = ${id}
+				AND direction = 'inbound'
+				AND read_at IS NULL
+		)
+		UPDATE conversations
+		SET unread_count = actual.cnt,
+			updated_at = NOW()
+		FROM actual
+		WHERE conversations.id = ${id}
+			AND conversations.org_id = ${auth.orgId}
+	`);
 
 	return json({ data: { ok: true } });
 };

@@ -4,7 +4,9 @@
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import AuthField from '$lib/components/auth/AuthField.svelte';
 
-	let { form }: {
+	let {
+		form
+	}: {
 		form?: { error?: string; success?: string; email?: string };
 	} = $props();
 
@@ -51,8 +53,9 @@
 				</div>
 				<h2 class="text-base font-semibold text-foreground">Check your email</h2>
 				<p class="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-					We've sent a reset link to <span class="font-medium text-foreground">{emailValue || 'your email'}</span>.
-					Check your inbox and follow the instructions.
+					We've sent a reset link to <span class="font-medium text-foreground"
+						>{emailValue || 'your email'}</span
+					>. Check your inbox and follow the instructions.
 				</p>
 			</div>
 		{:else}
@@ -85,9 +88,25 @@
 				>
 					{#if loading}
 						<span class="inline-flex items-center justify-center gap-2">
-							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+							<svg
+								class="animate-spin h-4 w-4"
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+							>
+								<circle
+									class="opacity-25"
+									cx="12"
+									cy="12"
+									r="10"
+									stroke="currentColor"
+									stroke-width="4"
+								></circle>
+								<path
+									class="opacity-75"
+									fill="currentColor"
+									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+								></path>
 							</svg>
 							Sending…
 						</span>
@@ -104,8 +123,18 @@
 			href="/auth/login"
 			class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
 		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-				<path d="m15 18-6-6 6-6"/>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="14"
+				height="14"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.5"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<path d="m15 18-6-6 6-6" />
 			</svg>
 			Back to sign in
 		</a>

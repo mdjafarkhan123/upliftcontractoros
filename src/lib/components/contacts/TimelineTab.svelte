@@ -4,9 +4,12 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { getMemberContext } from '$lib/context/member';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
+		Search,
+		X,
 		Clock,
 		MessageSquare,
 		MessageCircle,
@@ -45,6 +48,23 @@
 		link?: string | null;
 	};
 
+	type FilterCategory = {
+		key: string;
+		label: string;
+		icon: Component;
+	};
+
+	const FILTER_CATEGORIES: FilterCategory[] = [
+		{ key: 'messages', label: 'Messages', icon: MessageCircle },
+		{ key: 'quotes', label: 'Quotes', icon: FileText },
+		{ key: 'invoices', label: 'Invoices', icon: Receipt },
+		{ key: 'appointments', label: 'Appts', icon: Calendar },
+		{ key: 'jobs', label: 'Jobs', icon: Briefcase },
+		{ key: 'reviews', label: 'Reviews', icon: Star },
+		{ key: 'notes', label: 'Notes', icon: StickyNote },
+		{ key: 'automations', label: 'Auto', icon: Zap }
+	];
+
 	let { contactId }: { contactId: string } = $props();
 
 	const member = getMemberContext();
@@ -56,9 +76,30 @@
 	let loadingMore = $state(false);
 	let errorMsg = $state<string | null>(null);
 
+	// Free-text search. `searchInput` is the raw field value; `appliedSearch` is
+	// the debounced term that actually drives the server query.
+	let searchInput = $state('');
+	let appliedSearch = $state('');
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	let activeFilters = $state<Set<string>>(new Set());
+
 	let pendingDeleteEntry = $state<TimelineEntry | null>(null);
 	let confirmDeleteOpen = $state(false);
 	let deleting = $state(false);
+
+	function toggleFilter(key: string) {
+		const next = new Set(activeFilters);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		activeFilters = next;
+	}
+
+	function chipClass(active: boolean): string {
+		return active
+			? 'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary bg-primary/10 text-primary px-3 py-1.5 text-xs font-medium transition-colors'
+			: 'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground px-3 py-1.5 text-xs font-medium transition-colors';
+	}
 
 	const ICONS: Record<string, Component> = {
 		'message-in': MessageCircle,
@@ -92,9 +133,11 @@
 		negative: 'bg-destructive/10 text-destructive'
 	};
 
-	async function load(cursor: string | null) {
+	async function load(cursor: string | null, term: string, filters: Set<string>) {
 		const params = new SvelteURLSearchParams();
 		if (cursor) params.set('cursor', cursor);
+		if (term) params.set('q', term);
+		if (filters.size > 0) params.set('types', [...filters].join(','));
 		const res = await fetch(`/api/contacts/${contactId}/timeline?${params.toString()}`);
 		if (!res.ok) {
 			errorMsg = 'Failed to load timeline.';
@@ -106,15 +149,30 @@
 	}
 
 	$effect(() => {
+		const term = appliedSearch;
+		const filters = activeFilters;
+		void contactId;
 		loading = true;
 		errorMsg = null;
-		load(null).finally(() => (loading = false));
+		load(null, term, filters).finally(() => (loading = false));
 	});
+
+	function onSearchInput(e: Event) {
+		searchInput = (e.target as HTMLInputElement).value;
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => (appliedSearch = searchInput.trim()), 250);
+	}
+
+	function clearSearch() {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchInput = '';
+		appliedSearch = '';
+	}
 
 	async function loadMore() {
 		if (!nextCursor || loadingMore) return;
 		loadingMore = true;
-		await load(nextCursor);
+		await load(nextCursor, appliedSearch, activeFilters);
 		loadingMore = false;
 	}
 
@@ -135,7 +193,11 @@
 		if (day === 1) return 'Yesterday';
 		if (day < 7) return `${day} days ago`;
 		if (day < 30) return `${Math.round(day / 7)}w ago`;
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(iso).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
 
 	function getIcon(key: string): Component {
@@ -173,23 +235,79 @@
 	}
 </script>
 
+{#if items.length > 0 || appliedSearch || activeFilters.size > 0}
+	<div class="relative mb-3">
+		<Search
+			class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+		/>
+		<Input
+			type="search"
+			inputmode="search"
+			placeholder="Search timeline — quote, invoice, payment…"
+			class="pl-10 pr-12"
+			value={searchInput}
+			oninput={onSearchInput}
+		/>
+		{#if searchInput}
+			<button
+				type="button"
+				onclick={clearSearch}
+				aria-label="Clear search"
+				class="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+			>
+				<X class="h-4 w-4" />
+			</button>
+		{/if}
+	</div>
+
+	<div class="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+		{#each FILTER_CATEGORIES as cat (cat.key)}
+			{@const active = activeFilters.has(cat.key)}
+			{@const FilterIcon = cat.icon}
+			<button type="button" onclick={() => toggleFilter(cat.key)} class={chipClass(active)}>
+				<FilterIcon class="h-3.5 w-3.5" />
+				{cat.label}
+			</button>
+		{/each}
+		{#if activeFilters.size > 0}
+			<button
+				type="button"
+				onclick={() => {
+					activeFilters = new Set();
+				}}
+				class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+			>
+				<X class="h-3 w-3" />
+				Clear
+			</button>
+		{/if}
+	</div>
+{/if}
+
 {#if loading}
 	<SkeletonLoader lines={5} label="Loading timeline" />
 {:else if errorMsg}
 	<p class="text-sm text-destructive">{errorMsg}</p>
 {:else if items.length === 0}
-	<EmptyState
-		title="No activity yet"
-		description="Customer activity will appear here as your team communicates, schedules work, sends quotes, and records payments."
-		icon={Clock}
-	/>
+	{@const hasFilter = appliedSearch.length > 0 || activeFilters.size > 0}
+	{@const emptyTitle = hasFilter ? 'No matching activity' : 'No activity yet'}
+	{@const emptyDesc = hasFilter
+		? appliedSearch
+			? `Nothing in this contact's timeline matches “${appliedSearch}”. Try another word or clear the filters.`
+			: 'No activity matches the selected filters. Try adding more types or clearing them.'
+		: 'Customer activity will appear here as your team communicates, schedules work, sends quotes, and records payments.'}
+	<EmptyState title={emptyTitle} description={emptyDesc} icon={hasFilter ? Search : Clock} />
 {:else}
 	<ol class="space-y-3">
 		{#each items as entry (entry.id)}
 			{@const Icon = getIcon(entry.icon_key)}
 			{@const clickable = !!entry.link}
 			{@const isNote = entry.type === 'notes'}
-			<li class="rounded-xl border border-border bg-card p-4 transition-colors {clickable ? 'cursor-pointer hover:border-primary/40 hover:bg-accent/40' : ''}">
+			<li
+				class="rounded-xl border border-border bg-card p-4 transition-colors {clickable
+					? 'cursor-pointer hover:border-primary/40 hover:bg-accent/40'
+					: ''}"
+			>
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<div
 					class="flex items-start gap-3"
@@ -204,7 +322,9 @@
 					}}
 				>
 					<span
-						class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full {TONE_CLASSES[entry.tone]}"
+						class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full {TONE_CLASSES[
+							entry.tone
+						]}"
 						aria-hidden="true"
 					>
 						<Icon class="h-4 w-4" />

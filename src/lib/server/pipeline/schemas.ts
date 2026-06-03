@@ -6,22 +6,31 @@ const moneyString = z
 	.refine((v) => v === '' || /^\d+(\.\d{1,2})?$/.test(v), 'Value must be a positive number')
 	.transform((v) => (v === '' ? null : v));
 
+const isoDate = z
+	.string()
+	.trim()
+	.refine((v) => /^\d{4}-\d{2}-\d{2}$/.test(v), 'Expected close date must be YYYY-MM-DD');
+
 export const createOpportunitySchema = z.object({
 	contact_id: z.string().uuid('Invalid contact'),
 	title: z.string().trim().min(1, 'Title is required').max(200),
 	value: moneyString.optional().nullable(),
 	stage_id: z.string().uuid().optional(),
-	assigned_to: z.string().uuid().optional().nullable()
+	assigned_to: z.string().uuid().optional().nullable(),
+	expected_close_date: isoDate.optional().nullable()
 });
 
 export const updateOpportunitySchema = z.object({
 	title: z.string().trim().min(1).max(200).optional(),
 	value: moneyString.optional().nullable(),
-	assigned_to: z.string().uuid().nullable().optional()
+	assigned_to: z.string().uuid().nullable().optional(),
+	expected_close_date: isoDate.nullable().optional()
 });
 
 export const moveStageSchema = z.object({
 	stage_id: z.string().uuid('Invalid stage'),
+	from_stage_id: z.string().uuid('Invalid from_stage_id'),
+	move_request_id: z.string().uuid('Invalid move_request_id'),
 	lost_reason: z.string().trim().min(1).max(500).optional()
 });
 

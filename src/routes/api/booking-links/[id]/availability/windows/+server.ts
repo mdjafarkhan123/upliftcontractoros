@@ -42,20 +42,14 @@ export const PUT: RequestHandler = async (event) => {
 
 	const parsed = bodySchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
-			{ error: parsed.error.issues[0]?.message ?? 'Invalid input.' },
-			{ status: 400 }
-		);
+		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input.' }, { status: 400 });
 	}
 
 	const windows = parsed.data.windows;
 
 	for (const w of windows) {
 		if (toMinutes(w.end_time) <= toMinutes(w.start_time)) {
-			return json(
-				{ error: 'End time must be after start time on each window.' },
-				{ status: 400 }
-			);
+			return json({ error: 'End time must be after start time on each window.' }, { status: 400 });
 		}
 	}
 
@@ -69,10 +63,7 @@ export const PUT: RequestHandler = async (event) => {
 		list.sort((a, b) => a.start - b.start);
 		for (let i = 1; i < list.length; i++) {
 			if (list[i].start < list[i - 1].end) {
-				return json(
-					{ error: 'Windows on the same day cannot overlap.' },
-					{ status: 400 }
-				);
+				return json({ error: 'Windows on the same day cannot overlap.' }, { status: 400 });
 			}
 		}
 	}
@@ -80,9 +71,7 @@ export const PUT: RequestHandler = async (event) => {
 	const normalize = (t: string) => (t.length === 5 ? `${t}:00` : t);
 
 	await db.transaction(async (tx) => {
-		await tx
-			.delete(availabilityWindows)
-			.where(eq(availabilityWindows.booking_link_id, link.id));
+		await tx.delete(availabilityWindows).where(eq(availabilityWindows.booking_link_id, link.id));
 		if (windows.length > 0) {
 			await tx.insert(availabilityWindows).values(
 				windows.map((w) => ({

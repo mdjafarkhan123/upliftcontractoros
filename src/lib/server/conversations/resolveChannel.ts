@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { webchatSessions, type Conversation } from '$lib/server/db/schema';
+import { emailDomains, webchatSessions, type Conversation } from '$lib/server/db/schema';
 import { isReleasedPhone } from '$lib/utils/phone';
 
 export type OutboundChannel = 'sms' | 'email' | 'webchat';
@@ -18,8 +18,17 @@ type ContactLike = {
 
 type ConvLike = Pick<Conversation, 'id' | 'last_message_channel'>;
 
-function emailConfigured(): boolean {
-	return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_APEX_DOMAIN);
+/**
+ * Email is available for an org only when it has a Brevo-verified sending domain
+ * (email_domains.status = 'verified'). No shared-platform fallback exists.
+ */
+export async function isOrgEmailReady(orgId: string): Promise<boolean> {
+	const [row] = await db
+		.select({ id: emailDomains.id })
+		.from(emailDomains)
+		.where(and(eq(emailDomains.org_id, orgId), eq(emailDomains.status, 'verified')))
+		.limit(1);
+	return Boolean(row);
 }
 
 export async function hasActiveWebchatSession(conversationId: string): Promise<boolean> {
@@ -41,7 +50,8 @@ export async function hasActiveWebchatSession(conversationId: string): Promise<b
 export function computeChannelHints(
 	conv: ConvLike,
 	contact: ContactLike,
-	hasWebchat: boolean
+	hasWebchat: boolean,
+	emailReady: boolean
 ): ChannelHints {
 	const available: OutboundChannel[] = [];
 
@@ -49,7 +59,7 @@ export function computeChannelHints(
 	if (contact.phone && !isReleasedPhone(contact.phone) && !contact.sms_opt_out) {
 		available.push('sms');
 	}
-	if (contact.email && emailConfigured()) available.push('email');
+	if (contact.email && emailReady) available.push('email');
 
 	const last = conv.last_message_channel;
 	let suggested: OutboundChannel | null = null;

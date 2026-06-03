@@ -2,9 +2,13 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { dateTimeLocalValue } from '$lib/utils/calendar';
+	import { cn } from '$lib/utils/cn';
+	import { Check, Crown } from '@lucide/svelte';
 	import type { AppointmentDetail, AppointmentType } from '$lib/types/appointments';
 
 	type Assignee = { id: string; full_name: string };
@@ -26,6 +30,8 @@
 		canEditAssignee,
 		initialContact,
 		initialJob,
+		initialStart,
+		initialEnd,
 		submitLabel,
 		onCancel,
 		onSubmit
@@ -36,6 +42,8 @@
 		canEditAssignee: boolean;
 		initialContact?: ContactOption | null;
 		initialJob?: JobOption | null;
+		initialStart?: string | null;
+		initialEnd?: string | null;
 		submitLabel?: string;
 		onCancel: () => void;
 		onSubmit: (
@@ -51,18 +59,47 @@
 
 	let jobId = $derived(appointment?.job_id ?? initialJob?.id ?? '');
 	let jobOptions = $derived<JobOption[]>(
-		initialJob ? [initialJob] : appointment?.job_id && appointment.job_title
-			? [{ id: appointment.job_id, title: appointment.job_title, status: 'scheduled' }]
-			: []
+		initialJob
+			? [initialJob]
+			: appointment?.job_id && appointment.job_title
+				? [{ id: appointment.job_id, title: appointment.job_title, status: 'scheduled' }]
+				: []
 	);
 
 	let type = $derived<AppointmentType>(appointment?.type ?? 'estimate');
 	let title = $derived(appointment?.title ?? '');
-	let scheduledStart = $derived(dateTimeLocalValue(appointment?.scheduled_start ?? null));
-	let scheduledEnd = $derived(dateTimeLocalValue(appointment?.scheduled_end ?? null));
+	let scheduledStart = $state(
+		dateTimeLocalValue(appointment?.scheduled_start ?? initialStart ?? null)
+	);
+	let scheduledEnd = $state(dateTimeLocalValue(appointment?.scheduled_end ?? initialEnd ?? null));
 	let location = $derived(appointment?.location ?? '');
 	let notes = $derived(appointment?.notes ?? '');
-	let assignedTo = $derived(appointment?.assigned_to ?? '');
+
+	// Multi-assignee state. Initialized from the detail payload (edit mode) or
+	// empty (create). The lead is whichever member has is_lead = true; if the
+	// caller has no edit rights, these stay frozen at the initial values.
+	const initialAssignees = appointment?.assignees ?? [];
+	let selectedIds = $state<string[]>(initialAssignees.map((a) => a.id));
+	let leadId = $state<string | null>(
+		initialAssignees.find((a) => a.is_lead)?.id ?? initialAssignees[0]?.id ?? null
+	);
+
+	function toggleAssignee(memberId: string) {
+		if (selectedIds.includes(memberId)) {
+			selectedIds = selectedIds.filter((id) => id !== memberId);
+			if (leadId === memberId) leadId = selectedIds[0] ?? null;
+		} else {
+			selectedIds = [...selectedIds, memberId];
+			if (leadId === null) leadId = memberId;
+		}
+	}
+
+	function setLead(memberId: string) {
+		if (!selectedIds.includes(memberId)) {
+			selectedIds = [...selectedIds, memberId];
+		}
+		leadId = memberId;
+	}
 
 	let saving = $state(false);
 	let errorMsg = $state<string | null>(null);
@@ -159,7 +196,8 @@
 				payload.job_id = jobId || null;
 			}
 			if (canEditAssignee) {
-				payload.assigned_to = assignedTo || null;
+				payload.assignee_ids = selectedIds;
+				payload.lead_member_id = selectedIds.length > 0 ? leadId : null;
 			}
 
 			const result = await onSubmit(payload);
@@ -223,16 +261,17 @@
 	{#if mode === 'create' && contactId && jobOptions.length > 0}
 		<div class="space-y-1.5">
 			<Label for="a-job">Linked job (optional)</Label>
-			<select
-				id="a-job"
-				bind:value={jobId}
-				class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				<option value="">No job</option>
-				{#each jobOptions as j (j.id)}
-					<option value={j.id}>{j.title}</option>
-				{/each}
-			</select>
+			<Select.Root bind:value={jobId}>
+				<Select.Trigger class="h-11 w-full">
+					<Select.Value />
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="">No job</Select.Item>
+					{#each jobOptions as j (j.id)}
+						<Select.Item value={j.id}>{j.title}</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
 			<p class="text-xs text-muted-foreground">
 				If a job is linked, the location auto-fills from the job address.
 			</p>
@@ -242,15 +281,16 @@
 	<!-- Type -->
 	<div class="space-y-1.5">
 		<Label for="a-type">Type <span class="text-destructive">*</span></Label>
-		<select
-			id="a-type"
-			bind:value={type}
-			class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		>
-			{#each TYPES as t (t.value)}
-				<option value={t.value}>{t.label}</option>
-			{/each}
-		</select>
+		<Select.Root bind:value={type}>
+			<Select.Trigger class="h-11 w-full">
+				<Select.Value />
+			</Select.Trigger>
+			<Select.Content>
+				{#each TYPES as t (t.value)}
+					<Select.Item value={t.value}>{t.label}</Select.Item>
+				{/each}
+			</Select.Content>
+		</Select.Root>
 	</div>
 
 	<!-- Title -->
@@ -265,25 +305,15 @@
 	<!-- Times -->
 	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 		<div class="space-y-1.5">
-			<Label for="a-start">Start <span class="text-destructive">*</span></Label>
-			<input
-				id="a-start"
-				type="datetime-local"
-				bind:value={scheduledStart}
-				class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			/>
+			<Label>Start <span class="text-destructive">*</span></Label>
+			<DateTimePicker bind:value={scheduledStart} placeholder="Pick start date & time" />
 			{#if fieldErrors.scheduled_start}
 				<p class="text-xs text-destructive">{fieldErrors.scheduled_start}</p>
 			{/if}
 		</div>
 		<div class="space-y-1.5">
-			<Label for="a-end">End <span class="text-destructive">*</span></Label>
-			<input
-				id="a-end"
-				type="datetime-local"
-				bind:value={scheduledEnd}
-				class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			/>
+			<Label>End <span class="text-destructive">*</span></Label>
+			<DateTimePicker bind:value={scheduledEnd} placeholder="Pick end date & time" />
 			{#if fieldErrors.scheduled_end}
 				<p class="text-xs text-destructive">{fieldErrors.scheduled_end}</p>
 			{/if}
@@ -296,20 +326,80 @@
 		<Input id="a-location" bind:value={location} maxlength={500} />
 	</div>
 
-	<!-- Assignee -->
+	<!-- Crew (multi-assignee + lead) -->
 	{#if canEditAssignee}
 		<div class="space-y-1.5">
-			<Label for="a-assignee">Assigned to</Label>
-			<select
-				id="a-assignee"
-				bind:value={assignedTo}
-				class="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				<option value="">Unassigned</option>
-				{#each assignees as a (a.id)}
-					<option value={a.id}>{a.full_name}</option>
-				{/each}
-			</select>
+			<Label>Crew</Label>
+			<p class="text-xs text-muted-foreground">
+				Tap a member to add them. Tap the crown to set the lead.
+			</p>
+			{#if assignees.length === 0}
+				<p
+					class="rounded-md border border-dashed border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground"
+				>
+					No team members available.
+				</p>
+			{:else}
+				<ul class="divide-y divide-border rounded-md border border-border bg-card">
+					{#each assignees as a (a.id)}
+						{@const selected = selectedIds.includes(a.id)}
+						{@const isLead = leadId === a.id && selected}
+						<li class="flex items-center gap-2 px-2 py-1.5">
+							<button
+								type="button"
+								onclick={() => toggleAssignee(a.id)}
+								class={cn(
+									'flex min-h-11 flex-1 items-center gap-3 rounded-md px-2 text-left transition-colors',
+									selected ? 'bg-primary/5' : 'hover:bg-accent/40 active:bg-accent/60'
+								)}
+								aria-pressed={selected}
+							>
+								<span
+									class={cn(
+										'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors',
+										selected
+											? 'border-primary bg-primary text-primary-foreground'
+											: 'border-input bg-background'
+									)}
+								>
+									{#if selected}
+										<Check class="h-4 w-4" />
+									{/if}
+								</span>
+								<span class="flex-1 text-sm text-foreground">{a.full_name}</span>
+								{#if isLead}
+									<span
+										class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+									>
+										<Crown class="h-3 w-3" /> Lead
+									</span>
+								{/if}
+							</button>
+							<button
+								type="button"
+								onclick={() => setLead(a.id)}
+								disabled={isLead}
+								aria-label={isLead ? `${a.full_name} is lead` : `Make ${a.full_name} the lead`}
+								class={cn(
+									'flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition-colors',
+									isLead
+										? 'border-primary bg-primary text-primary-foreground'
+										: 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent/80'
+								)}
+							>
+								<Crown class="h-4 w-4" />
+							</button>
+						</li>
+					{/each}
+				</ul>
+				<p class="text-xs text-muted-foreground">
+					{selectedIds.length === 0
+						? 'No crew assigned.'
+						: selectedIds.length === 1
+							? '1 member · lead set'
+							: `${selectedIds.length} members · lead set`}
+				</p>
+			{/if}
 		</div>
 	{/if}
 

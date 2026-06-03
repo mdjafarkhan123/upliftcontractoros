@@ -1,14 +1,20 @@
-import { pgTable, pgEnum, uuid, text, boolean, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import {
+	pgTable,
+	pgEnum,
+	uuid,
+	text,
+	boolean,
+	integer,
+	numeric,
+	timestamp,
+	jsonb
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
 
-export const conversationStatusEnum = pgEnum('conversation_status', [
-	'open',
-	'closed',
-	'snoozed'
-]);
+export const conversationStatusEnum = pgEnum('conversation_status', ['open', 'closed', 'snoozed']);
 
 export const messageChannelEnum = pgEnum('message_channel', [
 	'sms',
@@ -98,11 +104,19 @@ export const messages = pgTable('messages', {
 	email_cc_addresses: text('email_cc_addresses').array(),
 	email_in_reply_to: text('email_in_reply_to'),
 	email_references: text('email_references'),
+	email_message_id: text('email_message_id'),
+	search_vector: text('search_vector').generatedAlwaysAs(
+		sql`to_tsvector('english', coalesce(body, ''))`
+	),
 	opened_at: timestamp('opened_at', { withTimezone: true }),
 	delivered_at: timestamp('delivered_at', { withTimezone: true }),
 	bounced_at: timestamp('bounced_at', { withTimezone: true }),
 	bounce_type: text('bounce_type'),
 	send_attempts: integer('send_attempts').notNull().default(0),
+
+	// Dollar cost charged against the org SMS credit balance at send time.
+	// Stamped on Twilio success; null for non-SMS channels and unsent rows.
+	sms_cost: numeric('sms_cost', { precision: 12, scale: 4 }),
 
 	sent_by: uuid('sent_by').references(() => orgMembers.id),
 	sent_at: timestamp('sent_at', { withTimezone: true }),

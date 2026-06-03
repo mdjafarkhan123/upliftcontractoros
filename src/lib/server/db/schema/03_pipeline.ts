@@ -1,4 +1,13 @@
-import { pgTable, uuid, text, boolean, integer, numeric, timestamp } from 'drizzle-orm/pg-core';
+import {
+	pgTable,
+	uuid,
+	text,
+	boolean,
+	integer,
+	numeric,
+	timestamp,
+	date
+} from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
@@ -14,6 +23,8 @@ export const pipelineStages = pgTable('pipeline_stages', {
 	is_default: boolean('is_default').notNull().default(false),
 	is_won: boolean('is_won').notNull().default(false),
 	is_lost: boolean('is_lost').notNull().default(false),
+	stale_after_days: integer('stale_after_days'),
+	probability: integer('probability'),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -38,6 +49,8 @@ export const opportunities = pgTable('opportunities', {
 	assigned_to: uuid('assigned_to').references(() => orgMembers.id),
 	lost_reason: text('lost_reason'),
 	closed_at: timestamp('closed_at', { withTimezone: true }),
+	stage_entered_at: timestamp('stage_entered_at', { withTimezone: true }).notNull().defaultNow(),
+	expected_close_date: date('expected_close_date'),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()

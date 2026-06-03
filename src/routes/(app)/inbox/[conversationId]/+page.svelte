@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Info, X, MessageSquare } from '@lucide/svelte';
+	import { ArrowLeft, Info, X, MessageSquare, Phone } from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
@@ -13,6 +13,7 @@
 	import OptOutBanner from '$lib/components/inbox/OptOutBanner.svelte';
 	import ConversationActions from '$lib/components/inbox/ConversationActions.svelte';
 	import { getMemberContext } from '$lib/context/member';
+	import { getOrgContext } from '$lib/context/org';
 	import {
 		inboxStore,
 		type SnoozePreset,
@@ -20,11 +21,12 @@
 		type OutboundChannel
 	} from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { getBrowserSupabase, realtimeAuthReady } from '$lib/supabase/browser';
+	import { createRealtimeManager } from '$lib/stores/realtimeReconnect';
 
 	let { data } = $props<{ data: { conversationId: string } }>();
 
 	const member = getMemberContext();
+	const org = getOrgContext();
 	const canSend = $derived(member().can_send_messages);
 	const canViewTeam = $derived(member().can_view_team_members);
 
@@ -40,56 +42,62 @@
 		const id = data.conversationId;
 		const threadStatus = inboxStore.threadStatus(id);
 		const entry = inboxStore.getThread(id);
-		if (
-			threadStatus === 'ready' &&
-			entry?.conversation &&
-			entry.conversation.unread_count > 0
-		) {
+		if (threadStatus === 'ready' && entry?.conversation && entry.conversation.unread_count > 0) {
 			void inboxStore.markRead(id);
 		}
 	});
 
+	let isRealtimeConnected = $state(true);
+	let realtimeFailed = $state(false);
+
 	$effect(() => {
 		const id = data.conversationId;
-		const supabase = getBrowserSupabase();
-		let cancelled = false;
-		let channel: ReturnType<typeof supabase.channel> | null = null;
-		void realtimeAuthReady().then(() => {
-			if (cancelled) return;
-			channel = supabase
-				.channel(`thread:${id}`)
-				.on(
-					'postgres_changes',
-					{
-						event: 'INSERT',
-						schema: 'public',
-						table: 'messages',
-						filter: `conversation_id=eq.${id}`
-					},
-					(payload: { new: ThreadMessage }) => {
-						console.log('[realtime:thread] INSERT', payload.new);
-						inboxStore.applyRealtimeMessageInsert(payload.new);
-					}
-				)
-				.on(
-					'postgres_changes',
-					{
-						event: 'UPDATE',
-						schema: 'public',
-						table: 'messages',
-						filter: `conversation_id=eq.${id}`
-					},
-					(payload: { new: ThreadMessage }) => {
-						console.log('[realtime:thread] UPDATE', payload.new);
-						inboxStore.applyRealtimeMessageUpdate(payload.new);
-					}
-				)
-				.subscribe((status, err) => console.log('[realtime:thread] status', status, err));
+		const orgId = member().org_id;
+		const manager = createRealtimeManager({
+			build: (supabase) =>
+				supabase
+					.channel(`thread:${id}`)
+					.on(
+						'postgres_changes',
+						{
+							event: 'INSERT',
+							schema: 'public',
+							table: 'messages',
+							filter: `conversation_id=eq.${id}`
+						},
+						(payload: { new: ThreadMessage }) => {
+							inboxStore.applyRealtimeMessageInsert(payload.new);
+						}
+					)
+					.on(
+						'postgres_changes',
+						{
+							event: 'UPDATE',
+							schema: 'public',
+							table: 'messages',
+							filter: `conversation_id=eq.${id}`
+						},
+						(payload: { new: ThreadMessage }) => {
+							inboxStore.applyRealtimeMessageUpdate(payload.new);
+						}
+					)
+					.on(
+						'postgres_changes',
+						{
+							event: 'INSERT',
+							schema: 'public',
+							table: 'media',
+							filter: `org_id=eq.${orgId}`
+						},
+						(payload: { new: Parameters<typeof inboxStore.applyRealtimeMediaInsert>[0] }) => {
+							inboxStore.applyRealtimeMediaInsert(payload.new);
+						}
+					),
+			onStatusChange: (c) => (isRealtimeConnected = c),
+			onPermanentFailure: () => (realtimeFailed = true),
+			onReconnect: () => inboxStore.loadThread(id, true)
 		});
-		return () => {
-			cancelled = true;
-			if (channel) void supabase.removeChannel(channel);
-		};
+		return () => manager.destroy();
 	});
 
 	onMount(async () => {
@@ -138,9 +146,7 @@
 	const suggestedChannel = $derived(conversation?.suggested_channel ?? null);
 
 	const emailSubjectDefault = $derived.by(() => {
-		const lastEmail = [...messages]
-			.reverse()
-			.find((m) => m.channel === 'email' && m.email_subject);
+		const lastEmail = [...messages].reverse().find((m) => m.channel === 'email' && m.email_subject);
 		if (lastEmail?.email_subject) {
 			return lastEmail.email_subject.startsWith('Re:')
 				? lastEmail.email_subject
@@ -174,17 +180,60 @@
 
 	async function handleSend(
 		body: string,
-		opts: { isInternalNote: boolean; channel?: OutboundChannel; emailSubject?: string }
+		opts: {
+			isInternalNote: boolean;
+			channel?: OutboundChannel;
+			emailSubject?: string;
+			interpolate?: boolean;
+			mediaIds?: string[];
+		}
 	) {
 		const result = await inboxStore.sendMessage(data.conversationId, body, {
 			isInternalNote: opts.isInternalNote,
 			channel: opts.channel,
-			emailSubject: opts.emailSubject
+			emailSubject: opts.emailSubject,
+			interpolate: opts.interpolate,
+			mediaIds: opts.mediaIds
 		});
 		if (!result.ok) {
 			toast.error('Message not sent', { description: result.error });
 		}
 	}
+
+	let typingDebounce: ReturnType<typeof setTimeout> | null = null;
+	function handleTyping(isTyping: boolean) {
+		if (typingDebounce) clearTimeout(typingDebounce);
+		typingDebounce = setTimeout(
+			() => {
+				fetch(`/api/conversations/${data.conversationId}/typing`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ is_typing: isTyping })
+				}).catch(() => {
+					/* silent */
+				});
+			},
+			isTyping ? 0 : 1000
+		);
+	}
+
+	type QuickReplyItem = {
+		id: string;
+		title: string;
+		body: string;
+		channel: 'sms' | 'email' | 'webchat' | 'any';
+	};
+	let quickReplies = $state<QuickReplyItem[]>([]);
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/quick-replies');
+			if (!res.ok) return;
+			const body = (await res.json()) as { data: { items: QuickReplyItem[] } };
+			quickReplies = body.data.items;
+		} catch {
+			// silent
+		}
+	});
 
 	async function handleSnooze(preset: SnoozePreset) {
 		const result = await inboxStore.snooze(data.conversationId, preset);
@@ -212,6 +261,40 @@
 		const result = await inboxStore.setAssignee(data.conversationId, memberId, name);
 		if (!result.ok) toast.error('Assignment failed', { description: result.error });
 	}
+
+	const orgTags = $derived.by(() => {
+		void inboxStore.items.length;
+		return inboxStore.getOrgTags();
+	});
+
+	async function handleUpdateTags(tags: string[]) {
+		const result = await inboxStore.updateTags(data.conversationId, tags);
+		if (!result.ok) toast.error('Tag update failed', { description: result.error });
+	}
+
+	// Day separators between message groups: "Today" / "Yesterday" / weekday
+	// (within the past week) / "May 12" (older; year shown only across years).
+	function isNewDay(curr: string | null, prev: string | null): boolean {
+		if (!curr) return false;
+		if (!prev) return true;
+		return new Date(curr).toDateString() !== new Date(prev).toDateString();
+	}
+
+	function dayLabel(iso: string | null): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		const now = new Date();
+		const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+		const diffDays = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+		if (diffDays === 0) return 'Today';
+		if (diffDays === 1) return 'Yesterday';
+		if (diffDays > 1 && diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+		return d.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' })
+		});
+	}
 </script>
 
 <svelte:head>
@@ -223,7 +306,7 @@
 >
 	<!-- Header -->
 	<header
-		class="flex shrink-0 items-center gap-3 border-b border-border/50 bg-background/80 px-3 py-3 backdrop-blur-xl sm:px-5"
+		class="flex shrink-0 items-center gap-3 border-b border-border/50 bg-background px-3 py-3 sm:px-5"
 	>
 		<button
 			class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -252,17 +335,29 @@
 			</div>
 		</div>
 
+		{#if contact?.phone}
+			<a
+				href={`tel:${contact.phone}`}
+				class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				aria-label={`Call ${contact.full_name}`}
+			>
+				<Phone class="h-5 w-5" />
+			</a>
+		{/if}
+
 		<div class="hidden lg:flex">
 			<ConversationActions
 				{conversation}
 				canManage={canSend}
 				{assignees}
 				currentMemberId={member().id}
+				{orgTags}
 				onSnooze={handleSnooze}
 				onUnsnooze={handleUnsnooze}
 				onClose={handleClose}
 				onReopen={handleReopen}
 				onAssign={handleAssign}
+				onUpdateTags={handleUpdateTags}
 			/>
 		</div>
 
@@ -274,6 +369,20 @@
 			<Info class="h-5 w-5" />
 		</button>
 	</header>
+
+	{#if realtimeFailed}
+		<div
+			class="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-300"
+		>
+			Connection lost — refresh the page to reconnect.
+		</div>
+	{:else if !isRealtimeConnected}
+		<div
+			class="shrink-0 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-center text-xs text-amber-700 dark:text-amber-300"
+		>
+			Live updates paused — reconnecting…
+		</div>
+	{/if}
 
 	<!-- Body -->
 	<div class="flex min-h-0 flex-1">
@@ -287,7 +396,9 @@
 				</div>
 			{:else if showError}
 				<div class="flex-1 p-4 md:p-6">
-					<div class="mx-auto max-w-3xl rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card">
+					<div
+						class="mx-auto max-w-3xl rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card"
+					>
 						{errorMsg}
 					</div>
 				</div>
@@ -312,7 +423,16 @@
 								</Button>
 							</div>
 						{/if}
-						{#each messages as m (m.id)}
+						{#each messages as m, i (m.id)}
+							{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
+								<div class="flex items-center justify-center py-1">
+									<span
+										class="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/50"
+									>
+										{dayLabel(m.created_at)}
+									</span>
+								</div>
+							{/if}
 							<MessageBubble
 								message={m}
 								canRetry={canSend}
@@ -326,7 +446,7 @@
 
 			<!-- Composer + banners -->
 			<div
-				class="shrink-0 border-t border-border/50 bg-background/85 px-3 pb-3 pt-3 backdrop-blur-xl shadow-[0_-10px_30px_-20px_hsl(0_0%_0%/0.18)] sm:px-5"
+				class="shrink-0 border-t border-border/50 bg-background px-3 pb-3 pt-3 shadow-[0_-10px_30px_-20px_hsl(0_0%_0%/0.18)] sm:px-5"
 			>
 				<div class="mx-auto max-w-3xl">
 					{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
@@ -335,13 +455,19 @@
 						</div>
 					{/if}
 					<Composer
-						availableChannels={availableChannels}
-						suggestedChannel={suggestedChannel}
-						emailSubjectDefault={emailSubjectDefault}
-						canSend={canSend}
+						{availableChannels}
+						{suggestedChannel}
+						{emailSubjectDefault}
+						{canSend}
 						smsOptOut={optedOut}
-						isClosed={isClosed}
+						{isClosed}
+						smsQuota={context?.sms_quota ?? null}
+						{quickReplies}
+						contactName={contact?.full_name ?? ''}
+						orgName={org().name}
+						contactId={contact?.id ?? ''}
 						onSend={handleSend}
+						onTyping={handleTyping}
 					/>
 				</div>
 			</div>
@@ -349,7 +475,7 @@
 
 		<!-- Desktop context sidebar -->
 		<aside
-			class="hidden w-80 shrink-0 overflow-y-auto border-l border-border/50 bg-background/60 px-4 py-4 backdrop-blur-sm lg:block"
+			class="hidden w-80 shrink-0 overflow-y-auto border-l border-border/50 bg-background px-4 py-4 lg:block"
 		>
 			<ContactContextPanel {contact} {context} />
 		</aside>
@@ -375,11 +501,13 @@
 				canManage={canSend}
 				{assignees}
 				currentMemberId={member().id}
+				{orgTags}
 				onSnooze={handleSnooze}
 				onUnsnooze={handleUnsnooze}
 				onClose={handleClose}
 				onReopen={handleReopen}
 				onAssign={handleAssign}
+				onUpdateTags={handleUpdateTags}
 			/>
 			<ContactContextPanel {contact} {context} />
 		</div>

@@ -59,13 +59,16 @@
 
 <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 	<div class="flex items-start gap-3 border-b border-border bg-muted/30 px-5 py-4">
-		<div class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+		<div
+			class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600"
+		>
 			<Beaker class="h-4 w-4" />
 		</div>
 		<div>
 			<h3 class="text-base font-semibold text-foreground">Try the full payment flow</h3>
 			<p class="text-xs text-muted-foreground">
-				Send yourself a $1 test invoice. You’ll see it land in your inbox, open the payment page, pay with a test card, and watch it mark itself as paid — all without touching real money.
+				Send yourself a $1 test invoice. You’ll see it land in your inbox, open the payment page,
+				pay with a test card, and watch it mark itself as paid — all without touching real money.
 			</p>
 		</div>
 	</div>
@@ -91,7 +94,8 @@
 				{sending ? 'Sending…' : 'Send $1 test invoice'}
 			</Button>
 			<p class="text-xs text-muted-foreground">
-				Use Stripe test card <code class="font-mono">4242 4242 4242 4242</code>, any future expiry, any CVC.
+				Use Stripe test card <code class="font-mono">4242 4242 4242 4242</code>, any future expiry,
+				any CVC.
 			</p>
 		</div>
 

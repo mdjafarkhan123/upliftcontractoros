@@ -4,6 +4,7 @@
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import * as Select from '$lib/components/ui/select';
 	import { Search, X } from '@lucide/svelte';
 
 	type ContactHit = { id: string; full_name: string; phone: string };
@@ -12,14 +13,22 @@
 	type Props = {
 		open: boolean;
 		assignees: Assignee[];
+		initialStageId?: string | null;
 		onClose: () => void;
 		onCreated: (opportunityId: string) => void;
 	};
 
-	let { open = $bindable(), assignees, onClose, onCreated }: Props = $props();
+	let {
+		open = $bindable(),
+		assignees,
+		initialStageId = null,
+		onClose,
+		onCreated
+	}: Props = $props();
 
 	let title = $state('');
 	let value = $state('');
+	let expectedCloseDate = $state('');
 	let assignedTo = $state<string>('');
 	let selectedContact = $state<ContactHit | null>(null);
 	let search = $state('');
@@ -51,6 +60,7 @@
 	function reset() {
 		title = '';
 		value = '';
+		expectedCloseDate = '';
 		assignedTo = '';
 		selectedContact = null;
 		search = '';
@@ -83,7 +93,9 @@
 					contact_id: selectedContact.id,
 					title: title.trim(),
 					value: value.trim() || null,
-					assigned_to: assignedTo || null
+					assigned_to: assignedTo || null,
+					expected_close_date: expectedCloseDate || null,
+					stage_id: initialStageId ?? undefined
 				})
 			});
 			const body = await res.json();
@@ -185,23 +197,30 @@
 				/>
 			</div>
 
-			<div class="space-y-1.5">
-				<Label for="opp-value">Estimated value</Label>
-				<Input id="opp-value" bind:value type="text" inputmode="decimal" placeholder="0.00" />
+			<div class="grid grid-cols-2 gap-3">
+				<div class="space-y-1.5">
+					<Label for="opp-value">Estimated value</Label>
+					<Input id="opp-value" bind:value type="text" inputmode="decimal" placeholder="0.00" />
+				</div>
+				<div class="space-y-1.5">
+					<Label for="opp-expected-close">Expected close</Label>
+					<Input id="opp-expected-close" type="date" bind:value={expectedCloseDate} />
+				</div>
 			</div>
 
 			<div class="space-y-1.5">
 				<Label for="opp-assignee">Assign to</Label>
-				<select
-					id="opp-assignee"
-					bind:value={assignedTo}
-					class="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<option value="">Unassigned</option>
-					{#each assignees as m (m.id)}
-						<option value={m.id}>{m.full_name}</option>
-					{/each}
-				</select>
+				<Select.Root bind:value={assignedTo}>
+					<Select.Trigger class="h-11 w-full">
+						<Select.Value />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="">Unassigned</Select.Item>
+						{#each assignees as m (m.id)}
+							<Select.Item value={m.id}>{m.full_name}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
 			</div>
 
 			{#if errorMsg}

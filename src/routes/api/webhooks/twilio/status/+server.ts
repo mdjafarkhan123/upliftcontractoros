@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { inboundCommunicationEvents, messages, outboxEvents } from '$lib/server/db/schema';
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
+import { refundSmsCredit } from '$lib/server/sms/credit';
 import { createLogger } from '$lib/server/log';
 
 const log = createLogger('twilio.webhook.status');
@@ -22,7 +23,9 @@ const STATE_RANK: Record<string, number> = {
 	received: 0
 };
 
-function mapTwilioStatus(s: string): 'queued' | 'sending' | 'sent' | 'delivered' | 'failed' | 'undeliverable' | null {
+function mapTwilioStatus(
+	s: string
+): 'queued' | 'sending' | 'sent' | 'delivered' | 'failed' | 'undeliverable' | null {
 	switch (s) {
 		case 'queued':
 		case 'accepted':
@@ -114,6 +117,17 @@ export const POST: RequestHandler = async ({ request }) => {
 					errMsg || (errCode ? `Twilio error ${errCode}` : `Twilio reported ${twilioStatus}`);
 			}
 			await tx.update(messages).set(update).where(eq(messages.id, msg.id));
+
+			// A charged SMS that fails/undelivers late at the carrier is refunded
+			// so the contractor only pays for sends that reach the recipient.
+			// Idempotent and a no-op for non-SMS or never-charged messages.
+			if (isFailureState && msg.channel === 'sms') {
+				await refundSmsCredit(tx, {
+					orgId: msg.org_id,
+					messageId: msg.id,
+					note: `Carrier reported ${twilioStatus}`
+				});
+			}
 		}
 
 		if (shouldEmitFailure) {

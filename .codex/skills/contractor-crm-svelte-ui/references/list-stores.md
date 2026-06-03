@@ -28,9 +28,9 @@ import type { Item, Filters } from '$lib/types/...';
 type Status = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
 
 type CacheEntry = {
-  items: Item[];
-  nextCursor: string | null;
-  fetchedAt: number;
+	items: Item[];
+	nextCursor: string | null;
+	fetchedAt: number;
 };
 
 const TTL_MS = 30_000;
@@ -42,65 +42,69 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: Filters): string {
-  // Stable string from every filter dimension. Order matters.
-  return `${f.tab}|${f.q.trim()}|${f.assignedTo ?? ''}`;
+	// Stable string from every filter dimension. Order matters.
+	return `${f.tab}|${f.q.trim()}|${f.assignedTo ?? ''}`;
 }
 
 async function fetchPage(f: Filters, cursor: string | null, signal: AbortSignal) {
-  const res = await fetch(`/api/things?${buildParams(f, cursor)}`, { signal });
-  if (!res.ok) throw new Error('Failed to load');
-  return (await res.json()) as { items: Item[]; next_cursor: string | null };
+	const res = await fetch(`/api/things?${buildParams(f, cursor)}`, { signal });
+	if (!res.ok) throw new Error('Failed to load');
+	return (await res.json()) as { items: Item[]; next_cursor: string | null };
 }
 
 export const thingsStore = {
-  get items() {
-    return cache.get(currentKey)?.items ?? [];
-  },
-  get nextCursor() {
-    return cache.get(currentKey)?.nextCursor ?? null;
-  },
-  get status() { return status; },
-  get error() { return error; },
+	get items() {
+		return cache.get(currentKey)?.items ?? [];
+	},
+	get nextCursor() {
+		return cache.get(currentKey)?.nextCursor ?? null;
+	},
+	get status() {
+		return status;
+	},
+	get error() {
+		return error;
+	},
 
-  async load(filters: Filters, force = false) {
-    const key = buildKey(filters);
-    currentKey = key;
+	async load(filters: Filters, force = false) {
+		const key = buildKey(filters);
+		currentKey = key;
 
-    const cached = cache.get(key);
-    const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
-    if (fresh && !force) {
-      status = 'ready';
-      error = null;
-      return;
-    }
+		const cached = cache.get(key);
+		const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
+		if (fresh && !force) {
+			status = 'ready';
+			error = null;
+			return;
+		}
 
-    if (activeController) activeController.abort();
-    const controller = new AbortController();
-    activeController = controller;
+		if (activeController) activeController.abort();
+		const controller = new AbortController();
+		activeController = controller;
 
-    // Cold (no cache) → 'loading' (shows skeleton).
-    // Warm (cache present) → 'revalidating' (keeps old items visible, no skeleton).
-    status = cached ? 'revalidating' : 'loading';
-    error = null;
+		// Cold (no cache) → 'loading' (shows skeleton).
+		// Warm (cache present) → 'revalidating' (keeps old items visible, no skeleton).
+		status = cached ? 'revalidating' : 'loading';
+		error = null;
 
-    try {
-      const body = await fetchPage(filters, null, controller.signal);
-      cache.set(key, {
-        items: body.items,
-        nextCursor: body.next_cursor,
-        fetchedAt: Date.now()
-      });
-      status = 'ready';
-    } catch (e) {
-      if ((e as { name?: string })?.name === 'AbortError') return;
-      error = e instanceof Error ? e.message : 'Failed to load';
-      status = cached ? 'ready' : 'error';
-    } finally {
-      if (activeController === controller) activeController = null;
-    }
-  },
+		try {
+			const body = await fetchPage(filters, null, controller.signal);
+			cache.set(key, {
+				items: body.items,
+				nextCursor: body.next_cursor,
+				fetchedAt: Date.now()
+			});
+			status = 'ready';
+		} catch (e) {
+			if ((e as { name?: string })?.name === 'AbortError') return;
+			error = e instanceof Error ? e.message : 'Failed to load';
+			status = cached ? 'ready' : 'error';
+		} finally {
+			if (activeController === controller) activeController = null;
+		}
+	}
 
-  // loadMore, update, remove, invalidate — see contacts.svelte.ts / jobs.svelte.ts.
+	// loadMore, update, remove, invalidate — see contacts.svelte.ts / jobs.svelte.ts.
 };
 ```
 

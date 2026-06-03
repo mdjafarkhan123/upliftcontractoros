@@ -11,6 +11,7 @@
 	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
 	import SendQuoteDialog from '$lib/components/quotes/SendQuoteDialog.svelte';
 	import ApplyTemplateDialog from '$lib/components/quotes/ApplyTemplateDialog.svelte';
+	import { Switch } from '$lib/components/ui/switch';
 	import DownloadPdfButton from '$lib/components/quotes/DownloadPdfButton.svelte';
 	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -54,6 +55,8 @@
 	let titleDraft = $state('');
 	let taxRateDraft = $state('0');
 	let notesDraft = $state('');
+	let depositRequiredDraft = $state(false);
+	let depositAmountDraft = $state('');
 	let initializedForId = $state<string | null>(null);
 
 	function initDrafts(q: QuoteDetail) {
@@ -61,6 +64,8 @@
 		titleDraft = q.title;
 		taxRateDraft = String(Number(q.tax_rate) * 100);
 		notesDraft = q.notes ?? '';
+		depositRequiredDraft = q.deposit_required;
+		depositAmountDraft = q.deposit_amount ?? '';
 		initializedForId = q.id;
 	}
 
@@ -92,7 +97,11 @@
 				toast.error(body.error ?? 'Failed to convert');
 				return;
 			}
-			const d = body.data as { id: string; invoice_number_display: string; already_existed: boolean };
+			const d = body.data as {
+				id: string;
+				invoice_number_display: string;
+				already_existed: boolean;
+			};
 			if (d.already_existed) {
 				toast.info(`Invoice ${d.invoice_number_display} already exists`);
 			} else {
@@ -110,9 +119,7 @@
 	const isChangesRequested = $derived(quote?.status === 'changes_requested');
 	const isEditable = $derived(isDraft || isChangesRequested);
 	const canResend = $derived(
-		quote?.status === 'sent' ||
-			quote?.status === 'viewed' ||
-			quote?.status === 'changes_requested'
+		quote?.status === 'sent' || quote?.status === 'viewed' || quote?.status === 'changes_requested'
 	);
 
 	function formatRequestedAt(iso: string): string {
@@ -126,7 +133,12 @@
 		if (diff < hr) return `${Math.floor(diff / min)} min ago`;
 		if (diff < day) return `${Math.floor(diff / hr)} hr ago`;
 		if (diff < 7 * day) return `${Math.floor(diff / day)}d ago`;
-		return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+		return d.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit'
+		});
 	}
 
 	const subtotal = $derived(
@@ -143,6 +155,11 @@
 	});
 	const taxAmount = $derived(Math.round(subtotal * taxRateNum * 100) / 100);
 	const total = $derived(Math.round((subtotal + subtotal * taxRateNum) * 100) / 100);
+	const depositAmountNum = $derived.by(() => {
+		const n = Number(depositAmountDraft);
+		return Number.isFinite(n) ? n : NaN;
+	});
+	const depositLocked = $derived((quote?.deposit_paid_amount ?? 0) > 0);
 
 	const dirty = $derived.by(() => {
 		if (!quote) return false;
@@ -150,6 +167,16 @@
 		if (notesDraft.trim() !== (quote.notes ?? '')) return true;
 		const currentTaxPct = String(Number(quote.tax_rate) * 100);
 		if (Number(taxRateDraft) !== Number(currentTaxPct)) return true;
+		if (depositRequiredDraft !== quote.deposit_required) return true;
+		const origDeposit = quote.deposit_amount ? Number(quote.deposit_amount) : NaN;
+		const draftDeposit = depositRequiredDraft ? depositAmountNum : NaN;
+		if (Number.isFinite(origDeposit) !== Number.isFinite(draftDeposit)) return true;
+		if (
+			Number.isFinite(origDeposit) &&
+			Number.isFinite(draftDeposit) &&
+			origDeposit !== draftDeposit
+		)
+			return true;
 		const orig = quote.line_items;
 		if (lineItems.length !== orig.length) return true;
 		for (let i = 0; i < lineItems.length; i++) {
@@ -206,22 +233,38 @@
 			}
 		}
 
+		if (depositRequiredDraft && !depositLocked) {
+			if (!Number.isFinite(depositAmountNum) || depositAmountNum <= 0) {
+				toast.error('Enter a deposit amount');
+				return;
+			}
+			if (total > 0 && depositAmountNum >= total) {
+				toast.error('Deposit must be less than the quote total');
+				return;
+			}
+		}
+
 		saving = true;
 		try {
+			const patchBody: Record<string, unknown> = {
+				title: titleDraft.trim(),
+				tax_rate: Number.isFinite(taxRateNum) ? taxRateNum : 0,
+				notes: notesDraft.trim() || null,
+				line_items: lineItems.map((li, idx) => ({
+					description: li.description.trim(),
+					quantity: Number(li.quantity),
+					unit_price: Number(li.unit_price),
+					position: idx
+				}))
+			};
+			if (!depositLocked) {
+				patchBody.deposit_required = depositRequiredDraft;
+				patchBody.deposit_amount = depositRequiredDraft ? depositAmountNum : null;
+			}
 			const res = await fetch(`/api/quotes/${quote.id}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					title: titleDraft.trim(),
-					tax_rate: Number.isFinite(taxRateNum) ? taxRateNum : 0,
-					notes: notesDraft.trim() || null,
-					line_items: lineItems.map((li, idx) => ({
-						description: li.description.trim(),
-						quantity: Number(li.quantity),
-						unit_price: Number(li.unit_price),
-						position: idx
-					}))
-				})
+				body: JSON.stringify(patchBody)
 			});
 			const body = await res.json();
 			if (!res.ok) {
@@ -262,7 +305,7 @@
 <svelte:head><title>{quote ? quote.quote_number_display : 'Quote'}</title></svelte:head>
 
 {#if showSkeleton}
-	<PageWrapper title="Quote">
+	<PageWrapper title="Quote" back="/quotes">
 		<div class="grid gap-4">
 			<div class="rounded-xl border border-border bg-card p-4">
 				<SkeletonLoader lines={3} />
@@ -276,12 +319,12 @@
 		</div>
 	</PageWrapper>
 {:else if !quote}
-	<PageWrapper title="Quote">
+	<PageWrapper title="Quote" back="/quotes">
 		<p class="text-sm text-destructive">{detailError ?? 'Not found'}</p>
 	</PageWrapper>
 {:else}
 	{@const q = quote}
-	<PageWrapper title={q.quote_number_display}>
+	<PageWrapper title={q.quote_number_display} back="/quotes">
 		{#snippet actions()}
 			{#if isEditable}
 				<JetEngineButton
@@ -359,7 +402,9 @@
 				{#if q.deposit_paid_amount > 0}
 					<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
 						<div class="flex items-start gap-3">
-							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+							<div
+								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+							>
 								<Check class="h-4 w-4" />
 							</div>
 							<div class="min-w-0 flex-1">
@@ -378,7 +423,9 @@
 				{:else}
 					<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
 						<div class="flex items-start gap-3">
-							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+							<div
+								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300"
+							>
 								<CreditCard class="h-4 w-4" />
 							</div>
 							<div class="min-w-0 flex-1">
@@ -397,7 +444,9 @@
 			{#if q.active_change_request}
 				<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-sm">
 					<div class="flex items-start gap-3">
-						<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+						<div
+							class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300"
+						>
 							<MessageSquare class="h-4 w-4" />
 						</div>
 						<div class="min-w-0 flex-1">
@@ -413,7 +462,8 @@
 								{q.active_change_request.message}
 							</p>
 							<p class="mt-2 text-xs text-amber-700/80 dark:text-amber-300/80">
-								Update the quote below and re-send. The request will be marked resolved automatically.
+								Update the quote below and re-send. The request will be marked resolved
+								automatically.
 							</p>
 						</div>
 					</div>
@@ -437,6 +487,44 @@
 				<Label for="quote-notes" class="mt-2">Notes</Label>
 				<Textarea id="quote-notes" bind:value={notesDraft} rows={3} disabled={!isEditable} />
 			</div>
+
+			{#if !depositLocked}
+				<div class="grid gap-3 rounded-xl border border-border bg-card p-4">
+					<div class="flex items-center justify-between gap-3">
+						<div class="min-w-0">
+							<Label for="deposit-toggle" class="text-sm font-semibold">Request a deposit</Label>
+							<p class="mt-1 text-xs text-muted-foreground">
+								Customer can pay it online after accepting the quote.
+							</p>
+						</div>
+						<Switch
+							id="deposit-toggle"
+							bind:checked={depositRequiredDraft}
+							disabled={!isEditable}
+						/>
+					</div>
+					{#if depositRequiredDraft}
+						<div class="grid gap-2">
+							<Label for="deposit-amount">
+								Deposit amount (USD) <span class="text-destructive">*</span>
+							</Label>
+							<Input
+								id="deposit-amount"
+								type="number"
+								inputmode="decimal"
+								min="0.01"
+								step="0.01"
+								placeholder="0.00"
+								bind:value={depositAmountDraft}
+								disabled={!isEditable}
+							/>
+							{#if isEditable && total > 0 && Number.isFinite(depositAmountNum) && depositAmountNum >= total}
+								<p class="text-xs text-destructive">Deposit must be less than the quote total.</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="space-y-3">
 				<div class="flex items-center justify-between">

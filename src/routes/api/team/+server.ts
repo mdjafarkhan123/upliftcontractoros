@@ -6,7 +6,11 @@ import { db } from '$lib/server/db/client';
 import { orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { createServiceClient } from '$lib/server/auth/supabase';
-import { getTemplate, isKnownPermissionKey, ALL_PERMISSION_KEYS } from '$lib/team/permissions-config';
+import {
+	getTemplate,
+	isKnownPermissionKey,
+	ALL_PERMISSION_KEYS
+} from '$lib/team/permissions-config';
 import type { PermissionValues } from '$lib/team/permissions-config';
 import type { PermissionKey } from '$lib/types';
 
@@ -95,10 +99,19 @@ export const POST: RequestHandler = async (event) => {
 	const [{ value: memberCount }] = await db
 		.select({ value: count() })
 		.from(orgMembers)
-		.where(and(eq(orgMembers.org_id, auth.orgId), eq(orgMembers.is_active, true), isNull(orgMembers.deleted_at)));
+		.where(
+			and(
+				eq(orgMembers.org_id, auth.orgId),
+				eq(orgMembers.is_active, true),
+				isNull(orgMembers.deleted_at)
+			)
+		);
 
 	if (memberCount >= auth.limits.max_team_members) {
-		return json({ error: `Team member limit of ${auth.limits.max_team_members} reached.` }, { status: 422 });
+		return json(
+			{ error: `Team member limit of ${auth.limits.max_team_members} reached.` },
+			{ status: 422 }
+		);
 	}
 
 	// Pre-check: case-insensitive email match within this org
@@ -273,4 +286,3 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Failed to save team member. Please try again.' }, { status: 500 });
 	}
 };
-

@@ -49,9 +49,7 @@ export function generateCandidateSlotsForDate(
 ): Date[] {
 	const all: Date[] = [];
 	for (const w of windows) {
-		all.push(
-			...generateSlotsForWindow(date, timezone, w, slotDurationMinutes, bufferMinutes)
-		);
+		all.push(...generateSlotsForWindow(date, timezone, w, slotDurationMinutes, bufferMinutes));
 	}
 	all.sort((a, b) => a.getTime() - b.getTime());
 	const deduped: Date[] = [];

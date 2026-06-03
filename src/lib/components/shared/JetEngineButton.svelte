@@ -87,7 +87,11 @@
 		'bg-[hsl(var(--status-active))] text-white hover:bg-[hsl(var(--status-active))] border-transparent';
 
 	const activeLabel = $derived(
-		current === 'loading' ? (loadingLabel ?? label) : current === 'success' ? (successLabel ?? label) : label
+		current === 'loading'
+			? (loadingLabel ?? label)
+			: current === 'success'
+				? (successLabel ?? label)
+				: label
 	);
 </script>
 

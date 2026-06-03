@@ -1,4 +1,4 @@
 interface:
-  display_name: "Contractor CRM Svelte UI"
-  short_description: "Svelte 5 UI rules for Contractor OS."
-  default_prompt: "Use this skill when editing Contractor OS Svelte pages, layouts, components, UI data loading, navigation, or client auth."
+  display_name: 'Contractor CRM Svelte UI'
+  short_description: 'Svelte 5 UI rules for Contractor OS.'
+  default_prompt: 'Use this skill when editing Contractor OS Svelte pages, layouts, components, UI data loading, navigation, or client auth.'

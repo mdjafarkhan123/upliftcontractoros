@@ -1,21 +1,17 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, eq, gte, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	appointments,
-	contacts,
-	jobs,
-	orgMembers,
-	outboxEvents
-} from '$lib/server/db/schema';
+import { appointments, contacts, jobs, orgMembers, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	canCreateAppointment,
-	canViewAnyAppointment
-} from '$lib/server/appointments/permissions';
+import { canCreateAppointment, canViewAnyAppointment } from '$lib/server/appointments/permissions';
 import { createAppointmentSchema } from '$lib/server/appointments/schemas';
-import { hasOverlap } from '$lib/server/appointments/overlap';
+import { findConflictingAssignee } from '$lib/server/appointments/overlap';
+import {
+	resolveAssigneeInput,
+	syncAppointmentAssignees,
+	validateAssigneesBelongToOrg
+} from '$lib/server/appointments/assignees';
 
 const MAX_ROWS = 500;
 const VALID_STATUSES = new Set(['scheduled', 'completed', 'cancelled', 'no_show']);
@@ -33,7 +29,10 @@ export const GET: RequestHandler = async (event) => {
 	const jobIdParam = url.searchParams.get('job_id');
 
 	if (!fromParam || !toParam) {
-		return json({ error: 'from and to query params are required (ISO timestamps).' }, { status: 400 });
+		return json(
+			{ error: 'from and to query params are required (ISO timestamps).' },
+			{ status: 400 }
+		);
 	}
 	const from = new Date(fromParam);
 	const to = new Date(toParam);
@@ -72,6 +71,10 @@ export const GET: RequestHandler = async (event) => {
 			job_id: appointments.job_id,
 			assigned_to: appointments.assigned_to,
 			assignee_name: orgMembers.full_name,
+			assignee_count: sql<number>`(
+				SELECT COUNT(*)::int FROM appointment_assignees aa
+				WHERE aa.appointment_id = ${appointments.id}
+			)`,
 			type: appointments.type,
 			status: appointments.status,
 			title: appointments.title,
@@ -148,13 +151,7 @@ export const POST: RequestHandler = async (event) => {
 				service_address_zip: jobs.service_address_zip
 			})
 			.from(jobs)
-			.where(
-				and(
-					eq(jobs.id, input.job_id),
-					eq(jobs.org_id, auth.orgId),
-					isNull(jobs.deleted_at)
-				)
-			)
+			.where(and(eq(jobs.id, input.job_id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 			.limit(1);
 		if (!jobRow) return json({ error: 'Job not found' }, { status: 422 });
 		if (jobRow.contact_id !== input.contact_id) {
@@ -170,30 +167,35 @@ export const POST: RequestHandler = async (event) => {
 		jobLocation = addrParts.length > 0 ? addrParts.join(' · ') : null;
 	}
 
-	if (input.assigned_to) {
-		const [assignee] = await db
-			.select({ id: orgMembers.id })
-			.from(orgMembers)
-			.where(
-				and(
-					eq(orgMembers.id, input.assigned_to),
-					eq(orgMembers.org_id, auth.orgId),
-					eq(orgMembers.is_active, true),
-					isNull(orgMembers.deleted_at)
-				)
-			)
-			.limit(1);
-		if (!assignee) {
-			return json({ error: 'Assignee is not an active member.' }, { status: 422 });
+	const resolution = resolveAssigneeInput({
+		assignee_ids: input.assignee_ids,
+		lead_member_id: input.lead_member_id,
+		assigned_to: input.assigned_to
+	});
+	if ('field' in resolution) {
+		return json(
+			{ error: resolution.message, field_errors: { [resolution.field]: resolution.message } },
+			{ status: 422 }
+		);
+	}
+	const { assigneeIds, leadMemberId } = resolution;
+
+	if (assigneeIds.length > 0) {
+		const orgErr = await validateAssigneesBelongToOrg(db, auth.orgId, assigneeIds);
+		if (orgErr) {
+			return json(
+				{ error: orgErr.message, field_errors: { [orgErr.field]: orgErr.message } },
+				{ status: 422 }
+			);
 		}
 
-		const conflict = await hasOverlap(db, {
+		const conflictMember = await findConflictingAssignee(db, {
 			orgId: auth.orgId,
-			assignedTo: input.assigned_to,
+			assigneeIds,
 			start: input.scheduled_start,
 			end: input.scheduled_end
 		});
-		if (conflict) {
+		if (conflictMember) {
 			return json({ error: 'Time conflict' }, { status: 409 });
 		}
 	}
@@ -205,7 +207,7 @@ export const POST: RequestHandler = async (event) => {
 				org_id: auth.orgId,
 				contact_id: input.contact_id,
 				job_id: input.job_id ?? null,
-				assigned_to: input.assigned_to ?? null,
+				assigned_to: leadMemberId,
 				type: input.type,
 				status: 'scheduled',
 				title: input.title,
@@ -215,6 +217,15 @@ export const POST: RequestHandler = async (event) => {
 				notes: input.notes ?? null
 			})
 			.returning();
+
+		if (assigneeIds.length > 0) {
+			await syncAppointmentAssignees(tx, {
+				orgId: auth.orgId,
+				appointmentId: inserted.id,
+				assigneeIds,
+				leadMemberId
+			});
+		}
 
 		await tx.insert(outboxEvents).values({
 			org_id: auth.orgId,
@@ -226,7 +237,8 @@ export const POST: RequestHandler = async (event) => {
 				org_id: auth.orgId,
 				contact_id: inserted.contact_id,
 				job_id: inserted.job_id,
-				assigned_to: inserted.assigned_to,
+				assigned_to: leadMemberId,
+				assignee_ids: assigneeIds,
 				scheduled_start: inserted.scheduled_start.toISOString(),
 				scheduled_end: inserted.scheduled_end?.toISOString() ?? null
 			},

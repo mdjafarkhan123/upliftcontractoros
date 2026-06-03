@@ -35,9 +35,7 @@ function bucket(): string {
 }
 
 export async function r2Get(key: string): Promise<Buffer> {
-	const res = await r2Client().send(
-		new GetObjectCommand({ Bucket: bucket(), Key: key })
-	);
+	const res = await r2Client().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
 	if (!res.Body) throw new Error(`R2 object ${key} has no body`);
 	const chunks: Uint8Array[] = [];
 	// @ts-expect-error -- Body is a Node Readable stream in this runtime
@@ -45,11 +43,7 @@ export async function r2Get(key: string): Promise<Buffer> {
 	return Buffer.concat(chunks);
 }
 
-export async function r2Upload(
-	key: string,
-	body: Buffer,
-	contentType: string
-): Promise<void> {
+export async function r2Upload(key: string, body: Buffer, contentType: string): Promise<void> {
 	await r2Client().send(
 		new PutObjectCommand({
 			Bucket: bucket(),
@@ -107,9 +101,7 @@ export async function r2DeleteByPrefix(prefix: string): Promise<number> {
 }
 
 export async function r2Presign(key: string, expiresInSeconds = 3600): Promise<string> {
-	return getSignedUrl(
-		r2Client(),
-		new GetObjectCommand({ Bucket: bucket(), Key: key }),
-		{ expiresIn: expiresInSeconds }
-	);
+	return getSignedUrl(r2Client(), new GetObjectCommand({ Bucket: bucket(), Key: key }), {
+		expiresIn: expiresInSeconds
+	});
 }

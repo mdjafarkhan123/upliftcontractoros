@@ -55,9 +55,7 @@
 	let submitError = $state<string | null>(null);
 	let submitFieldErrors = $state<Record<string, string>>({});
 
-	const availableDatesForMonth = $derived(
-		availableDatesByMonth.get(month) ?? new Set<string>()
-	);
+	const availableDatesForMonth = $derived(availableDatesByMonth.get(month) ?? new Set<string>());
 
 	const selectedSlotLabel = $derived(
 		selectedSlot && config
@@ -253,7 +251,7 @@
 	<!-- Header -->
 	<header class="mb-8 text-center">
 		<div
-			class="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-card/70 shadow-[0_8px_30px_-12px_hsl(var(--brand-primary)/0.4)] backdrop-blur"
+			class="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-card shadow-[0_8px_30px_-12px_hsl(var(--brand-primary)/0.4)]"
 		>
 			{#if config?.org_logo_url}
 				<img
@@ -281,7 +279,7 @@
 				</p>
 			{/if}
 			<div
-				class="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-card/40 px-3 py-1 text-[11px] font-medium text-muted-foreground"
+				class="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground"
 			>
 				<Clock class="h-3 w-3" />
 				{config.slot_duration_minutes} min
@@ -305,14 +303,14 @@
 	<!-- Card -->
 	{#if config}
 		<section
-			class="overflow-hidden rounded-2xl border border-border/60 bg-card/70 p-5 shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)] backdrop-blur sm:p-7"
+			class="overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)] sm:p-7"
 		>
 			{#if step === 1}
 				<Calendar
 					{month}
 					availableDates={availableDatesForMonth}
 					loading={datesLoading}
-					selectedDate={selectedDate}
+					{selectedDate}
 					timezone={config.org_timezone}
 					onSelectDate={handleSelectDate}
 					onChangeMonth={handleMonthChange}
@@ -343,7 +341,7 @@
 						{slots}
 						loading={slotsLoading}
 						timezone={config.org_timezone}
-						selectedSlot={selectedSlot}
+						{selectedSlot}
 						onSelect={handleSelectSlot}
 					/>
 				</div>

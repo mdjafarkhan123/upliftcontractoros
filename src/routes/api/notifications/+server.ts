@@ -14,9 +14,7 @@ export const GET: RequestHandler = async (event) => {
 	const items = await db
 		.select()
 		.from(notifications)
-		.where(
-			and(eq(notifications.org_id, auth.orgId), eq(notifications.member_id, auth.member.id))
-		)
+		.where(and(eq(notifications.org_id, auth.orgId), eq(notifications.member_id, auth.member.id)))
 		.orderBy(desc(notifications.created_at))
 		.limit(PAGE_SIZE);
 

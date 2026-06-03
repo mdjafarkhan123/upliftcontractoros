@@ -28,6 +28,8 @@ export type RecordInboundMessageInput = {
 	source: string;
 	sentAt?: Date;
 	mediaUrls?: string[] | null;
+	/** True when the message carries media — drives the "📷 Photo" inbox preview. */
+	hasMedia?: boolean;
 };
 
 /**
@@ -68,7 +70,8 @@ export async function recordInboundMessage(
 			channel: input.channel,
 			direction: 'inbound',
 			body: input.body,
-			is_internal_note: false
+			is_internal_note: false,
+			hasMedia: input.hasMedia ?? false
 		},
 		sentAt
 	);

@@ -1,5 +1,15 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core';
-import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import {
+	pgTable,
+	pgEnum,
+	uuid,
+	text,
+	boolean,
+	timestamp,
+	primaryKey,
+	index,
+	uniqueIndex
+} from 'drizzle-orm/pg-core';
+import { sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
 import { jobs } from './04_jobs';
@@ -56,3 +66,36 @@ export const appointments = pgTable('appointments', {
 
 export type Appointment = InferSelectModel<typeof appointments>;
 export type NewAppointment = InferInsertModel<typeof appointments>;
+
+// Multi-assignee join. `appointments.assigned_to` stays as the denormalized
+// lead pointer so list queries / "my appointments" stay fast; this table is
+// the source of truth for the full crew.
+//
+// Invariant: at most one row per appointment may have is_lead = true. Enforced
+// by partial unique index `idx_appt_assignees_one_lead`.
+export const appointmentAssignees = pgTable(
+	'appointment_assignees',
+	{
+		appointment_id: uuid('appointment_id')
+			.notNull()
+			.references(() => appointments.id, { onDelete: 'cascade' }),
+		member_id: uuid('member_id')
+			.notNull()
+			.references(() => orgMembers.id),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		is_lead: boolean('is_lead').notNull().default(false),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		pk: primaryKey({ columns: [t.appointment_id, t.member_id] }),
+		byMember: index('idx_appt_assignees_member_org').on(t.member_id, t.org_id),
+		oneLead: uniqueIndex('idx_appt_assignees_one_lead')
+			.on(t.appointment_id)
+			.where(sql`is_lead = true`)
+	})
+);
+
+export type AppointmentAssignee = InferSelectModel<typeof appointmentAssignees>;
+export type NewAppointmentAssignee = InferInsertModel<typeof appointmentAssignees>;

@@ -11,10 +11,16 @@
 		Eye,
 		XCircle,
 		Trophy,
+		TrendingDown,
+		Sparkles,
+		ArrowRightLeft,
 		Briefcase,
 		UserPlus,
+		UserCheck,
 		Star,
-		Activity
+		Activity,
+		Send,
+		UserCog
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
@@ -25,9 +31,15 @@
 		quote_accepted: CheckCircle2,
 		quote_viewed: Eye,
 		quote_declined: XCircle,
+		quote_sent: Send,
+		opportunity_created: Sparkles,
+		opportunity_stage_changed: ArrowRightLeft,
+		opportunity_assignee_changed: UserCog,
 		opportunity_won: Trophy,
+		opportunity_lost: TrendingDown,
 		job_completed: Briefcase,
 		lead: UserPlus,
+		contact_became_customer: UserCheck,
 		review_received: Star
 	};
 
@@ -57,12 +69,12 @@
 </script>
 
 <section
-	class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-card dark:border-white/10"
+	class="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card dark:border-white/10"
 >
 	<header
-		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-4 py-3"
+		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-5 py-4"
 	>
-		<h2 class="text-sm font-semibold text-foreground">Recent activity</h2>
+		<h2 class="text-base font-semibold tracking-tight text-foreground">Recent activity</h2>
 	</header>
 
 	{#if rows.length === 0}

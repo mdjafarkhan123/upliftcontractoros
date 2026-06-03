@@ -63,7 +63,11 @@ CREATE TABLE organizations (
   stripe_publishable_key  TEXT,
   stripe_webhook_secret   TEXT,           -- encrypted at rest via Supabase Vault
   stripe_account_id       TEXT,           -- acct_xxx, display only
+  stripe_account_name     TEXT,
+  stripe_account_email    TEXT,
+  stripe_livemode         BOOLEAN,
   stripe_connected_at     TIMESTAMPTZ,
+  stripe_last_verified_at TIMESTAMPTZ,
 
   -- Org profile
   is_setup_complete     BOOLEAN NOT NULL DEFAULT FALSE,

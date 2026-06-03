@@ -8,17 +8,17 @@ type DbOrTx = Db | Tx;
 
 const PREVIEW_LIMIT = 140;
 
-function buildPreview(channel: Message['channel'], body: string | null): string {
+function buildPreview(channel: Message['channel'], body: string | null, hasMedia: boolean): string {
 	if (channel === 'missed_call') return 'Missed phone call';
-	if (!body) return '';
-	const trimmed = body.trim();
+	const trimmed = body?.trim() ?? '';
+	if (!trimmed) return hasMedia ? '📷 Photo' : '';
 	return trimmed.length > PREVIEW_LIMIT ? trimmed.slice(0, PREVIEW_LIMIT) : trimmed;
 }
 
 type TouchInput = Pick<
 	Message,
 	'conversation_id' | 'channel' | 'direction' | 'body' | 'is_internal_note'
->;
+> & { hasMedia?: boolean };
 
 /**
  * Bump conversation operational metadata after a message is persisted.
@@ -50,7 +50,7 @@ export async function touchConversationOnMessage(
 		return;
 	}
 
-	const preview = buildPreview(message.channel, message.body);
+	const preview = buildPreview(message.channel, message.body, message.hasMedia ?? false);
 	const isInbound = message.direction === 'inbound';
 	const isEmail = message.channel === 'email';
 

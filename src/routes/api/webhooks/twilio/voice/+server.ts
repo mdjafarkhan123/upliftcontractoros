@@ -11,10 +11,7 @@ import {
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
-import {
-	findOrCreateOpenConversation,
-	recordInboundMessage
-} from '$lib/server/conversations';
+import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/conversations';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -150,7 +147,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			const { conversation: conv } = await findOrCreateOpenConversation(tx, {
 				orgId: org.id,
 				contactId,
-				createdChannel: 'missed_call'
+				createdChannel: 'missed_call',
+				reactivate: true
 			});
 
 			const insertedMsg = await recordInboundMessage(tx, {

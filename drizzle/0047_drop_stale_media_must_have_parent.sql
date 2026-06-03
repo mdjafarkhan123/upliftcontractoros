@@ -1,0 +1,15 @@
+-- Remove the orphaned `media_must_have_parent` check constraint.
+--
+-- This constraint is a leftover from an early schema revision. It required every
+-- media row to hang off a job/quote/invoice/message (or be an org_logo/avatar/
+-- marketing_asset) and was supposed to be dropped when `media_exactly_one_parent`
+-- took over, but it lingered on the live DB. It is NOT defined in the Drizzle
+-- schema (src/lib/server/db/schema/09_media.ts) — only `media_exactly_one_parent`
+-- is. Because both checks must pass, this stale rule rejected contact-only
+-- attachments (purpose_tag = 'contact_attachment', contact_id set, no job/quote/
+-- invoice/message), breaking inbox media uploads.
+--
+-- `media_exactly_one_parent` already enforces the correct, stricter invariant
+-- (exactly one of contact/job/quote/invoice/message for non-org_logo rows), so
+-- dropping this orphan only removes the contradictory blocker. Idempotent.
+ALTER TABLE "media" DROP CONSTRAINT IF EXISTS "media_must_have_parent";

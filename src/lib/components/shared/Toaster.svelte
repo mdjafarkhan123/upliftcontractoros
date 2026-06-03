@@ -35,7 +35,7 @@
 			out:fade={{ duration: 140 }}
 			role={t.variant === 'error' ? 'alert' : 'status'}
 			class={cn(
-				'pointer-events-auto flex items-start gap-3 rounded-xl border bg-card/95 px-3.5 py-3 shadow-lg backdrop-blur',
+				'pointer-events-auto flex items-start gap-3 rounded-xl border bg-card px-3.5 py-3 shadow-lg',
 				'text-sm text-foreground',
 				VARIANT_CLASSES[t.variant]
 			)}

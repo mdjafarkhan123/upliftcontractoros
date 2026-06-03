@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { media, jobs, quotes, invoices } from '$lib/server/db/schema';
+import { media, jobs, quotes, invoices, contacts } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 
 export const GET: RequestHandler = async (event) => {
@@ -14,15 +14,37 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	const { searchParams } = event.url;
+	const contactId = searchParams.get('contact_id');
 	const jobId = searchParams.get('job_id');
 	const quoteId = searchParams.get('quote_id');
 	const invoiceId = searchParams.get('invoice_id');
 
-	if (!jobId && !quoteId && !invoiceId) {
-		return json({ error: 'At least one of job_id, quote_id, invoice_id is required' }, { status: 400 });
+	if (!contactId && !jobId && !quoteId && !invoiceId) {
+		return json(
+			{ error: 'At least one of contact_id, job_id, quote_id, invoice_id is required' },
+			{ status: 400 }
+		);
 	}
 
 	// Validate parent belongs to org
+	if (contactId) {
+		const [c] = await db
+			.select({ id: contacts.id, assigned_to: contacts.assigned_to })
+			.from(contacts)
+			.where(
+				and(
+					eq(contacts.id, contactId),
+					eq(contacts.org_id, auth.orgId),
+					isNull(contacts.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!c) return json({ error: 'Contact not found' }, { status: 404 });
+		// Don't leak existence to members without access to this contact.
+		if (!auth.member.can_view_all_contacts && c.assigned_to !== auth.member.id) {
+			return json({ error: 'Contact not found' }, { status: 404 });
+		}
+	}
 	if (jobId) {
 		const [j] = await db
 			.select({ id: jobs.id, assigned_to: jobs.assigned_to })
@@ -48,12 +70,19 @@ export const GET: RequestHandler = async (event) => {
 		const [inv] = await db
 			.select({ id: invoices.id })
 			.from(invoices)
-			.where(and(eq(invoices.id, invoiceId), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at)))
+			.where(
+				and(
+					eq(invoices.id, invoiceId),
+					eq(invoices.org_id, auth.orgId),
+					isNull(invoices.deleted_at)
+				)
+			)
 			.limit(1);
 		if (!inv) return json({ error: 'Invoice not found' }, { status: 404 });
 	}
 
 	const conditions = [eq(media.org_id, auth.orgId), isNull(media.deleted_at)];
+	if (contactId) conditions.push(eq(media.contact_id, contactId));
 	if (jobId) conditions.push(eq(media.job_id, jobId));
 	if (quoteId) conditions.push(eq(media.quote_id, quoteId));
 	if (invoiceId) conditions.push(eq(media.invoice_id, invoiceId));

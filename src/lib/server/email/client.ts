@@ -1,15 +1,4 @@
-import { Resend } from 'resend';
-const env = process.env;
-
-let _client: Resend | null = null;
-
-export function resend(): Resend {
-	if (_client) return _client;
-	const key = env.RESEND_API_KEY;
-	if (!key) throw new Error('RESEND_API_KEY is required.');
-	_client = new Resend(key);
-	return _client;
-}
+import { sendBrevoEmail } from './brevo/send';
 
 export type EmailAttachment = {
 	filename: string;
@@ -33,8 +22,13 @@ export type SendEmailResult = {
 	id: string | null;
 };
 
+/**
+ * Provider-neutral email send. Backed by Brevo's transactional API. The returned
+ * `id` is Brevo's messageId, stored on messages.email_provider_message_id and
+ * matched back by the delivery-events webhook.
+ */
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-	const res = await resend().emails.send({
+	const { messageId } = await sendBrevoEmail({
 		to: input.to,
 		from: input.from,
 		subject: input.subject,
@@ -42,13 +36,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 		text: input.text,
 		replyTo: input.replyTo,
 		headers: input.headers,
-		attachments: input.attachments?.map((a) => ({
-			filename: a.filename,
-			content: a.content,
-			contentType: a.contentType
-		})),
+		attachments: input.attachments,
 		tags: input.tags
 	});
-	if (res.error) throw new Error(res.error.message);
-	return { id: res.data?.id ?? null };
+	return { id: messageId };
 }

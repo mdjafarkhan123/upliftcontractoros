@@ -15,9 +15,7 @@
 	);
 </script>
 
-<article
-	class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:p-5"
->
+<article class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:p-5">
 	<header class="flex items-center justify-between gap-2">
 		<Badge label={meta.label} variant="info" />
 		<time class="text-xs text-muted-foreground" datetime={item.published_at}>

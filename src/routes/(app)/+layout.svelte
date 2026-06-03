@@ -83,6 +83,14 @@
 		lastFeatureOverridesUpdatedAt = toIso(session.org.feature_overrides_updated_at);
 		pollHandle = setInterval(pollStatus, POLL_MS);
 
+		// Register service worker for Web Push — permission is NOT requested here.
+		// User initiates permission from Settings → Notifications.
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch(() => {
+				// SW registration failure is non-fatal
+			});
+		}
+
 		// Skip CRM-side data + realtime entirely while suspended.
 		if (session.org.status === 'suspended') return;
 

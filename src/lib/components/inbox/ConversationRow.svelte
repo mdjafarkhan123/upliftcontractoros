@@ -7,7 +7,8 @@
 		Clock,
 		Lock,
 		StickyNote,
-		AlertCircle
+		AlertCircle,
+		AlertTriangle
 	} from '@lucide/svelte';
 	import type { ConversationListItem, MessageChannel } from '$lib/stores/inbox.svelte';
 	import { cn } from '$lib/utils/cn';
@@ -49,6 +50,12 @@
 	const isSnoozed = $derived(c.status === 'snoozed');
 	const isClosed = $derived(c.status === 'closed');
 	const hasFailure = $derived(c.has_delivery_failure === true && !isClosed);
+	// Customer's last message is unanswered — they're waiting on us. Hidden when
+	// snoozed (deferred on purpose) or closed.
+	const isWaiting = $derived(
+		c.last_message_direction === 'inbound' && !isSnoozed && !isClosed
+	);
+	const waitingLabel = $derived(isWaiting ? formatWaiting(c.last_inbound_at) : '');
 
 	const previewText = $derived.by(() => {
 		if (c.last_message_preview && c.last_message_preview.trim().length > 0) {
@@ -74,6 +81,18 @@
 		if (diff < day) return `${Math.floor(diff / hr)}h`;
 		if (diff < 7 * day) return `${Math.floor(diff / day)}d`;
 		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	}
+
+	function formatWaiting(iso: string | null): string {
+		if (!iso) return '';
+		const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+		const min = 60_000;
+		const hr = 60 * min;
+		const day = 24 * hr;
+		if (diff < min) return 'now';
+		if (diff < hr) return `${Math.floor(diff / min)}m`;
+		if (diff < day) return `${Math.floor(diff / hr)}h`;
+		return `${Math.floor(diff / day)}d`;
 	}
 
 	function formatSnoozeUntil(iso: string | null): string {
@@ -161,8 +180,16 @@
 			{/if}
 		</div>
 
-		{#if hasFailure || isSnoozed || isClosed || c.assignee_name}
+		{#if hasFailure || isWaiting || isSnoozed || isClosed || c.assignee_name}
 			<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+				{#if isWaiting}
+					<span
+						class="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-600 dark:text-amber-400"
+					>
+						<AlertTriangle class="h-3 w-3" />
+						{waitingLabel === 'now' ? 'Waiting' : `Waiting ${waitingLabel}`}
+					</span>
+				{/if}
 				{#if hasFailure}
 					<span
 						class="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive"

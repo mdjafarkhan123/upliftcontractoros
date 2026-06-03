@@ -7,7 +7,7 @@ Cross-reference: Core Schema Design v1, Master Domain Architecture v1, Blueprint
 ## Table of Contents
 
 1. Organization Lifecycle
-1a. Usage & Quotas
+   1a. Usage & Quotas
 2. Contact Rules
 3. Pipeline & Opportunities
 4. Job Rules

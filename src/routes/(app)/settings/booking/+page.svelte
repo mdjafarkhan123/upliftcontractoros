@@ -74,7 +74,11 @@
 
 <svelte:head><title>Booking Availability</title></svelte:head>
 
-<PageWrapper title="Booking Availability" subtitle="Manage links customers use to book themselves">
+<PageWrapper
+	title="Booking Availability"
+	subtitle="Manage links customers use to book themselves"
+	back="/settings"
+>
 	{#snippet actions()}
 		{#if featureEnabled && isAdmin}
 			<Button onclick={() => goto('/settings/booking/new')}>
@@ -88,8 +92,12 @@
 	</Button>
 
 	{#if !featureEnabled}
-		<div class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
-			<div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+		<div
+			class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted px-6 py-12 text-center"
+		>
+			<div
+				class="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
+			>
 				<Lock class="h-6 w-6" />
 			</div>
 			<h3 class="text-base font-semibold text-foreground">Online booking is not enabled</h3>
@@ -132,7 +140,10 @@
 							</div>
 							<p class="mt-1 truncate text-xs text-muted-foreground">{url}</p>
 							<p class="mt-1 text-xs text-muted-foreground">
-								{link.slot_duration_minutes} min · {link.window_count} weekly window{link.window_count === 1 ? '' : 's'}
+								{link.slot_duration_minutes} min · {link.window_count} weekly window{link.window_count ===
+								1
+									? ''
+									: 's'}
 								{#if link.override_count > 0}
 									· {link.override_count} override{link.override_count === 1 ? '' : 's'}
 								{/if}
@@ -143,7 +154,11 @@
 						<Button variant="outline" size="sm" onclick={() => copyUrl(link.slug)}>
 							<Copy class="h-3.5 w-3.5" /> Copy URL
 						</Button>
-						<Button variant="outline" size="sm" onclick={() => goto(`/settings/booking/${link.id}`)}>
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => goto(`/settings/booking/${link.id}`)}
+						>
 							Edit <ChevronRight class="h-3.5 w-3.5" />
 						</Button>
 					</div>

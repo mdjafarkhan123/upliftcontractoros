@@ -32,11 +32,7 @@ const stripePostSchema = z
 	})
 	.strict();
 
-function logEvent(
-	level: 'info' | 'warn' | 'error',
-	event: string,
-	ctx: Record<string, unknown>
-) {
+function logEvent(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>) {
 	console.log(JSON.stringify({ level, event, ...ctx }));
 }
 
@@ -117,7 +113,8 @@ export const POST: RequestHandler = async (event) => {
 		field_errors.stripe_restricted_key = 'Must be a valid restricted key (rk_live_… or rk_test_…).';
 	}
 	if (!isValidStripePublishableKey(stripe_publishable_key)) {
-		field_errors.stripe_publishable_key = 'Must be a valid publishable key (pk_live_… or pk_test_…).';
+		field_errors.stripe_publishable_key =
+			'Must be a valid publishable key (pk_live_… or pk_test_…).';
 	}
 	if (!isValidStripeWebhookSecret(stripe_webhook_secret)) {
 		field_errors.stripe_webhook_secret = 'Must be a valid webhook signing secret (whsec_…).';
@@ -160,7 +157,8 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const account = await stripe.accounts.retrieve(null);
 		accountId = account.id ?? null;
-		accountName = account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null;
+		accountName =
+			account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null;
 		accountEmail = account.email ?? null;
 	} catch (err) {
 		logEvent('info', 'settings.stripe.connect.account_metadata_unavailable', {

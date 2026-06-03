@@ -44,6 +44,8 @@ const automationPatchSchema = z
 			.nullable()
 			.optional(),
 		review_funnel_message: z.string().min(1).max(MSG_MAX).optional(),
+		review_funnel_reminder_enabled: z.boolean().optional(),
+		review_funnel_reminder_message: z.string().min(1).max(MSG_MAX).optional(),
 
 		appointment_reminder_enabled: z.boolean().optional(),
 		appointment_reminder_hours_before: z.number().int().min(0).max(DELAY_HOURS_MAX).optional(),
@@ -51,8 +53,15 @@ const automationPatchSchema = z
 		appointment_reminder_1h_enabled: z.boolean().optional(),
 		appointment_reminder_1h_message: z.string().min(1).max(MSG_MAX).optional(),
 
+		appointment_confirmation_enabled: z.boolean().optional(),
+		appointment_confirmation_sms_message: z.string().min(1).max(MSG_MAX).optional(),
+		appointment_confirmation_email_subject: z.string().min(1).max(200).optional(),
+		appointment_confirmation_email_message: z.string().min(1).max(2000).optional(),
+
 		payment_receipt_enabled: z.boolean().optional(),
 		payment_receipt_message: z.string().min(1).max(MSG_MAX).optional(),
+		payment_receipt_sms_enabled: z.boolean().optional(),
+		payment_receipt_sms_message: z.string().min(1).max(MSG_MAX).optional(),
 
 		speed_to_lead_enabled: z.boolean().optional(),
 		speed_to_lead_message: z.string().min(1).max(MSG_MAX).optional()
@@ -64,9 +73,14 @@ const TEMPLATE_FIELDS = [
 	'quote_followup_message',
 	'invoice_reminder_message',
 	'review_funnel_message',
+	'review_funnel_reminder_message',
 	'appointment_reminder_message',
 	'appointment_reminder_1h_message',
+	'appointment_confirmation_sms_message',
+	'appointment_confirmation_email_subject',
+	'appointment_confirmation_email_message',
 	'payment_receipt_message',
+	'payment_receipt_sms_message',
 	'speed_to_lead_message'
 ] as const;
 
@@ -86,13 +100,21 @@ const RETURN_COLUMNS = {
 	review_funnel_delay_hours: automationSettings.review_funnel_delay_hours,
 	google_review_link: automationSettings.google_review_link,
 	review_funnel_message: automationSettings.review_funnel_message,
+	review_funnel_reminder_enabled: automationSettings.review_funnel_reminder_enabled,
+	review_funnel_reminder_message: automationSettings.review_funnel_reminder_message,
 	appointment_reminder_enabled: automationSettings.appointment_reminder_enabled,
 	appointment_reminder_hours_before: automationSettings.appointment_reminder_hours_before,
 	appointment_reminder_message: automationSettings.appointment_reminder_message,
 	appointment_reminder_1h_enabled: automationSettings.appointment_reminder_1h_enabled,
 	appointment_reminder_1h_message: automationSettings.appointment_reminder_1h_message,
+	appointment_confirmation_enabled: automationSettings.appointment_confirmation_enabled,
+	appointment_confirmation_sms_message: automationSettings.appointment_confirmation_sms_message,
+	appointment_confirmation_email_subject: automationSettings.appointment_confirmation_email_subject,
+	appointment_confirmation_email_message: automationSettings.appointment_confirmation_email_message,
 	payment_receipt_enabled: automationSettings.payment_receipt_enabled,
 	payment_receipt_message: automationSettings.payment_receipt_message,
+	payment_receipt_sms_enabled: automationSettings.payment_receipt_sms_enabled,
+	payment_receipt_sms_message: automationSettings.payment_receipt_sms_message,
 	speed_to_lead_enabled: automationSettings.speed_to_lead_enabled,
 	speed_to_lead_message: automationSettings.speed_to_lead_message,
 	// Cast to text so the canonical PostgreSQL microsecond precision survives
@@ -151,9 +173,23 @@ export const PATCH: RequestHandler = async (event) => {
 		if (typeof v === 'string') {
 			const r = validateTemplateVariables(v);
 			if (!r.ok) {
-				field_errors[f] = `Unknown variable(s): ${r.unknown.map((u) => `{${u}}`).join(', ')}. Only {contact_name} and {org_name} are allowed.`;
+				field_errors[f] = `Unknown variable(s): ${r.unknown.map((u) => `{${u}}`).join(', ')}.`;
 			}
 		}
+	}
+	if (
+		typeof input.review_funnel_message === 'string' &&
+		!input.review_funnel_message.includes('{review_link}')
+	) {
+		field_errors.review_funnel_message =
+			'Must include {review_link} — the public review link is the primary CTA.';
+	}
+	if (
+		typeof input.review_funnel_reminder_message === 'string' &&
+		!input.review_funnel_reminder_message.includes('{review_link}')
+	) {
+		field_errors.review_funnel_reminder_message =
+			'Must include {review_link} — the public review link is the primary CTA.';
 	}
 	if (Object.keys(field_errors).length > 0) {
 		return json({ error: 'Validation failed.', field_errors }, { status: 400 });
@@ -206,10 +242,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 		if (!current) return json({ error: 'Automation settings not found.' }, { status: 404 });
 
-		return json(
-			{ error: 'Settings changed elsewhere.', data: current },
-			{ status: 409 }
-		);
+		return json({ error: 'Settings changed elsewhere.', data: current }, { status: 409 });
 	}
 
 	console.log(

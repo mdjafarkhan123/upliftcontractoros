@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { organizations, media, outboxEvents } from '$lib/server/db/schema';
+import { organizations, media, outboxEvents, automationSettings } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { isValidHexColor, normalizeHexColor } from '$lib/utils/validation/hexColor';
 import { isValidIanaTimezone } from '$lib/utils/validation/ianaTimezone';
@@ -23,7 +23,16 @@ const orgPatchSchema = z
 		state: z.string().max(100).trim().nullable().optional(),
 		zip: z.string().max(20).trim().nullable().optional(),
 		primary_color: z.string().max(20).nullable().optional(),
-		logo_url: z.string().uuid().nullable().optional() // media row id
+		logo_url: z.string().uuid().nullable().optional(), // media row id
+		google_review_link: z
+			.string()
+			.url()
+			.regex(/^https:\/\//, 'Must be an https URL.')
+			.max(500)
+			.nullable()
+			.optional(),
+		calendar_day_start_hour: z.number().int().min(0).max(23).optional(),
+		calendar_day_end_hour: z.number().int().min(1).max(24).optional()
 	})
 	.strict();
 
@@ -58,9 +67,13 @@ export const GET: RequestHandler = async (event) => {
 			state: organizations.state,
 			zip: organizations.zip,
 			primary_color: organizations.primary_color,
-			logo_url: organizations.logo_url
+			logo_url: organizations.logo_url,
+			calendar_day_start_hour: organizations.calendar_day_start_hour,
+			calendar_day_end_hour: organizations.calendar_day_end_hour,
+			google_review_link: automationSettings.google_review_link
 		})
 		.from(organizations)
+		.leftJoin(automationSettings, eq(automationSettings.org_id, organizations.id))
 		.where(eq(organizations.id, auth.orgId))
 		.limit(1);
 
@@ -127,6 +140,29 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 	}
 
+	const startNext =
+		input.calendar_day_start_hour !== undefined ? input.calendar_day_start_hour : undefined;
+	const endNext =
+		input.calendar_day_end_hour !== undefined ? input.calendar_day_end_hour : undefined;
+	if (startNext !== undefined || endNext !== undefined) {
+		const [existing] = await db
+			.select({
+				s: organizations.calendar_day_start_hour,
+				e: organizations.calendar_day_end_hour
+			})
+			.from(organizations)
+			.where(eq(organizations.id, auth.orgId))
+			.limit(1);
+		const s = startNext ?? existing?.s ?? 7;
+		const e = endNext ?? existing?.e ?? 19;
+		if (e <= s) {
+			field_errors.calendar_day_end_hour = 'End hour must be after start hour.';
+		} else {
+			if (startNext !== undefined) updates.calendar_day_start_hour = startNext;
+			if (endNext !== undefined) updates.calendar_day_end_hour = endNext;
+		}
+	}
+
 	if (input.logo_url !== undefined) {
 		if (input.logo_url === null) {
 			updates.logo_url = null;
@@ -134,7 +170,9 @@ export const PATCH: RequestHandler = async (event) => {
 			const [m] = await db
 				.select({ id: media.id, r2_key: media.r2_key })
 				.from(media)
-				.where(and(eq(media.id, input.logo_url), eq(media.org_id, auth.orgId), isNull(media.deleted_at)))
+				.where(
+					and(eq(media.id, input.logo_url), eq(media.org_id, auth.orgId), isNull(media.deleted_at))
+				)
 				.limit(1);
 			if (!m) {
 				field_errors.logo_url = 'Logo must reference an uploaded media file.';
@@ -148,11 +186,14 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ error: 'Validation failed.', field_errors }, { status: 400 });
 	}
 
-	if (Object.keys(updates).length === 0) {
+	const googleReviewLinkChanging = input.google_review_link !== undefined;
+
+	if (Object.keys(updates).length === 0 && !googleReviewLinkChanging) {
 		return json({ error: 'No editable fields provided.' }, { status: 400 });
 	}
 
-	updates.updated_at = new Date();
+	const orgHasUpdates = Object.keys(updates).length > 0;
+	if (orgHasUpdates) updates.updated_at = new Date();
 
 	const logoChanging = 'logo_url' in updates;
 	const newLogoKey = (updates.logo_url ?? null) as string | null;
@@ -166,10 +207,19 @@ export const PATCH: RequestHandler = async (event) => {
 		state: organizations.state,
 		zip: organizations.zip,
 		primary_color: organizations.primary_color,
-		logo_url: organizations.logo_url
+		logo_url: organizations.logo_url,
+		calendar_day_start_hour: organizations.calendar_day_start_hour,
+		calendar_day_end_hour: organizations.calendar_day_end_hour
 	};
 
 	const updated = await db.transaction(async (tx) => {
+		if (googleReviewLinkChanging) {
+			await tx
+				.update(automationSettings)
+				.set({ google_review_link: input.google_review_link ?? null, updated_at: new Date() })
+				.where(eq(automationSettings.org_id, auth.orgId));
+		}
+
 		// If the logo is changing, look up the previous media row (by prior r2_key)
 		// so we can soft-delete it and emit media.deleted through the outbox.
 		let prevLogoMedia: typeof media.$inferSelect | null = null;
@@ -185,22 +235,27 @@ export const PATCH: RequestHandler = async (event) => {
 					.select()
 					.from(media)
 					.where(
-						and(
-							eq(media.org_id, auth.orgId),
-							eq(media.r2_key, prevKey),
-							isNull(media.deleted_at)
-						)
+						and(eq(media.org_id, auth.orgId), eq(media.r2_key, prevKey), isNull(media.deleted_at))
 					)
 					.limit(1);
 				prevLogoMedia = row ?? null;
 			}
 		}
 
-		const [row] = await tx
-			.update(organizations)
-			.set(updates)
-			.where(eq(organizations.id, auth.orgId))
-			.returning(returningCols);
+		let row: Record<string, unknown> | undefined;
+		if (orgHasUpdates) {
+			[row] = await tx
+				.update(organizations)
+				.set(updates)
+				.where(eq(organizations.id, auth.orgId))
+				.returning(returningCols);
+		} else {
+			[row] = await tx
+				.select(returningCols)
+				.from(organizations)
+				.where(eq(organizations.id, auth.orgId))
+				.limit(1);
+		}
 
 		if (prevLogoMedia) {
 			await tx
@@ -227,15 +282,33 @@ export const PATCH: RequestHandler = async (event) => {
 		return row;
 	});
 
-	const resolvedLogo = await resolveLogoUrl(updated.logo_url);
+	if (!updated) error(404, 'Organization not found.');
+	const resolvedLogo = await resolveLogoUrl(updated.logo_url as string | null);
+
+	const changed_fields = Object.keys(updates).filter((k) => k !== 'updated_at');
+	if (googleReviewLinkChanging) changed_fields.push('google_review_link');
 
 	logChange({
 		request_id: crypto.randomUUID(),
 		org_id: auth.orgId,
 		member_id: auth.member.id,
 		route: 'PATCH /api/settings/org',
-		changed_fields: Object.keys(updates).filter((k) => k !== 'updated_at')
+		changed_fields
 	});
 
-	return json({ data: { ...updated, logo_url: resolvedLogo } });
+	return json({
+		data: {
+			...updated,
+			logo_url: resolvedLogo,
+			google_review_link: googleReviewLinkChanging
+				? (input.google_review_link ?? null)
+				: ((
+						await db
+							.select({ v: automationSettings.google_review_link })
+							.from(automationSettings)
+							.where(eq(automationSettings.org_id, auth.orgId))
+							.limit(1)
+					)[0]?.v ?? null)
+		}
+	});
 };

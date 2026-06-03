@@ -122,10 +122,7 @@
 			</dl>
 
 			{#if !detail.is_resolved}
-				<Button
-					class="w-full sm:w-auto"
-					onclick={() => (confirmOpen = true)}
-				>
+				<Button class="w-full sm:w-auto" onclick={() => (confirmOpen = true)}>
 					<CheckCircle2 class="h-4 w-4" /> Mark resolved
 				</Button>
 			{/if}

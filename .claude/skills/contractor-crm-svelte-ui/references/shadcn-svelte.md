@@ -183,6 +183,19 @@ correctly via `tailwind-merge` under the hood.
 > `bind:value` holds the raw string value — no `{ value, label }` wrapper needed
 > (this differs from raw Bits UI — shadcn-svelte normalises this).
 
+> **Always use this Select for dropdowns. Never fall back to a native
+> `<select><option>` element** — even on mobile. The custom component IS
+> mobile-first: trigger is `h-11`, items are `min-h-11` on mobile, content has
+> a `max-h` with scroll. A native `<select>` clashes with the rest of the UI
+> (different border radius, focus ring, dark-mode treatment).
+>
+> If the shared Select is missing something you need (touch target, scroll cap,
+> grouping, search), **improve `src/lib/components/ui/select/*` directly** so
+> every consumer benefits. Do not side-step it with a native element.
+>
+> The legacy `select.svelte` wrapper in that folder is "kept for backward
+> compatibility" only — do not use it for new code.
+
 ### Switch
 
 ```svelte

@@ -8,16 +8,28 @@
 	import ContactPickerSheet from '$lib/components/quotes/ContactPickerSheet.svelte';
 	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
 	import InvoiceTotalsCard from '$lib/components/invoices/InvoiceTotalsCard.svelte';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { User } from '@lucide/svelte';
 	import type { QuoteLineDraft } from '$lib/types/quotes';
 
 	type ContactPick = { id: string; full_name: string; phone: string; email: string | null };
 
-	let selectedContact = $state<ContactPick | null>(null);
-	let title = $state('');
+	const prefillContactId = page.url.searchParams.get('contact_id');
+	const prefillContactName = page.url.searchParams.get('contact_name');
+	const prefillJobId = page.url.searchParams.get('job_id');
+	const prefillJobTitle = page.url.searchParams.get('job_title');
+
+	let selectedContact = $state<ContactPick | null>(
+		prefillContactId && prefillContactName
+			? { id: prefillContactId, full_name: prefillContactName, phone: '', email: null }
+			: null
+	);
+	let linkedJobId = $state<string | null>(prefillJobId);
+	let title = $state(prefillJobTitle ? `${prefillJobTitle} — invoice` : '');
 	let taxRatePct = $state('0');
 	let dueDate = $state('');
 	let notes = $state('');
@@ -76,6 +88,7 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					contact_id: selectedContact.id,
+					job_id: linkedJobId,
 					title: title.trim(),
 					tax_rate: Number.isFinite(taxRate) ? taxRate : 0,
 					due_date: dueDate.trim() || null,
@@ -107,8 +120,8 @@
 
 <svelte:head><title>New invoice</title></svelte:head>
 
-<PageWrapper title="New invoice" subtitle="Build your invoice, then save once">
-	<div class="grid max-w-xl gap-5">
+<PageWrapper title="New invoice" subtitle="Build your invoice, then save once" back="/invoices">
+	<div class="grid gap-5">
 		<div class="grid gap-2">
 			<Label>Contact <span class="text-destructive">*</span></Label>
 			{#if selectedContact}
@@ -136,6 +149,11 @@
 			{#if fieldErrors.contact_id}
 				<p class="text-xs text-destructive">{fieldErrors.contact_id}</p>
 			{/if}
+			{#if linkedJobId && prefillJobTitle}
+				<p class="text-xs text-muted-foreground">
+					Linked to job: <span class="font-medium text-foreground">{prefillJobTitle}</span>
+				</p>
+			{/if}
 		</div>
 
 		<div class="grid gap-2">
@@ -159,7 +177,7 @@
 			</div>
 			<div class="grid gap-2">
 				<Label for="dueDate">Due date</Label>
-				<Input id="dueDate" type="date" bind:value={dueDate} />
+				<Calendar bind:value={dueDate} placeholder="Pick due date" />
 			</div>
 		</div>
 
@@ -197,5 +215,11 @@
 		</div>
 	</div>
 
-	<ContactPickerSheet bind:open={pickerOpen} onPick={(c) => (selectedContact = c)} />
+	<ContactPickerSheet
+		bind:open={pickerOpen}
+		onPick={(c) => {
+			selectedContact = c;
+			linkedJobId = null;
+		}}
+	/>
 </PageWrapper>

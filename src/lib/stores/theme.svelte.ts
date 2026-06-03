@@ -8,8 +8,7 @@ function readInitial(): Theme {
 	if (!browser) return 'dark';
 	const stored = localStorage.getItem(STORAGE_KEY);
 	if (stored === 'light' || stored === 'dark') return stored;
-	const prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
-	return prefersLight ? 'light' : 'dark';
+	return 'dark';
 }
 
 function applyToDocument(theme: Theme) {

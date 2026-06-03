@@ -3,7 +3,13 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createServiceClient } from '$lib/server/auth/supabase';
 import { db } from '$lib/server/db/client';
-import { automationSettings, orgCounters, orgMembers, organizations } from '$lib/server/db/schema';
+import {
+	automationSettings,
+	orgCounters,
+	orgMembers,
+	orgSmsCredit,
+	organizations
+} from '$lib/server/db/schema';
 import { seedPipelineStages } from '$lib/server/db/seed/pipeline_stages';
 import {
 	featureFlagsSchema,
@@ -11,10 +17,7 @@ import {
 	planNameSchema,
 	PLAN_TEMPLATES
 } from '$lib/admin/planTemplates';
-import {
-	adminPermissionsSchema,
-	fullAdminPermissions
-} from '$lib/permissions/permissions-matrix';
+import { adminPermissionsSchema, fullAdminPermissions } from '$lib/permissions/permissions-matrix';
 
 export const createOrgSchema = z.object({
 	businessName: z.string().trim().min(1, 'Business name is required'),
@@ -50,13 +53,26 @@ const AUTOMATION_DEFAULTS = {
 	invoice_reminder_message:
 		"Hi {contact_name}, just a reminder that your invoice is due. Please don't hesitate to reach out if you have any questions.",
 	review_funnel_message:
-		'Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1-5.',
+		'Hi {contact_name}, it was a pleasure working with you. A quick review from you means the world to a small team like ours at {org_name} — and helps neighbors find us too. Takes 20 seconds: {review_link}',
+	review_funnel_reminder_message:
+		"Hi {contact_name}, quick nudge from {org_name} — we'd love your rating: {review_link}",
+	review_funnel_nudge_1_message:
+		'Hi {contact_name}, thanks again for the rating! When you have a sec, would you mind leaving a quick public review? It helps a lot: {review_link}',
+	review_funnel_nudge_2_message:
+		'Hi {contact_name}, last nudge from {org_name} — a public review really helps neighbors find us: {review_link}',
 	appointment_reminder_message:
 		'Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out.',
 	appointment_reminder_1h_message:
 		'Hi {contact_name}, just a reminder — your appointment is in about 1 hour. See you soon!',
+	appointment_confirmation_sms_message:
+		"Hi {contact_name}, your {appointment_type} with {org_name} is confirmed for {appointment_datetime}. We'll text a reminder before. Need to change it? {manage_link}",
+	appointment_confirmation_email_subject: 'Your appointment with {org_name} is confirmed',
+	appointment_confirmation_email_message:
+		"Hi {contact_name},\n\nYour {appointment_type} with {org_name} is confirmed for {appointment_datetime}.\n\n{location_block}We've attached a calendar invite so you can add it to Google, Outlook, or Apple Calendar in one tap.\n\nNeed to reschedule or cancel? {manage_link}\n\nIf anything else comes up, just reply to this email and we'll sort it out.\n\nThanks,\n{org_name}",
 	payment_receipt_message:
 		'Hi {contact_name}, we received your payment of {amount}. Thank you — we appreciate your business!',
+	payment_receipt_sms_message:
+		'Hi {contact_name}, thanks for your payment of {amount} to {org_name}. Reply STOP to opt out.',
 	speed_to_lead_message:
 		"Hi {contact_name}, thanks for reaching out! We'll get back to you shortly."
 } as const;
@@ -132,6 +148,15 @@ export async function createOrganizationWithAdmin(
 				org_id: orgId,
 				next_quote_number: 1,
 				next_invoice_number: 1
+			});
+
+			// Seed the SMS credit account with one month's included allowance.
+			// monthly_included_credit and per_sms_cost use their column defaults;
+			// last_monthly_grant_at = now so the monthly cron won't double-grant.
+			await tx.insert(orgSmsCredit).values({
+				org_id: orgId,
+				balance: '5.0000',
+				last_monthly_grant_at: new Date()
 			});
 
 			await seedPipelineStages(orgId, tx);

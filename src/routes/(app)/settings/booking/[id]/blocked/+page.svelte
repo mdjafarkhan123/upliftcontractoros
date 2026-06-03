@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
@@ -152,13 +153,10 @@
 			<Plus class="h-4 w-4" /> Block a date
 		</Button>
 	{:else}
-		<form
-			class="space-y-4 rounded-xl border border-border bg-card p-4"
-			onsubmit={submit}
-		>
+		<form class="space-y-4 rounded-xl border border-border bg-card p-4" onsubmit={submit}>
 			<div class="space-y-1.5">
 				<Label for="ov-date">Date <span class="text-destructive">*</span></Label>
-				<Input id="ov-date" type="date" bind:value={formDate} min={today} required />
+				<Calendar bind:value={formDate} placeholder="Pick a date" min={today} />
 				{#if fieldErrors.override_date}
 					<p class="text-xs text-destructive">{fieldErrors.override_date}</p>
 				{/if}
@@ -173,7 +171,12 @@
 							formBlocked ? 'border-primary bg-primary/5' : 'border-border'
 						].join(' ')}
 					>
-						<input type="radio" name="block-type" checked={formBlocked} onchange={() => (formBlocked = true)} />
+						<input
+							type="radio"
+							name="block-type"
+							checked={formBlocked}
+							onchange={() => (formBlocked = true)}
+						/>
 						Block all day
 					</label>
 					<label
@@ -182,7 +185,12 @@
 							!formBlocked ? 'border-primary bg-primary/5' : 'border-border'
 						].join(' ')}
 					>
-						<input type="radio" name="block-type" checked={!formBlocked} onchange={() => (formBlocked = false)} />
+						<input
+							type="radio"
+							name="block-type"
+							checked={!formBlocked}
+							onchange={() => (formBlocked = false)}
+						/>
 						Custom hours
 					</label>
 				</div>
@@ -258,7 +266,9 @@
 	{:else}
 		<ul class="grid gap-2">
 			{#each overrides as o (o.id)}
-				<li class="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3">
+				<li
+					class="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3"
+				>
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-semibold text-foreground">{formatDate(o.override_date)}</p>
 						<p class="mt-0.5 text-xs text-muted-foreground">

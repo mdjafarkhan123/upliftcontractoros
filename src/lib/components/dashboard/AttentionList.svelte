@@ -35,12 +35,12 @@
 </script>
 
 <section
-	class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-card dark:border-white/10"
+	class="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card dark:border-white/10"
 >
 	<header
-		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-4 py-3"
+		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-5 py-4"
 	>
-		<h2 class="text-sm font-semibold text-foreground">Needs your attention</h2>
+		<h2 class="text-base font-semibold tracking-tight text-foreground">Needs your attention</h2>
 	</header>
 	{#if items.length === 0}
 		<div class="bg-muted/20 px-4 py-8 text-center">

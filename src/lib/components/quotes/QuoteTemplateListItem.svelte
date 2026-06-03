@@ -21,11 +21,7 @@
 
 <div class="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/30">
 	<div class="flex items-start gap-3">
-		<button
-			type="button"
-			class="min-w-0 flex-1 text-left"
-			onclick={() => onEdit(template.id)}
-		>
+		<button type="button" class="min-w-0 flex-1 text-left" onclick={() => onEdit(template.id)}>
 			<p class="truncate text-sm font-semibold">{template.name}</p>
 			{#if template.description}
 				<p class="mt-0.5 line-clamp-2 text-xs text-muted-foreground">

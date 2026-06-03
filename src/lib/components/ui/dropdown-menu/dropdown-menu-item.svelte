@@ -14,7 +14,7 @@
 <DropdownMenuPrimitive.Item
 	bind:ref
 	class={cn(
-		'relative flex min-h-[44px] cursor-pointer select-none items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+		'relative flex min-h-[44px] cursor-pointer select-none items-center gap-2.5 rounded-lg px-3 py-2 text-sm outline-none transition-all duration-150 ease-out focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
 		variant === 'destructive' && 'text-destructive focus:bg-destructive/10 focus:text-destructive',
 		className
 	)}

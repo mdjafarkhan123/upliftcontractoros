@@ -1,8 +1,5 @@
 <script lang="ts">
-	let {
-		scope_of_work,
-		notes
-	}: { scope_of_work: string | null; notes: string | null } = $props();
+	let { scope_of_work, notes }: { scope_of_work: string | null; notes: string | null } = $props();
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4">

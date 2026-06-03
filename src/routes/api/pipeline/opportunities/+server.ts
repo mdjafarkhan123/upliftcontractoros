@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -11,11 +11,24 @@ import {
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { createOpportunitySchema } from '$lib/server/pipeline/schemas';
+import { pipelineScopeFor } from '$lib/server/pipeline/permissions';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
-	if (!auth.member.can_view_full_pipeline) error(403, 'Forbidden');
+
+	const scope = pipelineScopeFor(auth.member);
+	if (scope === 'none') error(403, 'Forbidden');
+
+	const conditions = [eq(opportunities.org_id, auth.orgId), isNull(opportunities.deleted_at)];
+	if (scope === 'mine') conditions.push(eq(opportunities.assigned_to, auth.member.id));
+
+	const contactIdParam = event.url.searchParams.get('contact_id');
+	if (contactIdParam) conditions.push(eq(opportunities.contact_id, contactIdParam));
+
+	if (event.url.searchParams.get('open') === 'true') {
+		conditions.push(isNull(opportunities.closed_at));
+	}
 
 	const rows = await db
 		.select({
@@ -29,15 +42,17 @@ export const GET: RequestHandler = async (event) => {
 			assignee_name: orgMembers.full_name,
 			lost_reason: opportunities.lost_reason,
 			closed_at: opportunities.closed_at,
-			created_at: opportunities.created_at
+			created_at: opportunities.created_at,
+			stage_entered_at: opportunities.stage_entered_at,
+			expected_close_date: opportunities.expected_close_date
 		})
 		.from(opportunities)
 		.innerJoin(contacts, eq(contacts.id, opportunities.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, opportunities.assigned_to))
-		.where(and(eq(opportunities.org_id, auth.orgId), isNull(opportunities.deleted_at)))
-		.orderBy(desc(opportunities.created_at));
+		.where(and(...conditions))
+		.orderBy(asc(opportunities.stage_entered_at));
 
-	return json({ opportunities: rows });
+	return json({ opportunities: rows, scope });
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -147,7 +162,8 @@ export const POST: RequestHandler = async (event) => {
 				stage_id: stageId!,
 				title: input.title,
 				value: input.value ?? null,
-				assigned_to: input.assigned_to ?? null
+				assigned_to: input.assigned_to ?? null,
+				expected_close_date: input.expected_close_date ?? null
 			})
 			.returning();
 
@@ -157,6 +173,7 @@ export const POST: RequestHandler = async (event) => {
 			resource_type: 'opportunity',
 			resource_id: inserted.id,
 			payload: {
+				event_version: 1,
 				opportunity_id: inserted.id,
 				org_id: auth.orgId,
 				contact_id: inserted.contact_id,

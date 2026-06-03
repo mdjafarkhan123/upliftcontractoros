@@ -36,15 +36,19 @@ queue:notification-dispatch
 
 ## 2. Automation Types & Triggers
 
-| Automation Type               | Trigger Event          | Queue                         | What It Does                                        |
-| ----------------------------- | ---------------------- | ----------------------------- | --------------------------------------------------- |
-| `missed_call_textback`        | `call.missed`          | `queue:missed-call-textback`  | SMS to caller within seconds + lead creation        |
-| `speed_to_lead`               | `contact.created`      | `queue:speed-to-lead`         | Instant SMS confirmation to new contact/lead        |
-| `quote_followup`              | `quote.sent` + delay   | `queue:quote-followup`        | Follow-up SMS at 24h and 72h (two reminders)        |
-| `invoice_reminder`            | `invoice.overdue`      | `queue:invoice-reminder`      | Reminder SMS; reschedules until paid                |
-| `review_request`              | `job.completed` + delay| `queue:review-request`        | Review request SMS after configurable delay         |
-| `appointment_reminder_24h`    | `appointment.created`  | `queue:appointment-reminder`  | Reminder SMS 24h before appointment                 |
-| `appointment_reminder_1h`     | `appointment.created`  | `queue:appointment-reminder`  | Reminder SMS 1h before appointment                  |
+| Automation Type            | Trigger Event                 | Queue                        | What It Does                                                           |
+| -------------------------- | ----------------------------- | ---------------------------- | ---------------------------------------------------------------------- |
+| `missed_call_textback`     | `call.missed`                 | `queue:missed-call-textback` | SMS to caller within seconds + lead creation                           |
+| `speed_to_lead`            | `contact.created`             | `queue:speed-to-lead`        | Instant SMS confirmation to new contact/lead                           |
+| `quote_followup`           | `quote.sent` + delay          | `queue:quote-followup`       | Follow-up SMS at 24h and 72h (two reminders)                           |
+| `invoice_reminder`         | `invoice.overdue`             | `queue:invoice-reminder`     | Reminder SMS; reschedules until paid                                   |
+| `review.send`              | `job.completed` + delay       | `automation`                 | Creates review_request `sent`, queues SMS, emits `review_request.sent` |
+| `review.unengaged`         | `review_request.sent` +72h    | `automation`                 | One-shot reminder if still `status='sent'`                             |
+| `review.nudge_1`           | `review_request.engaged` +24h | `automation`                 | Nudge if `status='engaged' AND nudge_count=0`; bumps to 1              |
+| `review.nudge_2`           | `review_request.engaged` +72h | `automation`                 | Nudge if `status='engaged' AND nudge_count=1`; bumps to 2              |
+| `review.expire`            | `review_request.sent` +14d    | `automation`                 | Flips active rows to `expired` (terminal)                              |
+| `appointment_reminder_24h` | `appointment.created`         | `queue:appointment-reminder` | Reminder SMS 24h before appointment                                    |
+| `appointment_reminder_1h`  | `appointment.created`         | `queue:appointment-reminder` | Reminder SMS 1h before appointment                                     |
 
 > ⚠️ Legacy note: trigger event was previously listed as `lead.created` for speed_to_lead
 > and `appointment.booked` for appointment reminders. Correct names are above.
@@ -57,44 +61,50 @@ Every BullMQ worker must check for prior execution before proceeding.
 At-least-once delivery is guaranteed — exactly-once is the worker's responsibility.
 
 ```typescript
-// Example: review_request worker
-async function processReviewRequest(job: Job) {
-  const { automation_job_id, job_id, org_id } = job.data;
+// Example: review.nudge_1 worker (engaged-stream).
+//
+// Retries are race-safe because the UPDATE includes
+// `WHERE nudge_count = 0` — a second concurrent fire affects 0 rows.
+async function handleReviewNudge1(job: Job) {
+	const { review_request_id, org_id } = job.data;
 
-  // Step 1 — Idempotency check: has this already been processed?
-  const existing = await db.query.review_requests.findFirst({
-    where: eq(review_requests.job_id, job_id)
-  });
-  if (existing) {
-    return { skipped: true, reason: 'review_request already exists' };
-  }
+	// Step 1 — Re-read state at fire time (never trust the queue payload alone)
+	const rr = await loadActiveReviewRequest(org_id, review_request_id, ['engaged']);
+	const { settings } = await loadContext(org_id);
+	if (!rr || !settings?.review_funnel_enabled || rr.nudge_count !== 0) return;
 
-  // Step 2 — Check automation_jobs.status: was this job cancelled?
-  const automationJob = await db.query.automation_jobs.findFirst({
-    where: eq(automation_jobs.id, automation_job_id)
-  });
-  if (automationJob?.status === 'cancelled') {
-    return { skipped: true, reason: 'automation_job cancelled' };
-  }
+	// Step 2 — Re-check SMS opt-out
+	const contact = await loadContact(org_id, rr.contact_id);
+	if (!contact || contact.sms_opt_out) return;
 
-  // Step 3 — Check SMS opt-out before sending
-  const contact = await getContact(org_id, job_id);
-  if (contact.sms_opt_out) {
-    return { skipped: true, reason: 'sms_opt_out' };
-  }
+	// Step 3 — Atomic claim + dispatch in one transaction
+	await db.transaction(async (tx) => {
+		const updated = await tx
+			.update(reviewRequests)
+			.set({ nudge_count: 1, updated_at: new Date() })
+			.where(
+				and(
+					eq(reviewRequests.id, rr.id),
+					eq(reviewRequests.status, 'engaged'),
+					eq(reviewRequests.nudge_count, 0)
+				)
+			)
+			.returning({ id: reviewRequests.id });
+		if (updated.length === 0) return; // someone else claimed it
 
-  // Step 4 — Check automation settings
-  const settings = await getAutomationSettings(org_id);
-  if (!settings.review_funnel_enabled) {
-    return { skipped: true, reason: 'review_funnel_disabled' };
-  }
+		await queueAutomationSms(tx, {
+			/* ... */
+		});
+		await emitReviewEvent(tx, {
+			org_id,
+			review_request_id: rr.id,
+			type: 'nudge_sent',
+			nudge_number: 1
+		});
+	});
 
-  // Step 5 — Execute side effect
-  await createReviewRequest(org_id, job_id, contact.id);
-  await sendReviewRequestSMS(contact.phone, org_id);
-
-  // Step 6 — Record in automation_jobs audit trail
-  await recordAutomationJob(automation_job_id, 'completed');
+	// Step 6 — Record in automation_jobs audit trail
+	await recordAutomationJob(automation_job_id, 'completed');
 }
 ```
 
@@ -114,7 +124,8 @@ Every BullMQ worker must satisfy all of these before shipping:
 □ Check automation_settings before triggering any automation
 □ Record result in automation_jobs (status: completed | skipped | failed)
 □ Insert notifications row when user-facing
-□ Handle partial failure gracefully (don't re-send SMS if it was sent but DB write failed)
+□ Check member_notification_preferences before dispatching
+□ Handle Web Push dispatch if enabled and not throttled
 □ Render all human-readable times in organizations.timezone — never raw UTC
 ```
 
@@ -170,18 +181,24 @@ How a business event becomes a visible in-app notification:
 
 4. BullMQ notification worker:
    → determines which org_member(s) receive this notification
-   → INSERT INTO notifications (member_id, type, resource_type, resource_id, ...)
+   → checks member_notification_preferences
+   → INSERT INTO notifications (member_id, type, metadata, route, ...)
+   → if push enabled + not throttled: dispatches to Web Push service
 
 5. Supabase Realtime detects notifications INSERT
-   → pushes to subscribed client
+   → pushes to subscribed client (In-App)
 
-6. Client UI updates
+6. Web Push Service (optional branch):
+   → sends to browser/device via push_subscriptions
+
+7. Client UI updates:
    → notification bell badge increments
    → notification panel shows new item
+   → (optional) OS-level push notification shown
 ```
 
 Steps 1–4 are guaranteed by the outbox pattern.
-Steps 5–6 are best-effort Realtime delivery.
+Steps 5–7 are best-effort delivery.
 
 If the client is offline, they see the notification on next app open by querying
 the `notifications` table directly.
@@ -191,7 +208,25 @@ the `notifications` table directly.
 ```
 contact.sms_opted_in → queue:notification-dispatch → Admin + Manager members notified
 quote.deposit_paid → queue:notification-dispatch → members with quote/payment visibility notified
+opportunity.created → queue:notification-dispatch → assignee (or Admin/Manager fallback) notified
+opportunity.assignee_changed → queue:notification-dispatch → new assignee only; self-assignment is silent
+opportunity.lost → queue:notification-dispatch → assignee (or Admin/Manager fallback) notified
+opportunity.stage_changed → no queue (feed-only — activity_events only)
+contact.status_changed → no queue (feed-only — activity_events only)
 ```
+
+### Pipeline Notification Recipient Helper
+
+`notificationWorker.pipelineRecipients(orgId, payload.assigned_to)` is the
+shared recipient resolver for pipeline notifications:
+
+- If `assigned_to` is a non-empty string → `[{ id: assigned_to }]`
+- Otherwise → admin + manager members via `adminManagerMembers(orgId)`
+
+Self-assignment is filtered inside `handleOpportunityAssigneeChanged` by
+comparing `payload.new_assigned_to` with `payload.changed_by_member_id`
+before dispatch — assigning yourself a deal does **not** produce a
+notification.
 
 ---
 
@@ -201,26 +236,26 @@ One `automation_settings` row per org, created automatically on org creation.
 All settings accessible to Admin only in Contractor App.
 Agency team configures during onboarding.
 
-| Setting                               | Default                |
-| ------------------------------------- | ---------------------- |
-| `missed_call_textback_enabled`        | TRUE                   |
-| `missed_call_textback_message`        | "Hi! We missed your call. We'll be in touch shortly — or reply here and we'll get back to you right away." |
-| `quote_followup_enabled`              | TRUE                   |
-| `quote_followup_delay_1_hours`        | 24                     |
-| `quote_followup_delay_2_hours`        | 72                     |
-| `quote_followup_message`              | "Hi {contact_name}, just following up on the quote we sent. Any questions? We're happy to help." |
-| `invoice_reminder_enabled`            | TRUE                   |
-| `invoice_reminder_delay_days`         | 3                      |
-| `invoice_reminder_message`            | "Hi {contact_name}, just a reminder that your invoice is due. Please don't hesitate to reach out if you have any questions." |
-| `review_funnel_enabled`               | TRUE                   |
-| `review_funnel_delay_hours`           | 2                      |
-| `google_review_link`                  | NULL (set by agency)   |
-| `review_funnel_message`               | "Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1–5." |
-| `appointment_reminder_enabled`        | TRUE                   |
-| `appointment_reminder_hours_before`   | 24                     |
-| `appointment_reminder_message`        | "Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out." |
-| `speed_to_lead_enabled`               | TRUE                   |
-| `speed_to_lead_message`               | "Hi {contact_name}, thanks for reaching out! We'll get back to you shortly." |
+| Setting                             | Default                                                                                                                      |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `missed_call_textback_enabled`      | TRUE                                                                                                                         |
+| `missed_call_textback_message`      | "Hi! We missed your call. We'll be in touch shortly — or reply here and we'll get back to you right away."                   |
+| `quote_followup_enabled`            | TRUE                                                                                                                         |
+| `quote_followup_delay_1_hours`      | 24                                                                                                                           |
+| `quote_followup_delay_2_hours`      | 72                                                                                                                           |
+| `quote_followup_message`            | "Hi {contact_name}, just following up on the quote we sent. Any questions? We're happy to help."                             |
+| `invoice_reminder_enabled`          | TRUE                                                                                                                         |
+| `invoice_reminder_delay_days`       | 3                                                                                                                            |
+| `invoice_reminder_message`          | "Hi {contact_name}, just a reminder that your invoice is due. Please don't hesitate to reach out if you have any questions." |
+| `review_funnel_enabled`             | TRUE                                                                                                                         |
+| `review_funnel_delay_hours`         | 2                                                                                                                            |
+| `google_review_link`                | NULL (set by agency)                                                                                                         |
+| `review_funnel_message`             | "Hi {contact_name}, thank you for choosing us! How did we do today? Reply with a number from 1–5."                           |
+| `appointment_reminder_enabled`      | TRUE                                                                                                                         |
+| `appointment_reminder_hours_before` | 24                                                                                                                           |
+| `appointment_reminder_message`      | "Hi {contact_name}, just a reminder about your appointment tomorrow. Reply STOP to opt out."                                 |
+| `speed_to_lead_enabled`             | TRUE                                                                                                                         |
+| `speed_to_lead_message`             | "Hi {contact_name}, thanks for reaching out! We'll get back to you shortly."                                                 |
 
 Message templates support `{contact_name}` and `{org_name}` interpolation at send time.
 The same `quote_followup_message` is used for both the 24h and 72h follow-up reminders.

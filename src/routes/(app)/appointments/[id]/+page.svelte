@@ -7,17 +7,28 @@
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft, Pencil, MapPin, User, Calendar, Briefcase, Globe } from '@lucide/svelte';
+	import {
+		ArrowLeft,
+		Pencil,
+		MapPin,
+		User,
+		Calendar,
+		Briefcase,
+		Globe,
+		Crown
+	} from '@lucide/svelte';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
 	import AppointmentForm from '$lib/components/appointments/AppointmentForm.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { formatDateTime } from '$lib/utils/format';
+	import { formatDateTimeInOrgTz } from '$lib/utils/formatInOrgTz';
+	import { sessionStore } from '$lib/stores/session.svelte';
 	import type { AppointmentDetail, AppointmentStatus } from '$lib/types/appointments';
 
 	let { data }: { data: PageData } = $props();
 
 	const member = getMemberContext();
+	const orgTz = $derived(sessionStore.data?.org.timezone);
 	const canEdit = $derived(member().can_reschedule_appointments);
 	const canEditAssignee = $derived(member().can_view_all_appointments);
 
@@ -125,7 +136,7 @@
 
 <svelte:head><title>Appointment</title></svelte:head>
 
-<PageWrapper class="md:max-w-2xl">
+<PageWrapper>
 	<Button variant="ghost" href="/appointments" class="mb-4">
 		<ArrowLeft class="h-4 w-4" /> Back to appointments
 	</Button>
@@ -145,7 +156,9 @@
 								{appointment.title}
 							</h1>
 							{#if appointment.booking_source === 'booking_link'}
-								<span class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+								<span
+									class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+								>
 									Self-booked
 								</span>
 							{/if}
@@ -170,9 +183,9 @@
 						<div>
 							<dt class="text-xs font-medium text-muted-foreground">When</dt>
 							<dd class="text-foreground">
-								{formatDateTime(appointment.scheduled_start)}
+								{formatDateTimeInOrgTz(appointment.scheduled_start, orgTz)}
 								{#if appointment.scheduled_end}
-									– {formatDateTime(appointment.scheduled_end)}
+									– {formatDateTimeInOrgTz(appointment.scheduled_end, orgTz)}
 								{/if}
 							</dd>
 						</div>
@@ -180,10 +193,29 @@
 
 					<div class="flex items-start gap-2">
 						<User class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-						<div>
-							<dt class="text-xs font-medium text-muted-foreground">Assigned to</dt>
-							<dd class="text-foreground">
-								{appointment.assignee_name ?? 'Unassigned'}
+						<div class="min-w-0 flex-1">
+							<dt class="text-xs font-medium text-muted-foreground">Crew</dt>
+							<dd class="mt-1">
+								{#if appointment.assignees.length === 0}
+									<span class="text-sm italic text-muted-foreground">Unassigned</span>
+								{:else}
+									<ul class="flex flex-wrap gap-1.5">
+										{#each appointment.assignees as a (a.id)}
+											<li
+												class={[
+													'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+													a.is_lead
+														? 'bg-primary/10 text-primary'
+														: 'bg-secondary text-secondary-foreground'
+												].join(' ')}
+											>
+												{#if a.is_lead}<Crown class="h-3 w-3" />{/if}
+												<span>{a.full_name}</span>
+												{#if a.is_lead}<span class="text-[10px] opacity-70">· Lead</span>{/if}
+											</li>
+										{/each}
+									</ul>
+								{/if}
 							</dd>
 						</div>
 					</div>
@@ -285,7 +317,11 @@
 					<Button variant="outline" disabled={actionLoading} onclick={() => (noShowOpen = true)}>
 						No-show
 					</Button>
-					<Button variant="destructive" disabled={actionLoading} onclick={() => (cancelOpen = true)}>
+					<Button
+						variant="destructive"
+						disabled={actionLoading}
+						onclick={() => (cancelOpen = true)}
+					>
 						Cancel
 					</Button>
 				</section>

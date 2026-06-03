@@ -71,6 +71,28 @@ const config: Config = {
 			},
 			minWidth: {
 				touch: '44px'
+			},
+			keyframes: {
+				'spark-flash': {
+					'0%, 88%, 100%': {
+						transform: 'scale(1) rotate(0deg)',
+						filter: 'drop-shadow(0 0 0 hsl(var(--primary) / 0))',
+						color: 'hsl(var(--muted-foreground))'
+					},
+					'92%': {
+						transform: 'scale(1.25) rotate(-8deg)',
+						filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.8))',
+						color: 'hsl(var(--primary))'
+					},
+					'96%': {
+						transform: 'scale(1.15) rotate(6deg)',
+						filter: 'drop-shadow(0 0 3px hsl(var(--primary) / 0.5))',
+						color: 'hsl(var(--primary))'
+					}
+				}
+			},
+			animation: {
+				'spark-flash': 'spark-flash 3.5s ease-in-out infinite'
 			}
 		}
 	},

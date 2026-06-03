@@ -152,17 +152,13 @@
 			class="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40"
 		>
 			{#if displayUrl}
-				<img
-					src={displayUrl}
-					alt="Organization logo"
-					class="h-full w-full object-contain p-1.5"
-				/>
+				<img src={displayUrl} alt="Organization logo" class="h-full w-full object-contain p-1.5" />
 			{:else}
 				<span class="text-[10px] uppercase tracking-wide text-muted-foreground">No logo</span>
 			{/if}
 			{#if uploading}
 				<div
-					class="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm"
+					class="absolute inset-0 flex items-center justify-center bg-background/70"
 				>
 					<Loader2 class="h-5 w-5 animate-spin text-primary" />
 				</div>

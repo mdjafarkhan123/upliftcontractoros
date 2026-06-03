@@ -6,11 +6,7 @@ import type { BookingLink } from '$lib/server/db/schema';
 import { resolveAvailabilityForDate } from './availability/resolve';
 import { generateCandidateSlotsForDate } from './slots/generate';
 import { detectConflicts } from './conflicts/detect';
-import {
-	assertDateBookable,
-	filterByMinAdvance,
-	isDatePotentiallyInRange
-} from './validators';
+import { assertDateBookable, filterByMinAdvance, isDatePotentiallyInRange } from './validators';
 import { enumerateDatesInMonth } from './timezone/utils';
 import type { IsoDate, IsoMonth, ResolvedAvailability } from './types';
 
@@ -30,17 +26,9 @@ export async function generateSlotsForDate(params: {
 }): Promise<Date[]> {
 	const { orgId, timezone, bookingLink, date } = params;
 
-	assertDateBookable(
-		date,
-		timezone,
-		bookingLink.max_future_days,
-		bookingLink.min_advance_hours
-	);
+	assertDateBookable(date, timezone, bookingLink.max_future_days, bookingLink.min_advance_hours);
 
-	const resolved: ResolvedAvailability = await resolveAvailabilityForDate(
-		bookingLink.id,
-		date
-	);
+	const resolved: ResolvedAvailability = await resolveAvailabilityForDate(bookingLink.id, date);
 	if (resolved.blocked || resolved.windows.length === 0) return [];
 
 	const candidates = generateCandidateSlotsForDate(
@@ -68,10 +56,7 @@ export async function generateSlotsForDate(params: {
 // Does NOT query existing appointments. Returns sorted YYYY-MM-DD strings.
 export async function getEligibleDatesForMonth(params: {
 	timezone: string;
-	bookingLink: Pick<
-		BookingLink,
-		'id' | 'min_advance_hours' | 'max_future_days'
-	>;
+	bookingLink: Pick<BookingLink, 'id' | 'min_advance_hours' | 'max_future_days'>;
 	month: IsoMonth;
 }): Promise<IsoDate[]> {
 	const { timezone, bookingLink, month } = params;

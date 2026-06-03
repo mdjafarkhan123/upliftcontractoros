@@ -26,10 +26,7 @@ function generateAlias(): string {
  * Idempotent: if the conversation already has an alias, returns it without
  * generating a new one.
  */
-export async function ensureReplyAlias(
-	orgId: string,
-	conversationId: string
-): Promise<string> {
+export async function ensureReplyAlias(orgId: string, conversationId: string): Promise<string> {
 	const [existing] = await db
 		.select({ reply_alias: conversations.reply_alias })
 		.from(conversations)

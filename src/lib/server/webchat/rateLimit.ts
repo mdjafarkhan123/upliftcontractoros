@@ -18,12 +18,15 @@ interface Bucket {
 const store = new Map<string, Bucket>();
 
 // Purge expired entries every 5 minutes to prevent unbounded growth
-setInterval(() => {
-	const now = Date.now();
-	for (const [k, v] of store) {
-		if (v.resetAt < now) store.delete(k);
-	}
-}, 5 * 60 * 1000);
+setInterval(
+	() => {
+		const now = Date.now();
+		for (const [k, v] of store) {
+			if (v.resetAt < now) store.delete(k);
+		}
+	},
+	5 * 60 * 1000
+);
 
 function check(key: string, limit: number, windowMs: number): boolean {
 	const now = Date.now();

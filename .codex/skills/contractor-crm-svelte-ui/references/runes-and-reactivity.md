@@ -8,38 +8,38 @@
 
 ```svelte
 <script lang="ts">
-  // ── Props — always $props(), never export let ─────────────
-  let {
-    value,
-    onClose,
-    variant = 'default',
-    children,
-  }: {
-    value: string;
-    onClose: () => void;
-    variant?: 'default' | 'success' | 'danger';
-    children?: import('svelte').Snippet;
-  } = $props();
+	// ── Props — always $props(), never export let ─────────────
+	let {
+		value,
+		onClose,
+		variant = 'default',
+		children
+	}: {
+		value: string;
+		onClose: () => void;
+		variant?: 'default' | 'success' | 'danger';
+		children?: import('svelte').Snippet;
+	} = $props();
 
-  // ── State ──────────────────────────────────────────────────
-  let loading = $state(false);
-  let items = $state<Contact[]>([]);
-  let searchQuery = $state('');
+	// ── State ──────────────────────────────────────────────────
+	let loading = $state(false);
+	let items = $state<Contact[]>([]);
+	let searchQuery = $state('');
 
-  // ── Derived (simple — single expression) ───────────────────
-  let isEmpty = $derived(filteredItems.length === 0 && !loading);
+	// ── Derived (simple — single expression) ───────────────────
+	let isEmpty = $derived(filteredItems.length === 0 && !loading);
 
-  // ── Derived (multi-step — use $derived.by) ─────────────────
-  // Use $derived.by() for synchronous multi-step derivations.
-  // NEVER use $effect + $state for synchronous derived values — that is always wrong.
-  // Exception: async-derived values have no $derived equivalent.
-  //   For async derivations, $effect + $state IS the correct pattern, not a workaround:
-  //   $effect(() => { fetchSomething(id).then(result => { derivedValue = result; }); });
-  let filteredItems = $derived.by(() => {
-    const q = searchQuery.toLowerCase();
-    const filtered = items.filter(i => i.full_name.toLowerCase().includes(q));
-    return filtered.sort((a, b) => a.full_name.localeCompare(b.full_name));
-  });
+	// ── Derived (multi-step — use $derived.by) ─────────────────
+	// Use $derived.by() for synchronous multi-step derivations.
+	// NEVER use $effect + $state for synchronous derived values — that is always wrong.
+	// Exception: async-derived values have no $derived equivalent.
+	//   For async derivations, $effect + $state IS the correct pattern, not a workaround:
+	//   $effect(() => { fetchSomething(id).then(result => { derivedValue = result; }); });
+	let filteredItems = $derived.by(() => {
+		const q = searchQuery.toLowerCase();
+		const filtered = items.filter((i) => i.full_name.toLowerCase().includes(q));
+		return filtered.sort((a, b) => a.full_name.localeCompare(b.full_name));
+	});
 </script>
 ```
 
@@ -48,27 +48,27 @@
 ```svelte
 <!-- InputField.svelte — wraps a native <input> -->
 <script lang="ts">
-  import { cn } from '$lib/utils';
+	import { cn } from '$lib/utils';
 
-  let {
-    class: className,
-    label,
-    error,
-    ...rest          // all remaining props passed through to <input>
-  }: {
-    class?: string;
-    label: string;
-    error?: string;
-    [key: string]: unknown; // index signature required for rest spread to HTML element
-  } = $props();
+	let {
+		class: className,
+		label,
+		error,
+		...rest // all remaining props passed through to <input>
+	}: {
+		class?: string;
+		label: string;
+		error?: string;
+		[key: string]: unknown; // index signature required for rest spread to HTML element
+	} = $props();
 </script>
 
 <div class="flex flex-col gap-1">
-  <label class="text-sm font-medium">{label}</label>
-  <input class={cn('input-base', className)} {...rest} />
-  {#if error}
-    <span class="text-sm text-destructive">{error}</span>
-  {/if}
+	<label class="text-sm font-medium">{label}</label>
+	<input class={cn('input-base', className)} {...rest} />
+	{#if error}
+		<span class="text-sm text-destructive">{error}</span>
+	{/if}
 </div>
 ```
 
@@ -81,28 +81,28 @@ Use `$bindable()` when a parent should be able to use `bind:propName` on a compo
 ```svelte
 <!-- ToggleSwitch.svelte -->
 <script lang="ts">
-  let {
-    checked = $bindable(false),
-    disabled = false,
-    onchange,
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onchange?: (value: boolean) => void;
-  } = $props();
+	let {
+		checked = $bindable(false),
+		disabled = false,
+		onchange
+	}: {
+		checked?: boolean;
+		disabled?: boolean;
+		onchange?: (value: boolean) => void;
+	} = $props();
 </script>
 
 <button
-  role="switch"
-  aria-checked={checked}
-  {disabled}
-  class="min-h-[44px]"
-  onclick={() => {
-    checked = !checked;
-    onchange?.(checked);
-  }}
+	role="switch"
+	aria-checked={checked}
+	{disabled}
+	class="min-h-[44px]"
+	onclick={() => {
+		checked = !checked;
+		onchange?.(checked);
+	}}
 >
-  <span class={checked ? 'translate-x-5' : 'translate-x-0'} />
+	<span class={checked ? 'translate-x-5' : 'translate-x-0'} />
 </button>
 
 <!-- Parent usage -->
@@ -110,6 +110,7 @@ Use `$bindable()` when a parent should be able to use `bind:propName` on a compo
 ```
 
 **Rules:**
+
 - Only declare a prop as `$bindable()` when two-way binding genuinely makes sense (toggles, inputs, dialogs open state, controlled form fields).
 - Always provide a default value inside `$bindable(defaultValue)`.
 - Callback prop (`onchange`) is still recommended alongside `$bindable()` for side-effect notifications.
@@ -139,7 +140,7 @@ Lowercase, no `on:` prefix. This is the Svelte 5 way.
 
 ```svelte
 {#snippet header()}
-  <h2>Title</h2>
+	<h2>Title</h2>
 {/snippet}
 
 {@render header()}
@@ -154,24 +155,27 @@ card content).
 ```svelte
 <!-- DataList.svelte — component that accepts a typed snippet -->
 <script lang="ts">
-  import type { Snippet } from 'svelte';
-  import type { Contact } from '$lib/types';
+	import type { Snippet } from 'svelte';
+	import type { Contact } from '$lib/types';
 
-  let { items, row }: {
-    items: Contact[];
-    row: Snippet<[Contact]>;
-  } = $props();
+	let {
+		items,
+		row
+	}: {
+		items: Contact[];
+		row: Snippet<[Contact]>;
+	} = $props();
 </script>
 
 {#each items as item (item.id)}
-  {@render row(item)}
+	{@render row(item)}
 {/each}
 
 <!-- Usage by parent -->
 <DataList {items}>
-  {#snippet row(contact: Contact)}
-    <div class="row">{contact.full_name} — {contact.status}</div>
-  {/snippet}
+	{#snippet row(contact: Contact)}
+		<div class="row">{contact.full_name} — {contact.status}</div>
+	{/snippet}
 </DataList>
 ```
 
@@ -183,8 +187,8 @@ Always return a cleanup function when the effect creates a side effect.
 
 ```ts
 $effect(() => {
-  const id = setInterval(poll, 5000);
-  return () => clearInterval(id);
+	const id = setInterval(poll, 5000);
+	return () => clearInterval(id);
 });
 ```
 
@@ -207,9 +211,9 @@ $effect(() => {
 import { untrack } from 'svelte';
 
 $effect(() => {
-  const id = contact.id; // tracked — effect re-runs when id changes
-  const config = untrack(() => appConfig); // read once, NOT tracked
-  loadContact(id, config);
+	const id = contact.id; // tracked — effect re-runs when id changes
+	const config = untrack(() => appConfig); // read once, NOT tracked
+	loadContact(id, config);
 });
 ```
 
@@ -231,14 +235,14 @@ Inside `{#each}` blocks, use `{@const}` to compute values once per iteration.
 
 ```svelte
 {#each contacts as contact (contact.id)}
-  {@const fullName = `${contact.first_name} ${contact.last_name}`}
-  {@const isOverdue = contact.follow_up_date && new Date(contact.follow_up_date) < new Date()}
-  <div class="contact-row">
-    <span>{fullName}</span>
-    {#if isOverdue}
-      <Badge variant="destructive">Overdue</Badge>
-    {/if}
-  </div>
+	{@const fullName = `${contact.first_name} ${contact.last_name}`}
+	{@const isOverdue = contact.follow_up_date && new Date(contact.follow_up_date) < new Date()}
+	<div class="contact-row">
+		<span>{fullName}</span>
+		{#if isOverdue}
+			<Badge variant="destructive">Overdue</Badge>
+		{/if}
+	</div>
 {/each}
 ```
 

@@ -1,4 +1,3 @@
-
 # Contractor Growth Operating System (Multi-Tenant SaaS)
 
 > Last Updated: May 2026 | Status: Approved Foundation Document | Supersedes: Blueprint v2
@@ -248,11 +247,11 @@ The platform behaves as a private business vault for every contractor.
 
 Contractor organizations support three roles.
 
-|Role|Access Level|
-|---|---|
-|Admin|Full organization access including team management and billing|
-|Manager|Operational access — contacts, jobs, quotes, invoices, inbox. No team management or billing|
-|Member|Limited access — assigned jobs and conversations only|
+| Role    | Access Level                                                                                |
+| ------- | ------------------------------------------------------------------------------------------- |
+| Admin   | Full organization access including team management and billing                              |
+| Manager | Operational access — contacts, jobs, quotes, invoices, inbox. No team management or billing |
+| Member  | Limited access — assigned jobs and conversations only                                       |
 
 > **Important:** Admin accounts are never self-registered. All Admin accounts are created exclusively by the Platform Owner via the Super Admin panel. See Section 7 — Onboarding Flow.
 
@@ -284,12 +283,12 @@ Simple RBAC. No enterprise permission complexity. Roles map directly to how cont
 active → suspended → pending_deletion → deleted
 ```
 
-|Status|Meaning|Data Behavior|
-|---|---|---|
-|`active`|Live paying client|Full access|
-|`suspended`|Churned or payment failed|App access locked, data retained|
-|`pending_deletion`|Scheduled for deletion|Deletion occurs 7 days after scheduling|
-|`deleted`|Purged|All org data removed|
+| Status             | Meaning                   | Data Behavior                           |
+| ------------------ | ------------------------- | --------------------------------------- |
+| `active`           | Live paying client        | Full access                             |
+| `suspended`        | Churned or payment failed | App access locked, data retained        |
+| `pending_deletion` | Scheduled for deletion    | Deletion occurs 7 days after scheduling |
+| `deleted`          | Purged                    | All org data removed                    |
 
 Cron job runs nightly to advance orgs through the status flow and execute scheduled deletions.
 
@@ -310,7 +309,7 @@ Cron job runs nightly to advance orgs through the status flow and execute schedu
    → Business name
    → Trade type
    → Location
-   → Twilio phone number
+   → Telnyx phone number
 6. Platform Owner creates Admin account:
    → Full name
    → Email address (must be a real, accessible inbox)
@@ -519,7 +518,7 @@ Operational work order management. Post-win execution tracking.
 
 ### Entity Definition
 
-A Job is a post-win operational record. It is created automatically when an Opportunity is marked Won. It represents the actual work to be scheduled, executed, and invoiced. The Opportunity and Job are linked — one Opportunity generates one Job.
+A Job is an operational work record. Most Jobs are created automatically when an Opportunity is marked Won, representing the work to be scheduled, executed, and invoiced — in that case the Opportunity and Job are linked one-to-one. Jobs can also be created manually for callbacks, warranty visits, repeat-customer work, subcontract work, or backfilling existing jobs at onboarding. Each Job records its origin via a `source` field (`opportunity` or `manual`) so reporting can still distinguish pipeline-driven revenue from operational work.
 
 > Invoices attach to Jobs — not to Opportunities.
 
@@ -542,11 +541,12 @@ Scheduled → In Progress → Completed
 
 ### Key Rules
 
-- Jobs are never created manually from scratch in v1
-- A Job is always born from a Won Opportunity
+- A Job is typically born from a Won Opportunity (automatic, one-to-one)
+- Contractors with full-pipeline permission can also create a Job manually (callbacks, warranty visits, repeat customers, backfill)
+- Every Job records its `source`: `opportunity` (auto) or `manual`
 - Invoices attach to Jobs — not to Opportunities
 - Job photos and media attach to Jobs
-- When a Job is marked Completed, the review funnel triggers automatically
+- When a Job is marked Completed, the review funnel triggers automatically (regardless of source)
 
 ---
 
@@ -707,20 +707,26 @@ Reduce scheduling friction.
 
 ### Purpose
 
-Generate positive reviews while intercepting negative feedback privately.
+Generate positive public reviews while intercepting negative feedback privately through a low-friction "Link-First" funnel.
 
-### Smart Review Funnel
+### Smart Review Funnel (Link-First)
 
-After job completion, customer receives:
+After job completion, the customer receives an SMS/Email with a unique, short review link.
 
-```
-How was your experience?
-👎 🙁 😐 🙂 🌟
-```
+**Review Link Flow:**
 
-**Positive flow:** Redirected to Google review link
+1.  **Landing:** Customer lands on a simple, mobile-optimized rating page (Public link, no login/OTP required).
+2.  **Action:**
+    - **Positive (Rating ≥ 4):** Customer is immediately redirected to the organization's Google Business Profile review link to post publicly.
+    - **Negative (Rating ≤ 3):** Customer is presented with a private feedback form. This data is collected internally and the contractor is notified immediately for resolution.
 
-**Negative flow:** Redirected to private feedback form → contractor notified internally
+### Implementation Details
+
+- **Secure Tokens:** Uses short, unguessable tokens (e.g., `/r/{token}`) to prevent carrier spam filters while maintaining security.
+- **Internal Mapping:** Each token is tied to a specific Job and Contact.
+- **Submission Rules:** Limited to one submission per job (repeats can optionally update the existing feedback).
+- **Expiry & Protection:** Links can have an optional expiry (e.g., 7–14 days) and basic rate limiting to prevent abuse.
+- **Conversion Focused:** Zero friction—no login, no OTP, just "Link to Rating to Result".
 
 ### Features
 
@@ -729,7 +735,7 @@ How was your experience?
 - Review growth metrics
 - Complaint resolution workflow
 
-> **Note:** Review velocity is the number one compounding growth metric for contractors. This module deserves the same engineering attention as the Inbox.
+> **Note:** Review velocity is the number one compounding growth metric for contractors. This module is a "Review Generation Funnel" designed to maximize conversion.
 
 ---
 
@@ -769,10 +775,10 @@ Rating improved: 4.1 → 4.5 ⭐
 
 ### Two-Tier Logging Model
 
-|Tier|Visible To|What Goes Here|
-|---|---|---|
-|Growth Feed|Contractor|Significant deliverables: GBP posts, blog articles, social posts, SEO completions, website updates, review responses, monthly summaries|
-|Internal Activity Log|Agency team only|Every micro-task, health checks, monitoring activities, internal notes, competitor checks, system verifications|
+| Tier                  | Visible To       | What Goes Here                                                                                                                          |
+| --------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Growth Feed           | Contractor       | Significant deliverables: GBP posts, blog articles, social posts, SEO completions, website updates, review responses, monthly summaries |
+| Internal Activity Log | Agency team only | Every micro-task, health checks, monitoring activities, internal notes, competitor checks, system verifications                         |
 
 > **Philosophy:** The Growth Feed is curated signal, not raw volume. Show contractors meaningful deliverables only. Log everything micro internally for team accountability. Quality of updates builds trust — not quantity.
 
@@ -893,11 +899,11 @@ Multi-user contractor organizations.
 
 ### Roles
 
-|Role|Access|
-|---|---|
-|Admin|Full organization access|
-|Manager|Operational access — no billing or team management|
-|Member|Limited — assigned jobs and conversations only|
+| Role    | Access                                             |
+| ------- | -------------------------------------------------- |
+| Admin   | Full organization access                           |
+| Manager | Operational access — no billing or team management |
+| Member  | Limited — assigned jobs and conversations only     |
 
 ### Permissions Philosophy
 
@@ -905,7 +911,175 @@ Simple RBAC. Roles map directly to operational responsibilities. No enterprise p
 
 ---
 
-# 10. Automation Architecture
+# 10. SMS System — Minimal Blueprint (Telnyx Edition)
+
+## Overview
+
+Each contractor is assigned a dedicated Telnyx phone number provisioned inside an isolated Telnyx subaccount controlled by the Platform Owner (PO).
+Contractors never interact with Telnyx directly.
+
+All billing is handled through the PO’s master Telnyx account.
+The platform enforces usage limits via an internal credit system.
+
+---
+
+## Telnyx Mapping Layer
+
+- **Organization** = Telnyx Subaccount (Child Account)
+- **Routing Foundation:** 1 subaccount = 1 organization. All inbound/outbound SMS flows depend on this mapping.
+- Each subaccount contains:
+  - One phone number
+  - One messaging profile
+- Messaging is handled via Telnyx Messages API
+- **Global Webhook:** Single global webhook endpoint for all inbound SMS. No per-tenant webhook URLs. Use `subaccount_id` from payload to map messages to the correct organization.
+
+---
+
+## Credit Model
+
+- Each organization receives a monthly credit allowance (e.g. $5)
+- Credits are virtual and managed internally
+- PO defines:
+  - Monthly allowance
+  - Cost per SMS (fixed internal pricing)
+  - Manual credit adjustments
+
+Real Telnyx costs are abstracted and not exposed.
+
+---
+
+## Credit Behavior
+
+- Monthly allowance rolls over
+- Each SMS deducts cost from org balance
+- If balance ≤ 0 → block sending
+- Contractors request top-ups off-platform
+- PO manually adjusts credit
+
+---
+
+## Provisioning (PO Controlled)
+
+From admin panel:
+
+- Create Telnyx subaccount per org
+- Purchase & assign phone number
+- Attach messaging profile
+- Set credit rules
+
+No contractor self-service.
+
+---
+
+## Message Flow
+
+1. Contractor sends SMS
+2. Platform checks credit
+3. If sufficient:
+   - Send via Telnyx API
+   - On success → deduct credit
+4. Store message with status
+
+---
+
+## Message Lifecycle Handling
+
+- Handle Telnyx webhooks:
+  - `message.sent`
+  - `message.delivered`
+  - `message.failed`
+- Update message status in database
+- Failed messages:
+  - optionally refund credit (configurable)
+
+---
+
+## Rate Limiting
+
+- Per organization limits:
+  - Messages per minute
+  - Messages per day
+- Global system cap
+
+---
+
+## Idempotency
+
+- Each message uses unique `client_reference_id`
+- Prevent duplicate sends and double billing
+
+---
+
+## Data Model (Message)
+
+- `message_id`
+- `org_id`
+- `to_number`
+- `from_number`
+- `body`
+- `cost`
+- `status`
+- `telnyx_message_id`
+- `created_at`
+
+---
+
+## Rules
+
+- One phone number per organization
+- One subaccount per organization
+- All messages pass credit check
+- No negative balances
+- PO controls pricing and limits
+
+---
+
+## Admin Visibility
+
+PO can view:
+
+- Usage per org
+- Remaining balance
+- Message logs
+- Failed deliveries
+
+---
+
+## Low Credit Warning
+
+- Notify contractor at 20% balance threshold
+
+---
+
+## PO Safety Floor
+
+- Stop all SMS if master balance is below threshold
+
+---
+
+## Compliance
+
+- **GDPR Consent:** Enforce GDPR-compliant SMS consent tracking (UK/EU).
+- **Consent Storage:** Store consent status, source, and timestamp per contact.
+- **Opt-out Handling:** Automatically revoke consent on opt-out keywords (e.g., STOP).
+- Define messaging use case
+- Ensure compliance with carrier rules
+
+---
+
+## Philosophy
+
+This is a controlled infrastructure layer.
+
+- Contractor → sends messages
+- Platform → enforces rules
+- PO → controls system
+
+No complexity is exposed to the contractor.
+
+---
+
+# 11. Automation Architecture
 
 ## Automation Philosophy
 
@@ -919,14 +1093,14 @@ Automation should feel invisible but powerful. The system automates repetitive o
 
 All time-sensitive, contractor-facing automations run through BullMQ job queues. This guarantees reliability, traceability, and per-tenant debugging.
 
-|Automation|Trigger Event|
-|---|---|
-|Missed call text-back|`call.missed`|
-|Speed-to-lead response|`lead.created`|
-|Quote follow-up reminders|`quote.sent` + timer|
-|Invoice overdue reminders|`invoice.overdue`|
-|Review request sequence|`job.completed`|
-|Appointment reminders|`appointment.booked` + timer|
+| Automation                | Trigger Event                |
+| ------------------------- | ---------------------------- |
+| Missed call text-back     | `call.missed`                |
+| Speed-to-lead response    | `lead.created`               |
+| Quote follow-up reminders | `quote.sent` + timer         |
+| Invoice overdue reminders | `invoice.overdue`            |
+| Review request sequence   | `job.completed`              |
+| Appointment reminders     | `appointment.booked` + timer |
 
 > **Rule:** If it affects a contractor directly and is time-sensitive — it lives in BullMQ, not N8N.
 
@@ -934,14 +1108,14 @@ All time-sensitive, contractor-facing automations run through BullMQ job queues.
 
 N8N handles agency-side, non-time-critical, and integration-heavy workflows.
 
-|Workflow|Purpose|
-|---|---|
-|GBP post publishing|Google Business Profile management|
-|Social media publishing|Facebook, Instagram scheduling|
-|Agency marketing sequences|Campaigns|
-|Scheduled reporting|Monthly performance reports|
-|Third-party integrations|External tool connections|
-|Review response workflows|Agency-managed review responses|
+| Workflow                   | Purpose                            |
+| -------------------------- | ---------------------------------- |
+| GBP post publishing        | Google Business Profile management |
+| Social media publishing    | Facebook, Instagram scheduling     |
+| Agency marketing sequences | Campaigns                          |
+| Scheduled reporting        | Monthly performance reports        |
+| Third-party integrations   | External tool connections          |
+| Review response workflows  | Agency-managed review responses    |
 
 > **Rule:** N8N is NOT the backend. The application backend is the source of truth. N8N reacts to events emitted by the backend. N8N never owns business logic, authentication, or tenant data.
 
@@ -952,7 +1126,7 @@ N8N handles agency-side, non-time-critical, and integration-heavy workflows.
 ### Missed Call Text-Back
 
 ```
-Missed call received (Twilio webhook)
+Missed call received (Telnyx webhook)
 → backend emits call.missed event
 → BullMQ job created
 → SMS sent to caller within seconds
@@ -984,15 +1158,15 @@ Invoice overdue
 ```
 Job marked Completed
 → BullMQ job created
-→ Review request SMS sent to customer
-→ Positive response → Google review link
-→ Negative response → private feedback form
-→ Contractor notified of negative feedback
+→ Review request SMS/Email sent to customer (Primary CTA: unique short link)
+→ Customer clicks link (/r/{token})
+→ Rating ≥ 4 → Redirect to Google review link
+→ Rating ≤ 3 → Private feedback form → Contractor notified internally
 ```
 
 ---
 
-# 11. Event-Driven Architecture
+# 12. Event-Driven Architecture
 
 ## Philosophy
 
@@ -1029,7 +1203,7 @@ Events trigger:
 
 ---
 
-# 12. Technical Architecture
+# 13. Technical Architecture
 
 ---
 
@@ -1155,13 +1329,13 @@ Server-side check:
 
 ## Frontend Stack
 
-|Layer|Technology|
-|---|---|
-|Framework|SvelteKit|
-|Rendering mode|CSR — ssr = false globally|
-|Language|TypeScript|
-|Reactivity|Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`)|
-|Deployment adapter|adapter-node|
+| Layer              | Technology                                                 |
+| ------------------ | ---------------------------------------------------------- |
+| Framework          | SvelteKit                                                  |
+| Rendering mode     | CSR — ssr = false globally                                 |
+| Language           | TypeScript                                                 |
+| Reactivity         | Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`) |
+| Deployment adapter | adapter-node                                               |
 
 ### Frontend Priorities
 
@@ -1177,15 +1351,15 @@ Server-side check:
 
 ## Backend Stack
 
-|Layer|Technology|
-|---|---|
-|API layer|SvelteKit server routes (`/api/*`)|
-|Database|Supabase PostgreSQL|
-|ORM|Drizzle ORM|
-|Auth|Supabase Auth|
-|Realtime|Supabase Realtime|
-|Queue|Redis + BullMQ|
-|Automation|Self-hosted N8N|
+| Layer      | Technology                         |
+| ---------- | ---------------------------------- |
+| API layer  | SvelteKit server routes (`/api/*`) |
+| Database   | Supabase PostgreSQL                |
+| ORM        | Drizzle ORM                        |
+| Auth       | Supabase Auth                      |
+| Realtime   | Supabase Realtime                  |
+| Queue      | Redis + BullMQ                     |
+| Automation | Self-hosted N8N                    |
 
 ### Backend Responsibilities
 
@@ -1248,14 +1422,14 @@ Agency team (current — no Agency App yet):
 
 ## Communication Infrastructure
 
-|Service|Provider|
-|---|---|
-|SMS and phone|Twilio|
-|Email|Resend (Postmark as alternative)|
+| Service       | Provider                         |
+| ------------- | -------------------------------- |
+| SMS and phone | Telnyx                           |
+| Email         | Resend (Postmark as alternative) |
 
 ### Webhook Security — Non-Negotiable
 
-- Twilio: Signature verification middleware on every webhook route
+- Telnyx: Signature verification middleware on every webhook route
 - Stripe: `stripe.webhooks.constructEvent()` on every payment webhook
 - Both implemented before first production deployment
 
@@ -1293,14 +1467,14 @@ Database stores metadata only — paths, ownership, permissions, purpose tags. F
 
 ## Deployment Strategy
 
-|Component|Infrastructure|
-|---|---|
-|Frontend + Backend|SvelteKit on VPS or container platform|
-|Database|Supabase PostgreSQL|
-|Realtime|Supabase Realtime|
-|Queue|Redis on VPS|
-|Automation|Self-hosted N8N on VPS|
-|Object storage|Cloudflare R2|
+| Component          | Infrastructure                         |
+| ------------------ | -------------------------------------- |
+| Frontend + Backend | SvelteKit on VPS or container platform |
+| Database           | Supabase PostgreSQL                    |
+| Realtime           | Supabase Realtime                      |
+| Queue              | Redis on VPS                           |
+| Automation         | Self-hosted N8N on VPS                 |
+| Object storage     | Cloudflare R2                          |
 
 ### Architecture Philosophy
 
@@ -1313,20 +1487,20 @@ Optimize for speed of iteration during early growth. Future service extraction o
 
 ---
 
-# 13. Data Retention Policy
+# 14. Data Retention Policy
 
-|Status|Meaning|Data Behavior|
-|---|---|---|
-|`active`|Live paying client|Full access|
-|`suspended`|Churned or payment failed|App locked, data retained|
-|`pending_deletion`|Scheduled for deletion|Deletion occurs 7 days after scheduling|
-|`deleted`|Purged|All org data permanently removed|
+| Status             | Meaning                   | Data Behavior                           |
+| ------------------ | ------------------------- | --------------------------------------- |
+| `active`           | Live paying client        | Full access                             |
+| `suspended`        | Churned or payment failed | App locked, data retained               |
+| `pending_deletion` | Scheduled for deletion    | Deletion occurs 7 days after scheduling |
+| `deleted`          | Purged                    | All org data permanently removed        |
 
 Cron job runs nightly — advances orgs through the status flow and executes scheduled deletions.
 
 ---
 
-# 14. Emotional Design Philosophy
+# 15. Emotional Design Philosophy
 
 ## Product Emotional Goals
 
@@ -1354,7 +1528,7 @@ Contractors should feel:
 
 ---
 
-# 15. Future Roadmap
+# 16. Future Roadmap
 
 ## Features
 
@@ -1378,7 +1552,7 @@ Contractors should feel:
 
 ---
 
-# 16. Core Product Positioning
+# 17. Core Product Positioning
 
 **The product is NOT:**
 
@@ -1392,19 +1566,17 @@ Contractors should feel:
 
 ---
 
-# 17. Recommended Next Steps
+# 18. Recommended Next Steps
 
-|Step|Deliverable|Purpose|
-|---|---|---|
-|✓ 1|Blueprint v3|Done|
-|✓ 2|Roles & Access Matrix|Done|
-|3|Master Domain Architecture|All entities, relationships, system boundaries|
-|4|Core Schema Design|Start with critical tables|
-|5|RLS Policy Design|Alongside schema — never after|
-|6|API Contract Design|What frontend needs from backend|
-|7|Build — Phase 1|Core modules only|
-
-> **Most important principle:** The agency IS the product in v1. The software is the delivery mechanism. Build the Contractor App to a solid standard and serve your first clients well before expanding scope.
+| Step | Deliverable                | Purpose                                        |
+| ---- | -------------------------- | ---------------------------------------------- |
+| ✓ 1  | Blueprint v3               | Done                                           |
+| ✓ 2  | Roles & Access Matrix      | Done                                           |
+| 3    | Master Domain Architecture | All entities, relationships, system boundaries |
+| 4    | Core Schema Design         | Start with critical tables                     |
+| 5    | RLS Policy Design          | Alongside schema — never after                 |
+| 6    | API Contract Design        | What frontend needs from backend               |
+| 7    | Build — Phase 1            | Core modules only                              |
 
 ---
 

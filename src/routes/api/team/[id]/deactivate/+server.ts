@@ -54,47 +54,57 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	// Gather assignment counts (for warning display)
-	const [[{ value: assignedContacts }], [{ value: openConversations }], [{ value: activeJobs }], [{ value: upcomingAppointments }]] =
-		await Promise.all([
-			db
-				.select({ value: count() })
-				.from(contacts)
-				.where(and(eq(contacts.assigned_to, memberId), eq(contacts.org_id, auth.orgId), isNull(contacts.deleted_at))),
-			db
-				.select({ value: count() })
-				.from(conversations)
-				.where(
-					and(
-						eq(conversations.assigned_to, memberId),
-						eq(conversations.org_id, auth.orgId),
-						eq(conversations.status, 'open'),
-						isNull(conversations.deleted_at)
-					)
-				),
-			db
-				.select({ value: count() })
-				.from(jobs)
-				.where(
-					and(
-						eq(jobs.assigned_to, memberId),
-						eq(jobs.org_id, auth.orgId),
-						inArray(jobs.status, ['scheduled', 'in_progress']),
-						isNull(jobs.deleted_at)
-					)
-				),
-			db
-				.select({ value: count() })
-				.from(appointments)
-				.where(
-					and(
-						eq(appointments.assigned_to, memberId),
-						eq(appointments.org_id, auth.orgId),
-						eq(appointments.status, 'scheduled'),
-						isNull(appointments.deleted_at),
-						gt(appointments.scheduled_start, new Date())
-					)
+	const [
+		[{ value: assignedContacts }],
+		[{ value: openConversations }],
+		[{ value: activeJobs }],
+		[{ value: upcomingAppointments }]
+	] = await Promise.all([
+		db
+			.select({ value: count() })
+			.from(contacts)
+			.where(
+				and(
+					eq(contacts.assigned_to, memberId),
+					eq(contacts.org_id, auth.orgId),
+					isNull(contacts.deleted_at)
 				)
-		]);
+			),
+		db
+			.select({ value: count() })
+			.from(conversations)
+			.where(
+				and(
+					eq(conversations.assigned_to, memberId),
+					eq(conversations.org_id, auth.orgId),
+					eq(conversations.status, 'open'),
+					isNull(conversations.deleted_at)
+				)
+			),
+		db
+			.select({ value: count() })
+			.from(jobs)
+			.where(
+				and(
+					eq(jobs.assigned_to, memberId),
+					eq(jobs.org_id, auth.orgId),
+					inArray(jobs.status, ['scheduled', 'in_progress']),
+					isNull(jobs.deleted_at)
+				)
+			),
+		db
+			.select({ value: count() })
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.assigned_to, memberId),
+					eq(appointments.org_id, auth.orgId),
+					eq(appointments.status, 'scheduled'),
+					isNull(appointments.deleted_at),
+					gt(appointments.scheduled_start, new Date())
+				)
+			)
+	]);
 
 	await db
 		.update(orgMembers)

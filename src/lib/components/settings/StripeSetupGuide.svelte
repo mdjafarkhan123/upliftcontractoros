@@ -2,10 +2,7 @@
 	import { ChevronDown, ExternalLink, Copy, Sparkles } from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
-	let {
-		webhookUrl,
-		defaultOpen = false
-	}: { webhookUrl: string; defaultOpen?: boolean } = $props();
+	let { webhookUrl, defaultOpen = false }: { webhookUrl: string; defaultOpen?: boolean } = $props();
 
 	let open = $state(defaultOpen);
 
@@ -61,7 +58,9 @@
 		onclick={() => (open = !open)}
 	>
 		<div class="flex items-center gap-3">
-			<div class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600">
+			<div
+				class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600"
+			>
 				<Sparkles class="h-4 w-4" />
 			</div>
 			<div>
@@ -79,7 +78,9 @@
 			<ol class="flex flex-col gap-5">
 				{#each steps as step, i (i)}
 					<li class="flex gap-3">
-						<div class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700">
+						<div
+							class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700"
+						>
 							{i + 1}
 						</div>
 						<div class="flex-1">
@@ -101,9 +102,14 @@
 
 							{#if i === 3}
 								<div class="mt-2 rounded-lg border border-border bg-muted/30 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Your webhook URL</p>
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">
+										Your webhook URL
+									</p>
 									<div class="mt-1 flex items-center gap-2">
-										<code class="flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs text-foreground">{webhookUrl}</code>
+										<code
+											class="flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs text-foreground"
+											>{webhookUrl}</code
+										>
 										<button
 											type="button"
 											onclick={copyWebhook}
@@ -136,7 +142,9 @@
 
 			<p class="mt-5 rounded-lg bg-emerald-500/5 p-3 text-xs text-foreground/80">
 				<span class="font-semibold">Not ready for real customers?</span>
-				You can paste a Stripe <em>test</em> key (starts with <code class="font-mono">rk_test_…</code>) and we’ll let you send yourself a $1 test invoice to see the whole flow before going live.
+				You can paste a Stripe <em>test</em> key (starts with
+				<code class="font-mono">rk_test_…</code>) and we’ll let you send yourself a $1 test invoice
+				to see the whole flow before going live.
 			</p>
 		</div>
 	{/if}

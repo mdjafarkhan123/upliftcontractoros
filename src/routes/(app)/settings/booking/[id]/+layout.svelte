@@ -29,7 +29,7 @@
 	}
 </script>
 
-<PageWrapper class="md:max-w-3xl">
+<PageWrapper>
 	<Button variant="ghost" href="/settings/booking" class="mb-4">
 		<ArrowLeft class="h-4 w-4" /> Back to booking links
 	</Button>
