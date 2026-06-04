@@ -321,6 +321,22 @@ function patchListEntries(
 	}
 }
 
+// Realtime `postgres_changes` rows come straight from the `messages` table and
+// never carry the joined `media`/`media_urls` projection that the API responses
+// build. Without this, a status INSERT/UPDATE replacing the in-thread message
+// would wipe the attachments already rendered from the send response or GET —
+// the "flash then gone" bug. Preserve whatever the existing message already has
+// whenever the incoming raw row doesn't bring its own.
+function preserveMedia(prev: ThreadMessage, next: ThreadMessage): ThreadMessage {
+	if ((next.media?.length ?? 0) > 0) return next;
+	if ((prev.media?.length ?? 0) === 0 && prev.media_urls == null) return next;
+	return {
+		...next,
+		media: prev.media ?? next.media,
+		media_urls: next.media_urls ?? prev.media_urls
+	};
+}
+
 function applyMessageToThread(conversationId: string, msg: ThreadMessage): void {
 	const entry = threadCache.get(conversationId);
 	if (!entry) return;
@@ -329,7 +345,7 @@ function applyMessageToThread(conversationId: string, msg: ThreadMessage): void 
 	const messages = entry.messages.map((m) => {
 		if (m.id === msg.id) {
 			replaced = true;
-			return msg;
+			return preserveMedia(m, msg);
 		}
 		if (
 			msg.twilio_message_sid &&
@@ -337,7 +353,7 @@ function applyMessageToThread(conversationId: string, msg: ThreadMessage): void 
 			m.twilio_message_sid === msg.twilio_message_sid
 		) {
 			replaced = true;
-			return msg;
+			return preserveMedia(m, msg);
 		}
 		return m;
 	});
@@ -824,7 +840,7 @@ export const inboxStore = {
 			);
 			if (idx >= 0) {
 				const next = entry.messages.slice();
-				next[idx] = { ...next[idx], ...msg };
+				next[idx] = preserveMedia(next[idx], { ...next[idx], ...msg });
 				threadCache.set(msg.conversation_id, { ...entry, messages: next });
 			}
 		}

@@ -5,7 +5,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import ChannelSelector from './ChannelSelector.svelte';
 	import { cn } from '$lib/utils/cn';
-	import type { OutboundChannel } from '$lib/stores/inbox.svelte';
+	import type { OutboundChannel, MessageMedia } from '$lib/stores/inbox.svelte';
 
 	export type QuickReplyItem = {
 		id: string;
@@ -49,6 +49,7 @@
 				emailSubject?: string;
 				interpolate?: boolean;
 				mediaIds?: string[];
+				optimisticMedia?: MessageMedia[];
 			}
 		) => Promise<void> | void;
 		onTyping?: (isTyping: boolean) => void;
@@ -60,6 +61,8 @@
 		id?: string;
 		media_type?: 'photo' | 'pdf' | 'attachment';
 		original_filename: string;
+		file_size_bytes: number;
+		mime_type: string;
 		previewUrl?: string;
 		errorMsg?: string;
 	};
@@ -79,7 +82,14 @@
 			const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
 			attachments = [
 				...attachments,
-				{ localId, status: 'uploading', original_filename: file.name, previewUrl }
+				{
+					localId,
+					status: 'uploading',
+					original_filename: file.name,
+					file_size_bytes: file.size,
+					mime_type: file.type,
+					previewUrl
+				}
 			];
 			const form = new FormData();
 			form.append('file', file);
@@ -233,6 +243,21 @@
 		sending = true;
 		try {
 			const mediaIds = doneAttachments.map((a) => a.id!).filter(Boolean);
+			// Render the attachments in the outgoing bubble immediately — the media is
+			// already uploaded to R2, so MessageMedia can presign by id. The confirmed
+			// server message (with the real joined media) replaces this on response.
+			const optimisticMedia: MessageMedia[] = doneAttachments.map((a) => ({
+				id: a.id!,
+				r2_key: '',
+				thumbnail_key: null,
+				web_key: null,
+				original_filename: a.original_filename,
+				file_size_bytes: a.file_size_bytes,
+				media_type: a.media_type ?? 'attachment',
+				mime_type: a.mime_type,
+				purpose_tag: 'message_attachment',
+				created_at: new Date().toISOString()
+			}));
 			await onSend(trimmed, {
 				isInternalNote,
 				channel: isInternalNote ? undefined : channel,
@@ -241,7 +266,8 @@
 						? trimmedSubject || emailSubjectDefault
 						: undefined,
 				interpolate: usedQuickReply,
-				mediaIds: mediaIds.length > 0 ? mediaIds : undefined
+				mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+				optimisticMedia: optimisticMedia.length > 0 ? optimisticMedia : undefined
 			});
 			body = '';
 			emailSubjectInput = null;

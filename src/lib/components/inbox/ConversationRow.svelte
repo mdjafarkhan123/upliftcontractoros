@@ -29,11 +29,11 @@
 
 	const channelTint = $derived(
 		channel === 'missed_call'
-			? 'text-amber-500'
+			? 'text-amber-600'
 			: channel === 'webchat'
-				? 'text-emerald-500'
+				? 'text-emerald-600'
 				: channel === 'email'
-					? 'text-sky-500'
+					? 'text-indigo-500'
 					: 'text-primary'
 	);
 
@@ -110,16 +110,16 @@
 <a
 	href={`/inbox/${c.id}`}
 	class={cn(
-		'group relative flex min-h-[86px] items-start gap-3 overflow-hidden rounded-xl border border-border/60 bg-card px-3.5 py-3.5 shadow-card transition-all duration-150 ease-out',
-		'hover:-translate-y-0.5 hover:border-border hover:bg-muted/30 hover:shadow-dropdown active:translate-y-0 active:bg-accent/60',
+		'group relative flex min-h-[86px] items-start gap-3 overflow-hidden rounded-xl border border-border/60 bg-card px-3.5 py-3.5 shadow-card transition-colors duration-150 ease-out',
+		'hover:border-border hover:bg-muted/30 active:bg-accent/60',
 		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-		hasUnread && !isClosed && 'border-primary/30 bg-primary/[0.025]',
+		hasUnread && !isClosed && 'border-primary/25 bg-primary/[0.025]',
 		hasFailure && 'border-destructive/40 bg-destructive/[0.035]',
-		isClosed && 'opacity-70'
+		isClosed && 'opacity-60'
 	)}
 >
 	{#if hasUnread && !isClosed}
-		<span class="absolute inset-y-3 left-0 w-1 rounded-r-full bg-primary"></span>
+		<span class="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary/80"></span>
 	{/if}
 	<div class="relative">
 		<div

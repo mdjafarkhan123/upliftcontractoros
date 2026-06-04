@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Info, X, MessageSquare, Phone } from '@lucide/svelte';
+	import { ArrowLeft, Info, X, Globe, Mail, MessageSquare, Phone } from '@lucide/svelte';
+	import { cn } from '$lib/utils/cn';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
@@ -18,7 +19,8 @@
 		inboxStore,
 		type SnoozePreset,
 		type ThreadMessage,
-		type OutboundChannel
+		type OutboundChannel,
+		type MessageMedia
 	} from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { createRealtimeManager } from '$lib/stores/realtimeReconnect';
@@ -142,6 +144,31 @@
 			.join('') || ''
 	);
 
+	const channelMeta: Record<string, { label: string; icon: typeof MessageSquare; tint: string }> = {
+		sms: { label: 'SMS', icon: MessageSquare, tint: 'text-muted-foreground' },
+		email: { label: 'Email', icon: Mail, tint: 'text-muted-foreground' },
+		webchat: { label: 'Web Chat', icon: Globe, tint: 'text-muted-foreground' }
+	};
+
+	const groupInfo = $derived.by(() => {
+		return messages.map((m, i) => {
+			const prev = messages[i - 1];
+			if (!prev) return { grouped: false, channelChanged: false };
+			const regularTypes = ['sms', 'email', 'webchat'];
+			const isRegular = regularTypes.includes(m.channel ?? '');
+			const prevIsRegular = regularTypes.includes(prev.channel ?? '');
+			const grouped =
+				isRegular &&
+				prevIsRegular &&
+				m.direction === prev.direction &&
+				m.channel === prev.channel &&
+				!m.is_internal_note &&
+				!prev.is_internal_note;
+			const channelChanged = isRegular && prevIsRegular && m.channel !== prev.channel;
+			return { grouped, channelChanged };
+		});
+	});
+
 	const availableChannels = $derived<OutboundChannel[]>(conversation?.available_channels ?? []);
 	const suggestedChannel = $derived(conversation?.suggested_channel ?? null);
 
@@ -186,6 +213,7 @@
 			emailSubject?: string;
 			interpolate?: boolean;
 			mediaIds?: string[];
+			optimisticMedia?: MessageMedia[];
 		}
 	) {
 		const result = await inboxStore.sendMessage(data.conversationId, body, {
@@ -193,7 +221,8 @@
 			channel: opts.channel,
 			emailSubject: opts.emailSubject,
 			interpolate: opts.interpolate,
-			mediaIds: opts.mediaIds
+			mediaIds: opts.mediaIds,
+			optimisticMedia: opts.optimisticMedia
 		});
 		if (!result.ok) {
 			toast.error('Message not sent', { description: result.error });
@@ -413,33 +442,49 @@
 			{:else}
 				<div
 					bind:this={scrollEl}
-					class="flex-1 space-y-3 overflow-y-auto px-3 py-5 sm:px-5 md:px-6"
+					class="flex-1 overflow-y-auto px-3 py-5 sm:px-5 md:px-6"
 				>
-					<div class="mx-auto flex max-w-3xl flex-col gap-3">
+					<div class="mx-auto flex max-w-3xl flex-col">
 						{#if nextCursor}
-							<div class="flex justify-center pb-1">
+							<div class="flex justify-center pb-3">
 								<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
 									{loadingMore ? 'Loading…' : 'Load earlier'}
 								</Button>
 							</div>
 						{/if}
-						{#each messages as m, i (m.id)}
-							{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
-								<div class="flex items-center justify-center py-1">
-									<span
-										class="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/50"
-									>
-										{dayLabel(m.created_at)}
-									</span>
-								</div>
-							{/if}
-							<MessageBubble
-								message={m}
-								canRetry={canSend}
-								inboundInitials={contactInitials}
-								outboundInitials={memberInitials}
-							/>
-						{/each}
+					{#each messages as m, i (m.id)}
+						{@const gi = groupInfo[i]}
+						{@const ch = channelMeta[m.channel ?? '']}
+
+						{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
+							<div class="flex items-center justify-center py-2">
+								<span
+									class="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
+								>
+									{dayLabel(m.created_at)}
+								</span>
+							</div>
+						{/if}
+
+						{#if gi.channelChanged}
+							<div class="flex items-center justify-center pt-3 pb-1">
+								<span
+									class="inline-flex items-center gap-1.5 rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
+								>
+									<ch.icon class="h-3.5 w-3.5" />
+									Switched to {ch.label}
+								</span>
+							</div>
+						{/if}
+
+						<MessageBubble
+							message={m}
+							canRetry={canSend}
+							grouped={gi.grouped}
+							inboundInitials={contactInitials}
+							outboundInitials={memberInitials}
+						/>
+					{/each}
 					</div>
 				</div>
 			{/if}

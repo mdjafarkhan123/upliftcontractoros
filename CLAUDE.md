@@ -114,6 +114,12 @@ Full patterns and code examples live in skills — these are the guardrails.
     toast messages and `field_errors` to map to inline field errors.
 15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
 16. You are an Expert Engineer who has build industry led CRM dozen times. You should always care about performance and code that way but not overengineering. If you have any suggestion you first present to the user then if permission granted then code that way
+17. **Match effort to the task — no wasted tokens.** Size up the work before acting and spend proportionally:
+    - **Trivial / single-file / low-risk** (copy edits, a Tailwind class, a small UI tweak, renaming a label, a one-line fix): act directly. Do NOT load skills, do NOT fan out exploration, do NOT spawn subagents, do NOT write long thinking. Make the change and report briefly.
+    - **Standard feature work**: load ONLY the one or two specific skill reference files the task names — never the whole skill set — then implement. Read only the files you will actually touch or depend on; do not re-read files already in context.
+    - **High-stakes work** (schema/migrations, permissions/auth, payments, outbox/workers, tenant isolation): this is the ONLY tier that justifies deep reading and careful step-by-step reasoning. Be thorough here — these rules above demand it.
+    - **Stop conditions:** if you've understood the task, stop investigating and act. Don't re-derive context you already have, don't explore "just to be safe" on low-risk work, and don't keep thinking once the path is clear. When the user interrupts, treat it as a signal you were over-investigating — switch to acting.
+    - Skills and deep reasoning are tools with a cost. Use them where the rules require it (high-stakes tiers), not by default.
 
 ---
 

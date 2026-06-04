@@ -6,8 +6,6 @@
 		Check,
 		CheckCheck,
 		Eye,
-		Send,
-		Clock,
 		Ban,
 		RotateCcw,
 		Sparkles
@@ -18,7 +16,19 @@
 	import MessageMedia from './MessageMedia.svelte';
 	import { cn } from '$lib/utils/cn';
 
-	let { message: m, canRetry = false }: { message: ThreadMessage; canRetry?: boolean } = $props();
+	let {
+		message: m,
+		canRetry = false,
+		inboundInitials = '',
+		outboundInitials = '',
+		grouped = false
+	}: {
+		message: ThreadMessage;
+		canRetry?: boolean;
+		inboundInitials?: string;
+		outboundInitials?: string;
+		grouped?: boolean;
+	} = $props();
 
 	const isRetryable = $derived(
 		m.direction === 'outbound' && !m.is_internal_note && m.status === 'failed' && canRetry
@@ -41,151 +51,189 @@
 	}
 
 	const isInbound = $derived(m.direction === 'inbound');
+	const isPending = $derived(m.status === 'queued' || m.status === 'sending');
+	const isDestructive = $derived(
+		m.status === 'failed' || m.status === 'bounced' || m.status === 'undeliverable'
+	);
+	const isTerminalFailure = $derived(m.status === 'bounced' || m.status === 'undeliverable');
 
 	const timestamp = $derived(
 		m.created_at
-			? new Date(m.created_at).toLocaleString('en-US', {
-					month: 'short',
-					day: 'numeric',
+			? new Date(m.created_at).toLocaleTimeString('en-US', {
 					hour: 'numeric',
 					minute: '2-digit'
 				})
 			: ''
 	);
 
-	type Display = {
-		label: string;
-		icon: typeof Mail;
-		tone: 'muted' | 'progress' | 'success' | 'destructive';
-		spin?: boolean;
-	};
+	const isRead = $derived(isInbound ? false : m.opened_at != null);
+	const isDelivered = $derived(isInbound ? false : m.status === 'delivered');
 
-	const display = $derived<Display>(
-		(() => {
-			if (m.opened_at) return { label: 'Opened', icon: Eye, tone: 'success' };
-			switch (m.status) {
-				case 'queued':
-					return { label: 'Queued', icon: Clock, tone: 'muted' };
-				case 'sending':
-					return { label: 'Sending…', icon: Loader2, tone: 'progress', spin: true };
-				case 'sent':
-					return { label: 'Sent', icon: Check, tone: 'muted' };
-				case 'delivered':
-					return { label: 'Delivered', icon: CheckCheck, tone: 'success' };
-				case 'failed':
-					return { label: 'Failed', icon: AlertCircle, tone: 'destructive' };
-				case 'bounced':
-					return { label: 'Bounced', icon: AlertCircle, tone: 'destructive' };
-				case 'undeliverable':
-					return { label: 'Undeliverable', icon: Ban, tone: 'destructive' };
-				default:
-					return { label: 'Sent', icon: Send, tone: 'muted' };
-			}
-		})()
-	);
-
-	const toneClass = $derived(
-		display.tone === 'destructive'
-			? 'text-destructive'
-			: display.tone === 'success'
-				? 'text-emerald-600 dark:text-emerald-400'
-				: display.tone === 'progress'
-					? 'text-primary'
-					: 'text-muted-foreground'
-	);
-
-	const isPending = $derived(m.status === 'queued' || m.status === 'sending');
-	const isDestructive = $derived(
-		m.status === 'failed' || m.status === 'bounced' || m.status === 'undeliverable'
-	);
-	const isTerminalFailure = $derived(m.status === 'bounced' || m.status === 'undeliverable');
+	function stripQuotedReply(raw: string): string {
+		if (!raw) return raw;
+		const lines = raw.split(/\r?\n/);
+		const kept: string[] = [];
+		for (let i = 0; i < lines.length; i++) {
+			const t = lines[i].trim();
+			if (/^On\b.*\bwrote:?$/i.test(t)) break;
+			if (/^On\b/i.test(t) && /\bwrote:?$/i.test((lines[i + 1] ?? '').trim())) break;
+			if (/^-{2,}\s*Original Message\s*-{2,}$/i.test(t)) break;
+			if (t.startsWith('>')) break;
+			kept.push(lines[i]);
+		}
+		const cleaned = kept.join('\n').trim();
+		return cleaned || raw.trim();
+	}
+	const displayBody = $derived(stripQuotedReply(m.body ?? ''));
+	const hasBody = $derived(displayBody.length > 0);
 </script>
 
-<div class="px-1">
+<div
+	class={cn(
+		'flex items-end gap-2',
+		isInbound ? 'justify-start' : 'justify-end',
+		grouped ? 'mt-0.5' : 'mt-4'
+	)}
+>
+	{#if isInbound}
+		{#if !grouped}
+			<div
+				class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-foreground ring-1 ring-border/60"
+				aria-hidden="true"
+			>
+				{#if inboundInitials}
+					{inboundInitials}
+				{:else}
+					<Mail class="h-3.5 w-3.5" />
+				{/if}
+			</div>
+		{:else}
+			<div class="w-8 shrink-0"></div>
+		{/if}
+	{/if}
+
 	<div
 		class={cn(
-			'overflow-hidden rounded-xl border bg-card shadow-card transition-colors',
-			isInbound
-				? 'border-l-4 border-l-blue-500/60 border-border/60'
-				: 'border-l-4 border-l-primary/70 border-border/60',
-			isPending && 'opacity-70',
-			isDestructive && !isTerminalFailure && 'border-destructive/40 border-l-destructive/60',
-			isTerminalFailure && 'border-destructive/60 border-l-destructive bg-destructive/[0.03]'
+			'flex max-w-[82%] flex-col md:max-w-[74%]',
+			isInbound ? 'items-start' : 'items-end'
 		)}
 	>
-		<div class="flex items-start gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
-			<div
-				class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60"
-			>
-				<Mail class="h-3.5 w-3.5" />
-			</div>
-			<div class="min-w-0 flex-1">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex min-w-0 items-center gap-2">
-						<span
-							class="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-						>
-							{isInbound ? 'Inbound email' : 'Sent email'}
-						</span>
-						{#if isAutomated}
-							<span
-								class="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
-							>
-								<Sparkles class="h-2.5 w-2.5" />
-								Automated
-							</span>
-						{/if}
-					</div>
-					<span class="shrink-0 text-[11px] text-muted-foreground">{timestamp}</span>
-				</div>
-				{#if m.email_subject}
-					<div class="mt-0.5 truncate text-sm font-semibold text-foreground">
-						{m.email_subject}
-					</div>
-				{/if}
-				{#if m.email_from_address && isInbound}
-					<div class="truncate text-[11px] text-muted-foreground">From: {m.email_from_address}</div>
-				{/if}
-			</div>
-		</div>
-		<div class="px-4 py-3.5">
-			<p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-				{m.body}
-			</p>
+		<div
+			class={cn(
+				'rounded-2xl px-4 py-3.5 text-sm shadow-sm transition-colors',
+				isInbound
+					? 'bg-secondary text-foreground'
+					: cn(
+							'bg-primary/90 text-primary-foreground',
+							isDestructive && 'ring-1 ring-inset ring-destructive/40',
+							isTerminalFailure && 'bg-destructive/10 text-foreground ring-2 ring-inset ring-destructive/50'
+						),
+				isPending && !isTerminalFailure && 'opacity-75'
+			)}
+		>
+			{#if m.email_subject}
+				<p
+					class={cn(
+						'mb-1.5 truncate text-[13px] font-semibold leading-snug',
+						isInbound ? 'text-foreground' : 'text-primary-foreground/90'
+					)}
+				>
+					{m.email_subject}
+				</p>
+			{/if}
+
+			{#if hasBody}
+				<p class="whitespace-pre-wrap break-words leading-relaxed">{displayBody}</p>
+			{/if}
+
 			{#if m.media && m.media.length > 0}
 				<div class="mt-3">
 					<MessageMedia media={m.media} align="start" />
 				</div>
 			{/if}
-			{#if !isInbound}
-				<div class={cn('mt-2 flex items-center justify-end gap-1 text-[10px]', toneClass)}>
-					<display.icon class={cn('h-3 w-3', display.spin && 'animate-spin')} />
-					<span>{display.label}</span>
-				</div>
-				{#if isDestructive}
-					<div class="mt-1 flex items-center justify-end gap-2 text-[10px] text-destructive/80">
-						{#if m.failure_reason}
-							<span class="max-w-[260px] truncate">{m.failure_reason}</span>
-						{/if}
-						{#if isRetryable}
-							<button
-								type="button"
-								onclick={onRetry}
-								disabled={retrying}
-								class="inline-flex min-h-[28px] items-center gap-1 rounded-md border border-destructive/40 px-1.5 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
-							>
-								{#if retrying}
-									<Loader2 class="h-3 w-3 animate-spin" />
-									<span>Retrying…</span>
-								{:else}
-									<RotateCcw class="h-3 w-3" />
-									<span>Retry</span>
-								{/if}
-							</button>
-						{/if}
-					</div>
+
+			<div
+				class={cn(
+					'mt-2 flex items-center justify-end gap-1.5',
+					hasBody === false && m.media && m.media.length > 0 && '-mt-1'
+				)}
+			>
+				<span class="inline-flex items-center gap-1 text-[10px]">
+					<Mail class="h-3.5 w-3.5 text-amber-500" />
+					<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}>Email</span>
+				</span>
+				{#if isAutomated}
+					<Sparkles class="h-3 w-3 shrink-0 opacity-60" aria-label="Automated" />
 				{/if}
+				<span
+					class={cn(
+						'text-[11px]',
+						isInbound ? 'text-muted-foreground' : 'text-primary-foreground/60'
+					)}
+				>
+					{timestamp}
+				</span>
+				{#if !isInbound}
+					{#if isPending}
+						<Loader2 class="h-3 w-3 animate-spin text-primary-foreground/70" aria-label="Sending" />
+					{:else if isDestructive}
+						{#if isTerminalFailure}
+							<Ban class="h-3 w-3 text-destructive/70" aria-label={m.status} />
+						{:else}
+							<AlertCircle class="h-3 w-3 text-destructive/70" aria-label="Failed" />
+						{/if}
+					{:else if isRead}
+						<Eye class="h-3.5 w-3.5 text-sky-500" aria-label="Opened" />
+					{:else if isDelivered}
+						<CheckCheck class="h-3.5 w-3.5 text-primary-foreground/80" aria-label="Delivered" />
+					{:else}
+						<Check class="h-3.5 w-3.5 text-primary-foreground/50" aria-label="Sent" />
+					{/if}
+				{/if}
+			</div>
+
+			{#if !isInbound && isDestructive}
+				<div class="mt-2 flex items-center justify-end gap-2 border-t border-destructive/15 pt-2">
+					{#if m.failure_reason}
+						<span class="max-w-[260px] truncate text-[10px] text-destructive/80"
+							>{m.failure_reason}</span
+						>
+					{/if}
+					{#if isRetryable}
+						<button
+							type="button"
+							onclick={onRetry}
+							disabled={retrying}
+							class="inline-flex min-h-[28px] items-center gap-1 rounded-md border border-destructive/40 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
+						>
+							{#if retrying}
+								<Loader2 class="h-3 w-3 animate-spin" />
+								<span>Retrying…</span>
+							{:else}
+								<RotateCcw class="h-3 w-3" />
+								<span>Retry</span>
+							{/if}
+						</button>
+					{/if}
+				</div>
 			{/if}
 		</div>
+
+		{#if !isInbound}
+			{#if !grouped}
+				<div
+					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary ring-1 ring-primary/20"
+					aria-hidden="true"
+				>
+					{#if outboundInitials}
+						{outboundInitials}
+					{:else}
+						<Mail class="h-3.5 w-3.5" />
+					{/if}
+				</div>
+			{:else}
+				<div class="w-8 shrink-0"></div>
+			{/if}
+		{/if}
 	</div>
 </div>

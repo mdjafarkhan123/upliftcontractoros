@@ -160,7 +160,10 @@
       "PowerShell($out = npm run check 2>&1 | Out-String; $errs = \\([regex]::Matches\\($out, 'ERROR'\\)\\).Count; Write-Output \\(\"Total ERROR lines: \" + $errs\\); if \\($out -match 'svelte-check found \\(\\\\d+\\) errors'\\) { Write-Output \\(\"svelte-check summary: \" + $Matches[0]\\) })",
       "PowerShell(npx prettier --write \"src/lib/server/email/brevo/client.ts\" \"src/lib/server/db/schema/14_email_domains.ts\" \"src/lib/stores/jafarEmailDomain.svelte.ts\" \"src/routes/api/admin/orgs/[id]/email-domain/+server.ts\" \"src/routes/api/admin/orgs/[id]/email-domain/verify/+server.ts\" \"src/lib/components/jafar/EmailDomainPanel.svelte\" 2>&1 | Select-Object -Last 10)",
       "Bash(claude mcp *)",
-      "mcp__svelte__svelte-autofixer"
+      "mcp__svelte__svelte-autofixer",
+      "Bash(git --no-pager diff --stat HEAD)",
+      "Bash(git --no-pager diff HEAD -- src/lib/components/inbox/EmailMessageCard.svelte)",
+      "mcp__supabase__execute_sql"
     ]
   },
   "enableAllProjectMcpServers": true,

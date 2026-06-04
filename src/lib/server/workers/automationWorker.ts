@@ -181,6 +181,23 @@ async function handleSpeedToLead(data: EventJobData) {
 	const contact = await loadContact(data.org_id, data.resource_id);
 	if (!contact || contact.sms_opt_out) return;
 
+	// Idempotency guard: one lead gets exactly one speed-to-lead text, ever. The
+	// outbox redelivers at-least-once, so without this a re-dispatched
+	// contact.created would queue another SMS each time. (This is the class of
+	// bug that produced the runaway auto-reply loop.)
+	const existing = await db
+		.select({ id: automationJobs.id })
+		.from(automationJobs)
+		.where(
+			and(
+				eq(automationJobs.org_id, data.org_id),
+				eq(automationJobs.type, 'speed_to_lead'),
+				eq(automationJobs.resource_id, contact.id)
+			)
+		)
+		.limit(1);
+	if (existing.length > 0) return;
+
 	const bullJobId = `speed_to_lead:${data.outbox_event_id}`;
 	const automationJob = await insertAutomationJob({
 		org_id: data.org_id,

@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { sql, and, eq, lte, inArray } from 'drizzle-orm';
+import { sql, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	outboxEvents,
@@ -238,112 +238,153 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 						: target.queue === 'media'
 							? mediaQueue()
 							: smsQueue();
-		await addJob(queue, target.jobName, data, target.delayMs ? { delay: target.delayMs } : {});
+		// Deterministic jobId so a redelivered outbox event can never enqueue the
+		// same job twice — BullMQ ignores an add whose id already exists. This is
+		// the queue-level guard against the duplicate-send class of bug; the
+		// at-least-once outbox loop relies on it for effectively-once dispatch.
+		await addJob(queue, target.jobName, data, {
+			jobId: `${event.id}__${target.jobName}`,
+			...(target.delayMs ? { delay: target.delayMs } : {})
+		});
 	}
 	return { status: 'routed' };
 }
 
-async function processBatch(): Promise<number> {
+// Stuck-row recovery window: a row left in 'processing' (worker crashed between
+// claim and finalize) becomes eligible for re-claim after this long. Re-dispatch
+// is safe because addJob is jobId-deduped and the handlers are idempotent.
+const PROCESSING_RECLAIM_MS = 5 * 60_000;
+
+/**
+ * Atomically claim a batch of due events: select pending (or stale 'processing')
+ * rows under SKIP LOCKED and flip them to 'processing' in one short transaction.
+ * No external calls happen here, so the tx commits fast and never holds locks
+ * while awaiting Redis — that was the cause of the redelivery loop.
+ */
+async function claimBatch(): Promise<OutboxEvent[]> {
+	const reclaimSeconds = Math.round(PROCESSING_RECLAIM_MS / 1000);
 	return db.transaction(async (tx) => {
-		// Guardrail: this transaction awaits Redis (addJob) *inside* the tx, so a
-		// frozen/suspended worker process (e.g. Windows console QuickEdit pause,
-		// OOM, SIGSTOP) would otherwise sit "idle in transaction" forever, holding
-		// the outbox row lock — which also starves Supabase Realtime's replication
-		// slot and bricks the inbox live updates org-wide. These SET LOCAL timeouts
-		// make Postgres auto-abort the transaction so locks always release. Connection
-		// -level startup params are silently ignored by the Supabase 6543 pooler, so
-		// SET LOCAL (which applies within the tx) is the only reliable mechanism.
-		await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
-		await tx.execute(sql`SET LOCAL statement_timeout = '60s'`);
+		// Keep a hard ceiling so a wedged session can't hold the row lock forever.
+		// This tx does only DB work, so it always completes well under the limit.
+		await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
 		const rows = await tx.execute<OutboxEvent>(sql`
 			SELECT * FROM outbox_events
-			WHERE status = 'pending' AND available_at <= now()
+			WHERE (
+				status = 'pending'
+				OR (status = 'processing' AND updated_at < now() - make_interval(secs => ${reclaimSeconds}))
+			)
+			AND available_at <= now()
 			ORDER BY sequence ASC
 			FOR UPDATE SKIP LOCKED
 			LIMIT ${BATCH_SIZE}
 		`);
 		const events = rows as unknown as OutboxEvent[];
-		if (events.length === 0) return 0;
+		if (events.length === 0) return [];
+		await tx
+			.update(outboxEvents)
+			.set({ status: 'processing', updated_at: new Date() })
+			.where(
+				inArray(
+					outboxEvents.id,
+					events.map((e) => e.id)
+				)
+			);
+		return events;
+	});
+}
 
-		const routedIds: string[] = [];
-		const activityRowsToInsert: Array<typeof activityEvents.$inferInsert> = [];
-		for (const event of events) {
-			try {
-				await tx
-					.update(outboxEvents)
-					.set({ status: 'processing', updated_at: new Date() })
-					.where(eq(outboxEvents.id, event.id));
-				const result = await dispatch(event);
-				if (result.status === 'routed') {
-					routedIds.push(event.id);
-					if (event.org_id && ACTIVITY_ALLOWLIST.includes(event.event_type)) {
-						const payload = (event.payload ?? {}) as Record<string, unknown>;
-						const contactIdRaw = payload.contact_id;
-						const eventVersionRaw = payload.event_version;
-						activityRowsToInsert.push({
-							org_id: event.org_id,
-							event_type: event.event_type,
-							resource_type: event.resource_type,
-							resource_id: event.resource_id,
-							contact_id:
-								typeof contactIdRaw === 'string' && contactIdRaw.length > 0 ? contactIdRaw : null,
-							payload: payload,
-							event_version:
-								typeof eventVersionRaw === 'number' && Number.isFinite(eventVersionRaw)
-									? eventVersionRaw
-									: 1,
-							occurred_at: event.created_at
-						});
-					}
-				} else {
-					console.warn(
-						`[outbox] unrouted event_type=${event.event_type} id=${event.id} — marking processed (no retry)`
-					);
-					await tx
-						.update(outboxEvents)
-						.set({
-							status: 'processed',
-							processed_at: new Date(),
-							last_error: result.reason,
-							updated_at: new Date()
-						})
-						.where(eq(outboxEvents.id, event.id));
+async function processBatch(): Promise<number> {
+	const events = await claimBatch();
+	if (events.length === 0) return 0;
+
+	const routedIds: string[] = [];
+	const unrouted: Array<{ id: string; reason: string }> = [];
+	const failures: Array<{ event: OutboxEvent; error: string }> = [];
+	const activityRowsToInsert: Array<typeof activityEvents.$inferInsert> = [];
+
+	// External side effects (BullMQ enqueue, R2 delete) run here — OUTSIDE any
+	// transaction. A failure or crash now leaves the row in 'processing', which
+	// claimBatch reclaims after PROCESSING_RECLAIM_MS; redelivery is safe via
+	// jobId dedup. Crucially, Redis is never enqueued inside a DB tx, so a tx that
+	// can't commit can no longer fire un-tracked, ever-repeating sends.
+	for (const event of events) {
+		try {
+			const result = await dispatch(event);
+			if (result.status === 'routed') {
+				routedIds.push(event.id);
+				if (event.org_id && ACTIVITY_ALLOWLIST.includes(event.event_type)) {
+					const payload = (event.payload ?? {}) as Record<string, unknown>;
+					const contactIdRaw = payload.contact_id;
+					const eventVersionRaw = payload.event_version;
+					activityRowsToInsert.push({
+						org_id: event.org_id,
+						event_type: event.event_type,
+						resource_type: event.resource_type,
+						resource_id: event.resource_id,
+						contact_id:
+							typeof contactIdRaw === 'string' && contactIdRaw.length > 0 ? contactIdRaw : null,
+						payload: payload,
+						event_version:
+							typeof eventVersionRaw === 'number' && Number.isFinite(eventVersionRaw)
+								? eventVersionRaw
+								: 1,
+						occurred_at: event.created_at
+					});
 				}
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				const nextAttempt = event.attempts + 1;
-				const isDead = nextAttempt >= event.max_attempts;
-				const backoffMs = Math.min(2 ** nextAttempt * 60_000, 60 * 60_000);
-				await tx
-					.update(outboxEvents)
-					.set({
-						status: isDead ? 'dead_lettered' : 'pending',
-						attempts: nextAttempt,
-						last_error: message,
-						available_at: isDead ? event.available_at : new Date(Date.now() + backoffMs),
-						dead_lettered_at: isDead ? new Date() : null,
-						updated_at: new Date()
-					})
-					.where(eq(outboxEvents.id, event.id));
-				console.error(
-					`[outbox] dispatch failed event=${event.id} attempt=${nextAttempt}: ${message}`
+			} else {
+				console.warn(
+					`[outbox] unrouted event_type=${event.event_type} id=${event.id} — marking processed (no retry)`
 				);
+				unrouted.push({ id: event.id, reason: result.reason });
 			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			failures.push({ event, error: message });
+			console.error(`[outbox] dispatch failed event=${event.id}: ${message}`);
 		}
+	}
 
+	// Finalize all status transitions in one short tx with no external calls.
+	await db.transaction(async (tx) => {
 		if (routedIds.length > 0) {
 			await tx
 				.update(outboxEvents)
 				.set({ status: 'processed', processed_at: new Date(), updated_at: new Date() })
-				.where(and(eq(outboxEvents.status, 'processing'), inArray(outboxEvents.id, routedIds)));
+				.where(inArray(outboxEvents.id, routedIds));
 		}
-
+		for (const u of unrouted) {
+			await tx
+				.update(outboxEvents)
+				.set({
+					status: 'processed',
+					processed_at: new Date(),
+					last_error: u.reason,
+					updated_at: new Date()
+				})
+				.where(eq(outboxEvents.id, u.id));
+		}
+		for (const f of failures) {
+			const nextAttempt = f.event.attempts + 1;
+			const isDead = nextAttempt >= f.event.max_attempts;
+			const backoffMs = Math.min(2 ** nextAttempt * 60_000, 60 * 60_000);
+			await tx
+				.update(outboxEvents)
+				.set({
+					status: isDead ? 'dead_lettered' : 'pending',
+					attempts: nextAttempt,
+					last_error: f.error,
+					available_at: isDead ? f.event.available_at : new Date(Date.now() + backoffMs),
+					dead_lettered_at: isDead ? new Date() : null,
+					updated_at: new Date()
+				})
+				.where(eq(outboxEvents.id, f.event.id));
+		}
 		if (activityRowsToInsert.length > 0) {
 			await tx.insert(activityEvents).values(activityRowsToInsert);
 		}
-
-		return events.length;
 	});
+
+	return events.length;
 }
 
 let running = false;
