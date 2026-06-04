@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { MessageSquare, Search } from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
@@ -35,11 +35,11 @@
 	);
 	const canViewAll = $derived(member().can_view_all_conversations);
 
-	let status = $state<StatusFilter>(data.status);
-	let assignee = $state<AssigneeFilter>(data.assignee);
-	let unread = $state<boolean>(data.unread);
-	let search = $state(data.q);
-	let tag = $state(data.tag);
+	let status = $state<StatusFilter>(untrack(() => data.status));
+	let assignee = $state<AssigneeFilter>(untrack(() => data.assignee));
+	let unread = $state<boolean>(untrack(() => data.unread));
+	let search = $state(untrack(() => data.q));
+	let tag = $state(untrack(() => data.tag));
 
 	const filters = $derived({ status, assignee, unread, q: search, tag });
 	const orgTags = $derived.by(() => {

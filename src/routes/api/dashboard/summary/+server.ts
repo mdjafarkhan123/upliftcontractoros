@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -344,7 +344,7 @@ export const GET: RequestHandler = async (event) => {
 						left join contacts c
 							on c.id = ae.contact_id
 						where ae.org_id = ${orgId}
-							and ae.event_type = any(${ACTIVITY_ALLOWLIST}::text[])
+							and ${inArray(sql`ae.event_type`, ACTIVITY_ALLOWLIST)}
 						order by ae.occurred_at desc
 						limit ${ACTIVITY_FETCH_LIMIT}
 					`);

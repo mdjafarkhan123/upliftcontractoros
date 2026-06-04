@@ -990,9 +990,9 @@
 								{:else if webchatWidget}
 									<!-- Mode selector -->
 									<div class="space-y-2">
-										<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 											Chat mode
-										</label>
+										</span>
 										<div class="flex gap-3">
 											{#each [{ value: 'asynchronous', label: 'Asynchronous', hint: 'Visitors leave details, team replies later' }, { value: 'instant', label: 'Instant', hint: 'Implies team is ready to respond quickly' }] as mode (mode.value)}
 												<button
@@ -1026,6 +1026,7 @@
 										<button
 											type="button"
 											role="switch"
+											aria-label="Toggle widget active"
 											aria-checked={webchatWidget.is_active}
 											onclick={() => {
 												if (webchatWidget) webchatWidget.is_active = !webchatWidget.is_active;
@@ -1080,9 +1081,9 @@
 
 									<!-- Domain allowlist -->
 									<div class="space-y-2">
-										<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 											Domain allowlist
-										</label>
+										</span>
 										<p class="text-[11px] text-slate-500">
 											Leave empty to allow all origins. Add full origins like <code
 												class="font-mono text-slate-400">https://example.com</code
@@ -1133,9 +1134,9 @@
 
 									<!-- Widget token (immutable) -->
 									<div class="space-y-1.5">
-										<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 											Widget token
-										</label>
+										</span>
 										<p class="text-[11px] text-slate-500">Generated once. Immutable. Never editable.</p>
 										<div class="flex items-center gap-2">
 											<code
@@ -1157,9 +1158,9 @@
 
 									<!-- Embed snippet -->
 									<div class="space-y-1.5">
-										<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 											Embed snippet
-										</label>
+										</span>
 										<p class="text-[11px] text-slate-500">
 											Paste this into the <code class="font-mono text-slate-400">&lt;head&gt;</code> of the
 											contractor's website.

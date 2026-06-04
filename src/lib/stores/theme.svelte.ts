@@ -19,9 +19,10 @@ function applyToDocument(theme: Theme) {
 }
 
 function createTheme() {
-	let value = $state<Theme>(readInitial());
+	const initial = readInitial();
+	let value = $state<Theme>(initial);
 
-	if (browser) applyToDocument(value);
+	if (browser) applyToDocument(initial);
 
 	return {
 		get value() {

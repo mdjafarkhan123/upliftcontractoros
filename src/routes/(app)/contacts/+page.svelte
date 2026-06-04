@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
@@ -34,11 +35,11 @@
 	// `searchInput` is what the input is bound to (immediate); `q` is the
 	// debounced value that drives the API call & URL sync. Debounce lives in
 	// ContactSearchBar (250 ms) and only fires `onInput` when the user pauses.
-	let searchInput = $state(data.q);
-	let q = $state(data.q);
-	let statusFilter = $state<StatusValue>(data.statusFilter);
-	let tag = $state<string>(data.tag);
-	let scope = $state<ScopeValue>(data.scope);
+	let searchInput = $state(untrack(() => data.q));
+	let q = $state(untrack(() => data.q));
+	let statusFilter = $state<StatusValue>(untrack(() => data.statusFilter));
+	let tag = $state<string>(untrack(() => data.tag));
+	let scope = $state<ScopeValue>(untrack(() => data.scope));
 
 	const filters = $derived({ q, statusFilter, tag, scope });
 
