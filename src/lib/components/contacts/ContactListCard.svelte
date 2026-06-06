@@ -20,7 +20,7 @@
 	}: {
 		id: string;
 		full_name: string;
-		phone: string;
+		phone: string | null;
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		assignee_name?: string | null;
@@ -74,7 +74,9 @@
 			<div class="flex items-start justify-between gap-2">
 				<div class="min-w-0">
 					<h3 class="truncate text-base font-semibold text-foreground">{full_name}</h3>
-					<p class="truncate text-sm text-muted-foreground">{formatPhoneDisplay(phone)}</p>
+					<p class="truncate text-sm text-muted-foreground">
+						{phone ? formatPhoneDisplay(phone) : 'No phone'}
+					</p>
 					{#if email}
 						<p class="truncate text-xs text-muted-foreground">{email}</p>
 					{/if}

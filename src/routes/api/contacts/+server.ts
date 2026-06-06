@@ -142,15 +142,19 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const input = parsed.data;
-	if (isReleasedPhone(input.phone)) {
-		return json({ error: 'Invalid phone value.', code: 'PHONE_INVALID' }, { status: 422 });
-	}
-	let e164: string;
-	try {
-		e164 = toE164(input.phone);
-	} catch (err) {
-		const message = err instanceof PhoneInvalidError ? err.message : 'Invalid phone value.';
-		return json({ error: message, code: 'PHONE_INVALID' }, { status: 422 });
+	// Phone is optional (Messenger / email-only contacts have none). Validate and
+	// dedup only when one was provided; otherwise the contact is created phoneless.
+	let e164: string | null = null;
+	if (input.phone) {
+		if (isReleasedPhone(input.phone)) {
+			return json({ error: 'Invalid phone value.', code: 'PHONE_INVALID' }, { status: 422 });
+		}
+		try {
+			e164 = toE164(input.phone);
+		} catch (err) {
+			const message = err instanceof PhoneInvalidError ? err.message : 'Invalid phone value.';
+			return json({ error: message, code: 'PHONE_INVALID' }, { status: 422 });
+		}
 	}
 
 	if (input.assigned_to) {
@@ -179,18 +183,21 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	// Dedup includes soft-deleted (phone reservation rule).
-	const existing = await findContactByPhone(auth.orgId, e164);
-	if (existing) {
-		return json(
-			{
-				error: 'A contact with this phone already exists.',
-				code: 'PHONE_DUPLICATE',
-				existing_contact_id: existing.id,
-				is_soft_deleted: existing.deleted_at !== null
-			},
-			{ status: 409 }
-		);
+	// Dedup includes soft-deleted (phone reservation rule). Only when a phone was
+	// provided — phoneless contacts have no (org_id, phone) dedup key.
+	if (e164) {
+		const existing = await findContactByPhone(auth.orgId, e164);
+		if (existing) {
+			return json(
+				{
+					error: 'A contact with this phone already exists.',
+					code: 'PHONE_DUPLICATE',
+					existing_contact_id: existing.id,
+					is_soft_deleted: existing.deleted_at !== null
+				},
+				{ status: 409 }
+			);
+		}
 	}
 
 	try {
@@ -239,8 +246,8 @@ export const POST: RequestHandler = async (event) => {
 		return json({ contact: result }, { status: 201 });
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Insert failed';
-		// Catch unique violation race on (org_id, phone)
-		if (/unique|duplicate/i.test(msg)) {
+		// Catch unique violation race on (org_id, phone) — only possible with a phone.
+		if (e164 && /unique|duplicate/i.test(msg)) {
 			const conflict = await findContactByPhone(auth.orgId, e164);
 			return json(
 				{

@@ -90,9 +90,9 @@
 
 		const payload: Record<string, unknown> = {
 			full_name: full_name.trim(),
-			phone: phone.trim(),
 			lead_source
 		};
+		if (phone.trim()) payload.phone = phone.trim();
 		if (email.trim()) payload.email = email.trim();
 		if (assigned_to) payload.assigned_to = assigned_to;
 		if (referred_by_contact_id) payload.referred_by_contact_id = referred_by_contact_id;
@@ -161,13 +161,12 @@
 		</div>
 
 		<div class="space-y-1.5">
-			<Label for="phone">Phone <span class="text-destructive">*</span></Label>
+			<Label for="phone">Phone</Label>
 			<Input
 				id="phone"
 				type="tel"
 				inputmode="tel"
 				bind:value={phone}
-				required
 				autocomplete="tel"
 				placeholder="(555) 123-4567"
 			/>

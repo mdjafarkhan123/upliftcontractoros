@@ -21,7 +21,7 @@
 		onMerge
 	}: {
 		full_name: string;
-		phone: string;
+		phone: string | null;
 		alt_phone?: string | null;
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
@@ -108,13 +108,22 @@
 	</div>
 
 	<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
-		<a
-			class="flex min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent/40"
-			href={`tel:${phone}`}
-		>
-			<Phone class="h-4 w-4 text-muted-foreground" />
-			<span class="font-medium">{formatPhoneDisplay(phone)}</span>
-		</a>
+		{#if phone}
+			<a
+				class="flex min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent/40"
+				href={`tel:${phone}`}
+			>
+				<Phone class="h-4 w-4 text-muted-foreground" />
+				<span class="font-medium">{formatPhoneDisplay(phone)}</span>
+			</a>
+		{:else}
+			<div
+				class="flex min-h-[44px] items-center gap-3 rounded-xl border border-dashed border-border bg-card px-4 py-2 text-sm text-muted-foreground"
+			>
+				<Phone class="h-4 w-4" />
+				<span>No phone number</span>
+			</div>
+		{/if}
 		{#if alt_phone}
 			<a
 				class="flex min-h-[44px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent/40"

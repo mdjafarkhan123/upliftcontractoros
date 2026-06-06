@@ -15,6 +15,7 @@ import {
 	emailQueue,
 	smsQueue,
 	mediaQueue,
+	messengerQueue,
 	addJob
 } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
@@ -40,7 +41,7 @@ const POLL_INTERVAL_MS = 30_000;
 const OUTBOX_CHANNEL = 'outbox_channel';
 
 type QueueTarget = {
-	queue: 'automation' | 'notification' | 'email' | 'sms' | 'media';
+	queue: 'automation' | 'notification' | 'email' | 'sms' | 'media' | 'messenger';
 	jobName: string;
 	delayMs?: number;
 };
@@ -166,6 +167,8 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [{ queue: 'email', jobName: 'email.send.requested' }];
 		case 'sms.send.requested':
 			return [{ queue: 'sms', jobName: 'sms.send.requested' }];
+		case 'messenger.send.requested':
+			return [{ queue: 'messenger', jobName: 'messenger.send.requested' }];
 		default:
 			return [];
 	}
@@ -237,7 +240,9 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 						? emailQueue()
 						: target.queue === 'media'
 							? mediaQueue()
-							: smsQueue();
+							: target.queue === 'messenger'
+								? messengerQueue()
+								: smsQueue();
 		// Deterministic jobId so a redelivered outbox event can never enqueue the
 		// same job twice — BullMQ ignores an add whose id already exists. This is
 		// the queue-level guard against the duplicate-send class of bug; the

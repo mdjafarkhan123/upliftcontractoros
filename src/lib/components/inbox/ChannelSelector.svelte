@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { MessageSquare, Mail, Globe } from '@lucide/svelte';
+	import { MessageSquare, Mail, Globe, Send } from '@lucide/svelte';
 	import { cn } from '$lib/utils/cn';
 	import type { OutboundChannel } from '$lib/stores/inbox.svelte';
 
@@ -18,7 +18,8 @@
 	const meta: Record<OutboundChannel, { label: string; icon: typeof MessageSquare }> = {
 		sms: { label: 'SMS', icon: MessageSquare },
 		email: { label: 'Email', icon: Mail },
-		webchat: { label: 'Webchat', icon: Globe }
+		webchat: { label: 'Webchat', icon: Globe },
+		messenger: { label: 'Messenger', icon: Send }
 	};
 
 	const options = $derived(available.map((c) => ({ key: c, ...meta[c] })));

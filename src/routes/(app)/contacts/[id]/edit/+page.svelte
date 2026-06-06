@@ -143,7 +143,7 @@
 			recentNotes = body.notes;
 
 			full_name = body.contact.full_name;
-			phone = body.contact.phone;
+			phone = body.contact.phone ?? '';
 			email = body.contact.email ?? '';
 			assigned_to = body.contact.assigned_to ?? '';
 			lead_source = body.contact.lead_source as typeof lead_source;
@@ -285,15 +285,12 @@
 							/>
 						</div>
 						<div class="space-y-1.5">
-							<Label for="phone">
-								Phone <span class="text-destructive">*</span>
-							</Label>
+							<Label for="phone">Phone</Label>
 							<Input
 								id="phone"
 								type="tel"
 								inputmode="tel"
 								bind:value={phone}
-								required
 								autocomplete="tel"
 								aria-invalid={fieldErrors.phone ? 'true' : undefined}
 							/>

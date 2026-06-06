@@ -17,12 +17,14 @@ export const NOTIFICATION_QUEUE = 'notification';
 export const EMAIL_QUEUE = 'email';
 export const SMS_QUEUE = 'sms';
 export const MEDIA_QUEUE = 'media';
+export const MESSENGER_QUEUE = 'messenger';
 
 let _automationQueue: Queue | null = null;
 let _notificationQueue: Queue | null = null;
 let _emailQueue: Queue | null = null;
 let _smsQueue: Queue | null = null;
 let _mediaQueue: Queue | null = null;
+let _messengerQueue: Queue | null = null;
 
 export function automationQueue(): Queue {
 	if (_automationQueue) return _automationQueue;
@@ -52,6 +54,12 @@ export function mediaQueue(): Queue {
 	if (_mediaQueue) return _mediaQueue;
 	_mediaQueue = new Queue(MEDIA_QUEUE, { connection: redisConnection() });
 	return _mediaQueue;
+}
+
+export function messengerQueue(): Queue {
+	if (_messengerQueue) return _messengerQueue;
+	_messengerQueue = new Queue(MESSENGER_QUEUE, { connection: redisConnection() });
+	return _messengerQueue;
 }
 
 export const DEFAULT_JOB_OPTIONS: JobsOptions = {

@@ -85,6 +85,14 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 
+	// A phoneless contact (e.g. a Messenger-only lead) has no number to release.
+	if (!target.phone) {
+		return json(
+			{ error: 'This contact has no phone number to release.', code: 'NO_PHONE' },
+			{ status: 409 }
+		);
+	}
+
 	const original = target.phone;
 	const released = buildReleasedPhone(target.id, original);
 

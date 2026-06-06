@@ -7,7 +7,8 @@ import {
 	integer,
 	numeric,
 	timestamp,
-	jsonb
+	jsonb,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -20,7 +21,8 @@ export const messageChannelEnum = pgEnum('message_channel', [
 	'sms',
 	'missed_call',
 	'email',
-	'webchat'
+	'webchat',
+	'messenger'
 ]);
 
 export const messageDirectionEnum = pgEnum('message_direction', ['inbound', 'outbound']);
@@ -90,6 +92,9 @@ export const messages = pgTable('messages', {
 	media_urls: text('media_urls').array(),
 	status: messageStatusEnum('status').notNull(),
 	twilio_message_sid: text('twilio_message_sid'),
+	// Messenger message id (Meta `mid`). Set on inbound messenger messages for
+	// webhook-retry dedup; null for all other channels and outbound rows.
+	messenger_mid: text('messenger_mid'),
 
 	reply_to_message_id: uuid('reply_to_message_id'),
 	failure_reason: text('failure_reason'),
@@ -123,7 +128,12 @@ export const messages = pgTable('messages', {
 	read_at: timestamp('read_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (t) => [
+	// Inbound Messenger dedup — Meta redelivers webhooks; the `mid` is the unique key.
+	uniqueIndex('idx_messages_messenger_mid')
+		.on(t.messenger_mid)
+		.where(sql`${t.messenger_mid} IS NOT NULL`)
+]);
 
 export type Message = InferSelectModel<typeof messages>;
 export type NewMessage = InferInsertModel<typeof messages>;

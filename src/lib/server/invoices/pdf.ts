@@ -45,7 +45,7 @@ export type InvoicePdfData = {
 		due_date: string | null;
 		created_at: Date;
 	};
-	contact: { full_name: string; email: string | null; phone: string };
+	contact: { full_name: string; email: string | null; phone: string | null };
 	lineItems: { description: string; quantity: string; unit_price: string; total: string }[];
 	payments: { amount: string; payment_method: string; paid_at: Date; notes: string | null }[];
 };
@@ -137,7 +137,7 @@ function renderHtml(d: InvoicePdfData): string {
 	</div>
 	<div class="meta">
 		<strong>${escapeHtml(d.contact.full_name)}</strong><br>
-		${escapeHtml(d.contact.phone)}${d.contact.email ? '<br>' + escapeHtml(d.contact.email) : ''}
+		${d.contact.phone ? escapeHtml(d.contact.phone) : ''}${d.contact.email ? (d.contact.phone ? '<br>' : '') + escapeHtml(d.contact.email) : ''}
 	</div>
 	<div style="font-weight:600;font-size:16px;margin-bottom:8px;">${escapeHtml(d.invoice.title)}</div>
 	<table>

@@ -3,7 +3,7 @@
 	import {
 		Building2,
 		Bot,
-		CreditCard,
+		Blocks,
 		UserCircle,
 		CalendarClock,
 		Users,
@@ -18,12 +18,10 @@
 	let {
 		role,
 		featureAutomation,
-		featureStripe,
 		featureOnlineBooking
 	}: {
 		role: 'admin' | 'manager' | 'member';
 		featureAutomation: boolean;
-		featureStripe: boolean;
 		featureOnlineBooking: boolean;
 	} = $props();
 
@@ -66,13 +64,12 @@
 			iconColor: 'text-violet-600 dark:text-violet-400'
 		},
 		{
-			href: '/settings/stripe',
-			label: 'Payments',
-			description: 'Connect Stripe to accept invoice payments',
-			icon: CreditCard,
-			locked: role !== 'admin' || !featureStripe,
-			lockedReason:
-				role !== 'admin' ? 'Admin only' : !featureStripe ? 'Not on your plan' : undefined,
+			href: '/settings/integrations',
+			label: 'Integrations',
+			description: 'Messenger, payments, and more',
+			icon: Blocks,
+			locked: role !== 'admin',
+			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
 			iconBg: 'bg-blue-50 dark:bg-blue-500/10',
 			iconColor: 'text-blue-600 dark:text-blue-400'
 		},

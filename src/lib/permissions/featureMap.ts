@@ -144,6 +144,14 @@ export const FEATURE_MODULE_MAP: Record<FeatureFlagKey, FeatureModuleBinding> = 
 		navKeys: [],
 		workerEvents: []
 	},
+	// Inbound webhook is auth/feature-gate bypassed (/api/webhooks). The outbound
+	// send event is gated here so the outbox worker drops messenger sends for orgs
+	// without the flag (e.g. before Meta App Review of pages_messaging).
+	feature_messenger: {
+		apiPrefixes: [],
+		navKeys: [],
+		workerEvents: ['messenger.send.requested']
+	},
 	feature_online_booking: {
 		apiPrefixes: ['/api/booking-links'],
 		navKeys: [],

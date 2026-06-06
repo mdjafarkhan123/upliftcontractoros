@@ -5,7 +5,7 @@ import { db } from '$lib/server/db/client';
 import { media } from '$lib/server/db/schema';
 import { MEDIA_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { r2Upload, r2DeleteObjects } from '$lib/server/media/r2';
-import { validateMagicBytes } from '$lib/server/media/mimeCheck';
+import { validateMagicBytes, detectMimeFromBytes } from '$lib/server/media/mimeCheck';
 import { processImage } from '$lib/server/media/imageProcessor';
 import { sha256Buffer } from '$lib/utils/hash';
 import { assertAndIncrementUsage } from '$lib/server/usage/assertAndIncrementUsage';
@@ -18,7 +18,9 @@ const log = createLogger('media.worker');
 // photo) — but it is still counted. Use an effectively-unbounded cap.
 const NO_BLOCK_LIMIT = Number.MAX_SAFE_INTEGER;
 
-type MediaItem = { url: string; content_type: string };
+type MediaSource = 'twilio' | 'messenger';
+
+type MediaItem = { url: string; content_type?: string };
 
 type MediaJobData = {
 	outbox_event_id: string;
@@ -31,6 +33,11 @@ type MediaJobData = {
 		conversation_id: string;
 		contact_id: string;
 		org_id: string;
+		// Which provider the URLs come from. Twilio media is private (Basic-auth
+		// fetch + a trusted content-type); Messenger/FB CDN URLs are public and
+		// carry no content-type, so the type is sniffed from the bytes. Absent =
+		// 'twilio' for backward-compatibility with already-queued events.
+		media_source?: MediaSource;
 		media: MediaItem[];
 	};
 };
@@ -43,19 +50,27 @@ function twilioAuthHeader(): string | null {
 }
 
 /**
- * Download one inbound media file from Twilio (private, expiring URL), validate
- * it, store it in R2 (with resized variants for photos), and insert a media row
- * linked to the message. Idempotent per file via sha256 — a retry that already
- * stored this exact file skips it instead of duplicating.
+ * Download one inbound media file, validate it, store it in R2 (with resized
+ * variants for photos), and insert a media row linked to the message. Idempotent
+ * per file via sha256 — a retry that already stored this exact file skips it
+ * instead of duplicating.
+ *
+ * Twilio media sits behind a private, expiring URL (Basic-auth fetch) and ships a
+ * trusted content-type we cross-check. Messenger/FB CDN URLs are public (no auth
+ * header) and carry no usable content-type, so the type is sniffed from the bytes.
  */
 async function storeOneMedia(
 	orgId: string,
 	messageId: string,
 	item: MediaItem,
-	authHeader: string
+	source: MediaSource,
+	authHeader: string | null
 ): Promise<void> {
-	const res = await fetch(item.url, { headers: { Authorization: authHeader } });
-	if (!res.ok) throw new Error(`Twilio media fetch failed (${res.status})`);
+	const res = await fetch(
+		item.url,
+		source === 'twilio' && authHeader ? { headers: { Authorization: authHeader } } : {}
+	);
+	if (!res.ok) throw new Error(`${source} media fetch failed (${res.status})`);
 	const bytes = Buffer.from(await res.arrayBuffer());
 	if (bytes.length === 0) {
 		log.warn({ phase: 'empty_media', message_id: messageId, url: item.url });
@@ -72,11 +87,17 @@ async function storeOneMedia(
 		.limit(1);
 	if (dup) return;
 
-	const detectedMime = validateMagicBytes(bytes, item.content_type || '');
+	// Twilio ships a trusted content-type we cross-check; Messenger ships none, so
+	// detect purely from magic bytes. Either way only image/* + PDF are storable.
+	const detectedMime =
+		source === 'messenger'
+			? detectMimeFromBytes(bytes)
+			: validateMagicBytes(bytes, item.content_type || '');
 	if (!detectedMime) {
 		log.warn({
 			phase: 'unsupported_media',
 			message_id: messageId,
+			source,
 			content_type: item.content_type
 		});
 		return;
@@ -160,12 +181,19 @@ async function processInboundMedia(job: Job<MediaJobData>) {
 		return;
 	}
 
-	const authHeader = twilioAuthHeader();
-	if (!authHeader) throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required');
+	const source: MediaSource = payload.media_source === 'messenger' ? 'messenger' : 'twilio';
+
+	// Twilio URLs are private and require Basic auth; Messenger/FB CDN URLs are
+	// public, so no header is built for them.
+	let authHeader: string | null = null;
+	if (source === 'twilio') {
+		authHeader = twilioAuthHeader();
+		if (!authHeader) throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required');
+	}
 
 	for (const item of payload.media) {
 		if (!item?.url) continue;
-		await storeOneMedia(orgId, messageId, item, authHeader);
+		await storeOneMedia(orgId, messageId, item, source, authHeader);
 	}
 }
 

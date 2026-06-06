@@ -85,6 +85,12 @@ export const FEATURE_FLAG_GROUPS: FeatureFlagGroup[] = [
 				label: 'Web chat widget',
 				description:
 					'Embeddable website chat widget that drops conversations into the inbox asynchronously.'
+			},
+			{
+				key: 'feature_messenger',
+				label: 'Facebook Messenger',
+				description:
+					'Facebook Page DMs land in the inbox as a unified channel. After enabling, the contractor connects their Page in Settings → Integrations.'
 			}
 		]
 	},
@@ -267,6 +273,8 @@ export const LIMIT_KEYS: readonly (keyof OrgLimits)[] = [
 	'max_team_members',
 	'max_monthly_sms',
 	'max_bulk_sms_per_day',
+	'max_sms_per_minute',
+	'max_sms_per_day',
 	'max_ai_requests_per_month',
 	'max_storage_gb',
 	'max_automation_workflows'
@@ -301,6 +309,20 @@ export const LIMIT_DEFS: LimitDef[] = [
 		description: 'Cap on broadcast SMS sends per day.',
 		unit: 'msgs / day',
 		zeroMeans: 'disabled'
+	},
+	{
+		key: 'max_sms_per_minute',
+		label: 'SMS per minute',
+		description: 'Outbound send-rate throttle. Over-cap sends are deferred, not dropped.',
+		unit: 'msgs / min',
+		zeroMeans: 'unlimited'
+	},
+	{
+		key: 'max_sms_per_day',
+		label: 'SMS per day (rate)',
+		description: 'Daily outbound send-rate throttle. Over-cap sends defer to the next day.',
+		unit: 'msgs / day',
+		zeroMeans: 'unlimited'
 	},
 	{
 		key: 'max_ai_requests_per_month',

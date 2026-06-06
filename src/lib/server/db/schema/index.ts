@@ -178,6 +178,19 @@ export type { QuickReply, NewQuickReply } from './13_quick_replies';
 export { emailDomainStatusEnum, emailDomains } from './14_email_domains';
 export type { EmailDomain, NewEmailDomain, EmailDnsRecord } from './14_email_domains';
 
+// Domain 15 — Messenger (per-tenant Facebook Page link + PSID identity)
+export {
+	messengerIntegrationStatusEnum,
+	messengerIntegrations,
+	messengerContacts
+} from './15_messenger';
+export type {
+	MessengerIntegration,
+	NewMessengerIntegration,
+	MessengerContact,
+	NewMessengerContact
+} from './15_messenger';
+
 // Domain 10 — Growth, Automation & System
 export {
 	growthFeedTypeEnum,

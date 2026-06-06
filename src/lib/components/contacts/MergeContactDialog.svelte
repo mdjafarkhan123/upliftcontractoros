@@ -10,7 +10,7 @@
 	type Candidate = {
 		id: string;
 		full_name: string;
-		phone: string;
+		phone: string | null;
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
 	};
@@ -21,7 +21,7 @@
 		onMerged
 	}: {
 		open?: boolean;
-		current: { id: string; full_name: string; phone: string };
+		current: { id: string; full_name: string; phone: string | null };
 		onMerged: (survivorId: string) => void;
 	} = $props();
 

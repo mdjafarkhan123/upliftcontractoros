@@ -2,7 +2,7 @@ import { SvelteMap } from 'svelte/reactivity';
 
 // ───── Types ───────────────────────────────────────────────────────────────
 
-export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat';
+export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat' | 'messenger';
 export type MessageDirection = 'inbound' | 'outbound';
 export type MessageStatus =
 	| 'sending'
@@ -81,7 +81,7 @@ export type ThreadMessage = {
 	_optimistic_key?: string;
 };
 
-export type OutboundChannel = 'sms' | 'email' | 'webchat';
+export type OutboundChannel = 'sms' | 'email' | 'webchat' | 'messenger';
 
 export type ConversationDetail = {
 	id: string;

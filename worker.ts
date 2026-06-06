@@ -14,6 +14,7 @@ const WORKER_COLORS: Record<string, string> = {
 	notification: '\x1b[33m', // yellow
 	email: '\x1b[35m', // magenta
 	sms: '\x1b[34m', // blue
+	messenger: '\x1b[35m', // magenta
 	worker: '\x1b[1m' // bold (for this file's own logs)
 };
 const RESET = '\x1b[0m';
@@ -39,10 +40,11 @@ import './src/lib/server/workers/notificationWorker';
 import './src/lib/server/workers/emailWorker';
 import './src/lib/server/workers/smsWorker';
 import './src/lib/server/workers/mediaWorker';
+import './src/lib/server/workers/messengerWorker';
 import { registerCronJobs } from './src/lib/server/cron';
 
 registerCronJobs();
 
 console.log(
-	'[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m + cron active'
+	'[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m \x1b[35mmessenger\x1b[0m + cron active'
 );

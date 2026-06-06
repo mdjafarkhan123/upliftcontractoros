@@ -11,6 +11,7 @@ export { queueAutomationEmail, type QueueAutomationEmailInput } from './queueAut
 export {
 	computeChannelHints,
 	hasActiveWebchatSession,
+	hasMessengerIdentity,
 	isOrgEmailReady,
 	type ChannelHints,
 	type OutboundChannel

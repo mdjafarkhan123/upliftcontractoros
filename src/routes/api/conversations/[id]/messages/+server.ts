@@ -8,6 +8,7 @@ import {
 	conversations,
 	media,
 	messages,
+	messengerContacts,
 	organizations,
 	outboxEvents,
 	webchatSessions
@@ -37,7 +38,7 @@ const sendSchema = z.object({
 	// Body may be empty when the message carries media (e.g. a photo-only MMS).
 	// A "body or media required" check runs after parse.
 	body: z.string().max(10_000, 'Message too long').default(''),
-	channel: z.enum(['sms', 'webchat', 'email']).optional(),
+	channel: z.enum(['sms', 'webchat', 'email', 'messenger']).optional(),
 	email_subject: z.string().trim().max(255).optional(),
 	is_internal_note: z.boolean().optional().default(false),
 	attachments: z.array(attachmentSchema).max(10).optional(),
@@ -592,7 +593,103 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
+	// ── Messenger branch (async via outbox → messenger worker) ──────────────
+	if (outboundChannel === 'messenger') {
+		// v1 sends text only — outbound media is deferred to the Messenger media work.
+		if (mediaIds.length > 0 || (parsed.attachments?.length ?? 0) > 0) {
+			return json(
+				{
+					error: 'Attachments are not supported on Messenger yet.',
+					field_errors: { attachments: 'Not supported on Messenger' }
+				},
+				{ status: 400 }
+			);
+		}
+		if (!parsed.body.trim()) {
+			return json(
+				{ error: 'Message body is required', field_errors: { body: 'Message body is required' } },
+				{ status: 400 }
+			);
+		}
+		// The contact must have a Messenger identity (PSID) on file — created on
+		// inbound. Without it there is no recipient to send to.
+		const [identity] = await db
+			.select({ id: messengerContacts.id })
+			.from(messengerContacts)
+			.where(
+				and(
+					eq(messengerContacts.org_id, auth.orgId),
+					eq(messengerContacts.contact_id, conv.contact_id)
+				)
+			)
+			.limit(1);
+		if (!identity) {
+			return json(
+				{
+					error: 'Contact has no Messenger conversation.',
+					field_errors: { channel: 'No Messenger identity' }
+				},
+				{ status: 400 }
+			);
+		}
+
+		const txStart = Date.now();
+		try {
+			const result = await db.transaction(async (tx) => {
+				const inserted = await recordOutboundMessage(tx, {
+					orgId: auth.orgId,
+					conversationId: conv.id,
+					channel: 'messenger',
+					body: parsed.body,
+					sentBy: auth.member.id,
+					status: 'queued',
+					source: 'api'
+				});
+
+				await reopenConversationIfNeeded(tx, conv);
+
+				await tx.insert(outboxEvents).values({
+					org_id: auth.orgId,
+					event_type: 'messenger.send.requested',
+					resource_type: 'message',
+					resource_id: inserted.id,
+					payload: {
+						message_id: inserted.id,
+						conversation_id: conv.id,
+						contact_id: contact.id,
+						org_id: auth.orgId
+					},
+					idempotency_key: `messenger.send.requested:${inserted.id}`
+				});
+
+				return inserted;
+			});
+			void touchContactLastContacted(auth.orgId, contact.id);
+			return json({ data: { message: result } }, { status: 201 });
+		} catch (e) {
+			log.error({
+				phase: 'tx_error',
+				channel: 'messenger',
+				conversation_id: conv.id,
+				org_id: auth.orgId,
+				ms: Date.now() - txStart,
+				error: e instanceof Error ? e.message : String(e),
+				stack: e instanceof Error ? e.stack : undefined
+			});
+			return json({ error: 'Failed to queue Messenger message.' }, { status: 500 });
+		}
+	}
+
 	// ── SMS branch (async via outbox → SMS worker) ──────────────────────────
+	if (!contact.phone) {
+		return json(
+			{
+				error: 'Contact does not have a phone number.',
+				field_errors: { channel: 'No phone on file' }
+			},
+			{ status: 400 }
+		);
+	}
 	if (contact.sms_opt_out) {
 		return json({ error: 'Contact has opted out of SMS.' }, { status: 400 });
 	}

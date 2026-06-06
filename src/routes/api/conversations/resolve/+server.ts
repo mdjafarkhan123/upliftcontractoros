@@ -68,7 +68,10 @@ export const GET: RequestHandler = async (event) => {
 		{ id: existing?.id ?? '', last_message_channel: existing?.last_message_channel ?? null },
 		{ phone: contact.phone, email: contact.email, sms_opt_out: contact.sms_opt_out },
 		false,
-		emailReady
+		emailReady,
+		// Messenger cannot be initiated outbound — replies are only allowed inside
+		// Meta's 24h window, so it's never offered in the compose-new flow.
+		false
 	);
 
 	const smsUsed = await getCurrentUsage(db, auth.orgId, 'sms_sent');

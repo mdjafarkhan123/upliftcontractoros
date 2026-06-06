@@ -30,7 +30,10 @@ export const contacts = pgTable('contacts', {
 		.references(() => organizations.id),
 	full_name: text('full_name').notNull(),
 	email: text('email'),
-	phone: text('phone').notNull(),
+	// Nullable since the Messenger channel: a PSID-only contact has no phone.
+	// Phone remains the dedup key (UNIQUE(org_id, phone)) ONLY when present.
+	// Downstream phone-assumption fixes are tracked separately and deferred.
+	phone: text('phone'),
 	// Secondary callable/searchable number. Populated by the merge-duplicates
 	// flow when the absorbed (source) contact had a different phone than the
 	// survivor, so the second number is never lost. Not subject to the

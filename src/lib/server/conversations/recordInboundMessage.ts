@@ -24,6 +24,8 @@ export type RecordInboundMessageInput = {
 	body: string | null;
 	status?: Message['status'];
 	twilioMessageSid?: string | null;
+	/** Meta `mid` for inbound Messenger messages — drives webhook-retry dedup. */
+	messengerMid?: string | null;
 	emailMeta?: EmailMeta;
 	source: string;
 	sentAt?: Date;
@@ -55,6 +57,7 @@ export async function recordInboundMessage(
 		is_internal_note: false,
 		status: input.status ?? 'received',
 		twilio_message_sid: input.twilioMessageSid ?? undefined,
+		messenger_mid: input.messengerMid ?? undefined,
 		media_urls: input.mediaUrls ?? undefined,
 		source: input.source,
 		sent_at: sentAt,

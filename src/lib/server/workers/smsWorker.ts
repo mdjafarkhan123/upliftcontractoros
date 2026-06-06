@@ -9,8 +9,9 @@ import {
 	organizations,
 	outboxEvents
 } from '$lib/server/db/schema';
-import { SMS_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
+import { SMS_QUEUE, redisConnection, smsQueue } from '$lib/server/queue/bullmq';
 import { sendSms } from '$lib/server/twilio/sendSms';
+import { reserveSmsRateSlot } from '$lib/server/sms/rateLimit';
 import { r2Presign } from '$lib/server/media/r2';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
@@ -31,6 +32,9 @@ type SmsJobData = {
 	resource_type: string;
 	resource_id: string; // message_id
 	payload: Record<string, unknown>;
+	// Set when a job is re-enqueued because it hit a rate limit. Carried only for
+	// observability/jitter — the message keeps deferring until a slot frees up.
+	throttle_count?: number;
 };
 
 /**
@@ -156,7 +160,9 @@ async function processSmsSend(job: Job<SmsJobData>) {
 
 	const [org] = await db
 		.select({
-			twilio_phone_number: organizations.twilio_phone_number
+			twilio_phone_number: organizations.twilio_phone_number,
+			max_sms_per_minute: organizations.max_sms_per_minute,
+			max_sms_per_day: organizations.max_sms_per_day
 		})
 		.from(organizations)
 		.where(eq(organizations.id, msg.org_id))
@@ -188,6 +194,32 @@ async function processSmsSend(job: Job<SmsJobData>) {
 		return;
 	}
 	const costStr = credit.per_sms_cost.toFixed(4);
+
+	// Rate limiting (per-org/min, per-org/day, global/min). Checked BEFORE credit
+	// reservation so a throttled send never reserves credit or burns a send
+	// attempt. On a limit hit we re-enqueue the same job with a delay and return —
+	// the message keeps its 'sending' status, so the delayed job reprocesses it
+	// cleanly. One re-enqueue per processing (1:1, no fan-out); the existing
+	// status + credit idempotency guards make a duplicate job a no-op.
+	const rate = await reserveSmsRateSlot(msg.org_id, {
+		perMin: org.max_sms_per_minute,
+		perDay: org.max_sms_per_day
+	});
+	if (!rate.allowed) {
+		log.info({
+			phase: 'rate_limited',
+			message_id: messageId,
+			org_id: msg.org_id,
+			limit: rate.limit,
+			retry_after_ms: rate.retryAfterMs
+		});
+		await smsQueue().add(
+			'sms.send.requested',
+			{ ...data, throttle_count: (data.throttle_count ?? 0) + 1 },
+			{ delay: rate.retryAfterMs }
+		);
+		return;
+	}
 
 	// Authoritative credit reservation: atomic guarded decrement, committed
 	// BEFORE the Twilio call so the balance can never go negative under

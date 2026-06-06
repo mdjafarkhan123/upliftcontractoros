@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
@@ -19,7 +19,8 @@ import type { Contact } from '$lib/server/db/schema';
  * Look up an existing contact in this org by E.164 phone.
  * Includes soft-deleted contacts — phone reservations survive soft delete.
  * Excludes "RELEASED:" sentinels because exact equality on the original phone
- * will never match those values.
+ * will never match those values. Phoneless contacts (NULL phone, e.g. Messenger
+ * leads) are explicitly excluded — they have no phone dedup identity.
  */
 export async function findContactByPhone(
 	orgId: string,
@@ -28,7 +29,9 @@ export async function findContactByPhone(
 	const [row] = await db
 		.select({ id: contacts.id, deleted_at: contacts.deleted_at })
 		.from(contacts)
-		.where(and(eq(contacts.org_id, orgId), eq(contacts.phone, e164Phone)))
+		.where(
+			and(eq(contacts.org_id, orgId), isNotNull(contacts.phone), eq(contacts.phone, e164Phone))
+		)
 		.limit(1);
 	return row ?? null;
 }

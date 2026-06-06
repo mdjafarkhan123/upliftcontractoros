@@ -31,7 +31,17 @@ const optionalTrimmedString = (max: number) =>
 
 export const createContactSchema = z.object({
 	full_name: trimmedString(200),
-	phone: z.string().min(1).max(40),
+	// Optional since the Messenger channel — a contact may be identified by a PSID
+	// (or email) with no phone. Empty/whitespace normalizes to undefined; when
+	// present it is E.164-validated in the route.
+	phone: z
+		.string()
+		.max(40)
+		.optional()
+		.transform((v) => {
+			const t = v?.trim();
+			return t && t.length > 0 ? t : undefined;
+		}),
 	email: z
 		.string()
 		.email()
@@ -50,7 +60,17 @@ export type CreateContactInput = z.infer<typeof createContactSchema>;
 export const updateContactSchema = z
 	.object({
 		full_name: trimmedString(200).optional(),
-		phone: z.string().min(1).max(40).optional(),
+		// Empty/whitespace normalizes to undefined → treated as "no change" by the
+		// PATCH route (never clears an existing phone; that goes through the
+		// release-phone reservation flow). A present value is E.164-validated there.
+		phone: z
+			.string()
+			.max(40)
+			.optional()
+			.transform((v) => {
+				const t = v?.trim();
+				return t && t.length > 0 ? t : undefined;
+			}),
 		email: z
 			.string()
 			.email()

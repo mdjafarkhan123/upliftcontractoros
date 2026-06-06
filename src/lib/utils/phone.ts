@@ -60,8 +60,8 @@ export function toE164(raw: string): string {
 	}
 }
 
-export function formatPhoneDisplay(e164: string): string {
-	if (isReleasedPhone(e164)) return '';
+export function formatPhoneDisplay(e164: string | null | undefined): string {
+	if (!e164 || isReleasedPhone(e164)) return '';
 	const parsed = parsePhoneNumberFromString(e164);
 	return parsed ? parsed.formatInternational() : e164;
 }

@@ -43,6 +43,50 @@
 		stripe_webhook_secret: ''
 	});
 
+	type KeyHint = { ok: boolean; text: string } | null;
+
+	function keyMode(val: string): 'live' | 'test' | null {
+		if (val.includes('_live_')) return 'live';
+		if (val.includes('_test_')) return 'test';
+		return null;
+	}
+
+	function rkHint(val: string): KeyHint {
+		if (!val) return null;
+		if (val.startsWith('rk_live_')) return { ok: true, text: 'Live mode key — ready for real customers' };
+		if (val.startsWith('rk_test_')) return { ok: true, text: 'Test mode key — no real money moves, safe for testing' };
+		if (val.startsWith('pk_')) return { ok: false, text: 'That\'s your publishable key — paste it in the "Publishable key" field below' };
+		if (val.startsWith('sk_')) return { ok: false, text: 'That\'s a full secret key — please create a restricted key instead (see step 3 in the guide above). It\'s safer.' };
+		if (val.startsWith('whsec_')) return { ok: false, text: 'That\'s your webhook secret — paste it in the "Webhook signing secret" field below' };
+		return { ok: false, text: 'Should start with rk_live_ or rk_test_' };
+	}
+
+	function pkHint(val: string): KeyHint {
+		if (!val) return null;
+		if (val.startsWith('pk_live_')) return { ok: true, text: 'Live mode publishable key' };
+		if (val.startsWith('pk_test_')) return { ok: true, text: 'Test mode publishable key' };
+		if (val.startsWith('rk_') || val.startsWith('sk_')) return { ok: false, text: 'That\'s a secret/restricted key — paste it in the "Restricted key" field above' };
+		if (val.startsWith('whsec_')) return { ok: false, text: 'That\'s your webhook secret — paste it in the "Webhook signing secret" field below' };
+		return { ok: false, text: 'Should start with pk_live_ or pk_test_' };
+	}
+
+	function wsHint(val: string): KeyHint {
+		if (!val) return null;
+		if (val.startsWith('whsec_')) return { ok: true, text: 'Webhook signing secret looks good' };
+		if (val.startsWith('rk_') || val.startsWith('sk_') || val.startsWith('pk_')) return { ok: false, text: 'That\'s an API key, not a webhook secret — go to step 5 in the guide above and click "Reveal" next to "Signing secret"' };
+		return { ok: false, text: 'Should start with whsec_' };
+	}
+
+	let rkValidation = $derived(rkHint(form.stripe_restricted_key));
+	let pkValidation = $derived(pkHint(form.stripe_publishable_key));
+	let wsValidation = $derived(wsHint(form.stripe_webhook_secret));
+
+	let modeMismatch = $derived(
+		keyMode(form.stripe_restricted_key) !== null &&
+		keyMode(form.stripe_publishable_key) !== null &&
+		keyMode(form.stripe_restricted_key) !== keyMode(form.stripe_publishable_key)
+	);
+
 	let webhookUrl = $derived(
 		typeof window !== 'undefined'
 			? `${window.location.origin}/api/webhooks/stripe?org_id=${o.id}`
@@ -157,7 +201,7 @@
 <PageWrapper
 	title="Online payments"
 	subtitle="Get paid by card on every invoice you send."
-	back="/settings"
+	back="/settings/integrations"
 >
 	{#if loading || !status}
 		<SkeletonLoader lines={6} label="Loading Stripe settings" height="64px" />
@@ -212,6 +256,10 @@
 					/>
 					{#if fieldErrors.stripe_restricted_key}
 						<p class="text-xs text-destructive">{fieldErrors.stripe_restricted_key}</p>
+					{:else if rkValidation}
+						<p class={`text-xs ${rkValidation.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+							{rkValidation.ok ? '✓' : '⚠'} {rkValidation.text}
+						</p>
 					{/if}
 				</div>
 
@@ -225,8 +273,18 @@
 					/>
 					{#if fieldErrors.stripe_publishable_key}
 						<p class="text-xs text-destructive">{fieldErrors.stripe_publishable_key}</p>
+					{:else if pkValidation}
+						<p class={`text-xs ${pkValidation.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+							{pkValidation.ok ? '✓' : '⚠'} {pkValidation.text}
+						</p>
 					{/if}
 				</div>
+
+				{#if modeMismatch}
+					<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+						<strong>Mode mismatch:</strong> Your restricted key is {keyMode(form.stripe_restricted_key)} mode but your publishable key is {keyMode(form.stripe_publishable_key)} mode. Both keys must be the same mode — either both live or both test.
+					</div>
+				{/if}
 
 				<div class="flex flex-col gap-1.5">
 					<Label for="ws">Webhook signing secret <span class="text-destructive">*</span></Label>
@@ -240,6 +298,10 @@
 					/>
 					{#if fieldErrors.stripe_webhook_secret}
 						<p class="text-xs text-destructive">{fieldErrors.stripe_webhook_secret}</p>
+					{:else if wsValidation}
+						<p class={`text-xs ${wsValidation.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+							{wsValidation.ok ? '✓' : '⚠'} {wsValidation.text}
+						</p>
 					{/if}
 				</div>
 

@@ -84,6 +84,10 @@ export const organizations = pgTable('organizations', {
 	feature_client_portal: boolean('feature_client_portal').notNull().default(false),
 	feature_webchat: boolean('feature_webchat').notNull().default(false),
 	feature_online_booking: boolean('feature_online_booking').notNull().default(false),
+	// Facebook Messenger inbox channel. Default false; flipped on per-org only after
+	// Meta App Review approves pages_messaging. Gates the Integrations connect card
+	// and drops messenger outbox events for orgs without it (see featureMap).
+	feature_messenger: boolean('feature_messenger').notNull().default(false),
 
 	// Master capability gates added in 0026 to close gaps where contractor toggles
 	// existed with no jafar-side gate. Default false; flipped on per plan template.
@@ -115,6 +119,11 @@ export const organizations = pgTable('organizations', {
 	max_team_members: integer('max_team_members').notNull().default(3),
 	max_monthly_sms: integer('max_monthly_sms').notNull().default(500),
 	max_bulk_sms_per_day: integer('max_bulk_sms_per_day').notNull().default(50),
+	// Outbound SMS send-rate throttles (PO-controlled per org via /jafar Usage
+	// limits). 0 = unlimited (only the platform-wide SMS_RATE_GLOBAL_PER_MIN cap
+	// applies). A send that hits a cap is deferred (re-queued), never dropped.
+	max_sms_per_minute: integer('max_sms_per_minute').notNull().default(30),
+	max_sms_per_day: integer('max_sms_per_day').notNull().default(1000),
 	max_ai_requests_per_month: integer('max_ai_requests_per_month').notNull().default(0),
 	max_storage_gb: integer('max_storage_gb').notNull().default(5),
 	max_automation_workflows: integer('max_automation_workflows').notNull().default(0),

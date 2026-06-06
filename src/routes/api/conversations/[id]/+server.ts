@@ -6,6 +6,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import {
 	computeChannelHints,
 	hasActiveWebchatSession,
+	hasMessengerIdentity,
 	isOrgEmailReady
 } from '$lib/server/conversations';
 import { getCurrentUsage } from '$lib/server/usage/assertAndIncrementUsage';
@@ -188,6 +189,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const hasWebchat = await hasActiveWebchatSession(conversation.id);
 	const emailReady = await isOrgEmailReady(conversation.org_id);
+	const hasMessenger = await hasMessengerIdentity(conversation.org_id, contact.id);
 	const channelHints = computeChannelHints(
 		{
 			id: conversation.id,
@@ -195,12 +197,14 @@ export const GET: RequestHandler = async (event) => {
 				| 'sms'
 				| 'email'
 				| 'webchat'
+				| 'messenger'
 				| 'missed_call'
 				| null
 		},
 		{ phone: contact.phone, email: contact.email, sms_opt_out: contact.sms_opt_out },
 		hasWebchat,
-		emailReady
+		emailReady,
+		hasMessenger
 	);
 
 	// SMS quota for composer gating (P0-A)

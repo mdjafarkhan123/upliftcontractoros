@@ -40,6 +40,7 @@ const FEATURE_KEYS: FeatureFlagKey[] = [
 	'feature_invoice_reminders',
 	'feature_financial_tools',
 	'feature_stripe_payments',
+	'feature_messenger',
 	'feature_growth_feed',
 	'feature_advanced_reporting',
 	'feature_ai_assistant',

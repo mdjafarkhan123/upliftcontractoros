@@ -24,7 +24,7 @@
 	}: {
 		contactId: string;
 		contactName: string;
-		phone: string;
+		phone: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		nextFollowUpAt: string | null;
 		onAddNote: () => void;
@@ -56,7 +56,7 @@
 				const params = new URLSearchParams({
 					contact_id: contactId,
 					name: contactName,
-					phone
+					phone: phone ?? ''
 				});
 				await goto(`/inbox/compose?${params}`);
 			}
@@ -93,9 +93,11 @@
 	class="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden"
 	aria-label="Quick actions"
 >
-	<Button variant="outline" class="h-11 shrink-0 snap-start" href={`tel:${phone}`}>
-		<Phone class="h-4 w-4" /> Call
-	</Button>
+	{#if phone}
+		<Button variant="outline" class="h-11 shrink-0 snap-start" href={`tel:${phone}`}>
+			<Phone class="h-4 w-4" /> Call
+		</Button>
+	{/if}
 
 	<Button
 		variant="outline"
