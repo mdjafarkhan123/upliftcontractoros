@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { FEATURE_FLAG_GROUPS } from '$lib/admin/featureGroups';
+	import { FEATURE_FLAG_GROUPS, SMS_MASTER_GATED_FLAGS } from '$lib/admin/featureGroups';
 	import type { FeatureFlags } from '$lib/types';
 	import Toggle from './Toggle.svelte';
 
 	let {
 		flags = $bindable<FeatureFlags>(),
-		integrationStatus = {}
+		integrationStatus = {},
+		smsEnabled = true
 	}: {
 		flags?: FeatureFlags;
 		integrationStatus?: Record<string, unknown>;
+		smsEnabled?: boolean;
 	} = $props();
 
 	const stripeConnected = $derived(Boolean(integrationStatus?.stripe_connected));
@@ -22,6 +24,15 @@
 </script>
 
 <div class="space-y-5">
+	{#if !smsEnabled}
+		<div
+			class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200"
+		>
+			SMS master switch is <span class="font-semibold">off</span>. SMS features are blocked org-wide
+			and the SMS toggles below are locked. Stored values are preserved and restore when you
+			re-enable SMS.
+		</div>
+	{/if}
 	{#each FEATURE_FLAG_GROUPS as group (group.id)}
 		<div class="rounded-xl border border-slate-800 bg-slate-950/40">
 			<header class="border-b border-slate-800/80 px-4 py-3">
@@ -33,7 +44,10 @@
 				{#each group.flags as flag (flag.key)}
 					{@const enabled = flags[flag.key]}
 					{@const connected = integrationConnected(flag.requires)}
-					<li class="flex items-start justify-between gap-4 px-4 py-3">
+					{@const mastered = !smsEnabled && SMS_MASTER_GATED_FLAGS.has(flag.key)}
+					<li
+						class="flex items-start justify-between gap-4 px-4 py-3 {mastered ? 'opacity-50' : ''}"
+					>
 						<div class="min-w-0 flex-1">
 							<div class="flex flex-wrap items-center gap-2">
 								<span class="text-sm font-medium text-white">{flag.label}</span>
@@ -58,7 +72,12 @@
 								{/if}
 							</div>
 							<p class="mt-0.5 text-[11px] leading-snug text-slate-500">{flag.description}</p>
-							{#if flag.requires && !connected && enabled}
+							{#if mastered}
+								<p class="mt-1 text-[11px] text-amber-300/90">
+									Governed by the SMS master switch (currently off). Value preserved — re-enable SMS
+									to restore.
+								</p>
+							{:else if flag.requires && !connected && enabled}
 								<p class="mt-1 text-[11px] text-amber-300/90">
 									Flag is on, but the {flag.requires} integration is not connected yet. Tenant cannot
 									use this feature until they connect.
@@ -66,7 +85,7 @@
 							{/if}
 						</div>
 
-						<Toggle bind:checked={flags[flag.key]} ariaLabel={flag.label} />
+						<Toggle bind:checked={flags[flag.key]} ariaLabel={flag.label} disabled={mastered} />
 					</li>
 				{/each}
 			</ul>

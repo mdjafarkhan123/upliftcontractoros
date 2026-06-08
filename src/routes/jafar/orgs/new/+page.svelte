@@ -303,16 +303,17 @@
 			<div class="px-5 py-5">
 				<div class="space-y-1.5">
 					<label for="twilioPhoneNumber" class="block text-xs font-semibold text-slate-300">
-						Twilio phone number <span class="text-red-400">*</span>
+						Twilio phone number
 					</label>
 					<input
 						id="twilioPhoneNumber"
 						name="twilioPhoneNumber"
-						required
 						placeholder="+15125550123"
 						class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm font-mono text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
 					/>
-					<p class="text-[11px] text-slate-500">E.164 format (e.g., +15125550123).</p>
+					<p class="text-[11px] text-slate-500">
+						Optional — leave blank to provision later. E.164 format (e.g., +15125550123).
+					</p>
 				</div>
 			</div>
 		</section>

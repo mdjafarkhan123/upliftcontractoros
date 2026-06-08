@@ -1,15 +1,18 @@
 {
-	"permissions": {
-		"allow": [
-			"Bash(Get-ChildItem *)",
-			"Bash(npx svelte-check *)",
-			"Bash(npx tsc *)",
-			"mcp__ide__getDiagnostics"
-		]
-	},
-	"statusLine": {
-		"type": "command",
-		"command": "bash .claude/statusline.sh",
-		"padding": 0
-	}
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem *)",
+      "Bash(npx svelte-check *)",
+      "Bash(npx tsc *)",
+      "mcp__ide__getDiagnostics"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash .claude/statusline.sh",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "twilio-developer-kit@twilio": true
+  }
 }

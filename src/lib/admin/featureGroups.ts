@@ -269,6 +269,26 @@ export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = FEATURE_FLAG_GROUPS.
 	g.flags.map((f) => f.key)
 );
 
+// Feature flags governed by the PO master SMS switch (organizations.sms_enabled).
+// When the master switch is OFF these are disabled/greyed in the editor and their
+// SMS effect is blocked at runtime in smsWorker — but their STORED values are never
+// wiped, so flipping the master back on restores the org's prior config.
+// Excludes feature_conversations (multi-channel inbox) and the dual-channel
+// capability flags (review_funnel, appointment_reminders, invoice_reminders,
+// quote_followup, payment_receipt) whose email side still sends when SMS is off.
+export const SMS_MASTER_GATED_FLAGS: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
+	'feature_one_way_sms',
+	'feature_two_way_sms',
+	'feature_bulk_sms',
+	'feature_missed_call_textback',
+	'feature_speed_to_lead',
+	'payment_receipt_sms_allowed',
+	'quote_followup_sms_allowed',
+	'appointment_reminder_sms_allowed',
+	'invoice_reminder_sms_allowed',
+	'review_funnel_sms_allowed'
+]);
+
 export const LIMIT_KEYS: readonly (keyof OrgLimits)[] = [
 	'max_team_members',
 	'max_monthly_sms',

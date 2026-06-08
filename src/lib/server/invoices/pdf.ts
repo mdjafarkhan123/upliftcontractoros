@@ -28,7 +28,7 @@ export type InvoicePdfData = {
 		city: string | null;
 		state: string | null;
 		zip: string | null;
-		twilio_phone_number: string;
+		twilio_phone_number: string | null;
 	};
 	invoice: {
 		id: string;
@@ -125,7 +125,7 @@ function renderHtml(d: InvoicePdfData): string {
 		<div>
 			<h1>${escapeHtml(d.org.name)}</h1>
 			<div class="muted">${escapeHtml(orgAddress)}</div>
-			<div class="muted">${escapeHtml(d.org.twilio_phone_number)}</div>
+			${d.org.twilio_phone_number ? `<div class="muted">${escapeHtml(d.org.twilio_phone_number)}</div>` : ''}
 		</div>
 		<div style="text-align:right;">
 			<div class="muted">Invoice</div>

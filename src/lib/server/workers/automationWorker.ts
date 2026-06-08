@@ -177,7 +177,9 @@ async function cancelPendingJobs(
 async function handleSpeedToLead(data: EventJobData) {
 	if (!data.org_id) return;
 	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.speed_to_lead_enabled) return;
+	// Master SMS gate: speed-to-lead is SMS-only, so skip when the org's master SMS
+	// switch is off — avoids creating a doomed automation job + undeliverable message.
+	if (!org || !org.sms_enabled || !settings || !settings.speed_to_lead_enabled) return;
 	const contact = await loadContact(data.org_id, data.resource_id);
 	if (!contact || contact.sms_opt_out) return;
 
@@ -229,7 +231,9 @@ async function handleSpeedToLead(data: EventJobData) {
 async function handleMissedCallTextback(data: EventJobData) {
 	if (!data.org_id) return;
 	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.missed_call_textback_enabled) return;
+	// Master SMS gate: missed-call textback is SMS-only, so skip when the org's master
+	// SMS switch is off — avoids a doomed automation job + undeliverable message.
+	if (!org || !org.sms_enabled || !settings || !settings.missed_call_textback_enabled) return;
 
 	const missedCallConversationId = data.payload.conversation_id as string | undefined;
 	const contactId = data.payload.contact_id as string | undefined;

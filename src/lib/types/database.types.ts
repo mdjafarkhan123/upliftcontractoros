@@ -1404,7 +1404,7 @@ export type Database = {
 					suspended_at: string | null;
 					timezone: string;
 					trade_type: string;
-					twilio_phone_number: string;
+					twilio_phone_number: string | null;
 					updated_at: string;
 					zip: string | null;
 				};
@@ -1431,7 +1431,7 @@ export type Database = {
 					suspended_at?: string | null;
 					timezone?: string;
 					trade_type: string;
-					twilio_phone_number: string;
+					twilio_phone_number?: string | null;
 					updated_at?: string;
 					zip?: string | null;
 				};
@@ -1458,7 +1458,7 @@ export type Database = {
 					suspended_at?: string | null;
 					timezone?: string;
 					trade_type?: string;
-					twilio_phone_number?: string;
+					twilio_phone_number?: string | null;
 					updated_at?: string;
 					zip?: string | null;
 				};
@@ -2256,7 +2256,7 @@ export type Database = {
 			message_channel: 'sms' | 'email' | 'webchat';
 			message_direction: 'inbound' | 'outbound';
 			message_status: 'sent' | 'delivered' | 'failed' | 'received' | 'queued' | 'bounced';
-			org_status: 'active' | 'suspended' | 'pending_deletion' | 'deleted';
+			org_status: 'active' | 'suspended' | 'pending_deletion' | 'deleted' | 'pending_setup';
 			outbox_event_status: 'pending' | 'processing' | 'processed' | 'failed' | 'dead_lettered';
 			payment_method: 'stripe' | 'cash' | 'check' | 'bank_transfer' | 'other';
 			quote_status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
@@ -2426,7 +2426,7 @@ export const Constants = {
 			message_channel: ['sms', 'email', 'webchat'],
 			message_direction: ['inbound', 'outbound'],
 			message_status: ['sent', 'delivered', 'failed', 'received', 'queued', 'bounced'],
-			org_status: ['active', 'suspended', 'pending_deletion', 'deleted'],
+			org_status: ['active', 'suspended', 'pending_deletion', 'deleted', 'pending_setup'],
 			outbox_event_status: ['pending', 'processing', 'processed', 'failed', 'dead_lettered'],
 			payment_method: ['stripe', 'cash', 'check', 'bank_transfer', 'other'],
 			quote_status: ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired'],

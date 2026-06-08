@@ -18,6 +18,22 @@ const ORG_SAFE_FIELDS = [
 	'state',
 	'zip',
 	'is_setup_complete',
+	// SMS activation state — drives the app-shell SMS status banner (Onboarding.md
+	// Parts 4 & 6) and SMS UI visibility. twilio_phone_number is the org's own number.
+	// country drives the Settings → Integrations SMS card (Part 7) availability copy.
+	'sms_enabled',
+	'sms_approval_status',
+	'twilio_phone_number',
+	'country',
+	// Carrier registration (US 10DLC / CA CWTA) data — lets Settings → Integrations
+	// (Onboarding.md Part 7) tell "skipped" from "submitted" and prefill the
+	// fill-it-later form, and drives the carrier-incomplete app-shell banner. This is
+	// the admin's own org data.
+	'legal_business_name',
+	'ein',
+	'website',
+	'messaging_use_case',
+	'business_number',
 	'calendar_day_start_hour',
 	'calendar_day_end_hour',
 	'feature_overrides_updated_at',

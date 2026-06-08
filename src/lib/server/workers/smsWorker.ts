@@ -12,6 +12,7 @@ import {
 import { SMS_QUEUE, redisConnection, smsQueue } from '$lib/server/queue/bullmq';
 import { sendSms } from '$lib/server/twilio/sendSms';
 import { reserveSmsRateSlot } from '$lib/server/sms/rateLimit';
+import { isWithinQuietHours, msUntilQuietHoursEnd } from '$lib/server/sms/quietHours';
 import { r2Presign } from '$lib/server/media/r2';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
@@ -71,7 +72,9 @@ async function bumpAttempts(messageId: string, attempts: number) {
 }
 
 function statusCallbackUrl(): string | undefined {
-	const base = env.PUBLIC_BASE_URL?.trim();
+	// APP_URL is the canonical public base (used by the Twilio/Telnyx clients);
+	// PUBLIC_BASE_URL kept as a fallback for older env files.
+	const base = (env.APP_URL ?? env.PUBLIC_BASE_URL)?.trim();
 	if (!base) return undefined;
 	return `${base.replace(/\/$/, '')}/api/webhooks/twilio/status`;
 }
@@ -160,13 +163,35 @@ async function processSmsSend(job: Job<SmsJobData>) {
 
 	const [org] = await db
 		.select({
+			sms_enabled: organizations.sms_enabled,
 			twilio_phone_number: organizations.twilio_phone_number,
+			twilio_subaccount_sid: organizations.twilio_subaccount_sid,
+			sms_approval_status: organizations.sms_approval_status,
+			timezone: organizations.timezone,
+			quiet_hours_enabled: organizations.quiet_hours_enabled,
+			quiet_hours_start_hour: organizations.quiet_hours_start_hour,
+			quiet_hours_end_hour: organizations.quiet_hours_end_hour,
 			max_sms_per_minute: organizations.max_sms_per_minute,
 			max_sms_per_day: organizations.max_sms_per_day
 		})
 		.from(organizations)
 		.where(eq(organizations.id, msg.org_id))
 		.limit(1);
+	// Master SMS gate (PO-controlled, organizations.sms_enabled). This is the single
+	// authoritative chokepoint for ALL outbound SMS — manual, bulk, and automation all
+	// converge here via sendSms. Off → block outbound; inbound + email are unaffected.
+	if (org && !org.sms_enabled) {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason: 'SMS is disabled for this organization',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
 	if (!org?.twilio_phone_number) {
 		await db
 			.update(messages)
@@ -178,6 +203,69 @@ async function processSmsSend(job: Job<SmsJobData>) {
 			})
 			.where(eq(messages.id, messageId));
 		return;
+	}
+	// Carrier-approval gate (Onboarding.md Case C). The number can receive calls +
+	// inbound SMS immediately, but outbound stays blocked until carrier registration
+	// (US 10DLC / Canada CWTA) is approved. 'not_required' and 'approved' pass;
+	// 'pending' and 'rejected' block. PO flips this in /jafar once registration clears.
+	if (org.sms_approval_status === 'pending' || org.sms_approval_status === 'rejected') {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason:
+					org.sms_approval_status === 'rejected'
+						? 'Carrier registration was rejected — outbound SMS is blocked'
+						: 'Outbound SMS is pending carrier approval',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
+
+	// Quiet-hours gate (Blueprint §10 / Onboarding.md Part 10 compliance). Held
+	// during the org's configured window, evaluated in its own timezone. Deferred —
+	// never dropped: the message reverts to 'queued' and the job is re-enqueued to
+	// fire when the window opens. Checked BEFORE rate-limit + credit reservation so a
+	// held send consumes neither. Fails open (sends) on a timezone bug so a tz fault
+	// can never freeze all outbound SMS.
+	if (org.quiet_hours_enabled) {
+		let withinQuietHours = false;
+		try {
+			withinQuietHours = isWithinQuietHours(
+				new Date(),
+				org.timezone,
+				org.quiet_hours_start_hour,
+				org.quiet_hours_end_hour
+			);
+		} catch (err) {
+			log.error({
+				phase: 'quiet_hours_eval_failed',
+				message_id: messageId,
+				org_id: msg.org_id,
+				timezone: org.timezone,
+				error: err instanceof Error ? err.message : String(err)
+			});
+		}
+		if (withinQuietHours) {
+			const delay = msUntilQuietHoursEnd(new Date(), org.timezone, org.quiet_hours_end_hour);
+			log.info({
+				phase: 'quiet_hours_deferred',
+				message_id: messageId,
+				org_id: msg.org_id,
+				timezone: org.timezone,
+				delay_ms: delay
+			});
+			// Revert the claim so the message reads as 'waiting to send' (no 'held'
+			// status exists); the delayed job re-claims it via markSending.
+			await db
+				.update(messages)
+				.set({ status: 'queued', send_attempts: 0, updated_at: new Date() })
+				.where(eq(messages.id, messageId));
+			await smsQueue().add('sms.send.requested', data, { delay });
+			return;
+		}
 	}
 
 	const credit = await getCreditState(db, msg.org_id);
@@ -281,7 +369,8 @@ async function processSmsSend(job: Job<SmsJobData>) {
 	try {
 		const sid = await sendSms(org.twilio_phone_number, contact.phone, msg.body ?? '', {
 			statusCallback: statusCallbackUrl(),
-			mediaUrl
+			mediaUrl,
+			subaccountSid: org.twilio_subaccount_sid
 		});
 
 		await db.transaction(async (tx) => {

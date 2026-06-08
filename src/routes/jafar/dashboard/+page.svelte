@@ -3,6 +3,8 @@
 	import { resolveRoute } from '$app/paths';
 	import { jafarDashboardStore } from '$lib/stores/jafarDashboard.svelte';
 	import AdminTableSkeleton from '$lib/components/jafar/skeletons/AdminTableSkeleton.svelte';
+	import SmsMasterFloorCard from '$lib/components/jafar/SmsMasterFloorCard.svelte';
+	import PlatformEmailDomainPanel from '$lib/components/jafar/PlatformEmailDomainPanel.svelte';
 
 	let busyEventId = $state<string | null>(null);
 	let actionError = $state('');
@@ -108,6 +110,12 @@
 		</a>
 	</div>
 
+	<!-- SMS master-balance safety floor & kill switch (platform-wide) -->
+	<SmsMasterFloorCard />
+
+	<!-- Platform system email sending domain (PO-managed, outbound-only) -->
+	<PlatformEmailDomainPanel />
+
 	{#if showSkeleton}
 		<AdminTableSkeleton columns={6} rows={6} title="Loading organizations" />
 		<AdminTableSkeleton columns={6} rows={3} title="Loading dead letters" />
@@ -189,14 +197,24 @@
 										{new Date(org.created_at).toLocaleDateString()}
 									</td>
 									<td class="px-5 py-3.5 text-right">
-										<a
-											href={resolveRoute('/jafar/orgs/[id]', { id: org.id })}
-											data-sveltekit-preload-code="viewport"
-											data-sveltekit-preload-data="hover"
-											class="inline-flex h-8 items-center rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
-										>
-											Open
-										</a>
+										<div class="inline-flex items-center gap-2">
+											<a
+												href="{resolveRoute('/jafar/orgs/[id]', { id: org.id })}?tab=details"
+												data-sveltekit-preload-code="viewport"
+												data-sveltekit-preload-data="hover"
+												class="inline-flex h-8 items-center rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
+											>
+												View Details
+											</a>
+											<a
+												href={resolveRoute('/jafar/orgs/[id]', { id: org.id })}
+												data-sveltekit-preload-code="viewport"
+												data-sveltekit-preload-data="hover"
+												class="inline-flex h-8 items-center rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
+											>
+												Open
+											</a>
+										</div>
 									</td>
 								</tr>
 							{/each}

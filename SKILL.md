@@ -1,4 +1,4 @@
-# SKILL.md
+# CLAUDE.md
 
 This file governs how Claude Code works in this repository.
 Read this file completely before starting any task.
@@ -34,8 +34,8 @@ Load them when relevant — do not load all at once.
 | **Files & Media**, R2 uploads                     | `references/10-files-and-media.md`            |
 | **Systems & Automations**, activity logs          | `references/11-growth-automations-systems.md` |
 | **Cross-Domain Map**, multi-table queries         | `references/12-cross-domain-map.md`           |
-| **Project structure**,                            | `references/project-structure.md`             |
-| **Project Tech Stack**, stack                     | `references/stack.md`                         |
+| **Project structure**                             | `references/project-structure.md`             |
+| **Project Tech Stack**                            | `references/stack.md`                         |
 
 ### UI Design & Aesthetics (`contractor-crm-design-reference`)
 
@@ -46,16 +46,29 @@ Load them when relevant — do not load all at once.
 | **Layout Patterns**, sidebar, sticky headers    | `references/layout-patterns.md`       |
 | **Typography & Motion**, fonts, transitions     | `references/typography-and-motion.md` |
 
-### Svelte & Frontend Patterns (`contractor-crm-svelte-ui`)
+You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
 
-| Working on...                                    | Reference File                       |
-| ------------------------------------------------ | ------------------------------------ |
-| **Runes & Reactivity**, $state, $props, $derived | `references/runes-and-reactivity.md` |
-| **Data Patterns**, forms, Realtime, mutations    | `references/data-patterns.md`        |
-| **Shadcn Svelte** primitives & Tailwind usage    | `references/shadcn-svelte.md`        |
-| **List Stores**, caching, SWR, pagination        | `references/list-stores.md`          |
-| **Navigation & Auth**, guards, permission checks | `references/navigation-and-auth.md`  |
-| **Shared Components**, Toasts, Skeletons         | `references/shared-components.md`    |
+## Available Svelte MCP Tools:
+
+### 1. list-sections
+
+Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
+When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
+
+### 2. get-documentation
+
+Retrieves full documentation content for specific sections. Accepts single or multiple sections.
+After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
+
+### 3. svelte-autofixer
+
+Analyzes Svelte code and returns issues and suggestions.
+You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
+
+### 4. playground-link
+
+Generates a Svelte Playground link with the provided code.
+After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
 
 The `contractor-crm` skill covers business rules and architecture. Its SKILL.md has universal rules; read only the specific reference file for your task. **Never assume schema structure from memory. Always read the relevant skill file first.**
 
@@ -72,7 +85,7 @@ npm run check:watch   # type checking in watch mode
 npm run lint          # prettier --check + eslint
 npm run format        # prettier --write
 
-npx tsx worker.ts     # start standalone worker process (separate terminal)
+npm run worker        # start standalone worker process (separate terminal; loads .env)
 
 npx drizzle-kit generate   # generate migration from schema changes
 npx drizzle-kit migrate    # run pending migrations
@@ -87,20 +100,20 @@ These rules are never overridden by a prompt. If a task conflicts with any of th
 Full patterns and code examples live in skills — these are the guardrails.
 
 1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
-2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`. Always add required mark for medatory form field.
+2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`. Always add required mark for mandatory form field.
 3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
 4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
 5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
-6. **Workers run standalone** — `npx tsx worker.ts` in a separate terminal. Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
+6. **Workers run standalone** — `npm run worker` in a separate terminal (runs `node --env-file=.env --import tsx worker.ts`; plain `npx tsx worker.ts` fails with `DATABASE_URL is required` because it skips `.env`). Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
 7. **All permission checks go through `checkPermission()`** — the 40 booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
 8. **Transaction boundary law** — business mutations + `outbox_events` INSERT inside the transaction. BullMQ enqueue, Twilio, Resend, any external call OUTSIDE (via outbox worker only). Never call external services inside a transaction.
 9. **Tenant isolation absolute** — every table has `org_id`, every query filters by it. RLS enforces at DB layer. API layer also enforces.
 10. **Schema is authoritative** — do not invent columns, tables, or enums. If something seems missing, ask. Read the relevant schema section before writing any DB logic.
+    - **You own the migration lifecycle.** Any time you edit a file under `src/lib/server/db/schema/**`, you must — in the same turn, without waiting for the user to ask — run `npx drizzle-kit generate` to produce the migration SQL, review it, then run `npx drizzle-kit migrate` to apply it. Never leave a schema change uncommitted to the DB and never instruct the user to "run the migration" themselves. If `generate` produces nothing or `migrate` fails, surface the error and stop — do not ship the feature claiming success while the DB is out of sync with the code.
 11. **Outbox pattern non-negotiable** — business events flow through `outbox_events` → outbox worker → BullMQ. Never trigger automations, SMS, or emails directly from route handlers.
 12. **`/jafar` completely isolated** — separate `jafarSession` cookie, no `org_id`, no `org_members` row, no Supabase auth. Never check jafar session in contractor middleware. Never mix.
 13. **Client-side auth guard mandatory** — `hooks.server.ts` protects initial load + API routes. `/(app)/+layout.svelte` protects client-side navigation. Both required. Neither replaces the other.
-14. **API error response shape is fixed** — every `/api/*` error response must use
-    this exact shape:
+14. **API error response shape is fixed** — every `/api/*` error response must use this exact shape:
     ```ts
     // Error
     { error: string; field_errors?: Partial<Record<string, string>>; }
@@ -108,11 +121,15 @@ Full patterns and code examples live in skills — these are the guardrails.
     { data: T }
     // Success with no body: return 204
     ```
-    Never use `message`, `msg`, `details`, or any other top-level key.
-    `field_errors` keys match the form field names exactly. UI reads `error` for
-    toast messages and `field_errors` to map to inline field errors.
+    Never use `message`, `msg`, `details`, or any other top-level key. `field_errors` keys match the form field names exactly. UI reads `error` for toast messages and `field_errors` to map to inline field errors.
 15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
-16. You are an Expert Engineer who has build industry led CRM dozen times. You should always care about performance and code that way but not overengineering. If you have any suggestion you first present to the user then if permission granted then code that way
+16. **Expert Engineer Mindset** — You are a senior developer with 20 years of experience building industry-led CRM systems. Think critically, research when needed, always prioritize performance, avoid overengineering, and design with strong UI/UX thinking from a contractor’s perspective. If you have any suggestions, present them to the user first; only implement them if permission is granted.
+17. **Match effort to the task — no wasted tokens.** Size up the work before acting and spend proportionally:
+    - **Trivial / single-file / low-risk** (copy edits, a Tailwind class, a small UI tweak, renaming a label, a one-line fix): act directly. Do NOT load skills, do NOT fan out exploration, do NOT spawn subagents, do NOT write long thinking. Make the change and report briefly.
+    - **Standard feature work**: load ONLY the one or two specific skill reference files the task names — never the whole skill set — then implement. Read only the files you will actually touch or depend on; do not re-read files already in context.
+    - **High-stakes work** (schema/migrations, permissions/auth, payments, outbox/workers, tenant isolation): this is the ONLY tier that justifies deep reading and careful step-by-step reasoning. Be thorough here — these rules above demand it.
+    - **Stop conditions:** if you've understood the task, stop investigating and act. Don't re-derive context you already have, don't explore "just to be safe" on low-risk work, and don't keep thinking once the path is clear. When the user interrupts, treat it as a signal you were over-investigating — switch to acting.
+    - Skills and deep reasoning are tools with a cost. Use them where the rules require it (high-stakes tiers), not by default.
 
 ---
 
@@ -170,6 +187,6 @@ Ask: **"Anything to adjust before we move on?"**
 
 ## Code Quality
 
-- Prefer explicit over clever. No generic builders, factories, or plugin systems.
+- Prefer explicit over clever. No generic builders, factories, or plugin systems. Always focus on best performance for Database calling and for code.
 - No reusable abstractions until duplication is proven across 3+ use cases.
 - Every `POST` and `PATCH` route validates input with Zod. Phone: E.164 normalized. Money: reject negatives, `numeric(12,2)`.

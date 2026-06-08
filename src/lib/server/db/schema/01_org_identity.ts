@@ -25,7 +25,19 @@ export const orgStatusEnum = pgEnum('org_status', [
 	'active',
 	'suspended',
 	'pending_deletion',
-	'deleted'
+	'deleted',
+	// Set on creation; the org is held in the onboarding wizard until it completes,
+	// at which point status flips to 'active'. (Gate wiring lands with the wizard.)
+	'pending_setup'
+]);
+
+// Carrier/compliance state for the org's SMS sender (10DLC in US, CWTA in Canada).
+// 'not_required' covers SMS-disabled orgs and countries with no registration step.
+export const smsApprovalStatusEnum = pgEnum('sms_approval_status', [
+	'not_required',
+	'pending',
+	'approved',
+	'rejected'
 ]);
 
 export const memberRoleEnum = pgEnum('member_role', ['admin', 'manager', 'member']);
@@ -35,7 +47,14 @@ export const organizations = pgTable('organizations', {
 	name: text('name').notNull(),
 	slug: text('slug').notNull().unique(),
 	trade_type: text('trade_type').notNull(),
-	twilio_phone_number: text('twilio_phone_number').notNull(),
+	// Nullable: an org may onboard without a number ("skip number / SMS optional").
+	// Inbound/outbound SMS + PDF sender display all guard against null.
+	twilio_phone_number: text('twilio_phone_number'),
+	// Per-contractor Twilio subaccount that owns this org's number. Populated by
+	// provisioning (Step 5.2). Null = no number yet, or a legacy master-owned number.
+	// Auth token stored plaintext, consistent with stripe_webhook_secret/_restricted_key.
+	twilio_subaccount_sid: text('twilio_subaccount_sid'),
+	twilio_subaccount_auth_token: text('twilio_subaccount_auth_token'),
 	status: orgStatusEnum('status').notNull().default('active'),
 	plan: text('plan').notNull().default('starter'),
 	stripe_restricted_key: text('stripe_restricted_key'),
@@ -55,6 +74,43 @@ export const organizations = pgTable('organizations', {
 	state: text('state'),
 	zip: text('zip'),
 	is_setup_complete: boolean('is_setup_complete').notNull().default(false),
+
+	// --- Onboarding & SMS activation foundation (Blueprint §10 + Onboarding.md) ---
+	// Master SMS switch, PO-controlled in /jafar/org. When false: SMS UI hidden,
+	// outbound blocked, and SMS sub-feature flags are overridden at runtime — their
+	// stored values are preserved (not wiped) so re-enabling restores prior config.
+	sms_enabled: boolean('sms_enabled').notNull().default(true),
+	// ISO 3166-1 alpha-2 country (e.g. 'US', 'CA', 'GB'), collected in onboarding Step 2.
+	// Drives phone availability and carrier-approval requirements.
+	country: text('country'),
+	// Carrier registration state for outbound SMS (10DLC in US, CWTA in Canada). Outbound
+	// is gated until 'approved' or 'not_required'; inbound + calls are allowed regardless.
+	sms_approval_status: smsApprovalStatusEnum('sms_approval_status')
+		.notNull()
+		.default('not_required'),
+	sms_approval_submitted_at: timestamp('sms_approval_submitted_at', { withTimezone: true }),
+	// External registration id (e.g. Twilio Trust Hub / messaging campaign SID).
+	sms_approval_external_id: text('sms_approval_external_id'),
+	// PO-supplied reason when a carrier submission is rejected / needs resubmission.
+	// Persisted so the contractor and the /jafar Details tab both see it.
+	sms_approval_reason: text('sms_approval_reason'),
+
+	// --- Carrier registration (Onboarding.md Step 4) ---
+	// Collected from the contractor in the onboarding wizard (US 10DLC / CA CWTA),
+	// then copied by the PO for manual Twilio submission. All nullable: the step is
+	// skippable and only applies to US/CA orgs that bought a number. Address is reused
+	// from the existing address/city/state/zip columns, not duplicated here.
+	// US legal business name / CA registered business name.
+	legal_business_name: text('legal_business_name'),
+	// US Employer Identification Number (10DLC).
+	ein: text('ein'),
+	// Canadian Business Number (CWTA).
+	business_number: text('business_number'),
+	// US business website (10DLC).
+	website: text('website'),
+	// Free-text description of how the org will use SMS (10DLC use case).
+	messaging_use_case: text('messaging_use_case'),
+
 	suspended_at: timestamp('suspended_at', { withTimezone: true }),
 	deletion_scheduled_at: timestamp('deletion_scheduled_at', { withTimezone: true }),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
@@ -140,7 +196,16 @@ export const organizations = pgTable('organizations', {
 	// Visible-hours range for the internal appointments calendar (time rail).
 	// Off-hours appointments still render; this is a display hint, not a constraint.
 	calendar_day_start_hour: integer('calendar_day_start_hour').notNull().default(7),
-	calendar_day_end_hour: integer('calendar_day_end_hour').notNull().default(19)
+	calendar_day_end_hour: integer('calendar_day_end_hour').notNull().default(19),
+
+	// SMS quiet hours (Blueprint §10 / Onboarding.md Part 10 compliance). Outbound SMS
+	// is held during this window, evaluated in the org's own `timezone`; deferred jobs
+	// auto-send when the window opens (never dropped). Defaults to the TCPA-safe window
+	// (block 9 PM → 8 AM local) so every org is compliant out of the box. start_hour and
+	// end_hour are 0–23; start > end means an overnight window (the common case).
+	quiet_hours_enabled: boolean('quiet_hours_enabled').notNull().default(true),
+	quiet_hours_start_hour: integer('quiet_hours_start_hour').notNull().default(21),
+	quiet_hours_end_hour: integer('quiet_hours_end_hour').notNull().default(8)
 });
 
 export type Organization = InferSelectModel<typeof organizations>;

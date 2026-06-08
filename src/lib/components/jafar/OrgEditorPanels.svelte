@@ -167,7 +167,7 @@
 		if (!credit) return;
 		perSmsCost = credit.per_sms_cost;
 		monthlyCredit = credit.monthly_included_credit;
-		phoneNumber = org.twilio_phone_number;
+		phoneNumber = org.twilio_phone_number ?? '';
 		showCostToContractor = credit.show_cost_to_contractor;
 	}
 

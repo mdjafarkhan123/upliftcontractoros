@@ -19,6 +19,7 @@ import {
 	addJob
 } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
+import { sendSystemEmail } from '$lib/server/email/sendSystemEmail';
 import { featureForWorkerEvent } from '$lib/permissions/featureMap';
 import type { FeatureFlagKey } from '$lib/types';
 
@@ -193,11 +194,87 @@ async function handleMediaDeleted(event: OutboxEvent): Promise<void> {
 	);
 }
 
+// Carrier registration submitted by a contractor (Onboarding.md Step 4). Notifies
+// the PO by system email so they can copy the data for manual Twilio submission.
+// Handled inline (no BullMQ queue), mirroring media.deleted. Re-submits re-notify.
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+async function handleCarrierSubmitted(event: OutboxEvent): Promise<void> {
+	const to = env.SUPER_ADMIN_EMAIL;
+	if (!to) {
+		console.warn(
+			`[outbox] carrier.submitted ${event.id}: SUPER_ADMIN_EMAIL not set — skipping PO email`
+		);
+		return;
+	}
+
+	const p = event.payload as {
+		org_name?: string;
+		country?: string;
+		legal_business_name?: string;
+		ein?: string | null;
+		business_number?: string | null;
+		website?: string | null;
+		messaging_use_case?: string | null;
+	};
+	const orgName = p.org_name ?? 'A contractor';
+	const country = p.country ?? '';
+	const program = country === 'CA' ? 'CWTA' : '10DLC';
+
+	const rows: [string, string | null | undefined][] = [
+		['Organization', orgName],
+		['Country', country],
+		['Legal/Business name', p.legal_business_name],
+		['EIN', p.ein],
+		['Business Number', p.business_number],
+		['Website', p.website],
+		['Messaging use case', p.messaging_use_case]
+	];
+	const present = rows.filter(([, v]) => v != null && v !== '');
+
+	const textBody = [
+		`${orgName} submitted carrier registration details (${country} ${program}).`,
+		'',
+		...present.map(([k, v]) => `${k}: ${v}`),
+		'',
+		'Review and submit these to Twilio, then update the org status in /jafar.'
+	].join('\n');
+
+	const htmlBody = [
+		`<p><strong>${escapeHtml(orgName)}</strong> submitted carrier registration details (${escapeHtml(`${country} ${program}`)}).</p>`,
+		'<table style="border-collapse:collapse">',
+		...present.map(
+			([k, v]) =>
+				`<tr><td style="padding:4px 12px 4px 0;color:#666">${escapeHtml(k)}</td><td style="padding:4px 0"><strong>${escapeHtml(String(v))}</strong></td></tr>`
+		),
+		'</table>',
+		'<p>Review and submit these to Twilio, then update the org status in /jafar.</p>'
+	].join('');
+
+	await sendSystemEmail({
+		to,
+		subject: `Carrier registration submitted — ${orgName} (${country} ${program})`,
+		text: textBody,
+		html: htmlBody
+	});
+	console.log(`[outbox] carrier.submitted: PO notified for org ${event.org_id}`);
+}
+
 type DispatchResult = { status: 'routed' } | { status: 'unrouted'; reason: string };
 
 async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 	if (event.event_type === 'media.deleted') {
 		await handleMediaDeleted(event);
+		return { status: 'routed' };
+	}
+	if (event.event_type === 'carrier.submitted') {
+		await handleCarrierSubmitted(event);
 		return { status: 'routed' };
 	}
 	if (event.org_id) {
@@ -283,7 +360,21 @@ async function claimBatch(): Promise<OutboxEvent[]> {
 			FOR UPDATE SKIP LOCKED
 			LIMIT ${BATCH_SIZE}
 		`);
-		const events = rows as unknown as OutboxEvent[];
+		// Raw `tx.execute(sql...)` returns timestamp columns as STRINGS, not Date
+		// objects. Downstream code feeds some of these back into Drizzle timestamp
+		// columns (the dead-letter `available_at`; the activity `occurred_at` =
+		// `created_at`), where Drizzle calls `.toISOString()` on them and throws
+		// "value.toISOString is not a function". Coerce every timestamp field to a
+		// Date here so the typed OutboxEvent shape matches reality.
+		const events = (rows as unknown as OutboxEvent[]).map((e) => ({
+			...e,
+			available_at: e.available_at == null ? e.available_at : new Date(e.available_at),
+			processed_at: e.processed_at == null ? e.processed_at : new Date(e.processed_at),
+			dead_lettered_at:
+				e.dead_lettered_at == null ? e.dead_lettered_at : new Date(e.dead_lettered_at),
+			created_at: e.created_at == null ? e.created_at : new Date(e.created_at),
+			updated_at: e.updated_at == null ? e.updated_at : new Date(e.updated_at)
+		}));
 		if (events.length === 0) return [];
 		await tx
 			.update(outboxEvents)

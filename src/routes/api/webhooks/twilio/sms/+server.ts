@@ -26,17 +26,29 @@ export const POST: RequestHandler = async ({ request }) => {
 	const params: Record<string, string> = {};
 	for (const [k, v] of form.entries()) params[k] = typeof v === 'string' ? v : '';
 
-	const signature = request.headers.get('x-twilio-signature');
-	if (!validateTwilioSignature(signature, url, params)) {
-		return new Response('Invalid signature', { status: 403 });
-	}
-
 	const fromRaw = params.From;
 	const toRaw = params.To;
 	const body = params.Body ?? '';
 	const sid = params.MessageSid;
 
+	// Resolve the org that owns the destination number BEFORE validating: an inbound
+	// webhook for a subaccount-owned number is signed with that subaccount's auth
+	// token (not master). Fall back to master when the org has no subaccount token.
+	const [org] = toRaw
+		? await db
+				.select()
+				.from(organizations)
+				.where(eq(organizations.twilio_phone_number, toRaw))
+				.limit(1)
+		: [];
+
+	const signature = request.headers.get('x-twilio-signature');
+	if (!validateTwilioSignature(signature, url, params, org?.twilio_subaccount_auth_token)) {
+		return new Response('Invalid signature', { status: 403 });
+	}
+
 	if (!fromRaw || !toRaw || !sid) return twiml();
+	if (!org) return twiml();
 
 	// Inbound MMS media — Twilio sends NumMedia + MediaUrlN/MediaContentTypeN.
 	// The URLs are private and expiring, so a worker fetches + stores them; here
@@ -63,13 +75,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (e instanceof PhoneInvalidError) return twiml();
 		throw e;
 	}
-
-	const [org] = await db
-		.select()
-		.from(organizations)
-		.where(eq(organizations.twilio_phone_number, toRaw))
-		.limit(1);
-	if (!org) return twiml();
 
 	// Audit raw payload (best-effort — never blocks webhook).
 	void db

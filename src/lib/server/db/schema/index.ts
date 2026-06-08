@@ -1,6 +1,7 @@
 // Domain 1 — Organization & Identity
 export {
 	orgStatusEnum,
+	smsApprovalStatusEnum,
 	memberRoleEnum,
 	organizations,
 	orgMembers,
@@ -206,7 +207,8 @@ export {
 	notificationDeliveryState,
 	automationJobs,
 	outboxEvents,
-	orgCounters
+	orgCounters,
+	platformSettings
 } from './10_system';
 export type {
 	GrowthFeedItem,
@@ -228,5 +230,7 @@ export type {
 	OutboxEvent,
 	NewOutboxEvent,
 	OrgCounter,
-	NewOrgCounter
+	NewOrgCounter,
+	PlatformSettings,
+	NewPlatformSettings
 } from './10_system';

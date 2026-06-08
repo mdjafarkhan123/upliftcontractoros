@@ -30,6 +30,15 @@ const PUBLIC_EXACT = new Set<string>(['/jafar']);
 const SUSPENDED_ALLOWED_APP_PATHS = ['/suspended', '/billing'];
 const SUSPENDED_ALLOWED_API_PATHS = ['/api/session', '/api/billing'];
 
+// While an org is `pending_setup`, the only API surface it may touch is the
+// onboarding wizard's own endpoints plus session reads. Everything else is
+// blocked so no business writes happen before onboarding completes.
+const PENDING_SETUP_ALLOWED_API_PATHS = ['/api/onboarding', '/api/session'];
+
+function isOnboardingPath(pathname: string): boolean {
+	return pathname === '/onboarding' || pathname.startsWith('/onboarding/');
+}
+
 function isPublicPath(pathname: string): boolean {
 	if (PUBLIC_EXACT.has(pathname)) return true;
 	for (const p of PUBLIC_PREFIXES) if (pathname.startsWith(p)) return true;
@@ -112,6 +121,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 				logSuspendedBlock(event, auth, 'org_suspended');
 				throw redirect(302, '/suspended');
 			}
+			// New orgs change their password inside the onboarding wizard, not here.
+			if (auth.orgStatus === 'pending_setup') throw redirect(302, '/onboarding');
 			if (auth.supabaseUser.app_metadata.password_changed) throw redirect(302, '/dashboard');
 		} else {
 			// App routes (everything not /api/*, not public)
@@ -125,8 +136,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 					logSuspendedBlock(event, auth, 'org_suspended');
 					throw redirect(302, '/suspended');
 				}
-				if (!auth.supabaseUser.app_metadata.password_changed) {
-					throw redirect(302, '/change-password');
+				// Onboarding gate: pending_setup orgs are held in the wizard (no bypass);
+				// completed orgs are bounced off the wizard. The wizard owns Step 1
+				// (forced password), so password_changed is only enforced outside it.
+				if (auth.orgStatus === 'pending_setup') {
+					if (!isOnboardingPath(pathname)) throw redirect(302, '/onboarding');
+				} else {
+					if (isOnboardingPath(pathname)) throw redirect(302, '/dashboard');
+					if (!auth.supabaseUser.app_metadata.password_changed) {
+						throw redirect(302, '/change-password');
+					}
 				}
 				// NOTE: is_setup_complete is no longer a blocker — surfaced as banner in UI.
 			} else {
@@ -146,6 +165,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 						JSON.stringify({
 							error: 'Organization access is suspended.',
 							code: 'ORG_SUSPENDED'
+						}),
+						{ status: 403, headers: { 'content-type': 'application/json' } }
+					);
+				}
+				if (
+					auth.orgStatus === 'pending_setup' &&
+					!matchesPrefix(pathname, PENDING_SETUP_ALLOWED_API_PATHS)
+				) {
+					return new Response(
+						JSON.stringify({
+							error: 'Complete onboarding to access this feature.',
+							code: 'ORG_PENDING_SETUP'
 						}),
 						{ status: 403, headers: { 'content-type': 'application/json' } }
 					);

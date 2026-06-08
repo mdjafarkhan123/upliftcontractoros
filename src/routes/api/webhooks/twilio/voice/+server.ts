@@ -25,8 +25,21 @@ export const POST: RequestHandler = async ({ request }) => {
 	const params: Record<string, string> = {};
 	for (const [k, v] of form.entries()) params[k] = typeof v === 'string' ? v : '';
 
+	const toRaw = params.To;
+
+	// Resolve the org that owns this number BEFORE validating: an inbound webhook
+	// for a subaccount-owned number is signed with that subaccount's auth token
+	// (not master). Fall back to master when the org has no subaccount token.
+	const [org] = toRaw
+		? await db
+				.select()
+				.from(organizations)
+				.where(eq(organizations.twilio_phone_number, toRaw))
+				.limit(1)
+		: [];
+
 	const signature = request.headers.get('x-twilio-signature');
-	if (!validateTwilioSignature(signature, url, params)) {
+	if (!validateTwilioSignature(signature, url, params, org?.twilio_subaccount_auth_token)) {
 		return new Response('Invalid signature', { status: 403 });
 	}
 
@@ -34,9 +47,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (callStatus !== 'no-answer' && callStatus !== 'busy') return twiml();
 
 	const fromRaw = params.From;
-	const toRaw = params.To;
 	const callSid = params.CallSid;
 	if (!fromRaw || !toRaw || !callSid) return twiml();
+	if (!org) return twiml();
 
 	let fromE164: string;
 	try {
@@ -45,13 +58,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (e instanceof PhoneInvalidError) return twiml();
 		throw e;
 	}
-
-	const [org] = await db
-		.select()
-		.from(organizations)
-		.where(eq(organizations.twilio_phone_number, toRaw))
-		.limit(1);
-	if (!org) return twiml();
 
 	// Idempotency: missed-call dedupe by CallSid stored in twilio_message_sid
 	const [existingMsg] = await db

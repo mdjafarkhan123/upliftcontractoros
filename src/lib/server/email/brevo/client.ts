@@ -177,6 +177,16 @@ export function buildDnsRecords(
 	return records;
 }
 
+// Sending-only DNS records for a single domain — DKIM + brevo-code + DMARC, no
+// inbound MX. Used by the PLATFORM system email domain (outbound-only), unlike the
+// per-org flow which also receives replies. Wraps the shared buildAuthRecords.
+export function buildSendingDnsRecords(
+	domain: string,
+	raw: BrevoDnsRecords | undefined
+): EmailDnsRecord[] {
+	return buildAuthRecords(domain, 'sending', raw);
+}
+
 // POST /v3/senders/domains — register a domain (sending or receiving) with Brevo.
 // Returns its status + raw DNS payload; callers build display records themselves.
 export async function createBrevoDomain(name: string): Promise<BrevoDomainStatus> {

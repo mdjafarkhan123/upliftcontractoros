@@ -21,6 +21,7 @@ import { runUnsnoozeConversations } from './unsnoozeConversations';
 import { runUnreadCountReconcile } from './unreadCountReconcile';
 import { runFollowUpDueSweep } from './followUpDueSweep';
 import { runSmsMonthlyGrant } from './smsMonthlyGrant';
+import { runSmsMasterBalanceSync } from './smsMasterBalanceSync';
 
 const log = createLogger('cron');
 
@@ -92,7 +93,8 @@ const JOBS: CronSpec[] = [
 	{ name: 'unsnooze-conversations', schedule: '*/5 * * * *', run: runUnsnoozeConversations },
 	{ name: 'unread-count-reconcile', schedule: '0 * * * *', run: runUnreadCountReconcile },
 	{ name: 'follow-up-due-sweep', schedule: '*/15 * * * *', run: runFollowUpDueSweep },
-	{ name: 'sms-monthly-grant', schedule: '0 5 1 * *', run: runSmsMonthlyGrant }
+	{ name: 'sms-monthly-grant', schedule: '0 5 1 * *', run: runSmsMonthlyGrant },
+	{ name: 'sms-master-balance-sync', schedule: '*/15 * * * *', run: runSmsMasterBalanceSync }
 ];
 
 let registered = false;

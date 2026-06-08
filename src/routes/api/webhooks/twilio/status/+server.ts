@@ -1,7 +1,12 @@
 import type { RequestHandler } from './$types';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { inboundCommunicationEvents, messages, outboxEvents } from '$lib/server/db/schema';
+import {
+	inboundCommunicationEvents,
+	messages,
+	organizations,
+	outboxEvents
+} from '$lib/server/db/schema';
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { refundSmsCredit } from '$lib/server/sms/credit';
 import { createLogger } from '$lib/server/log';
@@ -53,8 +58,20 @@ export const POST: RequestHandler = async ({ request }) => {
 	const params: Record<string, string> = {};
 	for (const [k, v] of form.entries()) params[k] = typeof v === 'string' ? v : '';
 
+	// An outbound status callback is signed by the account that SENT the message —
+	// the subaccount that owns the From number. Resolve it to pick the right auth
+	// token (master fallback for legacy master-owned numbers).
+	const fromRaw = params.From;
+	const [org] = fromRaw
+		? await db
+				.select({ subToken: organizations.twilio_subaccount_auth_token })
+				.from(organizations)
+				.where(eq(organizations.twilio_phone_number, fromRaw))
+				.limit(1)
+		: [];
+
 	const signature = request.headers.get('x-twilio-signature');
-	if (!validateTwilioSignature(signature, url, params)) {
+	if (!validateTwilioSignature(signature, url, params, org?.subToken)) {
 		return new Response('Invalid signature', { status: 403 });
 	}
 

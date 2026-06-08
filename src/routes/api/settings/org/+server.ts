@@ -32,7 +32,10 @@ const orgPatchSchema = z
 			.nullable()
 			.optional(),
 		calendar_day_start_hour: z.number().int().min(0).max(23).optional(),
-		calendar_day_end_hour: z.number().int().min(1).max(24).optional()
+		calendar_day_end_hour: z.number().int().min(1).max(24).optional(),
+		quiet_hours_enabled: z.boolean().optional(),
+		quiet_hours_start_hour: z.number().int().min(0).max(23).optional(),
+		quiet_hours_end_hour: z.number().int().min(0).max(23).optional()
 	})
 	.strict();
 
@@ -70,6 +73,9 @@ export const GET: RequestHandler = async (event) => {
 			logo_url: organizations.logo_url,
 			calendar_day_start_hour: organizations.calendar_day_start_hour,
 			calendar_day_end_hour: organizations.calendar_day_end_hour,
+			quiet_hours_enabled: organizations.quiet_hours_enabled,
+			quiet_hours_start_hour: organizations.quiet_hours_start_hour,
+			quiet_hours_end_hour: organizations.quiet_hours_end_hour,
 			google_review_link: automationSettings.google_review_link
 		})
 		.from(organizations)
@@ -163,6 +169,38 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 	}
 
+	// Quiet hours: hours are 0–23 and may wrap overnight (start > end), so unlike the
+	// calendar range we only reject a degenerate window (start === end) when quiet
+	// hours is enabled. Validate against the resolved enabled+start+end set.
+	if (
+		input.quiet_hours_enabled !== undefined ||
+		input.quiet_hours_start_hour !== undefined ||
+		input.quiet_hours_end_hour !== undefined
+	) {
+		const [existing] = await db
+			.select({
+				enabled: organizations.quiet_hours_enabled,
+				s: organizations.quiet_hours_start_hour,
+				e: organizations.quiet_hours_end_hour
+			})
+			.from(organizations)
+			.where(eq(organizations.id, auth.orgId))
+			.limit(1);
+		const enabled = input.quiet_hours_enabled ?? existing?.enabled ?? true;
+		const s = input.quiet_hours_start_hour ?? existing?.s ?? 21;
+		const e = input.quiet_hours_end_hour ?? existing?.e ?? 8;
+		if (enabled && s === e) {
+			field_errors.quiet_hours_end_hour = 'Start and end hours must differ.';
+		} else {
+			if (input.quiet_hours_enabled !== undefined)
+				updates.quiet_hours_enabled = input.quiet_hours_enabled;
+			if (input.quiet_hours_start_hour !== undefined)
+				updates.quiet_hours_start_hour = input.quiet_hours_start_hour;
+			if (input.quiet_hours_end_hour !== undefined)
+				updates.quiet_hours_end_hour = input.quiet_hours_end_hour;
+		}
+	}
+
 	if (input.logo_url !== undefined) {
 		if (input.logo_url === null) {
 			updates.logo_url = null;
@@ -209,7 +247,10 @@ export const PATCH: RequestHandler = async (event) => {
 		primary_color: organizations.primary_color,
 		logo_url: organizations.logo_url,
 		calendar_day_start_hour: organizations.calendar_day_start_hour,
-		calendar_day_end_hour: organizations.calendar_day_end_hour
+		calendar_day_end_hour: organizations.calendar_day_end_hour,
+		quiet_hours_enabled: organizations.quiet_hours_enabled,
+		quiet_hours_start_hour: organizations.quiet_hours_start_hour,
+		quiet_hours_end_hour: organizations.quiet_hours_end_hour
 	};
 
 	const updated = await db.transaction(async (tx) => {

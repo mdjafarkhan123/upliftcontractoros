@@ -28,6 +28,9 @@
 		google_review_link: string | null;
 		calendar_day_start_hour: number;
 		calendar_day_end_hour: number;
+		quiet_hours_enabled: boolean;
+		quiet_hours_start_hour: number;
+		quiet_hours_end_hour: number;
 	};
 
 	type OrgForm = {
@@ -42,6 +45,9 @@
 		google_review_link: string;
 		calendar_day_start_hour: number;
 		calendar_day_end_hour: number;
+		quiet_hours_enabled: boolean;
+		quiet_hours_start_hour: number;
+		quiet_hours_end_hour: number;
 	};
 
 	function apiToForm(d: OrgSettingsApi): OrgForm {
@@ -56,7 +62,10 @@
 			primary_color: d.primary_color ?? '',
 			google_review_link: d.google_review_link ?? '',
 			calendar_day_start_hour: d.calendar_day_start_hour,
-			calendar_day_end_hour: d.calendar_day_end_hour
+			calendar_day_end_hour: d.calendar_day_end_hour,
+			quiet_hours_enabled: d.quiet_hours_enabled,
+			quiet_hours_start_hour: d.quiet_hours_start_hour,
+			quiet_hours_end_hour: d.quiet_hours_end_hour
 		};
 	}
 
@@ -329,6 +338,60 @@
 						</select>
 						{#if fieldErrors.calendar_day_end_hour}
 							<p class="text-xs text-destructive">{fieldErrors.calendar_day_end_hour}</p>
+						{/if}
+					</div>
+				</div>
+			</section>
+
+			<section class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<h3 class="text-sm font-semibold text-foreground">SMS quiet hours</h3>
+						<p class="text-xs text-muted-foreground">
+							Outbound texts are held during these hours and sent automatically once the window
+							reopens — they're never lost. Evaluated in your business timezone.
+						</p>
+					</div>
+					<label class="flex shrink-0 items-center gap-2 text-sm">
+						<input
+							type="checkbox"
+							class="h-4 w-4 rounded border-input accent-primary"
+							bind:checked={form.quiet_hours_enabled}
+						/>
+						<span class="text-muted-foreground">Enabled</span>
+					</label>
+				</div>
+				<div class={cn('grid grid-cols-2 gap-3', !form.quiet_hours_enabled && 'opacity-50')}>
+					<div class="flex flex-col gap-1.5">
+						<Label for="quiet_hours_start_hour">Quiet from</Label>
+						<select
+							id="quiet_hours_start_hour"
+							class="h-11 rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed"
+							bind:value={form.quiet_hours_start_hour}
+							disabled={!form.quiet_hours_enabled}
+						>
+							{#each HOUR_OPTIONS.slice(0, 24) as opt (opt.value)}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+						{#if fieldErrors.quiet_hours_start_hour}
+							<p class="text-xs text-destructive">{fieldErrors.quiet_hours_start_hour}</p>
+						{/if}
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<Label for="quiet_hours_end_hour">Quiet until</Label>
+						<select
+							id="quiet_hours_end_hour"
+							class="h-11 rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed"
+							bind:value={form.quiet_hours_end_hour}
+							disabled={!form.quiet_hours_enabled}
+						>
+							{#each HOUR_OPTIONS.slice(0, 24) as opt (opt.value)}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+						{#if fieldErrors.quiet_hours_end_hour}
+							<p class="text-xs text-destructive">{fieldErrors.quiet_hours_end_hour}</p>
 						{/if}
 					</div>
 				</div>

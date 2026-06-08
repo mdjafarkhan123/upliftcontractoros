@@ -14,7 +14,14 @@ const statusPatchSchema = z.object({
 const entitlementsPatchSchema = z.object({
 	plan: planNameSchema.optional(),
 	featureFlags: featureFlagsSchema.optional(),
-	limits: limitsSchema.optional()
+	limits: limitsSchema.optional(),
+	sms_enabled: z.boolean().optional(),
+	// PO manual carrier-approval flip (Step 6). Unblocks/blocks outbound SMS at the
+	// worker gate; the contractor's session reloads via feature_overrides_updated_at.
+	sms_approval_status: z.enum(['not_required', 'pending', 'approved', 'rejected']).optional(),
+	// PO note shown to the contractor + /jafar Details tab when a submission is
+	// rejected / needs resubmission. Pass null to clear it (e.g. on approval).
+	sms_approval_reason: z.string().trim().max(1000).nullable().optional()
 });
 
 const patchSchema = z.union([statusPatchSchema, entitlementsPatchSchema]);
@@ -57,8 +64,16 @@ export async function PATCH({ params, request }) {
 		return json({ ok: true });
 	}
 
-	const { plan, featureFlags, limits } = parsed.data;
-	if (!plan && !featureFlags && !limits) {
+	const { plan, featureFlags, limits, sms_enabled, sms_approval_status, sms_approval_reason } =
+		parsed.data;
+	if (
+		!plan &&
+		!featureFlags &&
+		!limits &&
+		sms_enabled === undefined &&
+		sms_approval_status === undefined &&
+		sms_approval_reason === undefined
+	) {
 		throw error(400, 'No fields to update.');
 	}
 
@@ -69,6 +84,9 @@ export async function PATCH({ params, request }) {
 			...(plan ? { plan } : {}),
 			...(featureFlags ?? {}),
 			...(limits ?? {}),
+			...(sms_enabled !== undefined ? { sms_enabled } : {}),
+			...(sms_approval_status !== undefined ? { sms_approval_status } : {}),
+			...(sms_approval_reason !== undefined ? { sms_approval_reason } : {}),
 			feature_overrides_updated_at: now,
 			updated_at: now
 		})

@@ -5,13 +5,40 @@ export type Org = {
 	id: string;
 	name: string;
 	slug: string;
-	status: 'active' | 'suspended' | 'pending_deletion' | 'deleted';
+	status: 'active' | 'suspended' | 'pending_deletion' | 'deleted' | 'pending_setup';
 	trade_type: string;
+	country: string | null;
+	address: string | null;
 	city: string | null;
 	state: string | null;
+	zip: string | null;
 	timezone: string;
-	twilio_phone_number: string;
+	logo_url: string | null;
+	primary_color: string | null;
+	twilio_phone_number: string | null;
+	twilio_subaccount_sid: string | null;
+	// Stripe connection (written by /api/settings/stripe into dedicated columns, NOT
+	// into integration_status). Populated once the org connects a Stripe account.
+	stripe_account_id: string | null;
+	stripe_account_name: string | null;
+	stripe_account_email: string | null;
+	stripe_livemode: boolean | null;
+	stripe_connected_at: string | null;
+	stripe_last_verified_at: string | null;
 	is_setup_complete: boolean;
+	sms_enabled: boolean;
+	sms_approval_status: 'not_required' | 'pending' | 'approved' | 'rejected';
+	sms_approval_submitted_at: string | null;
+	sms_approval_reason: string | null;
+	// Carrier registration (Onboarding.md Step 4) — collected in onboarding, copied
+	// by the PO for manual Twilio submission. All nullable; address is reused above.
+	legal_business_name: string | null;
+	ein: string | null;
+	business_number: string | null;
+	website: string | null;
+	messaging_use_case: string | null;
+	calendar_day_start_hour: number;
+	calendar_day_end_hour: number;
 	created_at: string;
 	updated_at: string;
 	plan: PlanName;

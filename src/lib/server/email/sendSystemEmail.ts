@@ -15,7 +15,7 @@ export type SendSystemEmailInput = {
  */
 export async function sendSystemEmail(input: SendSystemEmailInput): Promise<SendEmailResult> {
 	return sendEmail({
-		from: systemFromAddress(),
+		from: await systemFromAddress(),
 		to: input.to,
 		subject: input.subject,
 		html: input.html,

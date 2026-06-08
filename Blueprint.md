@@ -911,94 +911,173 @@ Simple RBAC. Roles map directly to operational responsibilities. No enterprise p
 
 ---
 
-# 10. SMS System — Minimal Blueprint (Telnyx Edition)
+# 10. SMS System — Minimal Blueprint (Twilio)
 
 ## Overview
 
-Each contractor is assigned a dedicated Telnyx phone number provisioned inside an isolated Telnyx subaccount controlled by the Platform Owner (PO).
-Contractors never interact with Telnyx directly.
+Each contractor **may be assigned** a dedicated Twilio phone number provisioned inside an isolated Twilio subaccount, fully controlled by the Platform Owner (PO).
 
-All billing is handled through the PO’s master Telnyx account.
+**Important:**
+
+- Phone number setup is **optional**
+- Contractors can operate **without SMS**
+- Contractors never interact with Twilio directly
+
+All billing is handled through the PO’s master Twilio account.
 The platform enforces usage limits via an internal credit system.
 
 ---
 
-## Telnyx Mapping Layer
+## Twilio Mapping Layer
 
-- **Organization** = Telnyx Subaccount (Child Account)
-- **Routing Foundation:** 1 subaccount = 1 organization. All inbound/outbound SMS flows depend on this mapping.
-- Each subaccount contains:
-  - One phone number
-  - One messaging profile
-- Messaging is handled via Telnyx Messages API
-- **Global Webhook:** Single global webhook endpoint for all inbound SMS. No per-tenant webhook URLs. Use `subaccount_id` from payload to map messages to the correct organization.
+- **Organization** = Twilio Subaccount
+- **Routing Foundation:** 1 subaccount = 1 organization (only if SMS is enabled and number exists)
+
+Each subaccount contains:
+
+- (Optional) One phone number
+
+- Messaging capability via Twilio Programmable Messaging
+
+- **Global Webhook:** Single endpoint for all inbound messages
+  `/webhooks/sms`
+
+- Twilio sends:
+  - `AccountSid` (subaccount identifier)
+  - `To`, `From`, message data
+
+→ Map `AccountSid → org_id` → route to inbox
+
+---
+
+## SMS Availability Logic (NEW — IMPORTANT)
+
+SMS system is **conditionally active**:
+
+### Case 1 — SMS Disabled (sms_enabled = false)
+
+- No Twilio provisioning
+- No SMS UI
+- No webhook routing
+
+### Case 2 — SMS Enabled, No Number
+
+- Subaccount may or may not exist
+- No number assigned
+- SMS features disabled
+- System remains fully usable
+
+### Case 3 — Number Assigned
+
+- Full SMS system becomes active
+- Webhooks + sending enabled (subject to compliance)
 
 ---
 
 ## Credit Model
 
-- Each organization receives a monthly credit allowance (e.g. $5)
+- Each organization receives a monthly credit allowance (e.g. $5) by PO. Its not the Twilio real credit rather setup  credit for Organization
 - Credits are virtual and managed internally
-- PO defines:
-  - Monthly allowance
-  - Cost per SMS (fixed internal pricing)
-  - Manual credit adjustments
 
-Real Telnyx costs are abstracted and not exposed.
+PO defines:
+
+- Monthly allowance
+- Cost per SMS (fixed internal pricing)
+- Manual credit adjustments
+
+Real Twilio costs are abstracted.
 
 ---
 
 ## Credit Behavior
 
 - Monthly allowance rolls over
-- Each SMS deducts cost from org balance
+- Each outbound SMS deducts credit if that is successful
 - If balance ≤ 0 → block sending
 - Contractors request top-ups off-platform
 - PO manually adjusts credit
 
 ---
 
-## Provisioning (PO Controlled)
+## Provisioning (Controlled + Optional)
 
-From admin panel:
+Provisioning only happens when contractor chooses **“Get a Number”**:
 
-- Create Telnyx subaccount per org
-- Purchase & assign phone number
-- Attach messaging profile
+From admin/system:
+
+- Create Twilio subaccount (if not exists)
+- Purchase phone number
+- Assign to organization
+- Store `account_sid`, `auth_token` (or API key)
+- Configure webhook
 - Set credit rules
 
-No contractor self-service.
+No forced provisioning during onboarding.
 
 ---
 
 ## Message Flow
 
 1. Contractor sends SMS
-2. Platform checks credit
-3. If sufficient:
-   - Send via Telnyx API
+2. System checks:
+   - SMS enabled?
+   - Number exists?
+   - Credit available?
+
+3. If valid:
+   - Send via Twilio API
    - On success → deduct credit
-4. Store message with status
+
+4. Store message
 
 ---
 
 ## Message Lifecycle Handling
 
-- Handle Telnyx webhooks:
-  - `message.sent`
-  - `message.delivered`
-  - `message.failed`
-- Update message status in database
-- Failed messages:
-  - optionally refund credit (configurable)
+Handle Twilio webhooks:
+
+- `message.sent`
+- `message.delivered`
+- `message.failed`
+
+Update message status in database
+
+Failed messages:
+
+- Optional credit refund (configurable)
+
+---
+
+## Compliance Layer (NEW — TWILIO SPECIFIC)
+
+When number is purchased:
+
+### United States (10DLC)
+
+- Brand + Campaign registration required
+- Outbound SMS blocked until approved
+
+### Canada
+
+- Carrier registration required
+
+### System Behavior:
+
+- Allow inbound SMS immediately
+- Allow calls (if enabled)
+- Block outbound SMS until approval
 
 ---
 
 ## Rate Limiting
 
-- Per organization limits:
+This should be controllable by PO 
+
+- Per organization:
   - Messages per minute
+  - Messaage per 2 second
   - Messages per day
+
 - Global system cap
 
 ---
@@ -1010,7 +1089,7 @@ No contractor self-service.
 
 ---
 
-## Data Model (Message)
+## Data Model (Message) (not fixed)
 
 - `message_id`
 - `org_id`
@@ -1019,16 +1098,16 @@ No contractor self-service.
 - `body`
 - `cost`
 - `status`
-- `telnyx_message_id`
+- `twilio_message_sid`
 - `created_at`
 
 ---
 
 ## Rules
 
-- One phone number per organization
-- One subaccount per organization
-- All messages pass credit check
+- Max one phone number per organization
+- Subaccount only required if SMS is used
+- All outbound messages pass credit check
 - No negative balances
 - PO controls pricing and limits
 
@@ -1053,29 +1132,34 @@ PO can view:
 
 ## PO Safety Floor
 
-- Stop all SMS if master balance is below threshold
+- Stop all outbound SMS if master Twilio balance is low
+- Queue messages (do not lose)
 
 ---
 
-## Compliance
+## Compliance (Core Rules)
 
-- **GDPR Consent:** Enforce GDPR-compliant SMS consent tracking (UK/EU).
-- **Consent Storage:** Store consent status, source, and timestamp per contact.
-- **Opt-out Handling:** Automatically revoke consent on opt-out keywords (e.g., STOP).
-- Define messaging use case
-- Ensure compliance with carrier rules
+- Consent tracking required
+- Store consent status + timestamp
+- Auto-handle STOP / UNSUBSCRIBE
+- Quiet hours enforcement
+- Transactional vs promotional separation
 
 ---
 
 ## Philosophy
 
-This is a controlled infrastructure layer.
+This is a **controlled infrastructure layer with optional activation**.
 
-- Contractor → sends messages
+- Contractor → uses messaging (only if enabled)
 - Platform → enforces rules
 - PO → controls system
 
-No complexity is exposed to the contractor.
+No complexity is exposed.
+No feature is forced.
+Everything activates only when needed.
+
+To understand the Whole Picture you read the Onboarding Part from 'Onboarding.md'
 
 ---
 

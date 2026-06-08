@@ -4,6 +4,7 @@
 	import PlanTemplateSelector from '$lib/components/jafar/PlanTemplateSelector.svelte';
 	import FeatureFlagsEditor from '$lib/components/jafar/FeatureFlagsEditor.svelte';
 	import LimitsEditor from '$lib/components/jafar/LimitsEditor.svelte';
+	import Toggle from '$lib/components/jafar/Toggle.svelte';
 	import AdminSectionSkeleton from '$lib/components/jafar/skeletons/AdminSectionSkeleton.svelte';
 	import AdminHeaderSkeleton from '$lib/components/jafar/skeletons/AdminHeaderSkeleton.svelte';
 	import { FEATURE_FLAG_KEYS, LIMIT_KEYS } from '$lib/admin/featureGroups';
@@ -58,11 +59,17 @@
 	let plan = $state<PlanName>('starter');
 	let flags = $state<FeatureFlags>({} as FeatureFlags);
 	let limits = $state<OrgLimits>({} as OrgLimits);
+	let smsEnabled = $state(true);
 	let seeded = $state(false);
 	let seededOrgId = $state<string | null>(null);
 
 	// Frozen snapshot of last seeded values — drives dirty without serialization.
-	type Baseline = { plan: PlanName; flags: FeatureFlags; limits: OrgLimits };
+	type Baseline = {
+		plan: PlanName;
+		flags: FeatureFlags;
+		limits: OrgLimits;
+		smsEnabled: boolean;
+	};
 	let baseline = $state<Baseline | null>(null);
 
 	$effect(() => {
@@ -74,10 +81,17 @@
 			const seedPlan = org.plan ?? 'starter';
 			const seedFlags = pickFlags(org);
 			const seedLimits = pickLimits(org);
+			const seedSms = org.sms_enabled;
 			plan = seedPlan;
 			flags = { ...seedFlags };
 			limits = { ...seedLimits };
-			baseline = { plan: seedPlan, flags: seedFlags, limits: seedLimits };
+			smsEnabled = seedSms;
+			baseline = {
+				plan: seedPlan,
+				flags: seedFlags,
+				limits: seedLimits,
+				smsEnabled: seedSms
+			};
 			seeded = true;
 			mark('seed-complete');
 		}
@@ -86,6 +100,7 @@
 	const dirty = $derived.by(() => {
 		if (!seeded || !baseline) return false;
 		if (plan !== baseline.plan) return true;
+		if (smsEnabled !== baseline.smsEnabled) return true;
 		for (let i = 0; i < flagKeys.length; i++) {
 			const k = flagKeys[i];
 			if (flags[k] !== baseline.flags[k]) return true;
@@ -205,6 +220,7 @@
 	const statusStyles: Record<Org['status'], string> = {
 		active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
 		suspended: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+		pending_setup: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
 		pending_deletion: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
 		deleted: 'border-red-500/30 bg-red-500/10 text-red-300'
 	};
@@ -212,6 +228,7 @@
 	const statusLabels: Record<Org['status'], string> = {
 		active: 'Active',
 		suspended: 'Suspended',
+		pending_setup: 'Pending setup',
 		pending_deletion: 'Pending deletion',
 		deleted: 'Deleted'
 	};
@@ -278,7 +295,12 @@
 			const res = await fetch(`/api/admin/orgs/${orgId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ plan, featureFlags: flags, limits })
+				body: JSON.stringify({
+					plan,
+					featureFlags: flags,
+					limits,
+					sms_enabled: smsEnabled
+				})
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
@@ -298,6 +320,7 @@
 		plan = org.plan ?? 'starter';
 		flags = pickFlags(org);
 		limits = pickLimits(org);
+		smsEnabled = org.sms_enabled;
 		saved = false;
 	}
 
@@ -313,9 +336,50 @@
 		}
 	}
 
-	const integrationEntries = $derived(
-		org ? (Object.entries(org.integration_status ?? {}) as [string, unknown][]) : []
-	);
+	// Real connection status, derived from the dedicated org columns that the
+	// contractor's settings actually write to (Stripe → /api/settings/stripe,
+	// Twilio number → provisioning). The old integration_status JSON was never
+	// populated for these, so the panel always showed empty.
+	type Connection = {
+		key: string;
+		label: string;
+		sublabel: string;
+		connected: boolean;
+		detail: string | null;
+		mode: 'live' | 'test' | null;
+	};
+	const connections = $derived.by<Connection[]>(() => {
+		if (!org) return [];
+		return [
+			{
+				// Connected = a credential set was saved (DELETE nulls stripe_connected_at).
+				// stripe_account_id stays null when the restricted key lacks Account:read
+				// scope, so it is NOT a reliable connection signal — connected_at is.
+				key: 'stripe',
+				label: 'Stripe',
+				sublabel: 'Card payments',
+				connected: Boolean(org.stripe_connected_at),
+				detail: org.stripe_connected_at
+					? (org.stripe_account_name ?? org.stripe_account_email)
+					: null,
+				mode: org.stripe_connected_at
+					? org.stripe_livemode == null
+						? null
+						: org.stripe_livemode
+							? 'live'
+							: 'test'
+					: null
+			},
+			{
+				key: 'twilio',
+				label: 'Twilio',
+				sublabel: 'SMS & calls',
+				connected: Boolean(org.twilio_phone_number),
+				detail: org.twilio_phone_number,
+				mode: null
+			}
+		];
+	});
 
 	// Up-to-two-letter monogram for the org avatar tile in the hero.
 	const orgInitials = $derived(
@@ -327,8 +391,11 @@
 			.join('') || '—'
 	);
 
-	type Category = 'general' | 'entitlements' | 'integrations';
-	let activeCategory = $state<Category>('general');
+	type Category = 'general' | 'entitlements' | 'integrations' | 'details';
+	// Deep-link: /jafar/orgs/[id]?tab=details opens the Details tab directly.
+	let activeCategory = $state<Category>(
+		page.url.searchParams.get('tab') === 'details' ? 'details' : 'general'
+	);
 
 	const categoryItems = [
 		{
@@ -336,6 +403,13 @@
 			label: 'General',
 			desc: 'Identity, status & actions',
 			svgPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4'
+		},
+		{
+			id: 'details' as Category,
+			label: 'Details',
+			desc: 'Onboarding & carrier data',
+			svgPath:
+				'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8'
 		},
 		{
 			id: 'entitlements' as Category,
@@ -347,9 +421,121 @@
 			id: 'integrations' as Category,
 			label: 'Integrations',
 			desc: 'Chat, email & connections',
-			svgPath: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'
+			svgPath:
+				'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'
 		}
 	] as const;
+
+	// ── Details tab: carrier registration is only relevant for US/CA orgs ────────
+	const carrierRequired = $derived(org?.country === 'US' || org?.country === 'CA');
+
+	function fieldOrDash(v: string | null | undefined): string {
+		return v && v.trim() ? v : '';
+	}
+
+	// "Copy All" assembles a labeled, paste-ready block for manual Twilio submission.
+	const carrierCopyAll = $derived.by(() => {
+		if (!org) return '';
+		const addr = [org.address, org.city, org.state, org.zip].filter(Boolean).join(', ');
+		const lines: string[] = [];
+		lines.push(`Organization: ${org.name}`);
+		lines.push(`Country: ${org.country ?? '—'}`);
+		if (org.country === 'CA') {
+			lines.push(`Business name: ${fieldOrDash(org.legal_business_name) || '—'}`);
+			lines.push(`Business Number: ${fieldOrDash(org.business_number) || '—'}`);
+		} else {
+			lines.push(`Legal business name: ${fieldOrDash(org.legal_business_name) || '—'}`);
+			lines.push(`EIN: ${fieldOrDash(org.ein) || '—'}`);
+			lines.push(`Website: ${fieldOrDash(org.website) || '—'}`);
+		}
+		lines.push(`Address: ${addr || '—'}`);
+		lines.push(`Messaging use case: ${fieldOrDash(org.messaging_use_case) || '—'}`);
+		lines.push(`Phone number: ${org.twilio_phone_number ?? '—'}`);
+		return lines.join('\n');
+	});
+
+	// SMS credit balance (read-only, fetched lazily when the Details tab is viewed).
+	let creditBalance = $state<number | null>(null);
+	let creditLoading = $state(false);
+	let creditLoadedOrgId = $state<string | null>(null);
+
+	async function loadCredit(id: string) {
+		creditLoading = true;
+		try {
+			const res = await fetch(`/api/admin/orgs/${id}/sms-credit`);
+			if (res.ok) {
+				const body = (await res.json()) as { data: { credit: { balance: number } } };
+				creditBalance = body.data.credit.balance;
+			} else {
+				creditBalance = null;
+			}
+		} catch {
+			creditBalance = null;
+		} finally {
+			creditLoading = false;
+			creditLoadedOrgId = id;
+		}
+	}
+
+	$effect(() => {
+		if (activeCategory === 'details' && org && orgId && creditLoadedOrgId !== orgId) {
+			void loadCredit(orgId);
+		}
+	});
+
+	// ── Approval lifecycle actions (single home — immediate PATCH + reseed) ──────
+	let approving = $state(false);
+	let showRejectForm = $state(false);
+	let rejectReason = $state('');
+
+	async function patchApproval(body: Record<string, unknown>) {
+		if (approving) return;
+		approving = true;
+		actionError = '';
+		try {
+			const res = await fetch(`/api/admin/orgs/${orgId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!res.ok) {
+				const b = await res.json().catch(() => ({}));
+				throw new Error(b.error ?? 'Update failed');
+			}
+			showRejectForm = false;
+			rejectReason = '';
+			await reseedFromServer();
+		} catch (e) {
+			actionError = e instanceof Error ? e.message : 'Update failed';
+		} finally {
+			approving = false;
+		}
+	}
+
+	function markApproved() {
+		void patchApproval({ sms_approval_status: 'approved', sms_approval_reason: null });
+	}
+
+	function requestResubmission() {
+		if (!rejectReason.trim()) return;
+		void patchApproval({
+			sms_approval_status: 'rejected',
+			sms_approval_reason: rejectReason.trim()
+		});
+	}
+
+	const approvalBadge: Record<Org['sms_approval_status'], string> = {
+		not_required: 'border-slate-700 bg-slate-800/60 text-slate-400',
+		pending: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+		approved: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+		rejected: 'border-red-500/30 bg-red-500/10 text-red-300'
+	};
+	const approvalLabel: Record<Org['sms_approval_status'], string> = {
+		not_required: 'Not required',
+		pending: 'Pending',
+		approved: 'Approved',
+		rejected: 'Rejected'
+	};
 </script>
 
 <svelte:head>
@@ -539,14 +725,14 @@
 								onclick={() => (activeCategory = cat.id)}
 								class="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-all duration-150 ease-out cursor-pointer min-h-[44px]
 									{activeCategory === cat.id
-										? 'bg-emerald-500/20 text-emerald-100 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.15)]'
-										: 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}"
+									? 'bg-emerald-500/20 text-emerald-100 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.15)]'
+									: 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}"
 							>
 								<span
 									class="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150
 										{activeCategory === cat.id
-											? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-											: 'border-slate-700 bg-slate-800/40 text-slate-500 group-hover:border-slate-600 group-hover:text-slate-300'}"
+										? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+										: 'border-slate-700 bg-slate-800/40 text-slate-500 group-hover:border-slate-600 group-hover:text-slate-300'}"
 									aria-hidden="true"
 								>
 									<svg
@@ -627,7 +813,9 @@
 							</div>
 
 							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Slug</dt>
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Slug
+								</dt>
 								<dd class="mt-1 font-mono text-sm text-white">{org.slug}</dd>
 							</div>
 
@@ -639,7 +827,9 @@
 							</div>
 
 							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Location</dt>
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Location
+								</dt>
 								<dd class="mt-1 text-sm text-white">
 									{#if org.city || org.state}
 										{[org.city, org.state].filter(Boolean).join(', ')}
@@ -650,7 +840,9 @@
 							</div>
 
 							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Timezone</dt>
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Timezone
+								</dt>
 								<dd class="mt-1 font-mono text-sm text-white">{org.timezone}</dd>
 							</div>
 
@@ -659,19 +851,25 @@
 									Twilio phone
 								</dt>
 								<dd class="mt-1 flex items-center gap-2">
-									<span class="font-mono text-sm text-white">{org.twilio_phone_number}</span>
-									<button
-										type="button"
-										onclick={() => copyValue(org!.twilio_phone_number, 'phone')}
-										class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
-									>
-										{copied === 'phone' ? 'Copied' : 'Copy'}
-									</button>
+									{#if org.twilio_phone_number}
+										<span class="font-mono text-sm text-white">{org.twilio_phone_number}</span>
+										<button
+											type="button"
+											onclick={() => copyValue(org!.twilio_phone_number!, 'phone')}
+											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+										>
+											{copied === 'phone' ? 'Copied' : 'Copy'}
+										</button>
+									{:else}
+										<span class="text-sm italic text-slate-500">Not set</span>
+									{/if}
 								</dd>
 							</div>
 
 							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Created</dt>
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Created
+								</dt>
 								<dd class="mt-1 text-sm text-white">
 									{new Date(org.created_at).toLocaleString()}
 								</dd>
@@ -835,9 +1033,658 @@
 							</div>
 						{/if}
 					</section>
+				{:else if activeCategory === 'details'}
+					<!-- Business Profile -->
+					<section
+						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+					>
+						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+							<span
+								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300"
+								aria-hidden="true"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="17"
+									height="17"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M3 21h18" />
+									<path d="M5 21V7l8-4v18" />
+									<path d="M19 21V11l-6-4" />
+								</svg>
+							</span>
+							<div>
+								<h2 class="text-base font-semibold text-white">Business profile</h2>
+								<p class="mt-0.5 text-xs text-slate-500">
+									Onboarding Step 2 — collected from the contractor.
+								</p>
+							</div>
+						</header>
+						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Company name
+								</dt>
+								<dd class="mt-1 text-sm text-white">{org.name}</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Trade type
+								</dt>
+								<dd class="mt-1 text-sm text-white">{org.trade_type}</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Country
+								</dt>
+								<dd class="mt-1 text-sm text-white">
+									{org.country ?? '—'}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Timezone
+								</dt>
+								<dd class="mt-1 font-mono text-sm text-white">{org.timezone}</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Address
+								</dt>
+								<dd class="mt-1 text-sm text-white">
+									{#if org.address || org.city || org.state || org.zip}
+										{[org.address, org.city, org.state, org.zip].filter(Boolean).join(', ')}
+									{:else}
+										<span class="text-slate-500">—</span>
+									{/if}
+								</dd>
+							</div>
+						</dl>
+					</section>
 
+					<!-- Phone & SMS -->
+					<section
+						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+					>
+						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+							<span
+								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+								aria-hidden="true"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="17"
+									height="17"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path
+										d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"
+									/>
+								</svg>
+							</span>
+							<div>
+								<h2 class="text-base font-semibold text-white">Phone &amp; SMS</h2>
+								<p class="mt-0.5 text-xs text-slate-500">Number, subaccount, and sending state.</p>
+							</div>
+						</header>
+						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Twilio phone
+								</dt>
+								<dd class="mt-1 flex items-center gap-2">
+									{#if org.twilio_phone_number}
+										<span class="font-mono text-sm text-white">{org.twilio_phone_number}</span>
+										<button
+											type="button"
+											onclick={() => copyValue(org!.twilio_phone_number!, 'd-phone')}
+											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+										>
+											{copied === 'd-phone' ? 'Copied' : 'Copy'}
+										</button>
+									{:else}
+										<span class="text-sm italic text-slate-500">Not set</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Subaccount SID
+								</dt>
+								<dd class="mt-1 flex items-center gap-2">
+									{#if org.twilio_subaccount_sid}
+										<code class="truncate font-mono text-xs text-slate-200"
+											>{org.twilio_subaccount_sid}</code
+										>
+										<button
+											type="button"
+											onclick={() => copyValue(org!.twilio_subaccount_sid!, 'd-sid')}
+											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+										>
+											{copied === 'd-sid' ? 'Copied' : 'Copy'}
+										</button>
+									{:else}
+										<span class="text-sm italic text-slate-500">None</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									SMS enabled
+								</dt>
+								<dd class="mt-1">
+									{#if org.sms_enabled}
+										<span
+											class="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
+											>On</span
+										>
+									{:else}
+										<span
+											class="inline-flex items-center rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-semibold text-slate-400"
+											>Off</span
+										>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Approval status
+								</dt>
+								<dd class="mt-1">
+									<span
+										class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold {approvalBadge[
+											org.sms_approval_status
+										]}"
+									>
+										{approvalLabel[org.sms_approval_status]}
+									</span>
+								</dd>
+							</div>
+						</dl>
+					</section>
+
+					<!-- Carrier Registration -->
+					<section
+						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+					>
+						<header
+							class="flex items-center justify-between gap-3 border-b border-slate-800/80 px-5 py-4"
+						>
+							<div class="flex items-center gap-3 min-w-0">
+								<span
+									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-300"
+									aria-hidden="true"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="17"
+										height="17"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+										<path d="M14 2v6h6" />
+									</svg>
+								</span>
+								<div class="min-w-0">
+									<h2 class="text-base font-semibold text-white">Carrier registration</h2>
+									<p class="mt-0.5 text-xs text-slate-500">
+										Onboarding Step 4 — for manual Twilio {org.country === 'CA' ? 'CWTA' : '10DLC'} submission.
+									</p>
+								</div>
+							</div>
+							{#if carrierRequired}
+								<button
+									type="button"
+									onclick={() => copyValue(carrierCopyAll, 'd-carrier-all')}
+									class="shrink-0 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/20 transition-colors cursor-pointer"
+								>
+									{copied === 'd-carrier-all' ? 'Copied all' : 'Copy all'}
+								</button>
+							{/if}
+						</header>
+
+						{#if !carrierRequired}
+							<div class="px-5 py-6">
+								<p class="text-sm text-slate-400">
+									Not required — carrier registration applies to US (10DLC) and Canada (CWTA) only.
+								</p>
+							</div>
+						{:else}
+							<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
+								<div class="bg-slate-900/50 px-5 py-4">
+									<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										{org.country === 'CA' ? 'Business name' : 'Legal business name'}
+									</dt>
+									<dd class="mt-1 flex items-center gap-2">
+										{#if org.legal_business_name}
+											<span class="text-sm text-white">{org.legal_business_name}</span>
+											<button
+												type="button"
+												onclick={() => copyValue(org!.legal_business_name!, 'd-legal')}
+												class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+											>
+												{copied === 'd-legal' ? 'Copied' : 'Copy'}
+											</button>
+										{:else}
+											<span class="text-sm italic text-slate-500">Not provided</span>
+										{/if}
+									</dd>
+								</div>
+
+								{#if org.country === 'CA'}
+									<div class="bg-slate-900/50 px-5 py-4">
+										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+											Business Number
+										</dt>
+										<dd class="mt-1 flex items-center gap-2">
+											{#if org.business_number}
+												<span class="font-mono text-sm text-white">{org.business_number}</span>
+												<button
+													type="button"
+													onclick={() => copyValue(org!.business_number!, 'd-bn')}
+													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+												>
+													{copied === 'd-bn' ? 'Copied' : 'Copy'}
+												</button>
+											{:else}
+												<span class="text-sm italic text-slate-500">Not provided</span>
+											{/if}
+										</dd>
+									</div>
+								{:else}
+									<div class="bg-slate-900/50 px-5 py-4">
+										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+											EIN
+										</dt>
+										<dd class="mt-1 flex items-center gap-2">
+											{#if org.ein}
+												<span class="font-mono text-sm text-white">{org.ein}</span>
+												<button
+													type="button"
+													onclick={() => copyValue(org!.ein!, 'd-ein')}
+													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+												>
+													{copied === 'd-ein' ? 'Copied' : 'Copy'}
+												</button>
+											{:else}
+												<span class="text-sm italic text-slate-500">Not provided</span>
+											{/if}
+										</dd>
+									</div>
+									<div class="bg-slate-900/50 px-5 py-4">
+										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+											Website
+										</dt>
+										<dd class="mt-1 flex items-center gap-2">
+											{#if org.website}
+												<span class="truncate text-sm text-white">{org.website}</span>
+												<button
+													type="button"
+													onclick={() => copyValue(org!.website!, 'd-web')}
+													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+												>
+													{copied === 'd-web' ? 'Copied' : 'Copy'}
+												</button>
+											{:else}
+												<span class="text-sm italic text-slate-500">Not provided</span>
+											{/if}
+										</dd>
+									</div>
+								{/if}
+
+								<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
+									<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										Messaging use case
+									</dt>
+									<dd class="mt-1 flex items-start gap-2">
+										{#if org.messaging_use_case}
+											<p class="whitespace-pre-wrap text-sm text-white">{org.messaging_use_case}</p>
+											<button
+												type="button"
+												onclick={() => copyValue(org!.messaging_use_case!, 'd-usecase')}
+												class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+											>
+												{copied === 'd-usecase' ? 'Copied' : 'Copy'}
+											</button>
+										{:else}
+											<span class="text-sm italic text-slate-500">Not provided</span>
+										{/if}
+									</dd>
+								</div>
+							</dl>
+						{/if}
+					</section>
+
+					<!-- Branding -->
+					<section
+						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+					>
+						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+							<span
+								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-pink-500/30 bg-pink-500/10 text-pink-300"
+								aria-hidden="true"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="17"
+									height="17"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<circle cx="13.5" cy="6.5" r=".5" />
+									<circle cx="17.5" cy="10.5" r=".5" />
+									<circle cx="8.5" cy="7.5" r=".5" />
+									<circle cx="6.5" cy="12.5" r=".5" />
+									<path
+										d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+									/>
+								</svg>
+							</span>
+							<div>
+								<h2 class="text-base font-semibold text-white">Branding</h2>
+								<p class="mt-0.5 text-xs text-slate-500">
+									Onboarding Step 5 — logo, colors, hours.
+								</p>
+							</div>
+						</header>
+						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Logo
+								</dt>
+								<dd class="mt-1">
+									{#if org.logo_url}
+										<img
+											src={org.logo_url}
+											alt="{org.name} logo"
+											class="h-12 w-auto max-w-[160px] rounded-md border border-slate-800 bg-white/5 object-contain p-1"
+										/>
+									{:else}
+										<span class="text-sm italic text-slate-500">No logo</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Primary color
+								</dt>
+								<dd class="mt-1 flex items-center gap-2">
+									{#if org.primary_color}
+										<span
+											class="inline-block size-5 shrink-0 rounded border border-slate-700"
+											style="background-color: {org.primary_color}"
+										></span>
+										<span class="font-mono text-sm text-white">{org.primary_color}</span>
+									{:else}
+										<span class="text-sm italic text-slate-500">Default</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Business hours
+								</dt>
+								<dd class="mt-1 font-mono text-sm text-white">
+									{org.calendar_day_start_hour}:00 – {org.calendar_day_end_hour}:00
+								</dd>
+							</div>
+						</dl>
+					</section>
+
+					<!-- Account status & approval lifecycle -->
+					<section
+						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+					>
+						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+							<span
+								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300"
+								aria-hidden="true"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="17"
+									height="17"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+									<polyline points="22 4 12 14.01 9 11.01" />
+								</svg>
+							</span>
+							<div>
+								<h2 class="text-base font-semibold text-white">Account status</h2>
+								<p class="mt-0.5 text-xs text-slate-500">
+									Carrier approval lifecycle and SMS credit balance.
+								</p>
+							</div>
+						</header>
+
+						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Tenant status
+								</dt>
+								<dd class="mt-1">
+									<span
+										class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold {statusStyles[
+											org.status
+										]}"
+									>
+										{statusLabels[org.status]}
+									</span>
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Setup
+								</dt>
+								<dd class="mt-1 text-sm text-white">
+									{org.is_setup_complete ? 'Complete' : 'Pending'}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									Approval submitted
+								</dt>
+								<dd class="mt-1 text-sm text-white">
+									{#if org.sms_approval_submitted_at}
+										{new Date(org.sms_approval_submitted_at).toLocaleString()}
+									{:else}
+										<span class="text-slate-500">Never</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="bg-slate-900/50 px-5 py-4">
+								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+									SMS credit balance
+								</dt>
+								<dd class="mt-1 text-sm text-white">
+									{#if creditLoading && creditBalance === null}
+										<span class="text-slate-500">Loading…</span>
+									{:else if creditBalance !== null}
+										${creditBalance.toFixed(2)}
+									{:else}
+										<span class="text-slate-500">No credit account</span>
+									{/if}
+								</dd>
+							</div>
+						</dl>
+
+						<!-- Approval actions -->
+						<div class="border-t border-slate-800/80 px-5 py-5 space-y-4">
+							<div class="flex flex-wrap items-center gap-3">
+								<span class="text-sm font-semibold text-white">Carrier approval:</span>
+								<span
+									class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold {approvalBadge[
+										org.sms_approval_status
+									]}"
+								>
+									{approvalLabel[org.sms_approval_status]}
+								</span>
+							</div>
+
+							{#if carrierRequired}
+								{#if org.sms_approval_status === 'rejected' && org.sms_approval_reason}
+									<div
+										class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+									>
+										<p class="text-[11px] font-semibold uppercase tracking-wide text-red-300/80">
+											Resubmission reason
+										</p>
+										<p class="mt-1 whitespace-pre-wrap">{org.sms_approval_reason}</p>
+									</div>
+								{/if}
+
+								<div class="flex flex-wrap items-center gap-2">
+									<button
+										type="button"
+										disabled={approving || org.sms_approval_status === 'approved'}
+										onclick={markApproved}
+										class="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="15"
+											height="15"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											aria-hidden="true"
+										>
+											<polyline points="20 6 9 17 4 12" />
+										</svg>
+										Mark approved
+									</button>
+									<button
+										type="button"
+										disabled={approving}
+										onclick={() => (showRejectForm = !showRejectForm)}
+										class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-sm font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+									>
+										Request resubmission
+									</button>
+								</div>
+
+								{#if showRejectForm}
+									<div class="space-y-2">
+										<label
+											for="reject-reason"
+											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+										>
+											Resubmission reason <span class="text-red-400">*</span>
+										</label>
+										<textarea
+											id="reject-reason"
+											rows={3}
+											bind:value={rejectReason}
+											placeholder="What needs to be corrected before resubmitting to the carrier?"
+											class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-red-500/60"
+										></textarea>
+										<div class="flex justify-end">
+											<button
+												type="button"
+												disabled={approving || !rejectReason.trim()}
+												onclick={requestResubmission}
+												class="inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-4 text-sm font-semibold text-white shadow-md shadow-red-900/40 hover:from-red-500 hover:to-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
+											>
+												{approving ? 'Saving…' : 'Mark rejected'}
+											</button>
+										</div>
+									</div>
+								{/if}
+							{:else}
+								<p class="text-xs text-slate-500">
+									Approval isn't required for this org — carrier registration (US 10DLC / Canada
+									CWTA) applies to US and Canada only, so outbound SMS is permitted without it.
+								</p>
+							{/if}
+						</div>
+					</section>
 				{:else if activeCategory === 'entitlements'}
 					{#if seeded}
+						<!-- SMS activation (master switch) -->
+						<section
+							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
+						>
+							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
+								<span
+									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+									aria-hidden="true"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="17"
+										height="17"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+									</svg>
+								</span>
+								<div>
+									<h2 class="text-base font-semibold text-white">SMS activation</h2>
+									<p class="mt-0.5 text-xs text-slate-500">
+										Master switch for this tenant's SMS. When off, all outbound SMS is blocked and
+										the SMS feature flags below are locked — their stored values are preserved.
+									</p>
+								</div>
+							</header>
+							<div class="flex items-center justify-between gap-4 px-5 py-5">
+								<div class="min-w-0">
+									<p class="text-sm font-semibold text-white">SMS enabled</p>
+									<p class="mt-0.5 text-[11px] text-slate-500">
+										{smsEnabled
+											? 'Outbound SMS is permitted (subject to number, approval, and credit).'
+											: 'Outbound SMS is blocked org-wide. Inbound is still received and stored.'}
+									</p>
+								</div>
+								<Toggle bind:checked={smsEnabled} ariaLabel="Toggle SMS enabled" />
+							</div>
+							<div class="border-t border-slate-800/80 px-5 py-4">
+								<p class="text-[11px] text-slate-500">
+									Carrier approval (US 10DLC / Canada CWTA) is managed in the
+									<button
+										type="button"
+										onclick={() => (activeCategory = 'details')}
+										class="font-semibold text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline cursor-pointer"
+									>
+										Details
+									</button> tab.
+								</p>
+							</div>
+						</section>
+
 						<!-- Plan template -->
 						<section
 							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
@@ -903,13 +1750,17 @@
 								<div>
 									<h2 class="text-base font-semibold text-white">Feature flags</h2>
 									<p class="mt-0.5 text-xs text-slate-500">
-										The authoritative entitlement layer. Disable a flag and the tenant loses the feature —
-										no role bypass.
+										The authoritative entitlement layer. Disable a flag and the tenant loses the
+										feature — no role bypass.
 									</p>
 								</div>
 							</header>
 							<div class="px-5 py-5">
-								<FeatureFlagsEditor bind:flags integrationStatus={org.integration_status ?? {}} />
+								<FeatureFlagsEditor
+									bind:flags
+									integrationStatus={org.integration_status ?? {}}
+									{smsEnabled}
+								/>
 							</div>
 						</section>
 
@@ -941,7 +1792,8 @@
 								<div>
 									<h2 class="text-base font-semibold text-white">Usage limits</h2>
 									<p class="mt-0.5 text-xs text-slate-500">
-										Hard caps enforced by usage counters. Use 0 for disabled or unlimited where noted.
+										Hard caps enforced by usage counters. Use 0 for disabled or unlimited where
+										noted.
 									</p>
 								</div>
 							</header>
@@ -950,7 +1802,6 @@
 							</div>
 						</section>
 					{/if}
-
 				{:else if activeCategory === 'integrations'}
 					<!-- Webchat widget config (shown only when feature_webchat is enabled) -->
 					{#if org.feature_webchat}
@@ -990,7 +1841,9 @@
 								{:else if webchatWidget}
 									<!-- Mode selector -->
 									<div class="space-y-2">
-										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span
+											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+										>
 											Chat mode
 										</span>
 										<div class="flex gap-3">
@@ -1081,7 +1934,9 @@
 
 									<!-- Domain allowlist -->
 									<div class="space-y-2">
-										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span
+											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+										>
 											Domain allowlist
 										</span>
 										<p class="text-[11px] text-slate-500">
@@ -1128,16 +1983,22 @@
 												{/each}
 											</ul>
 										{:else}
-											<p class="text-[11px] text-slate-500">No domains added — all origins permitted.</p>
+											<p class="text-[11px] text-slate-500">
+												No domains added — all origins permitted.
+											</p>
 										{/if}
 									</div>
 
 									<!-- Widget token (immutable) -->
 									<div class="space-y-1.5">
-										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span
+											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+										>
 											Widget token
 										</span>
-										<p class="text-[11px] text-slate-500">Generated once. Immutable. Never editable.</p>
+										<p class="text-[11px] text-slate-500">
+											Generated once. Immutable. Never editable.
+										</p>
 										<div class="flex items-center gap-2">
 											<code
 												class="flex-1 truncate font-mono text-xs text-slate-300 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
@@ -1158,12 +2019,14 @@
 
 									<!-- Embed snippet -->
 									<div class="space-y-1.5">
-										<span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+										<span
+											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+										>
 											Embed snippet
 										</span>
 										<p class="text-[11px] text-slate-500">
-											Paste this into the <code class="font-mono text-slate-400">&lt;head&gt;</code> of the
-											contractor's website.
+											Paste this into the <code class="font-mono text-slate-400">&lt;head&gt;</code> of
+											the contractor's website.
 										</p>
 										<div class="relative">
 											<pre
@@ -1230,40 +2093,49 @@
 							<div>
 								<h2 class="text-base font-semibold text-white">Integration status</h2>
 								<p class="mt-0.5 text-xs text-slate-500">
-									Read-only. Some features require both the flag above AND an active integration here
-									(e.g. Stripe payments, Twilio SMS).
+									Read-only. Some features require both the flag above AND an active integration
+									here (e.g. Stripe payments, Twilio SMS).
 								</p>
 							</div>
 						</header>
 						<div class="px-5 py-5">
-							{#if integrationEntries.length === 0}
-								<p class="text-sm text-slate-500">No integrations connected yet.</p>
-							{:else}
-								<dl class="grid gap-px overflow-hidden rounded-xl bg-slate-800/60 sm:grid-cols-2">
-									{#each integrationEntries as [key, value] (key)}
-										<div class="flex items-center justify-between gap-3 bg-slate-950/40 px-4 py-3">
-											<dt class="font-mono text-xs text-slate-300">{key}</dt>
-											<dd>
-												{#if value === true}
-													<span
-														class="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300"
-													>
-														Connected
-													</span>
-												{:else if value === false}
-													<span
-														class="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
-													>
-														Disconnected
-													</span>
-												{:else}
-													<span class="font-mono text-xs text-slate-300">{String(value)}</span>
-												{/if}
-											</dd>
-										</div>
-									{/each}
-								</dl>
-							{/if}
+							<dl class="grid gap-px overflow-hidden rounded-xl bg-slate-800/60 sm:grid-cols-2">
+								{#each connections as conn (conn.key)}
+									<div class="flex items-center justify-between gap-3 bg-slate-950/40 px-4 py-3">
+										<dt class="min-w-0">
+											<span class="block text-sm font-semibold text-slate-200">{conn.label}</span>
+											<span class="block truncate text-[11px] text-slate-500">
+												{conn.connected && conn.detail ? conn.detail : conn.sublabel}
+											</span>
+										</dt>
+										<dd class="flex shrink-0 items-center gap-2">
+											{#if conn.connected && conn.mode}
+												<span
+													class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide
+														{conn.mode === 'live'
+														? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+														: 'border-slate-700 bg-slate-800/60 text-slate-400'}"
+												>
+													{conn.mode}
+												</span>
+											{/if}
+											{#if conn.connected}
+												<span
+													class="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300"
+												>
+													Connected
+												</span>
+											{:else}
+												<span
+													class="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+												>
+													Not connected
+												</span>
+											{/if}
+										</dd>
+									</div>
+								{/each}
+							</dl>
 						</div>
 					</section>
 				{/if}

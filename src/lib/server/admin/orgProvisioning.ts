@@ -30,10 +30,15 @@ export const createOrgSchema = z.object({
 	city: z.string().trim().min(1, 'City is required'),
 	state: z.string().trim().min(1, 'State is required'),
 	timezone: z.string().trim().min(1, 'Timezone is required'),
+	// Optional: an org may be created without a number (skip / SMS optional). Empty
+	// string from the form normalizes to null; a provided value must be valid E.164.
 	twilioPhoneNumber: z
 		.string()
 		.trim()
-		.regex(/^\+[1-9]\d{1,14}$/, 'Twilio phone number must be E.164, e.g. +15551234567'),
+		.regex(/^\+[1-9]\d{1,14}$/, 'Twilio phone number must be E.164, e.g. +15551234567')
+		.optional()
+		.or(z.literal(''))
+		.transform((v) => (v && v.length > 0 ? v : null)),
 	adminFullName: z.string().trim().min(1, 'Admin full name is required'),
 	adminEmail: z.string().trim().email('Admin email must be valid'),
 	adminTemporaryPassword: z.string().min(8, 'Temporary password must be at least 8 characters'),
@@ -136,8 +141,11 @@ export async function createOrganizationWithAdmin(
 				city: input.city,
 				state: input.state,
 				timezone: input.timezone,
-				twilio_phone_number: input.twilioPhoneNumber,
+				twilio_phone_number: input.twilioPhoneNumber ?? null,
 				is_setup_complete: false,
+				// Hold the org in the onboarding wizard until it completes; the
+				// final wizard step flips this to 'active' via completeOnboarding().
+				status: 'pending_setup',
 				plan,
 				...flags,
 				...limits,
@@ -192,5 +200,14 @@ export async function completeOrgSetup(orgId: string): Promise<void> {
 	await db
 		.update(organizations)
 		.set({ is_setup_complete: true, updated_at: new Date() })
+		.where(eq(organizations.id, orgId));
+}
+
+// Terminal onboarding transition: release the org from the wizard gate.
+// Flips `pending_setup` → `active` and marks setup complete in one write.
+export async function completeOnboarding(orgId: string): Promise<void> {
+	await db
+		.update(organizations)
+		.set({ status: 'active', is_setup_complete: true, updated_at: new Date() })
 		.where(eq(organizations.id, orgId));
 }

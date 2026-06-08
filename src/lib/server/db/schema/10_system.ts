@@ -6,14 +6,17 @@ import {
 	boolean,
 	integer,
 	serial,
+	numeric,
 	jsonb,
 	timestamp,
 	index,
-	uniqueIndex
+	uniqueIndex,
+	check
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
+import { emailDomainStatusEnum, type EmailDnsRecord } from './14_email_domains';
 
 export const growthFeedTypeEnum = pgEnum('growth_feed_type', [
 	'gbp_post',
@@ -285,3 +288,65 @@ export const orgCounters = pgTable('org_counters', {
 
 export type OrgCounter = InferSelectModel<typeof orgCounters>;
 export type NewOrgCounter = InferInsertModel<typeof orgCounters>;
+
+// Platform-wide singleton (PO scope — no org_id). Exactly one row, id='global',
+// enforced by the CHECK constraint. Home for the SMS master-balance safety floor
+// (Blueprint §"PO Safety Floor"): the PO's real Telnyx master-account balance is
+// cached here on a timer, and the floor is the threshold below which all SMS is
+// paused platform-wide. The authoritative paused state is BullMQ's own queue
+// pause flag (smsQueue().isPaused()), NOT a column here — sms_paused_at/reason
+// are display/audit metadata recorded when a pause is triggered.
+export const platformSettings = pgTable(
+	'platform_settings',
+	{
+		id: text('id').primaryKey().default('global'),
+		// SMS master-balance safety floor, in the master account's currency (USD).
+		// 0 disables the floor (no automatic pause). PO-configured via /jafar.
+		sms_master_floor: numeric('sms_master_floor', { precision: 12, scale: 4 })
+			.notNull()
+			.default('0'),
+		// Last-fetched Telnyx master-account available credit (cached by the
+		// sms-master-balance-sync cron). Null until the first successful fetch.
+		sms_master_balance: numeric('sms_master_balance', { precision: 12, scale: 4 }),
+		sms_master_balance_at: timestamp('sms_master_balance_at', { withTimezone: true }),
+		sms_master_balance_currency: text('sms_master_balance_currency'),
+		// Set when SMS is paused (auto by the floor, or manually by the PO). Cleared
+		// on resume. Authoritative paused state lives in BullMQ; these explain WHY.
+		sms_paused_at: timestamp('sms_paused_at', { withTimezone: true }),
+		sms_paused_reason: text('sms_paused_reason'),
+		// ── Platform system email sending domain (PO-managed in /jafar) ──────────
+		// Outbound-only mirror of the per-org email_domains flow: the platform's own
+		// system/PO mail (carrier notifications, password resets, billing) sends from
+		// a dedicated Brevo-authenticated subdomain registered + verified here. Being
+		// a singleton, these live on platform_settings rather than a per-row table.
+		// systemFromAddress() reads system_email_domain when status='verified',
+		// otherwise falls back to the SYSTEM_FROM_EMAIL env value.
+		// Source-of-truth inputs the PO types; system_email_domain is derived as
+		// `${sending_prefix}.${root_domain}` (e.g. notifications.upliftcontractor.com).
+		system_email_root_domain: text('system_email_root_domain'),
+		system_email_sending_prefix: text('system_email_sending_prefix'),
+		system_email_domain: text('system_email_domain'),
+		// From identity: `"${from_name}" <${from_local}@${domain}>`.
+		system_email_from_local: text('system_email_from_local').notNull().default('noreply'),
+		system_email_from_name: text('system_email_from_name').notNull().default('Uplift Contractor'),
+		system_email_brevo_domain_id: text('system_email_brevo_domain_id'),
+		// Null until the PO registers a domain. Reuses the per-org email_domain_status enum.
+		system_email_status: emailDomainStatusEnum('system_email_status'),
+		system_email_brevo_verified: boolean('system_email_brevo_verified').notNull().default(false),
+		system_email_brevo_authenticated: boolean('system_email_brevo_authenticated')
+			.notNull()
+			.default(false),
+		// DKIM + brevo-code + DMARC rows (sending-only; no inbound MX) for the panel.
+		system_email_dns_records: jsonb('system_email_dns_records').$type<EmailDnsRecord[]>(),
+		system_email_last_checked_at: timestamp('system_email_last_checked_at', {
+			withTimezone: true
+		}),
+		system_email_verified_at: timestamp('system_email_verified_at', { withTimezone: true }),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [check('platform_settings_singleton', sql`${t.id} = 'global'`)]
+);
+
+export type PlatformSettings = InferSelectModel<typeof platformSettings>;
+export type NewPlatformSettings = InferInsertModel<typeof platformSettings>;

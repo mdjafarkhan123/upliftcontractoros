@@ -14,6 +14,7 @@
 	import DesktopSidebar from '$lib/components/app-shell/DesktopSidebar.svelte';
 	import MoreSheet from '$lib/components/app-shell/MoreSheet.svelte';
 	import SetupBanner from '$lib/components/app-shell/SetupBanner.svelte';
+	import SmsStatusBanner from '$lib/components/app-shell/SmsStatusBanner.svelte';
 	import Toaster from '$lib/components/shared/Toaster.svelte';
 	import { sessionStore, type AppSessionData } from '$lib/stores/session.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
@@ -152,6 +153,22 @@
 			{#if showSetupBanner}
 				<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
 			{/if}
+			<SmsStatusBanner
+				smsEnabled={session.org.sms_enabled}
+				hasNumber={session.org.twilio_phone_number != null}
+				approvalStatus={session.org.sms_approval_status}
+				country={session.org.country}
+				carrierComplete={session.org.country === 'US'
+					? Boolean(
+							session.org.legal_business_name &&
+								session.org.ein &&
+								session.org.website &&
+								session.org.messaging_use_case
+						)
+					: session.org.country === 'CA'
+						? Boolean(session.org.legal_business_name && session.org.business_number)
+						: false}
+			/>
 			<main class="flex-1 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
 				{@render children()}
 			</main>
