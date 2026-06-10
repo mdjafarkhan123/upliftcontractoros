@@ -16,13 +16,26 @@ function escapeDisplayName(name: string): string {
 	return `"${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-function localPart(org: { email_sender_local: string | null; slug: string }): string {
-	const raw = org.email_sender_local ?? org.slug;
+function sanitizeLocalPart(raw: string): string {
 	const sanitised = raw
 		.toLowerCase()
 		.replace(/[^a-z0-9-]+/g, '-')
 		.replace(/^-+|-+$/g, '');
 	return sanitised || 'mail';
+}
+
+function localPart(org: { email_sender_local: string | null; slug: string }): string {
+	return sanitizeLocalPart(org.email_sender_local ?? org.slug);
+}
+
+/**
+ * The org's DEFAULT sending local-part — organizations.email_sender_local, or a
+ * sanitized slug fallback. Exported so the email-settings API can reject an extra
+ * address that would collide with the default (the default is not stored in the
+ * email_sender_addresses table).
+ */
+export function defaultLocalPart(org: { email_sender_local: string | null; slug: string }): string {
+	return localPart(org);
 }
 
 /**
@@ -31,6 +44,12 @@ function localPart(org: { email_sender_local: string | null; slug: string }): st
  * sending domain (email_domains.domain); per-org local-part.
  *
  *   "Acme Roofing" <acme-roofing@mail.acmeroofing.com>
+ *
+ * Pass `overrideLocalPart` to send from one of the org's extra branded addresses
+ * (email_sender_addresses) instead of the default — the caller is responsible for
+ * validating it is the default or one of the org's extras. The value is sanitized
+ * here with the same rules as the default so a malformed local-part can never be
+ * placed in the From header.
  */
 export function contractorFromAddress(
 	org: {
@@ -38,9 +57,11 @@ export function contractorFromAddress(
 		slug: string;
 		email_sender_local: string | null;
 	},
-	sendingDomain: string
+	sendingDomain: string,
+	overrideLocalPart?: string | null
 ): string {
-	return `${escapeDisplayName(org.name)} <${localPart(org)}@${sendingDomain}>`;
+	const local = overrideLocalPart ? sanitizeLocalPart(overrideLocalPart) : localPart(org);
+	return `${escapeDisplayName(org.name)} <${local}@${sendingDomain}>`;
 }
 
 /**

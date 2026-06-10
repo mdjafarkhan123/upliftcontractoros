@@ -1,18 +1,31 @@
 <script lang="ts">
 	import type { DashboardReputation } from '$lib/types/dashboard';
-	import { Star, ShieldOff, TrendingUp, TrendingDown, Sparkles } from '@lucide/svelte';
+	import { Star, ShieldOff, TrendingUp, TrendingDown, Sparkles, Send } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import SendRequestSheet from '$lib/components/reputation/SendRequestSheet.svelte';
+	import { getMemberContext } from '$lib/context/member';
 
 	let { reputation }: { reputation: DashboardReputation | null } = $props();
 
+	const member = getMemberContext();
+	const canSendRequests = $derived(member().can_send_review_requests === true);
+	let sendOpen = $state(false);
+
 	type State = 'unavailable' | 'feature_disabled' | 'no_reviews' | 'early' | 'healthy';
 
-	const state: State = $derived.by(() => {
+	const viewState: State = $derived.by(() => {
 		if (!reputation) return 'unavailable';
 		if (!reputation.funnel_enabled) return 'feature_disabled';
 		if (reputation.total_reviews === 0) return 'no_reviews';
 		if (reputation.total_reviews < 10) return 'early';
 		return 'healthy';
 	});
+
+	// CTA only makes sense once the funnel is live and the member can send.
+	const showCta = $derived(
+		canSendRequests &&
+			(viewState === 'no_reviews' || viewState === 'early' || viewState === 'healthy')
+	);
 
 	const velocity = $derived.by(() => {
 		if (!reputation) return null;
@@ -37,7 +50,7 @@
 		>
 	</header>
 
-	{#if state === 'unavailable'}
+	{#if viewState === 'unavailable'}
 		<div class="flex flex-col items-center gap-2 bg-muted/20 px-6 py-8 text-center">
 			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
 				<Star class="h-5 w-5 text-muted-foreground" />
@@ -45,7 +58,7 @@
 			<p class="text-sm font-medium text-foreground">Reputation unavailable</p>
 			<p class="text-xs text-muted-foreground">We couldn't load review stats. Try again soon.</p>
 		</div>
-	{:else if state === 'feature_disabled'}
+	{:else if viewState === 'feature_disabled'}
 		<div class="flex flex-col items-center gap-2 bg-muted/20 px-6 py-8 text-center">
 			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
 				<ShieldOff class="h-5 w-5 text-muted-foreground" />
@@ -53,7 +66,7 @@
 			<p class="text-sm font-medium text-foreground">Review automation inactive</p>
 			<p class="text-xs text-muted-foreground">Turn on the review funnel in automation settings.</p>
 		</div>
-	{:else if state === 'no_reviews' && reputation}
+	{:else if viewState === 'no_reviews' && reputation}
 		<div class="flex flex-col items-center gap-2 bg-emerald-500/5 px-6 py-8 text-center">
 			<div
 				class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500"
@@ -89,7 +102,7 @@
 					</span>
 				</div>
 
-				{#if state === 'early'}
+				{#if viewState === 'early'}
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
 					>
@@ -115,4 +128,17 @@
 			</div>
 		</div>
 	{/if}
+
+	{#if showCta}
+		<footer class="border-t border-border/70 px-5 py-4">
+			<Button size="sm" class="h-10 w-full" onclick={() => (sendOpen = true)}>
+				<Send class="h-4 w-4" />
+				Send review request
+			</Button>
+		</footer>
+	{/if}
 </section>
+
+{#if canSendRequests}
+	<SendRequestSheet bind:open={sendOpen} />
+{/if}

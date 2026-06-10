@@ -39,6 +39,20 @@ export type DashboardPipelineStage = {
 	value: string;
 };
 
+export type DashboardTodayJob = {
+	id: string;
+	title: string;
+	contact_name: string | null;
+	status: 'scheduled' | 'in_progress';
+	scheduled_start: string;
+	scheduled_end: string | null;
+};
+
+export type DashboardMissedCallRecovery = {
+	missed_count: number;
+	recovered_count: number;
+};
+
 export type DashboardReputation = {
 	funnel_enabled: boolean;
 	total_reviews: number;
@@ -48,20 +62,28 @@ export type DashboardReputation = {
 	requests_this_month: number;
 };
 
+export type DashboardPeriod = 'month' | 'year';
+
 export type DashboardSummary = {
 	generated_at: string;
 	timezone: string;
+	/** Time window for the flow KPIs (leads, jobs won, revenue). Balance cards ignore it. */
+	period: DashboardPeriod;
 	kpis: {
-		leads: { new_this_month: number; conversion_rate: number | null };
-		jobs_won: { count_this_month: number; value_this_month: string };
-		revenue: { this_month: string; outstanding: string } | null;
+		leads: { new_this_period: number; conversion_rate: number | null; new_last_period: number };
+		jobs_won: { count_this_period: number; value_this_period: string; count_last_period: number };
+		revenue: { this_period: string; outstanding: string; last_period: string } | null;
 	};
 	attention: {
 		overdue_invoices_count: number;
 		overdue_invoices_total: string;
 		quotes_awaiting_count: number;
-		jobs_today_count: number;
+		quotes_awaiting_total: string;
+		aging_leads_count: number;
+		unread_conversations_count: number;
 	};
+	today_schedule: DashboardTodayJob[];
+	missed_call_recovery: DashboardMissedCallRecovery | null;
 	pipeline_snapshot: DashboardPipelineStage[] | null;
 	recent_activity: DashboardActivityRow[];
 	reputation: DashboardReputation | null;

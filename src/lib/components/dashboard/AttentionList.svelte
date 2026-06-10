@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DashboardSummary } from '$lib/types/dashboard';
 	import { formatCurrency } from '$lib/utils/format';
-	import { AlertCircle, FileText, CalendarClock, ChevronRight } from '@lucide/svelte';
+	import { AlertCircle, FileText, MessageSquare, Clock, ChevronRight } from '@lucide/svelte';
 
 	let { attention }: { attention: DashboardSummary['attention'] } = $props();
 
@@ -16,18 +16,25 @@
 				href: '/invoices?status=overdue',
 				tone: 'text-rose-500'
 			},
+			attention.aging_leads_count > 0 && {
+				icon: Clock,
+				label: `${attention.aging_leads_count} aging lead${attention.aging_leads_count === 1 ? '' : 's'}`,
+				sub: 'No activity in 7+ days — follow up',
+				href: '/contacts?status=lead',
+				tone: 'text-orange-500'
+			},
 			attention.quotes_awaiting_count > 0 && {
 				icon: FileText,
 				label: `${attention.quotes_awaiting_count} quote${attention.quotes_awaiting_count === 1 ? '' : 's'} awaiting reply`,
-				sub: 'Sent or viewed, no response yet',
+				sub: `${formatCurrency(attention.quotes_awaiting_total)} on the table`,
 				href: '/quotes?status=sent',
 				tone: 'text-amber-500'
 			},
-			attention.jobs_today_count > 0 && {
-				icon: CalendarClock,
-				label: `${attention.jobs_today_count} job${attention.jobs_today_count === 1 ? '' : 's'} scheduled today`,
-				sub: 'Tap to review the schedule',
-				href: '/jobs?status=scheduled',
+			attention.unread_conversations_count > 0 && {
+				icon: MessageSquare,
+				label: `${attention.unread_conversations_count} unread conversation${attention.unread_conversations_count === 1 ? '' : 's'}`,
+				sub: 'New messages waiting in your inbox',
+				href: '/inbox',
 				tone: 'text-sky-500'
 			}
 		].filter(Boolean) as Item[]
@@ -46,7 +53,7 @@
 		<div class="bg-muted/20 px-4 py-8 text-center">
 			<p class="text-sm font-medium text-foreground">You're all caught up.</p>
 			<p class="mt-1 text-xs text-muted-foreground">
-				Nothing overdue, no quotes waiting, no jobs scheduled today.
+				Nothing overdue, no quotes waiting, no unread messages.
 			</p>
 		</div>
 	{:else}

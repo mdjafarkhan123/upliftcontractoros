@@ -33,6 +33,9 @@ export type RecordOutboundMessageInput = {
 	replyToMessageId?: string | null;
 	/** True when the message carries media — drives the "📷 Photo" inbox preview. */
 	hasMedia?: boolean;
+	/** Manual call-log metadata ('call' channel only). */
+	callOutcome?: Message['call_outcome'];
+	callDurationSeconds?: number | null;
 };
 
 /**
@@ -67,6 +70,8 @@ export async function recordOutboundMessage(
 		source: input.source,
 		sent_by: input.sentBy,
 		sent_at: sentAt,
+		call_outcome: input.callOutcome ?? undefined,
+		call_duration_seconds: input.callDurationSeconds ?? undefined,
 		...(input.emailMeta ?? {})
 	};
 

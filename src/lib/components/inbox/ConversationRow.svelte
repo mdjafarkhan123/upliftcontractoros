@@ -2,6 +2,7 @@
 	import {
 		MessageSquare,
 		PhoneMissed,
+		Phone,
 		Mail,
 		MessageCircle,
 		Clock,
@@ -20,21 +21,25 @@
 	const ChannelIcon = $derived(
 		channel === 'missed_call'
 			? PhoneMissed
-			: channel === 'email'
-				? Mail
-				: channel === 'webchat'
-					? MessageCircle
-					: MessageSquare
+			: channel === 'call'
+				? Phone
+				: channel === 'email'
+					? Mail
+					: channel === 'webchat'
+						? MessageCircle
+						: MessageSquare
 	);
 
 	const channelTint = $derived(
 		channel === 'missed_call'
 			? 'text-amber-600'
-			: channel === 'webchat'
-				? 'text-emerald-600'
-				: channel === 'email'
-					? 'text-indigo-500'
-					: 'text-primary'
+			: channel === 'call'
+				? 'text-sky-600'
+				: channel === 'webchat'
+					? 'text-emerald-600'
+					: channel === 'email'
+						? 'text-indigo-500'
+						: 'text-primary'
 	);
 
 	const initials = $derived(
@@ -52,9 +57,7 @@
 	const hasFailure = $derived(c.has_delivery_failure === true && !isClosed);
 	// Customer's last message is unanswered — they're waiting on us. Hidden when
 	// snoozed (deferred on purpose) or closed.
-	const isWaiting = $derived(
-		c.last_message_direction === 'inbound' && !isSnoozed && !isClosed
-	);
+	const isWaiting = $derived(c.last_message_direction === 'inbound' && !isSnoozed && !isClosed);
 	const waitingLabel = $derived(isWaiting ? formatWaiting(c.last_inbound_at) : '');
 
 	const previewText = $derived.by(() => {

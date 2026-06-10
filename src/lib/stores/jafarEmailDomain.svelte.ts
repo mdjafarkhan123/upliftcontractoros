@@ -17,7 +17,7 @@ export type EmailDomainRow = {
 	id: string;
 	org_id: string;
 	root_domain: string;
-	sending_prefix: string;
+	sending_prefix: string | null;
 	inbound_prefix: string;
 	domain: string;
 	inbound_domain: string;

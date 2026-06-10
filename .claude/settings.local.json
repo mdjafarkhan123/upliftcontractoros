@@ -201,7 +201,11 @@
       "mcp__brevo__accounts_get_account",
       "mcp__brevo__senders_get_senders",
       "mcp__brevo__domains_get_domains",
-      "mcp__brevo__campaign_analytics_get_email_event_report"
+      "mcp__brevo__campaign_analytics_get_email_event_report",
+      "Bash(dir *)",
+      "Bash(grep -rn 'from '\\\\''$lib/server/db/client'\\\\''' 'D:\\\\Projects\\\\ContractorOs\\\\src' -l)",
+      "PowerShell(npx prettier --check src/lib/server/db/client.ts src/lib/server/cron/unreadCountReconcile.ts \"src/routes/api/conversations/[id]/+server.ts\" svelte.config.js 2>&1; npx prettier --write src/lib/server/db/client.ts 2>&1 | Select-Object -Last 2)",
+      "PowerShell(npx prettier --write src/lib/server/cron/unreadCountReconcile.ts svelte.config.js 2>&1 | Select-Object -Last 3)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Info, X, Globe, Mail, MessageSquare, Phone } from '@lucide/svelte';
+	import {
+		ArrowLeft,
+		Info,
+		X,
+		Globe,
+		Mail,
+		MessageSquare,
+		Phone,
+		NotebookPen
+	} from '@lucide/svelte';
 	import { cn } from '$lib/utils/cn';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
@@ -9,6 +18,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import MessageBubble from '$lib/components/inbox/MessageBubble.svelte';
+	import LogCallSheet from '$lib/components/inbox/LogCallSheet.svelte';
 	import Composer from '$lib/components/inbox/Composer.svelte';
 	import ContactContextPanel from '$lib/components/inbox/ContactContextPanel.svelte';
 	import OptOutBanner from '$lib/components/inbox/OptOutBanner.svelte';
@@ -20,7 +30,8 @@
 		type SnoozePreset,
 		type ThreadMessage,
 		type OutboundChannel,
-		type MessageMedia
+		type MessageMedia,
+		type CallOutcome
 	} from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { createRealtimeManager } from '$lib/stores/realtimeReconnect';
@@ -211,6 +222,7 @@
 			isInternalNote: boolean;
 			channel?: OutboundChannel;
 			emailSubject?: string;
+			fromLocalPart?: string;
 			interpolate?: boolean;
 			mediaIds?: string[];
 			optimisticMedia?: MessageMedia[];
@@ -220,6 +232,7 @@
 			isInternalNote: opts.isInternalNote,
 			channel: opts.channel,
 			emailSubject: opts.emailSubject,
+			fromLocalPart: opts.fromLocalPart,
 			interpolate: opts.interpolate,
 			mediaIds: opts.mediaIds,
 			optimisticMedia: opts.optimisticMedia
@@ -227,6 +240,62 @@
 		if (!result.ok) {
 			toast.error('Message not sent', { description: result.error });
 		}
+	}
+
+	// ── Call logging detection ──────────────────────────────────────────────
+	// No reliable web "call ended" event exists. When the contractor taps the
+	// `tel:` link we arm a flag + timestamp; when they return to the tab
+	// (visibilitychange → visible) within a sensible window we offer to log the
+	// call. The window is 5 s–5 min: under 5 s is likely a mis-tap/cancel, over
+	// 5 min they probably switched apps for another reason. Misfires are fine —
+	// the sheet has a "Didn't call" dismiss and never blocks.
+	const CALL_MIN_AWAY_SECONDS = 5;
+	const CALL_MAX_AWAY_SECONDS = 300;
+	let callLogOpen = $state(false);
+	let callAwaySeconds = $state(0);
+	let callArmed = false;
+	let callLeftAt = 0;
+
+	function armCallDetection() {
+		if (!canSend) return;
+		callArmed = true;
+		callLeftAt = Date.now();
+	}
+
+	// Manual entry point — open the log sheet directly, no away-time prefill and
+	// without depending on the visibilitychange heuristic. Cancels any pending
+	// auto-detect so the two paths can't double-fire.
+	function openLogCallManual() {
+		callArmed = false;
+		callAwaySeconds = 0;
+		callLogOpen = true;
+	}
+
+	onMount(() => {
+		function onVisibility() {
+			if (document.visibilityState !== 'visible' || !callArmed) return;
+			callArmed = false;
+			const away = (Date.now() - callLeftAt) / 1000;
+			if (away >= CALL_MIN_AWAY_SECONDS && away <= CALL_MAX_AWAY_SECONDS) {
+				callAwaySeconds = Math.round(away);
+				callLogOpen = true;
+			}
+		}
+		document.addEventListener('visibilitychange', onVisibility);
+		return () => document.removeEventListener('visibilitychange', onVisibility);
+	});
+
+	async function handleLogCall(payload: {
+		outcome: CallOutcome;
+		durationSeconds: number | null;
+		body: string;
+	}) {
+		const result = await inboxStore.logCall(data.conversationId, {
+			outcome: payload.outcome,
+			durationSeconds: payload.durationSeconds,
+			body: payload.body
+		});
+		if (!result.ok) toast.error('Call not logged', { description: result.error });
 	}
 
 	let typingDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -365,13 +434,24 @@
 		</div>
 
 		{#if contact?.phone}
-			<a
-				href={`tel:${contact.phone}`}
-				class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				aria-label={`Call ${contact.full_name}`}
-			>
-				<Phone class="h-5 w-5" />
-			</a>
+			<div class="flex items-center gap-1.5">
+				<Button
+					href={`tel:${contact.phone}`}
+					onclick={armCallDetection}
+					variant="default"
+					size="sm"
+					aria-label={`Call ${contact.full_name}`}
+				>
+					<Phone class="h-4 w-4" />
+					<span>Call</span>
+				</Button>
+				{#if canSend}
+					<Button onclick={openLogCallManual} variant="outline" size="sm" aria-label="Log a call">
+						<NotebookPen class="h-4 w-4" />
+						<span class="hidden sm:inline">Log call</span>
+					</Button>
+				{/if}
+			</div>
 		{/if}
 
 		<div class="hidden lg:flex">
@@ -440,10 +520,7 @@
 					/>
 				</div>
 			{:else}
-				<div
-					bind:this={scrollEl}
-					class="flex-1 overflow-y-auto px-3 py-5 sm:px-5 md:px-6"
-				>
+				<div bind:this={scrollEl} class="flex-1 overflow-y-auto px-3 py-5 sm:px-5 md:px-6">
 					<div class="mx-auto flex max-w-3xl flex-col">
 						{#if nextCursor}
 							<div class="flex justify-center pb-3">
@@ -452,39 +529,41 @@
 								</Button>
 							</div>
 						{/if}
-					{#each messages as m, i (m.id)}
-						{@const gi = groupInfo[i]}
-						{@const ch = channelMeta[m.channel ?? '']}
+						{#each messages as m, i (m.id)}
+							{@const gi = groupInfo[i]}
+							{@const ch = channelMeta[m.channel ?? '']}
 
-						{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
-							<div class="flex items-center justify-center py-2">
-								<span
-									class="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
-								>
-									{dayLabel(m.created_at)}
-								</span>
-							</div>
-						{/if}
+							{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
+								<div class="flex items-center justify-center py-2">
+									<span
+										class="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
+									>
+										{dayLabel(m.created_at)}
+									</span>
+								</div>
+							{/if}
 
-						{#if gi.channelChanged}
-							<div class="flex items-center justify-center pt-3 pb-1">
-								<span
-									class="inline-flex items-center gap-1.5 rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
-								>
-									<ch.icon class="h-3.5 w-3.5" />
-									Switched to {ch.label}
-								</span>
-							</div>
-						{/if}
+							{#if gi.channelChanged}
+								<div class="flex items-center justify-center pt-3 pb-1">
+									<span
+										class="inline-flex items-center gap-1.5 rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
+									>
+										<ch.icon class="h-3.5 w-3.5" />
+										Switched to {ch.label}
+									</span>
+								</div>
+							{/if}
 
-						<MessageBubble
-							message={m}
-							canRetry={canSend}
-							grouped={gi.grouped}
-							inboundInitials={contactInitials}
-							outboundInitials={memberInitials}
-						/>
-					{/each}
+							<MessageBubble
+								message={m}
+								canRetry={canSend}
+								grouped={gi.grouped}
+								inboundInitials={contactInitials}
+								outboundInitials={memberInitials}
+								contactId={contact?.id ?? ''}
+								contactName={contact?.full_name ?? ''}
+							/>
+						{/each}
 					</div>
 				</div>
 			{/if}
@@ -510,6 +589,7 @@
 						{quickReplies}
 						contactName={contact?.full_name ?? ''}
 						orgName={org().name}
+						orgSlug={org().slug}
 						contactId={contact?.id ?? ''}
 						onSend={handleSend}
 						onTyping={handleTyping}
@@ -526,6 +606,15 @@
 		</aside>
 	</div>
 </div>
+
+<!-- Log-call sheet (offered after a tel: tap + return) -->
+<LogCallSheet
+	bind:open={callLogOpen}
+	contactName={contact?.full_name ?? ''}
+	prefillSeconds={callAwaySeconds}
+	onLog={handleLogCall}
+	onDismiss={() => {}}
+/>
 
 <!-- Mobile context sheet -->
 <Sheet.Root bind:open={mobileContextOpen}>

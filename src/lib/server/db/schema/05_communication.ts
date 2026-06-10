@@ -22,10 +22,23 @@ export const messageChannelEnum = pgEnum('message_channel', [
 	'missed_call',
 	'email',
 	'webchat',
-	'messenger'
+	'messenger',
+	// Manually logged phone call (contractor tapped a tel: link and called from
+	// the native dialer, then logged the outcome). Distinct from 'missed_call',
+	// which is an auto inbound row from Twilio. Never carries transport state.
+	'call'
 ]);
 
 export const messageDirectionEnum = pgEnum('message_direction', ['inbound', 'outbound']);
+
+// Outcome of a manually logged phone call ('call' channel). Null on every other
+// channel.
+export const callOutcomeEnum = pgEnum('call_outcome', [
+	'spoke',
+	'voicemail',
+	'no_answer',
+	'follow_up_scheduled'
+]);
 
 export const messageStatusEnum = pgEnum('message_status', [
 	'sent',
@@ -77,63 +90,71 @@ export const conversations = pgTable('conversations', {
 export type Conversation = InferSelectModel<typeof conversations>;
 export type NewConversation = InferInsertModel<typeof conversations>;
 
-export const messages = pgTable('messages', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	org_id: uuid('org_id')
-		.notNull()
-		.references(() => organizations.id),
-	conversation_id: uuid('conversation_id')
-		.notNull()
-		.references(() => conversations.id),
-	direction: messageDirectionEnum('direction').notNull(),
-	channel: messageChannelEnum('channel').notNull(),
-	body: text('body'),
-	is_internal_note: boolean('is_internal_note').notNull().default(false),
-	media_urls: text('media_urls').array(),
-	status: messageStatusEnum('status').notNull(),
-	twilio_message_sid: text('twilio_message_sid'),
-	// Messenger message id (Meta `mid`). Set on inbound messenger messages for
-	// webhook-retry dedup; null for all other channels and outbound rows.
-	messenger_mid: text('messenger_mid'),
+export const messages = pgTable(
+	'messages',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		conversation_id: uuid('conversation_id')
+			.notNull()
+			.references(() => conversations.id),
+		direction: messageDirectionEnum('direction').notNull(),
+		channel: messageChannelEnum('channel').notNull(),
+		body: text('body'),
+		is_internal_note: boolean('is_internal_note').notNull().default(false),
+		media_urls: text('media_urls').array(),
+		status: messageStatusEnum('status').notNull(),
+		twilio_message_sid: text('twilio_message_sid'),
+		// Messenger message id (Meta `mid`). Set on inbound messenger messages for
+		// webhook-retry dedup; null for all other channels and outbound rows.
+		messenger_mid: text('messenger_mid'),
 
-	reply_to_message_id: uuid('reply_to_message_id'),
-	failure_reason: text('failure_reason'),
-	failed_at: timestamp('failed_at', { withTimezone: true }),
-	source: text('source'),
+		reply_to_message_id: uuid('reply_to_message_id'),
+		failure_reason: text('failure_reason'),
+		failed_at: timestamp('failed_at', { withTimezone: true }),
+		source: text('source'),
 
-	email_provider: text('email_provider'),
-	email_provider_message_id: text('email_provider_message_id'),
-	email_subject: text('email_subject'),
-	email_from_address: text('email_from_address'),
-	email_to_addresses: text('email_to_addresses').array(),
-	email_cc_addresses: text('email_cc_addresses').array(),
-	email_in_reply_to: text('email_in_reply_to'),
-	email_references: text('email_references'),
-	email_message_id: text('email_message_id'),
-	search_vector: text('search_vector').generatedAlwaysAs(
-		sql`to_tsvector('english', coalesce(body, ''))`
-	),
-	opened_at: timestamp('opened_at', { withTimezone: true }),
-	delivered_at: timestamp('delivered_at', { withTimezone: true }),
-	bounced_at: timestamp('bounced_at', { withTimezone: true }),
-	bounce_type: text('bounce_type'),
-	send_attempts: integer('send_attempts').notNull().default(0),
+		email_provider: text('email_provider'),
+		email_provider_message_id: text('email_provider_message_id'),
+		email_subject: text('email_subject'),
+		email_from_address: text('email_from_address'),
+		email_to_addresses: text('email_to_addresses').array(),
+		email_cc_addresses: text('email_cc_addresses').array(),
+		email_in_reply_to: text('email_in_reply_to'),
+		email_references: text('email_references'),
+		email_message_id: text('email_message_id'),
+		search_vector: text('search_vector').generatedAlwaysAs(
+			sql`to_tsvector('english', coalesce(body, ''))`
+		),
+		opened_at: timestamp('opened_at', { withTimezone: true }),
+		delivered_at: timestamp('delivered_at', { withTimezone: true }),
+		bounced_at: timestamp('bounced_at', { withTimezone: true }),
+		bounce_type: text('bounce_type'),
+		send_attempts: integer('send_attempts').notNull().default(0),
 
-	// Dollar cost charged against the org SMS credit balance at send time.
-	// Stamped on Twilio success; null for non-SMS channels and unsent rows.
-	sms_cost: numeric('sms_cost', { precision: 12, scale: 4 }),
+		// Dollar cost charged against the org SMS credit balance at send time.
+		// Stamped on Twilio success; null for non-SMS channels and unsent rows.
+		sms_cost: numeric('sms_cost', { precision: 12, scale: 4 }),
 
-	sent_by: uuid('sent_by').references(() => orgMembers.id),
-	sent_at: timestamp('sent_at', { withTimezone: true }),
-	read_at: timestamp('read_at', { withTimezone: true }),
-	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-}, (t) => [
-	// Inbound Messenger dedup — Meta redelivers webhooks; the `mid` is the unique key.
-	uniqueIndex('idx_messages_messenger_mid')
-		.on(t.messenger_mid)
-		.where(sql`${t.messenger_mid} IS NOT NULL`)
-]);
+		// Manual call logging ('call' channel only). Null on every other channel.
+		call_outcome: callOutcomeEnum('call_outcome'),
+		call_duration_seconds: integer('call_duration_seconds'),
+
+		sent_by: uuid('sent_by').references(() => orgMembers.id),
+		sent_at: timestamp('sent_at', { withTimezone: true }),
+		read_at: timestamp('read_at', { withTimezone: true }),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		// Inbound Messenger dedup — Meta redelivers webhooks; the `mid` is the unique key.
+		uniqueIndex('idx_messages_messenger_mid')
+			.on(t.messenger_mid)
+			.where(sql`${t.messenger_mid} IS NOT NULL`)
+	]
+);
 
 export type Message = InferSelectModel<typeof messages>;
 export type NewMessage = InferInsertModel<typeof messages>;

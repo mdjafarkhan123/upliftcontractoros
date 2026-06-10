@@ -2,8 +2,9 @@ import { SvelteMap } from 'svelte/reactivity';
 
 // ───── Types ───────────────────────────────────────────────────────────────
 
-export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat' | 'messenger';
+export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat' | 'messenger' | 'call';
 export type MessageDirection = 'inbound' | 'outbound';
+export type CallOutcome = 'spoke' | 'voicemail' | 'no_answer' | 'follow_up_scheduled';
 export type MessageStatus =
 	| 'sending'
 	| 'sent'
@@ -69,6 +70,8 @@ export type ThreadMessage = {
 	failure_reason: string | null;
 	failed_at: string | null;
 	source: string | null;
+	call_outcome: CallOutcome | null;
+	call_duration_seconds: number | null;
 	email_subject: string | null;
 	email_from_address: string | null;
 	opened_at: string | null;
@@ -272,6 +275,7 @@ async function fetchThreadMessages(
 
 function previewFor(channel: MessageChannel, body: string | null, hasMedia = false): string {
 	if (channel === 'missed_call') return 'Missed phone call';
+	if (channel === 'call') return body?.trim() || 'Logged call';
 	const trimmed = body?.trim() ?? '';
 	if (!trimmed) return hasMedia ? '📷 Photo' : '';
 	return trimmed.length > PREVIEW_LIMIT ? trimmed.slice(0, PREVIEW_LIMIT) : trimmed;
@@ -546,6 +550,7 @@ export const inboxStore = {
 			isInternalNote?: boolean;
 			channel?: OutboundChannel;
 			emailSubject?: string;
+			fromLocalPart?: string;
 			interpolate?: boolean;
 			mediaIds?: string[];
 			optimisticMedia?: MessageMedia[];
@@ -577,6 +582,8 @@ export const inboxStore = {
 			failure_reason: null,
 			failed_at: null,
 			source: 'api',
+			call_outcome: null,
+			call_duration_seconds: null,
 			email_subject: opts.emailSubject ?? null,
 			email_from_address: null,
 			opened_at: null,
@@ -600,6 +607,7 @@ export const inboxStore = {
 			const payload: Record<string, unknown> = { body, is_internal_note: isInternal };
 			if (opts.channel) payload.channel = opts.channel;
 			if (opts.emailSubject) payload.email_subject = opts.emailSubject;
+			if (opts.fromLocalPart) payload.from_local_part = opts.fromLocalPart;
 			if (opts.interpolate) payload.interpolate = true;
 			if (opts.mediaIds && opts.mediaIds.length > 0) payload.media_ids = opts.mediaIds;
 			const res = await fetch(`/api/conversations/${conversationId}/messages`, {
@@ -667,6 +675,58 @@ export const inboxStore = {
 					messages: cur.messages.filter((m) => m._optimistic_key !== optimisticKey)
 				});
 			}
+			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+		}
+	},
+
+	async logCall(
+		conversationId: string,
+		input: { outcome: CallOutcome; durationSeconds?: number | null; body?: string }
+	): Promise<{ ok: true; message: ThreadMessage } | { ok: false; error: string }> {
+		try {
+			const payload: Record<string, unknown> = { outcome: input.outcome };
+			if (input.durationSeconds != null) payload.duration_seconds = input.durationSeconds;
+			if (input.body && input.body.trim()) payload.body = input.body.trim();
+			const res = await fetch(`/api/conversations/${conversationId}/calls`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const json = (await res.json().catch(() => ({}))) as {
+				data?: { message: ThreadMessage };
+				error?: string;
+			};
+			if (!res.ok || !json.data) {
+				return { ok: false, error: json.error ?? 'Failed to log call' };
+			}
+
+			const logged = json.data.message;
+			// Append to the thread (realtime INSERT dedups by id if it also arrives).
+			applyMessageToThread(conversationId, logged);
+
+			// Mirror the outbound metadata bump the server made.
+			patchListEntries(conversationId, (c) => ({
+				...c,
+				last_message_at: logged.created_at,
+				last_message_preview: previewFor(logged.channel, logged.body),
+				last_message_channel: logged.channel,
+				last_message_direction: 'outbound'
+			}));
+			applyConversationPatch(conversationId, {
+				last_message_at: logged.created_at,
+				last_message_preview: previewFor(logged.channel, logged.body),
+				last_message_channel: logged.channel,
+				last_message_direction: 'outbound'
+			});
+
+			// Logging into a closed/snoozed thread reopens it server-side — mirror here.
+			const priorStatus = threadCache.get(conversationId)?.conversation?.status;
+			if (priorStatus && priorStatus !== 'open') {
+				applyConversationPatch(conversationId, { status: 'open', snoozed_until: null });
+				patchListEntries(conversationId, (c) => ({ ...c, status: 'open', snoozed_until: null }));
+			}
+			return { ok: true, message: logged };
+		} catch (e) {
 			return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
 		}
 	},

@@ -62,15 +62,21 @@ const rootDomainSchema = z
 			)
 	);
 
-// Root domain + two sibling prefixes. The full sending/receiving domains are
-// derived from these — never sent by the client.
+// Root domain + prefixes. The full sending/receiving domains are derived from
+// these — never sent by the client. The sending prefix is OPTIONAL: an empty
+// string (or omitted) means send from the apex/root (info@theirbusiness.com).
+// The receiving prefix stays required — replies can never route to the apex.
+const optionalSendingPrefix = z.preprocess(
+	(v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+	dnsLabel.optional()
+);
 const bodySchema = z
 	.object({
 		root_domain: rootDomainSchema,
-		sending_prefix: dnsLabel,
+		sending_prefix: optionalSendingPrefix,
 		inbound_prefix: dnsLabel
 	})
-	.refine((v) => v.sending_prefix !== v.inbound_prefix, {
+	.refine((v) => !v.sending_prefix || v.sending_prefix !== v.inbound_prefix, {
 		message: 'Sending and receiving prefixes must be different.',
 		path: ['inbound_prefix']
 	});
@@ -196,7 +202,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const values: NewEmailDomain = {
 		org_id: orgId,
 		root_domain,
-		sending_prefix,
+		sending_prefix: sending_prefix ?? null,
 		inbound_prefix,
 		domain,
 		inbound_domain: inboundDomain,

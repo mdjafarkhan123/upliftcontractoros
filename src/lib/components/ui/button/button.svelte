@@ -31,7 +31,7 @@
 		destructive:
 			'bg-gradient-to-b from-destructive to-[hsl(var(--destructive-deep))] text-destructive-foreground border border-[hsl(var(--destructive-edge))] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.12),0_1px_2px_0_hsl(0_0%_0%/0.4)] hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.15),0_4px_16px_-2px_hsl(var(--destructive)/0.45)] active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_2px_0_hsl(0_0%_0%/0.15)]',
 		outline:
-			'bg-transparent border border-border/60 text-foreground shadow-sm hover:-translate-y-0.5 hover:border-border hover:bg-accent/40 hover:shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.15)] active:translate-y-0 active:scale-[0.98]',
+			'bg-transparent border border-primary/40 text-foreground shadow-sm hover:-translate-y-0.5 hover:border-primary/70 hover:bg-accent/40 hover:shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.15)] active:translate-y-0 active:scale-[0.98] dark:border-[hsl(var(--brand-light)/0.4)] dark:hover:border-[hsl(var(--brand-light)/0.7)]',
 		secondary:
 			'bg-[hsl(var(--surface-raised))] text-secondary-foreground border border-[hsl(var(--surface-raised-border))] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.04)] hover:-translate-y-0.5 hover:bg-[hsl(var(--surface-raised-hover))] hover:border-[hsl(var(--surface-raised-border-hover))] hover:shadow-md active:translate-y-0 active:scale-[0.98]',
 		ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',

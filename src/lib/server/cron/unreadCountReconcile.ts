@@ -15,17 +15,29 @@ import { db } from '$lib/server/db/client';
 import type { CronJobResult } from './index';
 
 export async function runUnreadCountReconcile(): Promise<CronJobResult> {
+	// Scoped to active rows only: a drifted conversation either still claims
+	// unread (unread_count <> 0) or was touched recently (any message write
+	// bumps updated_at). Cold, consistent threads are skipped, turning the
+	// hourly job from O(all messages) into O(active conversations). The count
+	// is a per-row correlated subquery served by idx_messages_direction_read.
 	const result = await db.execute(sql`
-		WITH actual AS (
-			SELECT
-				c.id AS conversation_id,
-				COALESCE(COUNT(m.id) FILTER (
-					WHERE m.direction = 'inbound' AND m.read_at IS NULL
-				), 0)::int AS cnt
+		WITH candidates AS (
+			SELECT c.id
 			FROM conversations c
-			LEFT JOIN messages m ON m.conversation_id = c.id
 			WHERE c.deleted_at IS NULL
-			GROUP BY c.id
+				AND (c.unread_count <> 0 OR c.updated_at > NOW() - INTERVAL '2 hours')
+		),
+		actual AS (
+			SELECT
+				cand.id AS conversation_id,
+				(
+					SELECT COUNT(*)::int
+					FROM messages m
+					WHERE m.conversation_id = cand.id
+						AND m.direction = 'inbound'
+						AND m.read_at IS NULL
+				) AS cnt
+			FROM candidates cand
 		)
 		UPDATE conversations c
 		SET unread_count = actual.cnt,

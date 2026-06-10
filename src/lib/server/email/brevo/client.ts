@@ -1,15 +1,18 @@
 import type { EmailDnsRecord } from '$lib/server/db/schema';
 import { brevoFetch, BrevoError } from './request';
 
-// Compose a full domain from a DNS-label prefix and the root domain. The sending
-// and receiving domains are SIBLINGS under the same root (no nesting):
+// Compose a full domain from a DNS-label prefix and the root domain:
 //   composeDomain('contact', 'uplift.com') → 'contact.uplift.com'
 //   composeDomain('replies', 'uplift.com') → 'replies.uplift.com'
+// An EMPTY/NULL prefix yields the apex/root itself — used for flexible sending
+// domains (info@uplift.com, no forced subdomain):
+//   composeDomain(null, 'uplift.com') → 'uplift.com'
 // Single source of truth — used by the create route to derive + store both
 // domains. The stored `domain` / `inbound_domain` columns are read everywhere
 // else, so callers never re-derive.
-export function composeDomain(prefix: string, root: string): string {
-	return `${prefix}.${root}`;
+export function composeDomain(prefix: string | null | undefined, root: string): string {
+	const p = prefix?.trim();
+	return p ? `${p}.${root}` : root;
 }
 
 // Brevo returns one record per authentication mechanism on create. Each is the

@@ -1,9 +1,22 @@
 <script lang="ts">
-	import { Send, StickyNote, Zap, Paperclip, X, FileText, Loader2 } from '@lucide/svelte';
+	import {
+		Send,
+		StickyNote,
+		Zap,
+		Paperclip,
+		X,
+		FileText,
+		Loader2,
+		ChevronDown,
+		Check,
+		Calendar
+	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Input } from '$lib/components/ui/input';
 	import * as Popover from '$lib/components/ui/popover';
 	import ChannelSelector from './ChannelSelector.svelte';
+	import { bookingPublicUrl } from '$lib/components/booking/publicUrl';
 	import { cn } from '$lib/utils/cn';
 	import type { OutboundChannel, MessageMedia } from '$lib/stores/inbox.svelte';
 
@@ -25,6 +38,7 @@
 		quickReplies = [],
 		contactName = '',
 		orgName = '',
+		orgSlug = '',
 		contactId = '',
 		onSend,
 		onTyping
@@ -39,6 +53,8 @@
 		quickReplies?: QuickReplyItem[];
 		contactName?: string;
 		orgName?: string;
+		/** Org slug — used to build public booking-link URLs for insertion. */
+		orgSlug?: string;
 		/** Contact the conversation belongs to — required to upload attachments. */
 		contactId?: string;
 		onSend: (
@@ -47,6 +63,7 @@
 				isInternalNote: boolean;
 				channel?: OutboundChannel;
 				emailSubject?: string;
+				fromLocalPart?: string;
 				interpolate?: boolean;
 				mediaIds?: string[];
 				optimisticMedia?: MessageMedia[];
@@ -143,6 +160,70 @@
 			if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
 		}
 		attachments = [];
+	}
+
+	// From-address picker (email only). Loaded lazily from a sender-accessible
+	// endpoint; the picker only appears when the org has extra branded addresses.
+	type FromOption = { local_part: string; label: string | null; address: string };
+	let fromDefault = $state<FromOption | null>(null);
+	let fromExtras = $state<FromOption[]>([]);
+	let selectedFromLocal = $state<string | null>(null);
+	let fromOpen = $state(false);
+
+	onMount(async () => {
+		if (!availableChannels.includes('email')) return;
+		try {
+			const res = await fetch('/api/email/from-options');
+			if (!res.ok) return;
+			const json = (await res.json()) as {
+				data: { default: FromOption | null; extras: FromOption[] };
+			};
+			fromDefault = json.data.default;
+			fromExtras = json.data.extras;
+		} catch {
+			// silent — picker just won't show; sends fall back to the default address
+		}
+	});
+
+	// Booking links — active links for this org, fetched lazily so the calendar
+	// button only appears when there is at least one link to insert.
+	type BookingLinkOption = {
+		id: string;
+		slug: string;
+		title: string;
+		appointment_type: string;
+	};
+	let bookingLinks = $state<BookingLinkOption[]>([]);
+	let bookingOpen = $state(false);
+
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/booking-links/active');
+			if (!res.ok) return;
+			const json = (await res.json()) as { data: BookingLinkOption[] };
+			bookingLinks = json.data;
+		} catch {
+			// silent — the booking button just won't show
+		}
+	});
+
+	function insertBookingLink(link: BookingLinkOption) {
+		if (!orgSlug) return;
+		const url = bookingPublicUrl(orgSlug, link.slug);
+		const cta = `Book a time here:\n${url}`;
+		const current = body.replace(/\s+$/, '');
+		body = current.length > 0 ? `${current}\n\n${cta}` : cta;
+		bookingOpen = false;
+	}
+
+	const fromAllOptions = $derived(fromDefault ? [fromDefault, ...fromExtras] : []);
+	const selectedFromOption = $derived(
+		fromAllOptions.find((o) => o.local_part === selectedFromLocal) ?? fromDefault
+	);
+
+	function pickFrom(local: string) {
+		selectedFromLocal = local;
+		fromOpen = false;
 	}
 
 	let body = $state('');
@@ -265,6 +346,15 @@
 					!isInternalNote && channel === 'email'
 						? trimmedSubject || emailSubjectDefault
 						: undefined,
+				// Only send an override when a non-default address is explicitly chosen;
+				// otherwise the server uses the org default.
+				fromLocalPart:
+					!isInternalNote &&
+					channel === 'email' &&
+					selectedFromLocal &&
+					selectedFromLocal !== fromDefault?.local_part
+						? selectedFromLocal
+						: undefined,
 				interpolate: usedQuickReply,
 				mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
 				optimisticMedia: optimisticMedia.length > 0 ? optimisticMedia : undefined
@@ -287,6 +377,8 @@
 	}
 
 	const showSubjectInput = $derived(!isInternalNote && channel === 'email');
+	// Only worth a picker when there is an actual choice (≥1 extra address).
+	const showFromPicker = $derived(showSubjectInput && fromExtras.length > 0);
 	const composerBorderClass = $derived(
 		isInternalNote
 			? 'border-amber-500/30 bg-amber-500/5'
@@ -397,8 +489,95 @@
 					{/if}
 				</Popover.Content>
 			</Popover.Root>
+
+			{#if bookingLinks.length > 0 && orgSlug}
+				<Popover.Root bind:open={bookingOpen}>
+					<Popover.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								aria-label="Insert booking link"
+							>
+								<Calendar class="h-3.5 w-3.5" />
+								Booking link
+							</button>
+						{/snippet}
+					</Popover.Trigger>
+					<Popover.Content align="end" class="w-72 p-2">
+						<ul class="max-h-72 space-y-1 overflow-y-auto">
+							{#each bookingLinks as link (link.id)}
+								<li>
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+										onclick={() => insertBookingLink(link)}
+									>
+										<Calendar class="h-4 w-4 shrink-0 text-muted-foreground" />
+										<span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+											{link.title}
+										</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+						<div class="mt-1 border-t border-border/60 pt-1.5">
+							<a
+								href="/settings/booking"
+								class="block rounded-lg px-2.5 py-1.5 text-xs text-primary hover:bg-muted"
+							>
+								Manage booking links →
+							</a>
+						</div>
+					</Popover.Content>
+				</Popover.Root>
+			{/if}
 		{/if}
 	</div>
+
+	{#if showFromPicker}
+		<Popover.Root bind:open={fromOpen}>
+			<Popover.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						disabled={sending || !canSend || channelBlocked !== null}
+						class="inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+						aria-label="Choose sending address"
+					>
+						<span class="shrink-0 text-muted-foreground/70">From:</span>
+						<span class="truncate text-foreground">{selectedFromOption?.address ?? ''}</span>
+						<ChevronDown class="h-3.5 w-3.5 shrink-0" />
+					</button>
+				{/snippet}
+			</Popover.Trigger>
+			<Popover.Content align="start" class="w-72 p-1.5">
+				<ul class="max-h-72 space-y-0.5 overflow-y-auto">
+					{#each fromAllOptions as opt (opt.local_part)}
+						<li>
+							<button
+								type="button"
+								class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+								onclick={() => pickFrom(opt.local_part)}
+							>
+								<span class="min-w-0 flex-1">
+									<span class="block truncate text-sm font-medium text-foreground">{opt.address}</span>
+									{#if opt.label}
+										<span class="block truncate text-xs text-muted-foreground">{opt.label}</span>
+									{/if}
+								</span>
+								{#if selectedFromOption?.local_part === opt.local_part}
+									<Check class="h-4 w-4 shrink-0 text-primary" />
+								{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</Popover.Content>
+		</Popover.Root>
+	{/if}
 
 	{#if showSubjectInput}
 		<Input

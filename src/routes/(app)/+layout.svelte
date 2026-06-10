@@ -149,7 +149,11 @@
 	<div class="flex min-h-screen flex-col bg-background">
 		<DesktopSidebar items={visibleNav} member={session.member} org={session.org} />
 		<div class="flex min-h-screen flex-1 flex-col md:pl-[var(--sidebar-width)]">
-			<AppHeader org={session.org} member={session.member} />
+			<!-- Brand lives in the desktop sidebar; the per-page header (PageWrapper) hosts
+			     global controls at md+. So the global brand bar is mobile-only. -->
+			<div class="md:hidden">
+				<AppHeader org={session.org} member={session.member} />
+			</div>
 			{#if showSetupBanner}
 				<SetupBanner onDismiss={() => (setupBannerDismissed = true)} />
 			{/if}

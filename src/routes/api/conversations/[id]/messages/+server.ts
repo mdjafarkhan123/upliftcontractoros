@@ -6,6 +6,7 @@ import { db } from '$lib/server/db/client';
 import {
 	contacts,
 	conversations,
+	emailSenderAddresses,
 	media,
 	messages,
 	messengerContacts,
@@ -13,6 +14,7 @@ import {
 	outboxEvents,
 	webchatSessions
 } from '$lib/server/db/schema';
+import { defaultLocalPart } from '$lib/server/email/senderAddresses';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
@@ -40,6 +42,17 @@ const sendSchema = z.object({
 	body: z.string().max(10_000, 'Message too long').default(''),
 	channel: z.enum(['sms', 'webchat', 'email', 'messenger']).optional(),
 	email_subject: z.string().trim().max(255).optional(),
+	// Optional From override for email — must be the org default or one of its extra
+	// branded addresses (validated against the DB in the email branch). Same local-part
+	// rule as the email-settings endpoints.
+	from_local_part: z
+		.string()
+		.trim()
+		.toLowerCase()
+		.min(1)
+		.max(64)
+		.regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/)
+		.optional(),
 	is_internal_note: z.boolean().optional().default(false),
 	attachments: z.array(attachmentSchema).max(10).optional(),
 	// Pre-uploaded media (via /api/media/upload as contact attachments) to re-link
@@ -390,6 +403,48 @@ export const POST: RequestHandler = async (event) => {
 			);
 		}
 
+		// Resolve the From override (one of the org's extra branded addresses). It is
+		// snapshotted into the outbox payload so the worker sends from exactly what was
+		// chosen, even if the address is edited or removed afterwards. Omitted → worker
+		// uses the org default.
+		let fromLocalPart: string | undefined;
+		if (parsed.from_local_part) {
+			const [org] = await db
+				.select({
+					slug: organizations.slug,
+					email_sender_local: organizations.email_sender_local
+				})
+				.from(organizations)
+				.where(eq(organizations.id, auth.orgId))
+				.limit(1);
+			if (!org) return json({ error: 'Organization not found.' }, { status: 404 });
+
+			if (parsed.from_local_part === defaultLocalPart(org)) {
+				fromLocalPart = parsed.from_local_part;
+			} else {
+				const [extra] = await db
+					.select({ id: emailSenderAddresses.id })
+					.from(emailSenderAddresses)
+					.where(
+						and(
+							eq(emailSenderAddresses.org_id, auth.orgId),
+							eq(emailSenderAddresses.local_part, parsed.from_local_part)
+						)
+					)
+					.limit(1);
+				if (!extra) {
+					return json(
+						{
+							error: 'That sending address is not available.',
+							field_errors: { from_local_part: 'Unknown sending address' }
+						},
+						{ status: 400 }
+					);
+				}
+				fromLocalPart = parsed.from_local_part;
+			}
+		}
+
 		// Find newest email in the thread for subject + threading headers.
 		const [lastEmail] = await db
 			.select({
@@ -511,7 +566,8 @@ export const POST: RequestHandler = async (event) => {
 						message_id: inserted.id,
 						conversation_id: conv.id,
 						contact_id: contact.id,
-						org_id: auth.orgId
+						org_id: auth.orgId,
+						...(fromLocalPart ? { from_local_part: fromLocalPart } : {})
 					},
 					idempotency_key: `email.send.requested:${inserted.id}`
 				});

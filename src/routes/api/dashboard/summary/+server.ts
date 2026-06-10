@@ -7,7 +7,8 @@ import { createLogger } from '$lib/server/log';
 import type {
 	DashboardSummary,
 	DashboardPipelineStage,
-	DashboardReputation
+	DashboardReputation,
+	DashboardTodayJob
 } from '$lib/types/dashboard';
 import {
 	ACTIVITY_ALLOWLIST,
@@ -40,8 +41,10 @@ const ACTIVITY_FETCH_LIMIT = 30;
 type CacheEntry = { data: DashboardSummary; expiresAt: number };
 const cache = new Map<string, CacheEntry>();
 
-function cacheKey(orgId: string, memberId: string): string {
-	return `${orgId}|${memberId}`;
+type Period = 'month' | 'year';
+
+function cacheKey(orgId: string, memberId: string, period: Period): string {
+	return `${orgId}|${memberId}|${period}`;
 }
 
 async function safe<T>(
@@ -72,7 +75,11 @@ export const GET: RequestHandler = async (event) => {
 	const tz = auth.org.timezone || 'America/Chicago';
 	const memberId = auth.member.id;
 
-	const key = cacheKey(orgId, memberId);
+	// KPI-row time window. Only the flow KPIs (leads, jobs won, revenue) honour
+	// this; balance cards and the other widgets stay month-based regardless.
+	const period: Period = event.url.searchParams.get('period') === 'year' ? 'year' : 'month';
+
+	const key = cacheKey(orgId, memberId, period);
 	const now = Date.now();
 	const hit = cache.get(key);
 	if (hit && hit.expiresAt > now) return json(hit.data);
@@ -80,10 +87,20 @@ export const GET: RequestHandler = async (event) => {
 	const canRevenue = auth.member.can_view_revenue === true;
 	const canPipeline = auth.member.can_view_pipeline_snapshot === true;
 	const featureReviewFunnel = auth.org.feature_review_funnel === true;
+	// Inbox visibility: full inbox (all) vs assigned-only. Drives unread scope.
+	const canViewAllConversations = auth.member.can_view_all_conversations === true;
+	const canViewAssignedConversations = auth.member.can_view_assigned_conversations === true;
+	const canViewInbox = canViewAllConversations || canViewAssignedConversations;
 
 	const degraded: string[] = [];
 
 	const monthStart = sql`(date_trunc('month', (now() AT TIME ZONE ${tz}))) AT TIME ZONE ${tz}`;
+	const lastMonthStart = sql`(date_trunc('month', (now() AT TIME ZONE ${tz}) - interval '1 month')) AT TIME ZONE ${tz}`;
+	// Flow-KPI window: matches the requested period (month or year), with the
+	// equivalent prior period for the trend chips.
+	const trunc = period === 'year' ? 'year' : 'month';
+	const periodStart = sql`(date_trunc(${trunc}, (now() AT TIME ZONE ${tz}))) AT TIME ZONE ${tz}`;
+	const lastPeriodStart = sql`(date_trunc(${trunc}, (now() AT TIME ZONE ${tz}) - interval '1 ${sql.raw(trunc)}')) AT TIME ZONE ${tz}`;
 	const dayStart = sql`(date_trunc('day', (now() AT TIME ZONE ${tz}))) AT TIME ZONE ${tz}`;
 	const dayEnd = sql`((date_trunc('day', (now() AT TIME ZONE ${tz})) + interval '1 day')) AT TIME ZONE ${tz}`;
 	const todayDate = sql`(now() AT TIME ZONE ${tz})::date`;
@@ -94,7 +111,10 @@ export const GET: RequestHandler = async (event) => {
 		revenue,
 		overdue,
 		quotesAwaiting,
-		jobsToday,
+		agingLeads,
+		todaySchedule,
+		unreadConversations,
+		missedCallRecovery,
 		pipeline,
 		reputation,
 		activityRows
@@ -103,18 +123,27 @@ export const GET: RequestHandler = async (event) => {
 		safe(
 			'leads',
 			async () => {
-				const [row] = await db.execute<{ new_this_month: number; became_customer: number }>(sql`
+				const [row] = await db.execute<{
+					new_this_period: number;
+					became_customer: number;
+					new_last_period: number;
+				}>(sql`
 						select
-							count(*) filter (where created_at >= ${monthStart})::int as new_this_month,
-							count(*) filter (where created_at >= ${monthStart} and status = 'customer')::int as became_customer
+							count(*) filter (where created_at >= ${periodStart})::int as new_this_period,
+							count(*) filter (where created_at >= ${periodStart} and status = 'customer')::int as became_customer,
+							count(*) filter (where created_at >= ${lastPeriodStart} and created_at < ${periodStart})::int as new_last_period
 						from contacts
 						where org_id = ${orgId} and deleted_at is null
 					`);
-				const n = row?.new_this_month ?? 0;
+				const n = row?.new_this_period ?? 0;
 				const c = row?.became_customer ?? 0;
-				return { new_this_month: n, conversion_rate: n > 0 ? c / n : null };
+				return {
+					new_this_period: n,
+					conversion_rate: n > 0 ? c / n : null,
+					new_last_period: row?.new_last_period ?? 0
+				};
 			},
-			{ new_this_month: 0, conversion_rate: null as number | null },
+			{ new_this_period: 0, conversion_rate: null as number | null, new_last_period: 0 },
 			degraded
 		),
 
@@ -122,24 +151,30 @@ export const GET: RequestHandler = async (event) => {
 		safe(
 			'jobs_won',
 			async () => {
-				const [row] = await db.execute<{ count: number; value: string }>(sql`
+				const [row] = await db.execute<{
+					count: number;
+					value: string;
+					count_last_period: number;
+				}>(sql`
 						select
-							count(*)::int as count,
-							coalesce(sum(o.value), 0)::text as value
+							count(*) filter (where o.closed_at >= ${periodStart})::int as count,
+							coalesce(sum(o.value) filter (where o.closed_at >= ${periodStart}), 0)::text as value,
+							count(*) filter (where o.closed_at >= ${lastPeriodStart} and o.closed_at < ${periodStart})::int as count_last_period
 						from opportunities o
 						join pipeline_stages s on s.id = o.stage_id
 						where o.org_id = ${orgId}
 							and o.deleted_at is null
 							and s.is_won = true
 							and o.closed_at is not null
-							and o.closed_at >= ${monthStart}
+							and o.closed_at >= ${lastPeriodStart}
 					`);
 				return {
-					count_this_month: row?.count ?? 0,
-					value_this_month: row?.value ?? '0'
+					count_this_period: row?.count ?? 0,
+					value_this_period: row?.value ?? '0',
+					count_last_period: row?.count_last_period ?? 0
 				};
 			},
-			{ count_this_month: 0, value_this_month: '0' },
+			{ count_this_period: 0, value_this_period: '0', count_last_period: 0 },
 			degraded
 		),
 
@@ -148,11 +183,13 @@ export const GET: RequestHandler = async (event) => {
 			? safe(
 					'revenue',
 					async () => {
-						const [paidRow] = await db.execute<{ this_month: string }>(sql`
-								select coalesce(sum(amount), 0)::text as this_month
+						const [paidRow] = await db.execute<{ this_period: string; last_period: string }>(sql`
+								select
+									coalesce(sum(amount) filter (where paid_at >= ${periodStart}), 0)::text as this_period,
+									coalesce(sum(amount) filter (where paid_at >= ${lastPeriodStart} and paid_at < ${periodStart}), 0)::text as last_period
 								from payments
 								where org_id = ${orgId}
-									and paid_at >= ${monthStart}
+									and paid_at >= ${lastPeriodStart}
 							`);
 						const [outRow] = await db.execute<{ outstanding: string }>(sql`
 								select coalesce(sum(i.total) - coalesce(sum(p.paid), 0), 0)::text as outstanding
@@ -168,11 +205,12 @@ export const GET: RequestHandler = async (event) => {
 									and i.status in ('sent', 'partially_paid')
 							`);
 						return {
-							this_month: paidRow?.this_month ?? '0',
+							this_period: paidRow?.this_period ?? '0',
+							last_period: paidRow?.last_period ?? '0',
 							outstanding: outRow?.outstanding ?? '0'
 						};
 					},
-					{ this_month: '0', outstanding: '0' },
+					{ this_period: '0', last_period: '0', outstanding: '0' },
 					degraded
 				)
 			: Promise.resolve(null),
@@ -198,16 +236,36 @@ export const GET: RequestHandler = async (event) => {
 			degraded
 		),
 
-		// quotes awaiting — sent or viewed
+		// quotes awaiting — sent or viewed (count + value on the table)
 		safe(
 			'quotes_awaiting',
 			async () => {
-				const [row] = await db.execute<{ count: number }>(sql`
-						select count(*)::int as count
+				const [row] = await db.execute<{ count: number; total: string }>(sql`
+						select
+							count(*)::int as count,
+							coalesce(sum(total), 0)::text as total
 						from quotes
 						where org_id = ${orgId}
 							and deleted_at is null
 							and status in ('sent', 'viewed')
+					`);
+				return { count: row?.count ?? 0, total: row?.total ?? '0' };
+			},
+			{ count: 0, total: '0' },
+			degraded
+		),
+
+		// aging leads — leads with no activity (or never contacted) for 7+ days
+		safe(
+			'aging_leads',
+			async () => {
+				const [row] = await db.execute<{ count: number }>(sql`
+						select count(*)::int as count
+						from contacts
+						where org_id = ${orgId}
+							and deleted_at is null
+							and status = 'lead'
+							and coalesce(last_contacted_at, created_at) < (now() - interval '7 days')
 					`);
 				return row?.count ?? 0;
 			},
@@ -215,25 +273,103 @@ export const GET: RequestHandler = async (event) => {
 			degraded
 		),
 
-		// jobs scheduled today (org tz)
+		// today's schedule — scheduled/in-progress jobs starting today (org tz)
 		safe(
-			'jobs_today',
+			'today_schedule',
 			async () => {
-				const [row] = await db.execute<{ count: number }>(sql`
-						select count(*)::int as count
-						from jobs
-						where org_id = ${orgId}
-							and deleted_at is null
-							and status in ('scheduled', 'in_progress')
-							and scheduled_start is not null
-							and scheduled_start >= ${dayStart}
-							and scheduled_start < ${dayEnd}
+				const rows = await db.execute<DashboardTodayJob>(sql`
+						select
+							j.id,
+							j.title,
+							j.status,
+							j.scheduled_start,
+							j.scheduled_end,
+							c.full_name as contact_name
+						from jobs j
+						left join contacts c on c.id = j.contact_id
+						where j.org_id = ${orgId}
+							and j.deleted_at is null
+							and j.status in ('scheduled', 'in_progress')
+							and j.scheduled_start is not null
+							and j.scheduled_start >= ${dayStart}
+							and j.scheduled_start < ${dayEnd}
+						order by j.scheduled_start asc
+						limit 8
 					`);
-				return row?.count ?? 0;
+				return rows as unknown as DashboardTodayJob[];
 			},
-			0,
+			[] as DashboardTodayJob[],
 			degraded
 		),
+
+		// unread conversations — permission-scoped (all inbox vs assigned-only)
+		canViewInbox
+			? safe(
+					'unread_conversations',
+					async () => {
+						const assignedFilter =
+							!canViewAllConversations && canViewAssignedConversations
+								? sql`and assigned_to = ${memberId}`
+								: sql``;
+						const [row] = await db.execute<{ count: number }>(sql`
+								select count(*)::int as count
+								from conversations
+								where org_id = ${orgId}
+									and deleted_at is null
+									and status = 'open'
+									and unread_count > 0
+									${assignedFilter}
+							`);
+						return row?.count ?? 0;
+					},
+					0,
+					degraded
+				)
+			: Promise.resolve(0),
+
+		// missed-call recovery — org-wide operational metric (full inbox only).
+		// Missed call = inbound missed_call message this month. Recovered = its
+		// conversation later got an inbound, non-missed_call reply (a real text-back).
+		canViewAllConversations
+			? safe(
+					'missed_call_recovery',
+					async () => {
+						const [row] = await db.execute<{
+							missed_count: number;
+							recovered_count: number;
+						}>(sql`
+								with mc as (
+									select m.id, m.conversation_id, m.created_at
+									from messages m
+									where m.org_id = ${orgId}
+										and m.channel = 'missed_call'
+										and m.direction = 'inbound'
+										and m.created_at >= ${monthStart}
+								)
+								select
+									count(*)::int as missed_count,
+									count(*) filter (
+										where exists (
+											select 1
+											from messages r
+											where r.conversation_id = mc.conversation_id
+												and r.org_id = ${orgId}
+												and r.direction = 'inbound'
+												and r.channel <> 'missed_call'
+												and r.created_at > mc.created_at
+										)
+									)::int as recovered_count
+								from mc
+							`);
+						return {
+							missed_count: row?.missed_count ?? 0,
+							recovered_count: row?.recovered_count ?? 0
+						};
+					},
+					{ missed_count: 0, recovered_count: 0 },
+					degraded
+				)
+			: Promise.resolve(null),
 
 		// pipeline snapshot — ordered by stage position
 		canPipeline
@@ -363,6 +499,7 @@ export const GET: RequestHandler = async (event) => {
 	const summary: DashboardSummary = {
 		generated_at: new Date().toISOString(),
 		timezone: tz,
+		period,
 		kpis: {
 			leads,
 			jobs_won: jobsWon,
@@ -371,9 +508,13 @@ export const GET: RequestHandler = async (event) => {
 		attention: {
 			overdue_invoices_count: overdue.count,
 			overdue_invoices_total: overdue.total,
-			quotes_awaiting_count: quotesAwaiting,
-			jobs_today_count: jobsToday
+			quotes_awaiting_count: quotesAwaiting.count,
+			quotes_awaiting_total: quotesAwaiting.total,
+			aging_leads_count: agingLeads,
+			unread_conversations_count: unreadConversations
 		},
+		today_schedule: todaySchedule,
+		missed_call_recovery: missedCallRecovery,
 		pipeline_snapshot: canPipeline ? pipeline : null,
 		recent_activity: activity,
 		reputation,

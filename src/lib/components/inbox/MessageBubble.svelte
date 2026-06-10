@@ -1,6 +1,10 @@
 <script lang="ts">
 	import {
 		PhoneMissed,
+		PhoneOutgoing,
+		PhoneOff,
+		Voicemail,
+		CalendarPlus,
 		Check,
 		CheckCheck,
 		AlertCircle,
@@ -25,16 +29,51 @@
 		canRetry = false,
 		inboundInitials = '',
 		outboundInitials = '',
-		grouped = false
+		grouped = false,
+		contactId = '',
+		contactName = ''
 	}: {
 		message: ThreadMessage;
 		canRetry?: boolean;
 		inboundInitials?: string;
 		outboundInitials?: string;
 		grouped?: boolean;
+		contactId?: string;
+		contactName?: string;
 	} = $props();
 
 	const isMissedCall = $derived(m.channel === 'missed_call');
+	const isCall = $derived(m.channel === 'call');
+
+	const callMeta = $derived.by(() => {
+		switch (m.call_outcome) {
+			case 'spoke':
+				return { label: 'Spoke', icon: PhoneOutgoing };
+			case 'voicemail':
+				return { label: 'Left voicemail', icon: Voicemail };
+			case 'no_answer':
+				return { label: 'No answer', icon: PhoneOff };
+			case 'follow_up_scheduled':
+				return { label: 'Follow-up scheduled', icon: CalendarPlus };
+			default:
+				return { label: 'Logged call', icon: PhoneOutgoing };
+		}
+	});
+
+	const callDuration = $derived.by(() => {
+		const s = m.call_duration_seconds;
+		if (s == null || s <= 0) return null;
+		const mins = Math.floor(s / 60);
+		const secs = s % 60;
+		if (mins > 0) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+		return `${secs}s`;
+	});
+
+	const followUpHref = $derived(
+		contactId
+			? `/appointments/new?contact_id=${contactId}&contact_name=${encodeURIComponent(contactName)}`
+			: '/appointments/new'
+	);
 	const isEmail = $derived(m.channel === 'email');
 	const isInbound = $derived(m.direction === 'inbound');
 	const isInternal = $derived(m.is_internal_note);
@@ -98,7 +137,15 @@
 						: isDelivered
 							? { label: 'Delivered', tone: 'success' }
 							: isDestructive
-								? { label: m.status === 'bounced' ? 'Bounced' : m.status === 'undeliverable' ? 'Undeliverable' : 'Failed', tone: 'destructive' }
+								? {
+										label:
+											m.status === 'bounced'
+												? 'Bounced'
+												: m.status === 'undeliverable'
+													? 'Undeliverable'
+													: 'Failed',
+										tone: 'destructive'
+									}
 								: { label: 'Sent', tone: 'muted' }
 	);
 
@@ -122,12 +169,43 @@
 			<span>Missed call · {timestamp}</span>
 		</div>
 	</div>
+{:else if isCall}
+	<div class="flex justify-center px-2 py-1">
+		<div
+			class="w-full max-w-[85%] rounded-xl border border-border/60 bg-card px-3.5 py-2.5 text-sm shadow-sm"
+		>
+			<div class="flex items-center gap-2 text-foreground">
+				<callMeta.icon class="h-4 w-4 shrink-0 text-primary" />
+				<span class="font-medium">{callMeta.label}</span>
+				{#if callDuration}
+					<span class="text-muted-foreground">· {callDuration}</span>
+				{/if}
+				<span class="ml-auto text-[11px] text-muted-foreground">{timestamp}</span>
+			</div>
+			{#if hasBody}
+				<p class="mt-1.5 whitespace-pre-wrap break-words leading-relaxed text-muted-foreground">
+					{m.body}
+				</p>
+			{/if}
+			{#if m.call_outcome === 'follow_up_scheduled'}
+				<a
+					href={followUpHref}
+					class="mt-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+				>
+					<CalendarPlus class="h-3.5 w-3.5" />
+					Schedule appointment
+				</a>
+			{/if}
+		</div>
+	</div>
 {:else if isInternal}
 	<div class="flex justify-center px-2 py-0.5">
 		<div
 			class="max-w-[85%] rounded-xl border border-amber-500/15 bg-amber-500/6 px-3.5 py-2.5 text-sm text-foreground shadow-sm"
 		>
-			<div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+			<div
+				class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+			>
 				<StickyNote class="h-3 w-3" />
 				Internal note
 			</div>
@@ -176,7 +254,8 @@
 						: cn(
 								'bg-primary/90 text-primary-foreground',
 								isDestructive && 'ring-1 ring-inset ring-destructive/40',
-								isTerminalFailure && 'bg-destructive/10 text-foreground ring-2 ring-inset ring-destructive/50'
+								isTerminalFailure &&
+									'bg-destructive/10 text-foreground ring-2 ring-inset ring-destructive/50'
 							),
 					isPending && !isTerminalFailure && 'opacity-75'
 				)}
@@ -189,19 +268,20 @@
 				{/if}
 
 				<div
-					class={cn(
-						'mt-1 flex items-center justify-end gap-1',
-						hasMedia && !hasBody && '-mt-1'
-					)}
+					class={cn('mt-1 flex items-center justify-end gap-1', hasMedia && !hasBody && '-mt-1')}
 				>
 					{#if !isInternal && !isMissedCall}
 						<span class="inline-flex items-center gap-1 text-[10px]">
 							{#if m.channel === 'webchat'}
 								<Globe class="h-3.5 w-3.5 text-violet-500" />
-								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}>Chat</span>
+								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}
+									>Chat</span
+								>
 							{:else}
 								<MessageSquare class="h-3.5 w-3.5 text-sky-500" />
-								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}>SMS</span>
+								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}
+									>SMS</span
+								>
 							{/if}
 						</span>
 					{/if}

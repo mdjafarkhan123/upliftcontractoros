@@ -2,6 +2,12 @@
 	import { cn } from '$lib/utils/cn';
 	import { goto } from '$app/navigation';
 	import { ArrowLeft } from '@lucide/svelte';
+	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
+	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
+	import UserMenu from '$lib/components/app-shell/UserMenu.svelte';
+	import { getOrgContext } from '$lib/context/org';
+	import { getMemberContext } from '$lib/context/member';
+	import type { Org, OrgMember } from '$lib/types';
 
 	let {
 		title,
@@ -20,6 +26,21 @@
 		class?: string;
 	} = $props();
 
+	// The global AppHeader is hidden at md+, so the page header is the single top bar
+	// on desktop and hosts the global controls (theme, notifications, user menu).
+	// Read org/member from the (app) layout context; fall back to null so PageWrapper
+	// still renders if ever used outside that tree (e.g. auth/onboarding).
+	function readContext<T>(read: () => () => T): (() => T) | null {
+		try {
+			return read();
+		} catch {
+			return null;
+		}
+	}
+	const org = readContext(getOrgContext);
+	const member = readContext(getMemberContext);
+	const showControls = Boolean(org && member);
+
 	function handleBack() {
 		if (typeof back === 'string') {
 			void goto(back);
@@ -29,12 +50,17 @@
 			void goto('/');
 		}
 	}
+
+	const hasTitleRow = $derived(Boolean(title || actions || back));
 </script>
 
 <div class={cn('mx-auto w-full max-w-screen-xl px-4 py-4 md:px-6 md:py-6', className)}>
-	{#if title || actions || back}
+	{#if hasTitleRow || showControls}
 		<header
-			class="-mx-4 mb-5 flex min-h-14 flex-col gap-3 border-b border-border/60 bg-background px-4 pb-4 md:-mx-6 md:sticky md:top-14 md:z-30 md:mb-6 md:min-h-16 md:flex-row md:items-center md:justify-between md:px-6 md:py-3"
+			class={cn(
+				'-mx-4 mb-5 min-h-14 flex-col gap-3 border-b border-border/60 bg-background px-4 pb-4 md:-mx-6 md:sticky md:top-0 md:z-30 md:mb-6 md:min-h-16 md:flex-row md:items-center md:justify-between md:px-6 md:py-3',
+				hasTitleRow ? 'flex' : 'hidden md:flex'
+			)}
 		>
 			<div class="flex min-w-0 items-center gap-3">
 				{#if back}
@@ -60,11 +86,33 @@
 					{/if}
 				</div>
 			</div>
-			{#if actions}
-				<div class="flex shrink-0 flex-wrap items-center gap-2">
-					{@render actions()}
-				</div>
-			{/if}
+
+			<div class="flex shrink-0 items-center gap-2.5">
+				{#if actions}
+					<div class="flex flex-wrap items-center gap-2">
+						{@render actions()}
+					</div>
+				{/if}
+				{#if showControls && org && member}
+					<!-- Desktop-only global controls; mobile gets these from the AppHeader -->
+					<div class="hidden items-center gap-2.5 md:flex">
+						{#if actions}
+							<div class="h-8 w-px bg-border/60" aria-hidden="true"></div>
+						{/if}
+						<div
+							class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/70 p-1 shadow-card"
+						>
+							<ThemeToggle />
+							<NotificationBell />
+						</div>
+						<div
+							class="flex items-center rounded-full border border-border/60 bg-card-raised/90 p-[3px] shadow-card transition-shadow duration-200 hover:shadow-dropdown"
+						>
+							<UserMenu member={member()} org={org()} />
+						</div>
+					</div>
+				{/if}
+			</div>
 		</header>
 	{/if}
 	{@render children?.()}

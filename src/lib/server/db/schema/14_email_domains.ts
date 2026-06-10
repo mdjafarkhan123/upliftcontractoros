@@ -50,13 +50,17 @@ export const emailDomains = pgTable(
 			.notNull()
 			.references(() => organizations.id, { onDelete: 'cascade' }),
 		// Source-of-truth inputs the PO types in /jafar. The two full domains below
-		// are derived from these as SIBLINGS under the root (no nesting):
-		//   domain         = `${sending_prefix}.${root_domain}`
+		// are derived from these (no nesting):
+		//   domain         = sending_prefix ? `${sending_prefix}.${root_domain}` : root_domain
 		//   inbound_domain = `${inbound_prefix}.${root_domain}`
 		// e.g. root upliftcontractor.com + prefixes contact/replies →
 		//   contact.upliftcontractor.com  and  replies.upliftcontractor.com
+		// sending_prefix is NULLABLE: when absent the org sends from the apex/root
+		// (info@upliftcontractor.com). The receiving prefix stays required — Brevo
+		// inbound MX can never sit on the apex without hijacking the contractor's
+		// real mailbox, so replies always land on a dedicated sibling subdomain.
 		root_domain: text('root_domain').notNull(),
-		sending_prefix: text('sending_prefix').notNull(),
+		sending_prefix: text('sending_prefix'),
 		inbound_prefix: text('inbound_prefix').notNull(),
 		// Sending subdomain, normalized lowercase (e.g. contact.joesplumbing.com).
 		// Stored-derived from sending_prefix + root_domain. Verified with Brevo for

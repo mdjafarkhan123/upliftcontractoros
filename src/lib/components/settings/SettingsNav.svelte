@@ -10,6 +10,7 @@
 		Bell,
 		Zap,
 		MessageSquare,
+		Mail,
 		Lock
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
@@ -62,6 +63,16 @@
 				role !== 'admin' ? 'Admin only' : !featureAutomation ? 'Not on your plan' : undefined,
 			iconBg: 'bg-violet-50 dark:bg-violet-500/10',
 			iconColor: 'text-violet-600 dark:text-violet-400'
+		},
+		{
+			href: '/settings/email',
+			label: 'Email',
+			description: 'Your branded sending address',
+			icon: Mail,
+			locked: role !== 'admin',
+			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
+			iconBg: 'bg-rose-50 dark:bg-rose-500/10',
+			iconColor: 'text-rose-600 dark:text-rose-400'
 		},
 		{
 			href: '/settings/integrations',

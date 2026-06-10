@@ -10,6 +10,7 @@ const PREVIEW_LIMIT = 140;
 
 function buildPreview(channel: Message['channel'], body: string | null, hasMedia: boolean): string {
 	if (channel === 'missed_call') return 'Missed phone call';
+	if (channel === 'call') return body?.trim() || 'Logged call';
 	const trimmed = body?.trim() ?? '';
 	if (!trimmed) return hasMedia ? '📷 Photo' : '';
 	return trimmed.length > PREVIEW_LIMIT ? trimmed.slice(0, PREVIEW_LIMIT) : trimmed;

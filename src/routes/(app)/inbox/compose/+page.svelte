@@ -105,6 +105,7 @@
 			isInternalNote: boolean;
 			channel?: OutboundChannel;
 			emailSubject?: string;
+			fromLocalPart?: string;
 			interpolate?: boolean;
 			mediaIds?: string[];
 		}
@@ -132,6 +133,7 @@
 				isInternalNote: opts.isInternalNote,
 				channel: opts.channel,
 				emailSubject: opts.emailSubject,
+				fromLocalPart: opts.fromLocalPart,
 				interpolate: opts.interpolate,
 				mediaIds: opts.mediaIds
 			});

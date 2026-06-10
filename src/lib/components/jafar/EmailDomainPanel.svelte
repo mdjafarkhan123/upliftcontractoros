@@ -74,15 +74,14 @@
 	);
 	const sendingPrefix = $derived(sendingPrefixInput.trim().toLowerCase());
 	const inboundPrefix = $derived(inboundPrefixInput.trim().toLowerCase());
-	const previewSending = $derived(normalizedRoot ? `${sendingPrefix}.${normalizedRoot}` : '');
+	// An empty sending prefix means apex — send from the root itself.
+	const previewSending = $derived(
+		normalizedRoot ? (sendingPrefix ? `${sendingPrefix}.${normalizedRoot}` : normalizedRoot) : ''
+	);
 	const previewInbound = $derived(normalizedRoot ? `${inboundPrefix}.${normalizedRoot}` : '');
 	const prefixesCollide = $derived(sendingPrefix.length > 0 && sendingPrefix === inboundPrefix);
 	const canSubmit = $derived(
-		!submitting &&
-			normalizedRoot.length > 0 &&
-			sendingPrefix.length > 0 &&
-			inboundPrefix.length > 0 &&
-			!prefixesCollide
+		!submitting && normalizedRoot.length > 0 && inboundPrefix.length > 0 && !prefixesCollide
 	);
 
 	async function submitDomain(e: SubmitEvent) {
@@ -361,18 +360,20 @@
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					<label class="block">
 						<span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-							Sending prefix <span class="text-red-400">*</span>
+							Sending prefix
 						</span>
 						<input
 							type="text"
 							bind:value={sendingPrefixInput}
-							required
 							autocomplete="off"
 							spellcheck="false"
 							placeholder="contact"
 							disabled={submitting}
 							class="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-50"
 						/>
+						<span class="mt-1.5 block text-[11px] text-slate-400">
+							Leave blank to send from the root domain (e.g. info@theirbusiness.com).
+						</span>
 					</label>
 					<label class="block">
 						<span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">

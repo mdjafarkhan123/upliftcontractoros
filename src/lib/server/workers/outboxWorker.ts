@@ -266,6 +266,68 @@ async function handleCarrierSubmitted(event: OutboxEvent): Promise<void> {
 	console.log(`[outbox] carrier.submitted: PO notified for org ${event.org_id}`);
 }
 
+// Contractor requested setup/change of their branded email sending domain (Stage 2
+// of the email identity plan). PO holds the DNS, so they apply the change manually
+// in /jafar. Notifies the PO by system email. Handled inline (no BullMQ queue),
+// mirroring carrier.submitted. Each request is its own event.
+async function handleEmailDomainChangeRequested(event: OutboxEvent): Promise<void> {
+	const to = env.SUPER_ADMIN_EMAIL;
+	if (!to) {
+		console.warn(
+			`[outbox] email_domain.change_requested ${event.id}: SUPER_ADMIN_EMAIL not set — skipping PO email`
+		);
+		return;
+	}
+
+	const p = event.payload as {
+		org_name?: string;
+		request_type?: string;
+		desired_domain?: string;
+		desired_local_part?: string | null;
+		note?: string | null;
+		requested_by?: string | null;
+	};
+	const orgName = p.org_name ?? 'A contractor';
+	const kind = p.request_type === 'change_domain' ? 'domain change' : 'new domain setup';
+
+	const rows: [string, string | null | undefined][] = [
+		['Organization', orgName],
+		['Request type', kind],
+		['Requested domain', p.desired_domain],
+		['Preferred address name', p.desired_local_part],
+		['Requested by', p.requested_by],
+		['Note', p.note]
+	];
+	const present = rows.filter(([, v]) => v != null && v !== '');
+
+	const textBody = [
+		`${orgName} requested a ${kind} for their branded email sending domain.`,
+		'',
+		...present.map(([k, v]) => `${k}: ${v}`),
+		'',
+		'Set up / change the domain in /jafar, then mark the request resolved.'
+	].join('\n');
+
+	const htmlBody = [
+		`<p><strong>${escapeHtml(orgName)}</strong> requested a ${escapeHtml(kind)} for their branded email sending domain.</p>`,
+		'<table style="border-collapse:collapse">',
+		...present.map(
+			([k, v]) =>
+				`<tr><td style="padding:4px 12px 4px 0;color:#666">${escapeHtml(k)}</td><td style="padding:4px 0"><strong>${escapeHtml(String(v))}</strong></td></tr>`
+		),
+		'</table>',
+		'<p>Set up / change the domain in /jafar, then mark the request resolved.</p>'
+	].join('');
+
+	await sendSystemEmail({
+		to,
+		subject: `Email domain ${kind} requested — ${orgName}`,
+		text: textBody,
+		html: htmlBody
+	});
+	console.log(`[outbox] email_domain.change_requested: PO notified for org ${event.org_id}`);
+}
+
 type DispatchResult = { status: 'routed' } | { status: 'unrouted'; reason: string };
 
 async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
@@ -275,6 +337,10 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 	}
 	if (event.event_type === 'carrier.submitted') {
 		await handleCarrierSubmitted(event);
+		return { status: 'routed' };
+	}
+	if (event.event_type === 'email_domain.change_requested') {
+		await handleEmailDomainChangeRequested(event);
 		return { status: 'routed' };
 	}
 	if (event.org_id) {

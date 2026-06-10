@@ -40,6 +40,8 @@
 
 	onMount(async () => {
 		void loadStats();
+		// Deep link from the dashboard "Schedule job" quick action.
+		if (page.url.searchParams.get('new') === '1' && canCreate) newOpen = true;
 		if (!canCreate) return;
 		const res = await fetch('/api/contacts/assignees');
 		if (res.ok) {

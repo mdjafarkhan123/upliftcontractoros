@@ -262,12 +262,18 @@ async function processEmailSend(job: Job<EmailJobData>) {
 
 	const recipient = msg.email_to_addresses?.[0] ?? contact.email;
 
+	// From-address override snapshotted at send-request time (one of the org's extra
+	// branded addresses). Absent → sendConversationEmail falls back to the org default.
+	const fromLocalPart =
+		typeof data.payload?.from_local_part === 'string' ? data.payload.from_local_part : null;
+
 	try {
 		const result = await sendConversationEmail({
 			org,
 			sendingDomain,
 			inboundDomain,
 			replyAlias,
+			fromLocalPart,
 			to: recipient,
 			subject: msg.email_subject ?? '',
 			body: msg.body ?? '',

@@ -421,6 +421,41 @@
 			"when": 1783300000000,
 			"tag": "0059_platform_system_email_domain",
 			"breakpoints": true
+		},
+		{
+			"idx": 60,
+			"version": "7",
+			"when": 1783400000000,
+			"tag": "0060_email_change_requests",
+			"breakpoints": true
+		},
+		{
+			"idx": 61,
+			"version": "7",
+			"when": 1783500000000,
+			"tag": "0061_email_domain_apex_sending",
+			"breakpoints": true
+		},
+		{
+			"idx": 62,
+			"version": "7",
+			"when": 1783600000000,
+			"tag": "0062_email_sender_addresses",
+			"breakpoints": true
+		},
+		{
+			"idx": 63,
+			"version": "7",
+			"when": 1783700000000,
+			"tag": "0063_manual_call_logging",
+			"breakpoints": true
+		},
+		{
+			"idx": 64,
+			"version": "7",
+			"when": 1783800000000,
+			"tag": "0064_perf_indexes",
+			"breakpoints": true
 		}
 	]
 }

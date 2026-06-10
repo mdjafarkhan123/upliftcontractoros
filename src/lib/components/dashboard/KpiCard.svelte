@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { cn } from '$lib/utils/cn';
-	import { Lock, ArrowUpRight, TrendingUp } from '@lucide/svelte';
+	import { Lock, ArrowUpRight, TrendingUp, TrendingDown, Minus } from '@lucide/svelte';
+
+	type Trend = { label: string; direction: 'up' | 'down' | 'flat'; positive: boolean };
 
 	let {
 		label,
 		value,
 		hint,
+		trend,
 		icon: Icon,
 		tone = 'default',
 		featured = false,
@@ -18,6 +21,8 @@
 		label: string;
 		value: string;
 		hint?: string;
+		/** Optional delta-vs-last-month chip. Colour follows `positive`, arrow follows `direction`. */
+		trend?: Trend;
 		icon?: Component;
 		tone?: 'default' | 'success' | 'warning' | 'danger';
 		/** Featured card — dark green gradient surface, white text. Used for the lead KPI. */
@@ -27,6 +32,20 @@
 		href?: string;
 		class?: string;
 	} = $props();
+
+	const TrendIcon = $derived(
+		trend?.direction === 'up' ? TrendingUp : trend?.direction === 'down' ? TrendingDown : Minus
+	);
+
+	const trendPill = $derived(
+		featured
+			? 'bg-white/10 text-white/90 ring-white/20'
+			: !trend || trend.direction === 'flat'
+				? 'bg-muted text-muted-foreground ring-border/60'
+				: trend.positive
+					? 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
+					: 'bg-rose-50 text-rose-700 ring-rose-200/70 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20'
+	);
 
 	const toneRing = $derived(
 		featured
@@ -98,18 +117,27 @@
 		>
 			{value}
 		</span>
-		{#if hint}
-			<span
-				class={cn(
-					'inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1',
-					featured
-						? 'bg-white/10 text-white/90 ring-white/20'
-						: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
-				)}
-			>
-				<TrendingUp class="h-3 w-3" />
-				{hint}
-			</span>
+		{#if trend || hint}
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+				{#if trend}
+					<span
+						class={cn(
+							'inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1',
+							trendPill
+						)}
+					>
+						<TrendIcon class="h-3 w-3" />
+						{trend.label}
+					</span>
+				{/if}
+				{#if hint}
+					<span
+						class={cn('text-xs', featured ? 'text-white/70' : 'text-muted-foreground')}
+					>
+						{hint}
+					</span>
+				{/if}
+			</div>
 		{/if}
 	</div>
 

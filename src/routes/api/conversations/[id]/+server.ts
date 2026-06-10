@@ -187,9 +187,13 @@ export const GET: RequestHandler = async (event) => {
 		`);
 	}
 
-	const hasWebchat = await hasActiveWebchatSession(conversation.id);
-	const emailReady = await isOrgEmailReady(conversation.org_id);
-	const hasMessenger = await hasMessengerIdentity(conversation.org_id, contact.id);
+	// Independent lookups — fan out over the pool instead of serializing.
+	const [hasWebchat, emailReady, hasMessenger, smsUsed] = await Promise.all([
+		hasActiveWebchatSession(conversation.id),
+		isOrgEmailReady(conversation.org_id),
+		hasMessengerIdentity(conversation.org_id, contact.id),
+		getCurrentUsage(db, auth.orgId, 'sms_sent')
+	]);
 	const channelHints = computeChannelHints(
 		{
 			id: conversation.id,
@@ -208,7 +212,6 @@ export const GET: RequestHandler = async (event) => {
 	);
 
 	// SMS quota for composer gating (P0-A)
-	const smsUsed = await getCurrentUsage(db, auth.orgId, 'sms_sent');
 	const smsLimit = auth.limits.max_monthly_sms;
 
 	const latestQuote = row.q_id

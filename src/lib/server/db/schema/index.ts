@@ -58,6 +58,7 @@ export {
 	messageChannelEnum,
 	messageDirectionEnum,
 	messageStatusEnum,
+	callOutcomeEnum,
 	conversations,
 	messages,
 	inboundCommunicationEvents
@@ -178,6 +179,18 @@ export type { QuickReply, NewQuickReply } from './13_quick_replies';
 // Domain 14 — Email Domains (per-tenant Brevo sending/receiving)
 export { emailDomainStatusEnum, emailDomains } from './14_email_domains';
 export type { EmailDomain, NewEmailDomain, EmailDnsRecord } from './14_email_domains';
+
+// Domain 16 — Email Change Requests (contractor → PO domain setup/change)
+export {
+	emailChangeRequestTypeEnum,
+	emailChangeRequestStatusEnum,
+	emailChangeRequests
+} from './16_email_change_requests';
+export type { EmailChangeRequest, NewEmailChangeRequest } from './16_email_change_requests';
+
+// Domain 17 — Email Sender Addresses (extra branded From-addresses per org)
+export { emailSenderAddresses } from './17_email_sender_addresses';
+export type { EmailSenderAddress, NewEmailSenderAddress } from './17_email_sender_addresses';
 
 // Domain 15 — Messenger (per-tenant Facebook Page link + PSID identity)
 export {

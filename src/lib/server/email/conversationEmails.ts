@@ -36,6 +36,11 @@ export type SendConversationEmailInput = {
 	/** Org's Brevo receiving subdomain (email_domains.inbound_domain). */
 	inboundDomain: string;
 	replyAlias: string;
+	/**
+	 * Optional override for the From local-part — one of the org's extra branded
+	 * addresses. Falls back to the org default when absent. Sanitized downstream.
+	 */
+	fromLocalPart?: string | null;
 	to: string;
 	subject: string;
 	body: string;
@@ -70,7 +75,7 @@ function bodyHtml(body: string): string {
 export async function sendConversationEmail(
 	input: SendConversationEmailInput
 ): Promise<SendConversationEmailResult> {
-	const fromAddress = contractorFromAddress(input.org, input.sendingDomain);
+	const fromAddress = contractorFromAddress(input.org, input.sendingDomain, input.fromLocalPart);
 	const reply = replyToAddress(input.replyAlias, input.inboundDomain);
 
 	const headers: Record<string, string> = {};

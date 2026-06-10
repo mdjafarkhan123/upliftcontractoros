@@ -3,7 +3,7 @@
 // Every public route call performs fresh DB reads. Slots are NEVER stored.
 
 import type { BookingLink } from '$lib/server/db/schema';
-import { resolveAvailabilityForDate } from './availability/resolve';
+import { resolveAvailabilityForDate, resolveAvailabilityForDates } from './availability/resolve';
 import { generateCandidateSlotsForDate } from './slots/generate';
 import { detectConflicts } from './conflicts/detect';
 import { assertDateBookable, filterByMinAdvance, isDatePotentiallyInRange } from './validators';
@@ -70,11 +70,16 @@ export async function getEligibleDatesForMonth(params: {
 			bookingLink.min_advance_hours
 		)
 	);
+	if (inRange.length === 0) return [];
+
+	// Batch-resolve all in-range dates in two queries instead of one await per
+	// day. Same Rule 2 resolution, just no N+1 round-trip storm.
+	const resolvedByDate = await resolveAvailabilityForDates(bookingLink.id, inRange);
 
 	const eligible: IsoDate[] = [];
 	for (const d of inRange) {
-		const resolved = await resolveAvailabilityForDate(bookingLink.id, d);
-		if (resolved.blocked) continue;
+		const resolved = resolvedByDate.get(d);
+		if (!resolved || resolved.blocked) continue;
 		if (resolved.windows.length === 0) continue;
 		eligible.push(d);
 	}
