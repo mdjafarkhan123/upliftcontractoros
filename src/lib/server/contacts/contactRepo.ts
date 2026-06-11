@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
@@ -13,6 +13,7 @@ import {
 	outboxEvents
 } from '$lib/server/db/schema';
 import { isReleasedPhone } from '$lib/utils/phone';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 import type { Contact } from '$lib/server/db/schema';
 
 /**
@@ -162,7 +163,8 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 		.limit(1);
 
 	if (!row) return null;
-	const contact = row.contact;
+	// Resolve the stored R2 key to a short-lived signed URL for the client.
+	const contact = { ...row.contact, avatar_url: await resolveLogoUrl(row.contact.avatar_url) };
 	const assignee =
 		row.assignee_id && row.assignee_name ? { id: row.assignee_id, name: row.assignee_name } : null;
 
@@ -222,6 +224,34 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 			AND ${contacts.deleted_at} IS NULL
 	`);
 
+	const [kpiRow] = await db.execute<{
+		lifetime_revenue: string;
+		open_quotes_count: number;
+		open_quotes_value: string;
+		active_jobs_count: number;
+	}>(sql`
+		SELECT
+			COALESCE((SELECT SUM(amount_paid::numeric) FROM invoices
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+				AND deleted_at IS NULL AND status IN ('paid', 'partially_paid')), 0)::text AS lifetime_revenue,
+			(SELECT COUNT(*)::int FROM quotes
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+				AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
+			COALESCE((SELECT SUM(total::numeric) FROM quotes
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+				AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')), 0)::text AS open_quotes_value,
+			(SELECT COUNT(*)::int FROM jobs
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+				AND deleted_at IS NULL AND status IN ('scheduled', 'in_progress')) AS active_jobs_count
+	`);
+
+	const kpi = {
+		lifetime_revenue: parseFloat(kpiRow?.lifetime_revenue ?? '0'),
+		open_quotes_count: Number(kpiRow?.open_quotes_count ?? 0),
+		open_quotes_value: parseFloat(kpiRow?.open_quotes_value ?? '0'),
+		active_jobs_count: Number(kpiRow?.active_jobs_count ?? 0)
+	};
+
 	return {
 		contact,
 		assignee,
@@ -229,7 +259,8 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 		referral_count: Number(referralCount?.count ?? 0),
 		addresses,
 		notes,
-		counts
+		counts,
+		kpi
 	};
 }
 
@@ -472,17 +503,194 @@ export async function mergeContacts(
 /** ids (from the given set) that have at least one live linked record. */
 async function findContactIdsWithLinks(orgId: string, ids: string[]): Promise<Set<string>> {
 	if (ids.length === 0) return new Set();
-	const rows = await db.execute<{ id: string }>(sql`
-		SELECT c.id FROM contacts c
-		WHERE c.org_id = ${orgId} AND c.id = ANY(${ids}::uuid[]) AND (
-			EXISTS (SELECT 1 FROM opportunities o WHERE o.contact_id = c.id AND o.org_id = ${orgId} AND o.deleted_at IS NULL)
-			OR EXISTS (SELECT 1 FROM jobs j WHERE j.contact_id = c.id AND j.org_id = ${orgId} AND j.deleted_at IS NULL)
-			OR EXISTS (SELECT 1 FROM quotes q WHERE q.contact_id = c.id AND q.org_id = ${orgId} AND q.deleted_at IS NULL)
-			OR EXISTS (SELECT 1 FROM invoices i WHERE i.contact_id = c.id AND i.org_id = ${orgId} AND i.deleted_at IS NULL)
-			OR EXISTS (SELECT 1 FROM conversations cv WHERE cv.contact_id = c.id AND cv.org_id = ${orgId} AND cv.deleted_at IS NULL)
+	const rows = await db
+		.select({ id: contacts.id })
+		.from(contacts)
+		.where(
+			and(
+				eq(contacts.org_id, orgId),
+				inArray(contacts.id, ids),
+				or(
+					exists(
+						db
+							.select({ x: sql`1` })
+							.from(opportunities)
+							.where(
+								and(
+									eq(opportunities.contact_id, contacts.id),
+									eq(opportunities.org_id, orgId),
+									isNull(opportunities.deleted_at)
+								)
+							)
+					),
+					exists(
+						db
+							.select({ x: sql`1` })
+							.from(jobs)
+							.where(
+								and(
+									eq(jobs.contact_id, contacts.id),
+									eq(jobs.org_id, orgId),
+									isNull(jobs.deleted_at)
+								)
+							)
+					),
+					exists(
+						db
+							.select({ x: sql`1` })
+							.from(quotes)
+							.where(
+								and(
+									eq(quotes.contact_id, contacts.id),
+									eq(quotes.org_id, orgId),
+									isNull(quotes.deleted_at)
+								)
+							)
+					),
+					exists(
+						db
+							.select({ x: sql`1` })
+							.from(invoices)
+							.where(
+								and(
+									eq(invoices.contact_id, contacts.id),
+									eq(invoices.org_id, orgId),
+									isNull(invoices.deleted_at)
+								)
+							)
+					)
+				)
+			)
+		);
+	return new Set(rows.map((r) => r.id));
+}
+
+export async function cascadeDeleteContact(orgId: string, contactId: string): Promise<void> {
+	const now = new Date();
+	await db.transaction(async (tx) => {
+		await tx
+			.update(opportunities)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(opportunities.org_id, orgId),
+					eq(opportunities.contact_id, contactId),
+					isNull(opportunities.deleted_at)
+				)
+			);
+		await tx
+			.update(jobs)
+			.set({ deleted_at: now })
+			.where(and(eq(jobs.org_id, orgId), eq(jobs.contact_id, contactId), isNull(jobs.deleted_at)));
+		await tx
+			.update(quotes)
+			.set({ deleted_at: now })
+			.where(
+				and(eq(quotes.org_id, orgId), eq(quotes.contact_id, contactId), isNull(quotes.deleted_at))
+			);
+		await tx
+			.update(invoices)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(invoices.org_id, orgId),
+					eq(invoices.contact_id, contactId),
+					isNull(invoices.deleted_at)
+				)
+			);
+		await tx
+			.update(conversations)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(conversations.org_id, orgId),
+					eq(conversations.contact_id, contactId),
+					isNull(conversations.deleted_at)
+				)
+			);
+		await tx
+			.update(contacts)
+			.set({ deleted_at: now, updated_at: now })
+			.where(and(eq(contacts.org_id, orgId), eq(contacts.id, contactId)));
+	});
+}
+
+/** Postgres foreign-key violation (a child row still references the contact). */
+function isForeignKeyViolation(e: unknown): boolean {
+	if (e && typeof e === 'object') {
+		const code = (e as { code?: string }).code;
+		if (code === '23503') return true;
+		const message = (e as { message?: string }).message ?? '';
+		if (/foreign key/i.test(message)) return true;
+		const cause = (e as { cause?: unknown }).cause;
+		if (cause && cause !== e) return isForeignKeyViolation(cause);
+	}
+	return false;
+}
+
+export type PurgeResult = { purged: boolean; reason?: 'blocked' | 'not_found' };
+
+/**
+ * Permanently hard-delete a soft-deleted contact. Only contacts with NO linked
+ * business records can be purged — the only children removed here are the
+ * contact's own addresses and notes. If any other table (opportunities, jobs,
+ * quotes, invoices, conversations, appointments, reviews, media, messenger,
+ * webchat …) still references the contact, the FK constraint rejects the delete,
+ * the transaction rolls back, and we report `blocked` — the contact stays
+ * restorable in the bin. Financial and communication history is never destroyed.
+ */
+export async function hardPurgeContact(orgId: string, contactId: string): Promise<PurgeResult> {
+	const [existing] = await db
+		.select({ id: contacts.id })
+		.from(contacts)
+		.where(
+			and(eq(contacts.org_id, orgId), eq(contacts.id, contactId), isNotNull(contacts.deleted_at))
 		)
-	`);
-	return new Set((rows as unknown as Array<{ id: string }>).map((r) => r.id));
+		.limit(1);
+	if (!existing) return { purged: false, reason: 'not_found' };
+
+	try {
+		await db.transaction(async (tx) => {
+			await tx
+				.delete(contactNotes)
+				.where(and(eq(contactNotes.org_id, orgId), eq(contactNotes.contact_id, contactId)));
+			await tx
+				.delete(contactAddresses)
+				.where(and(eq(contactAddresses.org_id, orgId), eq(contactAddresses.contact_id, contactId)));
+			await tx.delete(contacts).where(and(eq(contacts.org_id, orgId), eq(contacts.id, contactId)));
+		});
+		return { purged: true };
+	} catch (e) {
+		if (isForeignKeyViolation(e)) return { purged: false, reason: 'blocked' };
+		throw e;
+	}
+}
+
+export type PurgeSweepResult = { scanned: number; purged: number; blocked: number };
+
+/**
+ * Cron helper — hard-purge contacts soft-deleted before `cutoff`, across all
+ * orgs. Contacts that still have linked records are silently skipped (counted as
+ * blocked) and remain in their org's recycle bin. Bounded per run.
+ */
+export async function purgeDeletedContactsOlderThan(
+	cutoff: Date,
+	limit = 500
+): Promise<PurgeSweepResult> {
+	const rows = await db
+		.select({ id: contacts.id, org_id: contacts.org_id })
+		.from(contacts)
+		.where(and(isNotNull(contacts.deleted_at), lt(contacts.deleted_at, cutoff)))
+		.limit(limit);
+
+	let purged = 0;
+	let blocked = 0;
+	for (const row of rows) {
+		const result = await hardPurgeContact(row.org_id, row.id);
+		if (result.purged) purged += 1;
+		else blocked += 1;
+	}
+	return { scanned: rows.length, purged, blocked };
 }
 
 function scopeClause(orgId: string, ids: string[], restrictToMemberId: string | null) {
@@ -511,11 +719,19 @@ export async function bulkAddTags(
 	tags: string[],
 	restrictToMemberId: string | null
 ): Promise<number> {
+	const idArray = sql`ARRAY[${sql.join(
+		ids.map((id) => sql`${id}`),
+		sql`, `
+	)}]::uuid[]`;
+	const tagArray = sql`ARRAY[${sql.join(
+		tags.map((t) => sql`${t}`),
+		sql`, `
+	)}]::text[]`;
 	const rows = await db.execute<{ id: string }>(sql`
 		UPDATE contacts
-		SET tags = (SELECT COALESCE(array_agg(DISTINCT x), '{}') FROM unnest(tags || ${tags}::text[]) AS x),
+		SET tags = (SELECT COALESCE(array_agg(DISTINCT x), '{}') FROM unnest(tags || ${tagArray}) AS x),
 		    updated_at = now()
-		WHERE org_id = ${orgId} AND id = ANY(${ids}::uuid[]) AND deleted_at IS NULL
+		WHERE org_id = ${orgId} AND id = ANY(${idArray}) AND deleted_at IS NULL
 		${restrictToMemberId ? sql`AND assigned_to = ${restrictToMemberId}` : sql``}
 		RETURNING id
 	`);
@@ -528,11 +744,19 @@ export async function bulkRemoveTags(
 	tags: string[],
 	restrictToMemberId: string | null
 ): Promise<number> {
+	const idArray = sql`ARRAY[${sql.join(
+		ids.map((id) => sql`${id}`),
+		sql`, `
+	)}]::uuid[]`;
+	const tagArray = sql`ARRAY[${sql.join(
+		tags.map((t) => sql`${t}`),
+		sql`, `
+	)}]::text[]`;
 	const rows = await db.execute<{ id: string }>(sql`
 		UPDATE contacts
-		SET tags = ARRAY(SELECT x FROM unnest(tags) AS x WHERE NOT (x = ANY(${tags}::text[]))),
+		SET tags = ARRAY(SELECT x FROM unnest(tags) AS x WHERE NOT (x = ANY(${tagArray}))),
 		    updated_at = now()
-		WHERE org_id = ${orgId} AND id = ANY(${ids}::uuid[]) AND deleted_at IS NULL
+		WHERE org_id = ${orgId} AND id = ANY(${idArray}) AND deleted_at IS NULL
 		${restrictToMemberId ? sql`AND assigned_to = ${restrictToMemberId}` : sql``}
 		RETURNING id
 	`);

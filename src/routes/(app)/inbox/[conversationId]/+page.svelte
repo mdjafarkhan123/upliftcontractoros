@@ -584,6 +584,7 @@
 						{emailSubjectDefault}
 						{canSend}
 						smsOptOut={optedOut}
+						doNotContact={contact?.do_not_contact === true}
 						{isClosed}
 						smsQuota={context?.sms_quota ?? null}
 						{quickReplies}

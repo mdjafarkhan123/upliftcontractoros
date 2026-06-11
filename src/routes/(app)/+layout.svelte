@@ -18,7 +18,7 @@
 	import Toaster from '$lib/components/shared/Toaster.svelte';
 	import { sessionStore, type AppSessionData } from '$lib/stores/session.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
-	import { getBrowserSupabase } from '$lib/supabase/browser';
+	import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 	import type { NotificationItem } from '$lib/notifications/navigation';
 
 	let { data, children } = $props<{ data: { session: AppSessionData }; children: () => unknown }>();
@@ -77,8 +77,12 @@
 		}
 	}
 
-	let notificationsChannel: ReturnType<ReturnType<typeof getBrowserSupabase>['channel']> | null =
-		null;
+	// supabase-js (~205 KB raw) is dynamically imported after mount so the shell
+	// paints and hydrates without it on the critical path. Realtime notifications
+	// connect a beat later — invisible to the user.
+	let supabaseClient: SupabaseClient | null = null;
+	let notificationsChannel: RealtimeChannel | null = null;
+	let destroyed = false;
 
 	onMount(() => {
 		lastFeatureOverridesUpdatedAt = toIso(session.org.feature_overrides_updated_at);
@@ -96,40 +100,46 @@
 		if (session.org.status === 'suspended') return;
 
 		void notificationStore.load(true);
-		const supabase = getBrowserSupabase();
-		notificationStore.onSubscribed();
-		notificationsChannel = supabase
-			.channel(`notifications:member:${session.member.id}`)
-			.on(
-				'postgres_changes',
-				{
-					event: 'INSERT',
-					schema: 'public',
-					table: 'notifications',
-					filter: `member_id=eq.${session.member.id}`
-				},
-				(payload: { new: NotificationItem }) => {
-					notificationStore.applyRealtimeInsert(payload.new);
-				}
-			)
-			.on(
-				'postgres_changes',
-				{
-					event: 'UPDATE',
-					schema: 'public',
-					table: 'notifications',
-					filter: `member_id=eq.${session.member.id}`
-				},
-				(payload: { new: NotificationItem }) => {
-					notificationStore.applyRealtimeUpdate(payload.new);
-				}
-			)
-			.subscribe();
+		void (async () => {
+			const { getBrowserSupabase } = await import('$lib/supabase/browser');
+			if (destroyed) return;
+			const supabase = getBrowserSupabase();
+			supabaseClient = supabase;
+			notificationStore.onSubscribed();
+			notificationsChannel = supabase
+				.channel(`notifications:member:${session.member.id}`)
+				.on(
+					'postgres_changes',
+					{
+						event: 'INSERT',
+						schema: 'public',
+						table: 'notifications',
+						filter: `member_id=eq.${session.member.id}`
+					},
+					(payload: { new: NotificationItem }) => {
+						notificationStore.applyRealtimeInsert(payload.new);
+					}
+				)
+				.on(
+					'postgres_changes',
+					{
+						event: 'UPDATE',
+						schema: 'public',
+						table: 'notifications',
+						filter: `member_id=eq.${session.member.id}`
+					},
+					(payload: { new: NotificationItem }) => {
+						notificationStore.applyRealtimeUpdate(payload.new);
+					}
+				)
+				.subscribe();
+		})();
 	});
 	onDestroy(() => {
+		destroyed = true;
 		if (pollHandle) clearInterval(pollHandle);
-		if (notificationsChannel) {
-			void getBrowserSupabase().removeChannel(notificationsChannel);
+		if (notificationsChannel && supabaseClient) {
+			void supabaseClient.removeChannel(notificationsChannel);
 			notificationsChannel = null;
 		}
 	});

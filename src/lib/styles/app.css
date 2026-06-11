@@ -2,7 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Geist font is loaded via <link> in src/app.html with preconnect — faster than CSS @import. */
+/*
+ * Geist is self-hosted from /static/fonts (no render-blocking Google Fonts
+ * round trip). font-display: swap paints text in the fallback immediately.
+ * Only 400/500/600 ship; font-bold (700) resolves to the 600 face via the
+ * declared weight range — no synthesized bold.
+ */
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 300 400;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-500.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 600 700;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-600.woff2') format('woff2');
+}
 
 @layer base {
 	/* ─── Light Mode (default) ────────────────────────────────────────── */

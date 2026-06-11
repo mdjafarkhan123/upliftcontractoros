@@ -118,6 +118,7 @@ export type ContactSummary = {
 	email: string | null;
 	status: string;
 	sms_opt_out: boolean;
+	do_not_contact: boolean;
 	lead_source: string | null;
 };
 

@@ -12,16 +12,19 @@ Four layers. Every element must sit on exactly one of these:
 
 ```
 LIGHT MODE:
-  Layer 0 — Sidebar (bg-sidebar = gray-50)           ← navigation rail
-  Layer 1 — Page / Content (bg-background = white)   ← main content area
-  Layer 2 — Card (bg-card = white + border + shadow) ← floats on the page
-  Layer 3 — Popover / Modal (bg-popover + shadow-modal) ← highest elevation
+  Layer 0 — Sidebar (bg-sidebar = gray-50)               ← navigation rail
+  Layer 1 — Page / Content (bg-background = white)       ← main content area
+  Layer 2 — Card (bg-card = white + border + shadow-card)← floats on the page
+  Layer 3 — Popover / Modal (bg-popover + shadow-modal)  ← highest elevation
 
 DARK MODE:
-  Layer 0 — Page (bg-background = zinc-950)          ← deepest
-  Layer 1 — Sidebar (bg-sidebar = slightly lighter)  ← nav rail
-  Layer 2 — Card (bg-card = zinc-900 + border)       ← surfaces
-  Layer 3 — Popover / Modal                           ← highest elevation
+  Layer 0 — Page (bg-background = deep navy #080C14)     ← deepest
+  Layer 1 — Sidebar (bg-sidebar = slightly lighter navy) ← nav rail
+  Layer 2 — Card (bg-card = navy + border + shadow-card) ← surfaces
+  Layer 3 — Popover / Modal                              ← highest elevation
+
+  Dark mode depth is created by the inset top-highlight shadow technique,
+  not by lightening the card background significantly.
 ```
 
 Rule: Never put a card inside another card of the same bg.
@@ -34,41 +37,108 @@ The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 
 ### Standard List Card (contacts, jobs, invoices)
 
+Used on mobile. On desktop, these are replaced by the data table (`ContactTable`, `JobTable`, etc.).
+The card is the `<a>` or `<button>` element — the whole surface is the tap target.
+
 ```svelte
-<!-- Light-mode first. Clean white card with very soft border. -->
-<div
+<!-- Mobile list card — rounded-xl, primary/30 hover border, card-raised hover bg -->
+<a
+	href="/contacts/{id}"
 	class="
-  group
-  flex items-center gap-3
-  rounded-lg border border-border/60 bg-card px-4 py-3
+  group block rounded-xl
+  border border-border/70 bg-card p-4
   shadow-card
-  cursor-pointer
   transition-all duration-150 ease-out
-  hover:border-border hover:bg-muted/40 hover:shadow-dropdown
+  hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown
+  active:bg-muted/70
+  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+  dark:border-white/10
 "
 >
-	<!-- Avatar with initials -->
-	<div
-		class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold"
-	>
-		JS
+	<div class="flex items-start gap-3">
+		<!-- Status-colored avatar ring (see Avatar Ring System below) -->
+		<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary ring-1 ring-primary/15">
+			JS
+		</div>
+		<div class="min-w-0 flex-1">
+			<div class="flex items-start justify-between gap-2">
+				<h3 class="truncate text-base font-semibold text-foreground">Jane Smith</h3>
+				<Badge variant="info" label="Lead" />
+			</div>
+			<p class="truncate text-sm text-muted-foreground">+1 555 0100</p>
+			<p class="truncate text-xs text-muted-foreground">jane@example.com</p>
+		</div>
 	</div>
+</a>
+```
 
-	<!-- Content -->
-	<div class="min-w-0 flex-1">
-		<p class="truncate text-sm font-medium text-foreground">Jane Smith</p>
-		<p class="truncate text-xs text-muted-foreground">jane@example.com · +1 555 0100</p>
-	</div>
+**Key hover rule**: cards use `hover:border-primary/30 hover:bg-card-raised` — a subtle brand-tinted border lift, not a gray fill. This distinguishes them from table rows which use `hover:bg-muted/20`.
 
-	<!-- Right side: status + chevron -->
-	<div class="flex shrink-0 items-center gap-2">
-		<StatusBadge status="active" />
-		<ChevronRight
-			class="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5"
-		/>
-	</div>
+### Avatar Ring System — Status-Coded Colors
+
+Avatar rings are **never a single color**. They are always coded to the record's status so the user can scan the list without reading the badge.
+
+```svelte
+<!-- Use this helper function in any component that renders avatars -->
+function avatarRingClass(status: string) {
+	return status === 'customer' || status === 'active'
+		? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400'
+		: status === 'archived'
+			? 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400'
+			: status === 'inactive'
+				? 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20'
+				: 'bg-primary/10 text-primary ring-primary/15'; // lead / new / default
+}
+
+<!-- In the template — always use ring-1 with the status class -->
+<div class={cn(
+	'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1',
+	avatarRingClass(status)
+)}>
+	{initials}
 </div>
 ```
+
+| Status | Ring color | Why |
+|---|---|---|
+| `lead` / `new` / default | Green (`bg-primary/10 text-primary ring-primary/15`) | Brand color — this is a potential customer |
+| `customer` / `active` | Emerald (`bg-emerald-500/10 text-emerald-700 ring-emerald-500/20`) | Confirmed active — strong green signal |
+| `archived` | Amber (`bg-amber-500/10 text-amber-700 ring-amber-500/20`) | Dormant but recoverable — amber signals "attention needed" |
+| `inactive` | Slate (`bg-slate-100 text-slate-500 ring-slate-200`) | Neutral grey — no action expected, not urgent |
+
+**Why inactive ≠ archived**: `inactive` is a quiet neutral state (no action needed, just not active). `archived` signals the record was deliberately put away and may need reactivation. Amber on archived helps contractors spot recoverable contacts. Grey on inactive avoids false urgency.
+
+Apply this in both the mobile card and the desktop table. The visual consistency reinforces status at a glance across both views.
+
+---
+
+### Action Menu Reveal Pattern
+
+Table row action menus (`⋮`) are invisible by default and reveal on row hover. This keeps the table visually clean while keeping actions one click away.
+
+```svelte
+<!-- On the <tr> -->
+<tr class="group transition-colors hover:bg-muted/20">
+
+<!-- On the ⋮ trigger button -->
+<DropdownMenu.Trigger
+	class={cn(
+		'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground',
+		'transition-all hover:bg-accent hover:text-foreground',
+		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+		'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'  ← the key line
+	)}
+>
+	<MoreHorizontal class="h-4 w-4" />
+</DropdownMenu.Trigger>
+```
+
+Rules:
+- Always `opacity-0 group-hover:opacity-100 focus-visible:opacity-100` — keyboard users can still reach it
+- The `<td>` containing the button needs `onclick={(e) => e.stopPropagation()}` to prevent row-level click handlers (select mode) from firing when the menu opens
+- In select mode, hide the `⋮` menu entirely (`{#if !selectable}`) — the row click toggles selection
+
+---
 
 ### Stat Card (dashboard KPIs)
 
@@ -108,9 +178,9 @@ The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 
 **Icon badge color variants for different KPI cards**:
 
-- Revenue / financial → `bg-primary/10` with `text-primary` (indigo)
-- Active projects → `bg-blue-50 dark:bg-blue-500/10` with `text-blue-600 dark:text-blue-400`
-- Completed tasks → `bg-green-50 dark:bg-green-500/10` with `text-green-600 dark:text-green-400`
+- Revenue / financial → `bg-primary/10` with `text-primary` (brand green)
+- Active contacts/jobs → `bg-blue-50 dark:bg-blue-500/10` with `text-blue-600 dark:text-blue-400`
+- Completed / paid → `bg-emerald-50 dark:bg-emerald-500/10` with `text-emerald-600 dark:text-emerald-400`
 - Overdue / alerts → `bg-red-50 dark:bg-red-500/10` with `text-red-600 dark:text-red-400`
 - Pending / upcoming → `bg-amber-50 dark:bg-amber-500/10` with `text-amber-600 dark:text-amber-400`
 
@@ -157,7 +227,7 @@ The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 <Dialog.Content
 	class="
   border-border/50 bg-card
-  shadow-xl shadow-black/40
+  shadow-modal
   sm:max-w-[400px]
 "
 >
@@ -191,7 +261,7 @@ The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 	side="bottom"
 	class="
   rounded-t-2xl border-border/50 bg-card
-  px-0 pb-safe
+  px-0 pb-[env(safe-area-inset-bottom)]
 "
 >
 	<!-- Pull handle -->
@@ -236,91 +306,36 @@ The sidebar is ALWAYS bg-sidebar, never bg-background or bg-card.
 
 ## Badge Variants — Status System
 
-Always use these exact class combinations. Never use shadcn's default Badge variants for status — override with these.
+The project uses `$lib/components/shared/Badge.svelte` — **not** shadcn's `Badge` and not a `StatusBadge` component.
+It accepts a `variant` prop and a `label` prop.
 
 ```svelte
-<!-- Status badge helper pattern — build a StatusBadge component -->
-<script lang="ts">
-	import { Badge } from '$lib/components/ui/badge';
-	import { cn } from '$lib/utils';
+import Badge from '$lib/components/shared/Badge.svelte';
 
-	type Status =
-		| 'active'
-		| 'lead'
-		| 'inactive'
-		| 'pending'
-		| 'overdue'
-		| 'draft'
-		| 'paid'
-		| 'sent'
-		| 'accepted'
-		| 'declined';
+<!-- Contacts -->
+<Badge variant="info" label="Lead" />        <!-- blue — lead -->
+<Badge variant="success" label="Customer" /> <!-- green — customer -->
+<Badge variant="warning" label="Archived" /> <!-- amber — archived -->
 
-	let { status } = $props<{ status: Status }>();
-
-	const statusConfig: Record<Status, { label: string; classes: string }> = {
-		active: {
-			label: 'Active',
-			classes:
-				'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20'
-		},
-		lead: {
-			label: 'Lead',
-			classes:
-				'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
-		},
-		inactive: {
-			label: 'Inactive',
-			classes:
-				'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20'
-		},
-		pending: {
-			label: 'Pending',
-			classes:
-				'bg-amber-50 text-amber-700 border-amber-200 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/20'
-		},
-		overdue: {
-			label: 'Overdue',
-			classes:
-				'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
-		},
-		draft: {
-			label: 'Draft',
-			classes:
-				'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20'
-		},
-		paid: {
-			label: 'Paid',
-			classes:
-				'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20'
-		},
-		sent: {
-			label: 'Sent',
-			classes:
-				'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
-		},
-		accepted: {
-			label: 'Accepted',
-			classes:
-				'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20'
-		},
-		declined: {
-			label: 'Declined',
-			classes:
-				'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
-		}
-	};
-
-	const config = statusConfig[status] ?? {
-		label: status,
-		classes: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-	};
-</script>
-
-<Badge class={cn('border text-xs font-medium', config.classes)}>
-	{config.label}
-</Badge>
+<!-- Jobs / Invoices / Quotes -->
+<Badge variant="success" label="Paid" />
+<Badge variant="warning" label="Overdue" />
+<Badge variant="default" label="Draft" />
+<Badge variant="info" label="Sent" />
+<Badge variant="destructive" label="Cancelled" />
 ```
+
+### Variant → Color mapping
+
+| Variant | Color | Use for |
+|---|---|---|
+| `success` | Emerald green | Customer, Paid, Completed, Active |
+| `info` | Indigo/blue | Lead, Sent, In Progress |
+| `warning` | Amber | Archived, Overdue, Pending |
+| `destructive` | Red | Cancelled, Failed, Declined |
+| `default` | Muted gray | Draft, Inactive, Unknown |
+
+**Rule**: match the variant to the semantic meaning, not the label text. "Overdue" is `warning` (amber) not `destructive` (red) — red is reserved for cancellations and hard failures.
 
 ---
 
@@ -442,6 +457,39 @@ lifts slightly off the `bg-sidebar` (gray-50) surface — creating visual depth 
 	{/if}
 </div>
 ```
+
+---
+
+## Advanced Button & Hover Effects
+
+These are defined in `app.css` and available globally. Use them sparingly for high-impact interactions only.
+
+### Snake Glow — Power CTA hover effect
+
+A rotating conic-gradient border that glows on hover. Use on the single most important CTA on a page (e.g. "Send Quote", "Collect Payment"). **Never use on more than one element per screen.**
+
+```svelte
+<!-- Apply .snake-glow to the wrapping element -->
+<button class="snake-glow rounded-xl bg-card border border-border/60 px-6 py-3 ...">
+	Send Quote
+</button>
+```
+
+The glow uses `--brand-light` (bright green) and `--brand-primary` (mid green) from the brand palette. It is invisible at rest and activates on `:hover` with a 0.35s fade-in.
+
+### JetEngine Button — Loading state animation
+
+A two-phase loading indicator: spool-up (accelerating rotation over 1.4s) followed by continuous spin. Used in place of a standard spinner for primary async actions to communicate "something powerful is happening."
+
+```svelte
+<!-- Apply these classes to the icon inside the button when loading -->
+<svg class="animate-spool-up h-4 w-4">...</svg>
+
+<!-- Success state — pop-in checkmark -->
+<svg class="animate-pop-in h-4 w-4">...</svg>
+```
+
+Both `animate-spool-up` and `animate-pop-in` are defined in `app.css`. Never apply them to text or containers — only to SVG icons inside buttons.
 
 ---
 

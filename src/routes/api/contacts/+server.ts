@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, isNotNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contacts, outboxEvents, orgMembers } from '$lib/server/db/schema';
@@ -11,6 +11,7 @@ import {
 	isAssigneeValid,
 	isReferrerValid
 } from '$lib/server/contacts/contactRepo';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 
 const PAGE_SIZE = 25;
 
@@ -22,13 +23,18 @@ export const GET: RequestHandler = async (event) => {
 	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const statusFilter = url.searchParams.get('status') ?? 'all';
 	const tagFilter = (url.searchParams.get('tag') ?? '').trim();
+	const tempFilter = (url.searchParams.get('temp') ?? '').trim();
 	const scope = url.searchParams.get('scope');
 	const cursor = url.searchParams.get('cursor');
 
+	// The recycle bin ("deleted" filter) is the one view that surfaces
+	// soft-deleted contacts; every other filter shows only active rows.
+	const showDeleted = statusFilter === 'deleted';
+
 	const conditions: SQL[] = [
 		eq(contacts.org_id, auth.orgId),
-		isNull(contacts.deleted_at),
-		sql`${contacts.phone} NOT LIKE 'RELEASED:%'`
+		showDeleted ? isNotNull(contacts.deleted_at) : isNull(contacts.deleted_at),
+		sql`(${contacts.phone} IS NULL OR ${contacts.phone} NOT LIKE 'RELEASED:%')`
 	];
 
 	// Restricted members (no can_view_all_contacts) see only contacts assigned
@@ -45,6 +51,10 @@ export const GET: RequestHandler = async (event) => {
 
 	if (tagFilter.length > 0 && tagFilter.length <= 50) {
 		conditions.push(sql`${tagFilter} = ANY(${contacts.tags})`);
+	}
+
+	if (tempFilter === 'hot' || tempFilter === 'warm' || tempFilter === 'cold') {
+		conditions.push(eq(contacts.lead_temperature, tempFilter));
 	}
 
 	// Scope filter is only honored for full-access users. Restricted members
@@ -67,6 +77,7 @@ export const GET: RequestHandler = async (event) => {
 		const digits = searchRaw.replace(/\D+/g, '');
 		const searchClauses: SQL[] = [
 			ilike(contacts.full_name, `%${searchRaw}%`),
+			ilike(contacts.company_name, `%${searchRaw}%`),
 			ilike(contacts.email, `%${searchRaw}%`)
 		];
 		if (e164) {
@@ -97,14 +108,19 @@ export const GET: RequestHandler = async (event) => {
 		.select({
 			id: contacts.id,
 			full_name: contacts.full_name,
+			company_name: contacts.company_name,
 			phone: contacts.phone,
 			email: contacts.email,
 			status: contacts.status,
+			avatar_url: contacts.avatar_url,
 			lead_source: contacts.lead_source,
+			lead_temperature: contacts.lead_temperature,
 			assigned_to: contacts.assigned_to,
 			sms_opt_out: contacts.sms_opt_out,
 			tags: contacts.tags,
+			last_contacted_at: contacts.last_contacted_at,
 			created_at: contacts.created_at,
+			deleted_at: contacts.deleted_at,
 			assignee_name: orgMembers.full_name
 		})
 		.from(contacts)
@@ -114,7 +130,12 @@ export const GET: RequestHandler = async (event) => {
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	// Resolve stored R2 keys to short-lived signed URLs (cached). Only the rows
+	// that actually have a photo hit the resolver.
+	const items = await Promise.all(
+		sliced.map(async (r) => ({ ...r, avatar_url: await resolveLogoUrl(r.avatar_url) }))
+	);
 	const last = items[items.length - 1];
 	const nextCursor = hasMore && last ? `${last.created_at.toISOString()}|${last.id}` : null;
 
@@ -154,6 +175,16 @@ export const POST: RequestHandler = async (event) => {
 		} catch (err) {
 			const message = err instanceof PhoneInvalidError ? err.message : 'Invalid phone value.';
 			return json({ error: message, code: 'PHONE_INVALID' }, { status: 422 });
+		}
+	}
+
+	let altE164: string | null = null;
+	if (input.alt_phone) {
+		try {
+			altE164 = toE164(input.alt_phone);
+		} catch (err) {
+			const message = err instanceof PhoneInvalidError ? err.message : 'Invalid alternate phone.';
+			return json({ error: message, code: 'ALT_PHONE_INVALID' }, { status: 422 });
 		}
 	}
 
@@ -211,9 +242,14 @@ export const POST: RequestHandler = async (event) => {
 				.values({
 					org_id: auth.orgId,
 					full_name: input.full_name,
+					company_name: input.company_name ?? null,
 					phone: e164,
+					alt_phone: altE164,
+					// Label only meaningful when there is an alt number.
+					alt_phone_label: altE164 ? (input.alt_phone_label ?? null) : null,
 					email: input.email ?? null,
 					lead_source: effectiveLeadSource,
+					lead_temperature: input.lead_temperature ?? null,
 					assigned_to: input.assigned_to ?? null,
 					referred_by_contact_id: input.referred_by_contact_id ?? null,
 					notes: input.notes ?? null,

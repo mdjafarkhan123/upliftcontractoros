@@ -3,21 +3,31 @@ import { SvelteMap } from 'svelte/reactivity';
 export type ContactListItem = {
 	id: string;
 	full_name: string;
+	company_name: string | null;
 	phone: string;
 	email: string | null;
 	status: 'lead' | 'customer' | 'archived';
+	avatar_url: string | null;
 	lead_source: string;
+	lead_temperature: 'hot' | 'warm' | 'cold' | null;
 	assigned_to: string | null;
 	sms_opt_out: boolean;
 	tags: string[];
+	last_contacted_at: string | null;
 	created_at: string;
+	deleted_at: string | null;
 	assignee_name: string | null;
 };
 
+export type ContactStatusFilterValue = 'all' | 'leads' | 'customers' | 'archived' | 'deleted';
+
+export type ContactTemperatureFilterValue = '' | 'hot' | 'warm' | 'cold';
+
 export type ContactsFilters = {
 	q: string;
-	statusFilter: 'all' | 'leads' | 'customers' | 'archived';
+	statusFilter: ContactStatusFilterValue;
 	tag: string;
+	temperature: ContactTemperatureFilterValue;
 	scope: 'mine' | 'team' | 'unassigned';
 };
 
@@ -38,7 +48,7 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: ContactsFilters): string {
-	return `${f.q.trim()}|${f.statusFilter}|${f.tag}|${f.scope}`;
+	return `${f.q.trim()}|${f.statusFilter}|${f.tag}|${f.temperature}|${f.scope}`;
 }
 
 function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams {
@@ -46,6 +56,7 @@ function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams
 	if (f.q.trim()) params.set('q', f.q.trim());
 	if (f.statusFilter !== 'all') params.set('status', f.statusFilter);
 	if (f.tag) params.set('tag', f.tag);
+	if (f.temperature) params.set('temp', f.temperature);
 	if (f.scope !== 'team') params.set('scope', f.scope);
 	if (cursor) params.set('cursor', cursor);
 	return params;

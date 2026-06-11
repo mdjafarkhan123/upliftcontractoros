@@ -72,23 +72,52 @@ function pickLimits(org: Org): OrgLimits {
 	return out;
 }
 
+// Per-process cache of the member+org row, keyed by Supabase user id. Skips the
+// DB round trip the hooks pay on every authed request. Staleness window is 15s —
+// permission/feature/suspension changes lag at most that long (the client status
+// poll is 20 minutes, so this is not the bottleneck). Negative lookups are never
+// cached so a just-created member is usable immediately.
+const AUTH_CACHE_TTL_MS = 15_000;
+const AUTH_CACHE_MAX_ENTRIES = 5_000;
+const authRowCache = new Map<string, { member: OrgMember; org: Org; expiresAt: number }>();
+
+export function invalidateAuthContextCache(supabaseUserId: string): void {
+	authRowCache.delete(supabaseUserId);
+}
+
 export async function loadAuthContext(user: User): Promise<AuthContext | null> {
-	const [row] = await db
-		.select({ member: orgMembers, org: organizations })
-		.from(orgMembers)
-		.innerJoin(organizations, eq(organizations.id, orgMembers.org_id))
-		.where(
-			and(
-				eq(orgMembers.supabase_user_id, user.id),
-				eq(orgMembers.is_active, true),
-				isNull(orgMembers.deleted_at)
+	let member: OrgMember;
+	let org: Org;
+
+	const cached = authRowCache.get(user.id);
+	if (cached && cached.expiresAt > Date.now()) {
+		({ member, org } = cached);
+	} else {
+		const [row] = await db
+			.select({ member: orgMembers, org: organizations })
+			.from(orgMembers)
+			.innerJoin(organizations, eq(organizations.id, orgMembers.org_id))
+			.where(
+				and(
+					eq(orgMembers.supabase_user_id, user.id),
+					eq(orgMembers.is_active, true),
+					isNull(orgMembers.deleted_at)
+				)
 			)
-		)
-		.limit(1);
+			.limit(1);
 
-	if (!row) return null;
+		if (!row) {
+			authRowCache.delete(user.id);
+			return null;
+		}
 
-	const { member, org } = row;
+		({ member, org } = row);
+		if (authRowCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+			const oldestKey = authRowCache.keys().next().value;
+			if (oldestKey) authRowCache.delete(oldestKey);
+		}
+		authRowCache.set(user.id, { member, org, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+	}
 
 	return {
 		supabaseUser: user,

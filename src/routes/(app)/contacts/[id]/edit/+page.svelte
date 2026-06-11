@@ -6,6 +6,7 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import AddressesTab from '$lib/components/contacts/AddressesTab.svelte';
 	import ContactTagsEditor from '$lib/components/contacts/ContactTagsEditor.svelte';
+	import ContactAvatarUploader from '$lib/components/contacts/ContactAvatarUploader.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
@@ -15,6 +16,7 @@
 	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatDateTime } from '$lib/utils/format';
+	import { cn } from '$lib/utils/cn';
 	import { ArrowLeft } from '@lucide/svelte';
 	import type { ContactDetailResponse } from '../+page';
 
@@ -34,18 +36,37 @@
 	let recentNotes = $state<ContactDetailResponse['notes']>([]);
 
 	let full_name = $state('');
+	let company_name = $state('');
+	let avatar_url = $state<string | null>(null);
 	let phone = $state('');
+	let alt_phone = $state('');
+	let alt_phone_label = $state<'' | 'mobile' | 'home' | 'work' | 'fax' | 'other'>('');
 	let email = $state('');
+	let lead_temperature = $state<'' | 'hot' | 'warm' | 'cold'>('');
 	let assigned_to = $state<string>('');
 	let lead_source = $state<
-		'website_form' | 'live_chat' | 'missed_call' | 'manual' | 'referral' | 'other'
+		| 'website_form'
+		| 'live_chat'
+		| 'missed_call'
+		| 'manual'
+		| 'referral'
+		| 'google_ads'
+		| 'yelp'
+		| 'angi'
+		| 'facebook'
+		| 'nextdoor'
+		| 'door_hanger'
+		| 'job_sign'
+		| 'repeat_customer'
+		| 'other'
 	>('manual');
 	let status = $state<'lead' | 'customer' | 'archived'>('lead');
-	let next_follow_up_at_local = $state(''); // datetime-local string
+	let next_follow_up_at_local = $state('');
 	let preferred_contact_method = $state<'' | 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger'>(
 		''
 	);
 	let email_opt_in = $state(false);
+	let do_not_contact = $state(false);
 	let tags = $state<string[]>([]);
 
 	let assignees = $state<Array<{ id: string; full_name: string }>>([]);
@@ -143,8 +164,13 @@
 			recentNotes = body.notes;
 
 			full_name = body.contact.full_name;
+			company_name = body.contact.company_name ?? '';
+			avatar_url = body.contact.avatar_url;
 			phone = body.contact.phone ?? '';
+			alt_phone = body.contact.alt_phone ?? '';
+			alt_phone_label = (body.contact.alt_phone_label as typeof alt_phone_label) ?? '';
 			email = body.contact.email ?? '';
+			lead_temperature = (body.contact.lead_temperature as typeof lead_temperature) ?? '';
 			assigned_to = body.contact.assigned_to ?? '';
 			lead_source = body.contact.lead_source as typeof lead_source;
 			status = body.contact.status;
@@ -152,6 +178,7 @@
 			preferred_contact_method =
 				(body.contact.preferred_contact_method as typeof preferred_contact_method) ?? '';
 			email_opt_in = body.contact.email_opt_in;
+			do_not_contact = body.contact.do_not_contact ?? false;
 			tags = body.contact.tags ?? [];
 
 			if (body.contact.referred_by_contact_id && body.referrer) {
@@ -184,8 +211,12 @@
 		const payload: Record<string, unknown> = {
 			updated_at: original.contact.updated_at,
 			full_name: full_name.trim(),
+			company_name: company_name.trim() || null,
 			phone: phone.trim(),
+			alt_phone: alt_phone.trim() || null,
+			alt_phone_label: alt_phone.trim() ? alt_phone_label || null : null,
 			email: email.trim() ? email.trim() : null,
+			lead_temperature: lead_temperature || null,
 			assigned_to: assigned_to || null,
 			referred_by_contact_id: referred_by_contact_id || null,
 			lead_source,
@@ -193,6 +224,7 @@
 			next_follow_up_at: fromLocalInput(next_follow_up_at_local),
 			preferred_contact_method: preferred_contact_method || null,
 			email_opt_in,
+			do_not_contact,
 			tags
 		};
 
@@ -222,6 +254,11 @@
 			if (res.status === 422 && body.code === 'PHONE_INVALID') {
 				fieldErrors.phone = body.error ?? 'Invalid phone value.';
 				saveError = fieldErrors.phone;
+				return;
+			}
+			if (res.status === 422 && body.code === 'ALT_PHONE_INVALID') {
+				fieldErrors.alt_phone = body.error ?? 'Invalid alternate phone.';
+				saveError = fieldErrors.alt_phone;
 				return;
 			}
 			if (res.status === 422 && body.code === 'INVALID_ASSIGNEE') {
@@ -271,6 +308,25 @@
 					<h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
 						Identity
 					</h2>
+					<div class="mb-4 flex items-center gap-4">
+						<ContactAvatarUploader
+							contactId={original.contact.id}
+							name={full_name || original.contact.full_name}
+							src={avatar_url}
+							status={original.contact.status}
+							class="h-20 w-20 text-2xl"
+							onChange={(r) => {
+								avatar_url = r.avatar_url;
+								if (original) original.contact.updated_at = r.updated_at;
+							}}
+						/>
+						<div class="min-w-0">
+							<p class="text-sm font-medium text-foreground">Profile photo</p>
+							<p class="text-xs text-muted-foreground">
+								Tap the photo to upload. JPEG, PNG, or WebP, up to 5 MB.
+							</p>
+						</div>
+					</div>
 					<div class="grid gap-4">
 						<div class="space-y-1.5">
 							<Label for="full_name">
@@ -285,6 +341,16 @@
 							/>
 						</div>
 						<div class="space-y-1.5">
+							<Label for="company_name">Company</Label>
+							<Input
+								id="company_name"
+								bind:value={company_name}
+								maxlength={200}
+								autocomplete="organization"
+								placeholder="Business, HOA, or property manager"
+							/>
+						</div>
+						<div class="space-y-1.5">
 							<Label for="phone">Phone</Label>
 							<Input
 								id="phone"
@@ -296,6 +362,37 @@
 							/>
 							{#if fieldErrors.phone}
 								<p class="text-xs text-destructive">{fieldErrors.phone}</p>
+							{/if}
+						</div>
+						<div class="space-y-1.5">
+							<Label for="alt_phone">Alt phone</Label>
+							<div class="flex gap-2">
+								<Input
+									id="alt_phone"
+									type="tel"
+									inputmode="tel"
+									bind:value={alt_phone}
+									autocomplete="tel"
+									placeholder="(555) 123-4567"
+									aria-invalid={fieldErrors.alt_phone ? 'true' : undefined}
+									class="flex-1"
+								/>
+								<Select.Root bind:value={alt_phone_label}>
+									<Select.Trigger class="h-11 w-28 shrink-0">
+										<Select.Value placeholder="Type" />
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="">Type</Select.Item>
+										<Select.Item value="mobile">Mobile</Select.Item>
+										<Select.Item value="home">Home</Select.Item>
+										<Select.Item value="work">Work</Select.Item>
+										<Select.Item value="fax">Fax</Select.Item>
+										<Select.Item value="other">Other</Select.Item>
+									</Select.Content>
+								</Select.Root>
+							</div>
+							{#if fieldErrors.alt_phone}
+								<p class="text-xs text-destructive">{fieldErrors.alt_phone}</p>
 							{/if}
 						</div>
 						<div class="space-y-1.5">
@@ -315,7 +412,11 @@
 							<Label for="assigned_to">Assigned to</Label>
 							<Select.Root bind:value={assigned_to}>
 								<Select.Trigger class="h-11 w-full">
-									<Select.Value />
+									<span class="truncate text-sm">
+										{assigned_to
+											? (assignees.find((a) => a.id === assigned_to)?.full_name ?? 'Loading…')
+											: 'Unassigned'}
+									</span>
 								</Select.Trigger>
 								<Select.Content>
 									<Select.Item value="">Unassigned</Select.Item>
@@ -336,11 +437,33 @@
 								</Select.Trigger>
 								<Select.Content>
 									<Select.Item value="manual">Manual</Select.Item>
+									<Select.Item value="referral">Referral</Select.Item>
+									<Select.Item value="repeat_customer">Repeat customer</Select.Item>
 									<Select.Item value="website_form">Website form</Select.Item>
 									<Select.Item value="live_chat">Live chat</Select.Item>
 									<Select.Item value="missed_call">Missed call</Select.Item>
-									<Select.Item value="referral">Referral</Select.Item>
+									<Select.Item value="google_ads">Google Ads</Select.Item>
+									<Select.Item value="facebook">Facebook / Instagram</Select.Item>
+									<Select.Item value="yelp">Yelp</Select.Item>
+									<Select.Item value="angi">Angi / HomeAdvisor</Select.Item>
+									<Select.Item value="nextdoor">Nextdoor</Select.Item>
+									<Select.Item value="door_hanger">Door hanger</Select.Item>
+									<Select.Item value="job_sign">Job sign / yard sign</Select.Item>
 									<Select.Item value="other">Other</Select.Item>
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="space-y-1.5">
+							<Label for="lead_temperature">Lead temperature</Label>
+							<Select.Root bind:value={lead_temperature}>
+								<Select.Trigger class="h-11 w-full">
+									<Select.Value placeholder="Not set" />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="">Not set</Select.Item>
+									<Select.Item value="hot">Hot</Select.Item>
+									<Select.Item value="warm">Warm</Select.Item>
+									<Select.Item value="cold">Cold</Select.Item>
 								</Select.Content>
 							</Select.Root>
 						</div>
@@ -489,6 +612,23 @@
 								</p>
 							</div>
 							<Switch bind:checked={email_opt_in} aria-label="Email opt-in" />
+						</div>
+						<div
+							class={cn(
+								'flex items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:col-span-2',
+								do_not_contact
+									? 'border-destructive/40 bg-destructive/5'
+									: 'border-border bg-background'
+							)}
+						>
+							<div class="min-w-0">
+								<p class="text-sm font-medium text-foreground">Do Not Contact</p>
+								<p class="text-xs text-muted-foreground">
+									Blocks all outbound messages (SMS, email, any channel). Use for legal requests or
+									abusive contacts.
+								</p>
+							</div>
+							<Switch bind:checked={do_not_contact} aria-label="Do not contact" />
 						</div>
 					</div>
 				</section>

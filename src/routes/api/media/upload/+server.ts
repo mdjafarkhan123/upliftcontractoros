@@ -19,8 +19,9 @@ import {
 } from '$lib/server/usage/assertAndIncrementUsage';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-const ORG_LOGO_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const ORG_LOGO_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// Org logo and contact avatar are small square brand/profile images — same caps.
+const IMAGE_ASSET_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const IMAGE_ASSET_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const ALLOWED_PURPOSE_TAGS = [
 	'job_photo',
@@ -30,7 +31,8 @@ const ALLOWED_PURPOSE_TAGS = [
 	'quote_attachment',
 	'invoice_attachment',
 	'contact_attachment',
-	'org_logo'
+	'org_logo',
+	'contact_avatar'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
 
@@ -47,10 +49,6 @@ const uploadSchema = z.object({
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
-
-	if (!auth.member.can_upload_files) {
-		error(403, 'Forbidden: upload permission required');
-	}
 
 	// Rate limiting — truly atomic via Lua script
 	const allowed = await checkUploadRateLimit(auth.orgId);
@@ -90,12 +88,29 @@ export const POST: RequestHandler = async (event) => {
 	const { purpose_tag, contact_id, job_id, quote_id, invoice_id } = parsed.data;
 
 	const isOrgLogo = purpose_tag === 'org_logo';
+	const isContactAvatar = purpose_tag === 'contact_avatar';
+	// Both are small, square, image-only brand/profile assets with no parent FK.
+	const isImageAsset = isOrgLogo || isContactAvatar;
 
-	// Size cap: 5 MB for org_logo, 20 MB otherwise
-	const sizeCap = isOrgLogo ? ORG_LOGO_MAX_FILE_SIZE : MAX_FILE_SIZE;
+	// Permission gates differ by purpose: org logo is admin-only, contact avatar
+	// rides on contact-edit rights, everything else needs the generic upload gate.
+	if (isOrgLogo) {
+		if (auth.member.role !== 'admin') {
+			error(403, 'Forbidden: admin role required to upload org logo');
+		}
+	} else if (isContactAvatar) {
+		if (!auth.member.can_edit_contacts) {
+			error(403, 'Forbidden: contact edit permission required');
+		}
+	} else if (!auth.member.can_upload_files) {
+		error(403, 'Forbidden: upload permission required');
+	}
+
+	// Size cap: 5 MB for image assets (logo/avatar), 20 MB otherwise
+	const sizeCap = isImageAsset ? IMAGE_ASSET_MAX_FILE_SIZE : MAX_FILE_SIZE;
 	if (file.size > sizeCap) {
 		return json(
-			{ error: isOrgLogo ? 'Logo exceeds 5 MB maximum' : 'File exceeds 20 MB maximum' },
+			{ error: isImageAsset ? 'Image exceeds 5 MB maximum' : 'File exceeds 20 MB maximum' },
 			{ status: 400 }
 		);
 	}
@@ -116,22 +131,22 @@ export const POST: RequestHandler = async (event) => {
 
 	// Validate purpose_tag → parent FK requirements
 	if (isOrgLogo) {
-		// Org logo is org-scoped only; admin-gated and must NOT carry a parent FK.
-		if (auth.member.role !== 'admin') {
-			error(403, 'Forbidden: admin role required to upload org logo');
-		}
+		// Org logo is org-scoped only — its r2_key is stored on organizations.logo_url.
+		// The media row must NOT carry a parent FK (DB CHECK enforces this).
 		if (contact_id || job_id || quote_id || invoice_id) {
 			return json({ error: 'org_logo uploads must not include a parent FK' }, { status: 422 });
 		}
 	} else {
-		if (purpose_tag === 'contact_attachment') {
+		if (purpose_tag === 'contact_attachment' || isContactAvatar) {
+			// Both attach to a single contact. The avatar's r2_key is mirrored onto
+			// contacts.avatar_url; the media row carries contact_id so it satisfies the
+			// exactly-one-parent CHECK (it's hidden from the Files tab by purpose_tag).
 			if (!contact_id) {
-				return json({ error: 'contact_id is required for contact_attachment' }, { status: 422 });
+				return json({ error: `contact_id is required for ${purpose_tag}` }, { status: 422 });
 			}
-			// Contact attachments are standalone — DB CHECK enforces exactly one parent.
 			if (job_id || quote_id || invoice_id) {
 				return json(
-					{ error: 'contact_attachment must not include another parent FK' },
+					{ error: `${purpose_tag} must not include another parent FK` },
 					{ status: 422 }
 				);
 			}
@@ -215,8 +230,8 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 
-	if (isOrgLogo && !ORG_LOGO_ALLOWED_MIME.has(claimedMime)) {
-		return json({ error: 'Logo must be a JPEG, PNG, or WebP image.' }, { status: 422 });
+	if (isImageAsset && !IMAGE_ASSET_ALLOWED_MIME.has(claimedMime)) {
+		return json({ error: 'Image must be a JPEG, PNG, or WebP.' }, { status: 422 });
 	}
 
 	const detectedMime = validateMagicBytes(fileBytes, claimedMime);
@@ -224,8 +239,8 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'File content does not match the declared file type' }, { status: 422 });
 	}
 
-	if (isOrgLogo && !ORG_LOGO_ALLOWED_MIME.has(detectedMime)) {
-		return json({ error: 'Logo must be a JPEG, PNG, or WebP image.' }, { status: 422 });
+	if (isImageAsset && !IMAGE_ASSET_ALLOWED_MIME.has(detectedMime)) {
+		return json({ error: 'Image must be a JPEG, PNG, or WebP.' }, { status: 422 });
 	}
 
 	const isPdf = detectedMime === 'application/pdf';

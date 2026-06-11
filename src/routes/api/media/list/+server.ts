@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { media, jobs, quotes, invoices, contacts } from '$lib/server/db/schema';
@@ -81,7 +81,13 @@ export const GET: RequestHandler = async (event) => {
 		if (!inv) return json({ error: 'Invoice not found' }, { status: 404 });
 	}
 
-	const conditions = [eq(media.org_id, auth.orgId), isNull(media.deleted_at)];
+	const conditions = [
+		eq(media.org_id, auth.orgId),
+		isNull(media.deleted_at),
+		// Contact profile photos live in media but are surfaced via the avatar, not
+		// as an attachment in the Files tab.
+		ne(media.purpose_tag, 'contact_avatar')
+	];
 	if (contactId) conditions.push(eq(media.contact_id, contactId));
 	if (jobId) conditions.push(eq(media.job_id, jobId));
 	if (quoteId) conditions.push(eq(media.quote_id, quoteId));

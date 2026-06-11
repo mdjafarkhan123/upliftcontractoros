@@ -33,6 +33,7 @@
 		emailSubjectDefault = '',
 		canSend = true,
 		smsOptOut = false,
+		doNotContact = false,
 		isClosed = false,
 		smsQuota = null,
 		quickReplies = [],
@@ -48,6 +49,7 @@
 		emailSubjectDefault?: string;
 		canSend?: boolean;
 		smsOptOut?: boolean;
+		doNotContact?: boolean;
 		isClosed?: boolean;
 		smsQuota?: { used: number; limit: number } | null;
 		quickReplies?: QuickReplyItem[];
@@ -291,6 +293,7 @@
 
 	const channelBlocked = $derived.by(() => {
 		if (isInternalNote) return null;
+		if (doNotContact) return 'Do Not Contact — remove the flag in contact settings before sending.';
 		if (channel === 'sms' && smsOptOut) return 'Contact has opted out of SMS.';
 		if (channel === 'sms' && smsQuotaExceeded) return 'SMS limit reached for this month';
 		if (availableChannels.length === 0) return 'No channels available for this contact.';

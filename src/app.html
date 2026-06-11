@@ -16,11 +16,21 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<!-- Self-hosted Geist (declared in app.css). Preload the two weights used
+		     above the fold so text settles in one paint instead of swapping late. -->
 		<link
-			rel="stylesheet"
-			href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap"
+			rel="preload"
+			href="/fonts/geist-v5-latin-regular.woff2"
+			as="font"
+			type="font/woff2"
+			crossorigin
+		/>
+		<link
+			rel="preload"
+			href="/fonts/geist-v5-latin-500.woff2"
+			as="font"
+			type="font/woff2"
+			crossorigin
 		/>
 		%sveltekit.head%
 		<style>

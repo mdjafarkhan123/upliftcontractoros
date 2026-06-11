@@ -16,10 +16,27 @@
 	});
 
 	let full_name = $state('');
+	let company_name = $state('');
 	let phone = $state('');
+	let alt_phone = $state('');
+	let alt_phone_label = $state<'' | 'mobile' | 'home' | 'work' | 'fax' | 'other'>('');
 	let email = $state('');
+	let lead_temperature = $state<'' | 'hot' | 'warm' | 'cold'>('');
 	let lead_source = $state<
-		'website_form' | 'live_chat' | 'missed_call' | 'manual' | 'referral' | 'other'
+		| 'website_form'
+		| 'live_chat'
+		| 'missed_call'
+		| 'manual'
+		| 'referral'
+		| 'google_ads'
+		| 'yelp'
+		| 'angi'
+		| 'facebook'
+		| 'nextdoor'
+		| 'door_hanger'
+		| 'job_sign'
+		| 'repeat_customer'
+		| 'other'
 	>('manual');
 	let assigned_to = $state<string>('');
 	let referred_by_contact_id = $state<string>('');
@@ -92,7 +109,13 @@
 			full_name: full_name.trim(),
 			lead_source
 		};
+		if (company_name.trim()) payload.company_name = company_name.trim();
+		if (lead_temperature) payload.lead_temperature = lead_temperature;
 		if (phone.trim()) payload.phone = phone.trim();
+		if (alt_phone.trim()) {
+			payload.alt_phone = alt_phone.trim();
+			if (alt_phone_label) payload.alt_phone_label = alt_phone_label;
+		}
 		if (email.trim()) payload.email = email.trim();
 		if (assigned_to) payload.assigned_to = assigned_to;
 		if (referred_by_contact_id) payload.referred_by_contact_id = referred_by_contact_id;
@@ -161,6 +184,17 @@
 		</div>
 
 		<div class="space-y-1.5">
+			<Label for="company_name">Company</Label>
+			<Input
+				id="company_name"
+				bind:value={company_name}
+				maxlength={200}
+				autocomplete="organization"
+				placeholder="Business, HOA, or property manager"
+			/>
+		</div>
+
+		<div class="space-y-1.5">
 			<Label for="phone">Phone</Label>
 			<Input
 				id="phone"
@@ -170,6 +204,34 @@
 				autocomplete="tel"
 				placeholder="(555) 123-4567"
 			/>
+		</div>
+
+		<div class="space-y-1.5">
+			<Label for="alt_phone">Alt phone</Label>
+			<div class="flex gap-2">
+				<Input
+					id="alt_phone"
+					type="tel"
+					inputmode="tel"
+					bind:value={alt_phone}
+					autocomplete="tel"
+					placeholder="(555) 123-4567"
+					class="flex-1"
+				/>
+				<Select.Root bind:value={alt_phone_label}>
+					<Select.Trigger class="h-11 w-28 shrink-0">
+						<Select.Value placeholder="Type" />
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="">Type</Select.Item>
+						<Select.Item value="mobile">Mobile</Select.Item>
+						<Select.Item value="home">Home</Select.Item>
+						<Select.Item value="work">Work</Select.Item>
+						<Select.Item value="fax">Fax</Select.Item>
+						<Select.Item value="other">Other</Select.Item>
+					</Select.Content>
+				</Select.Root>
+			</div>
 		</div>
 
 		<div class="space-y-1.5">
@@ -185,11 +247,34 @@
 				</Select.Trigger>
 				<Select.Content>
 					<Select.Item value="manual">Manual</Select.Item>
+					<Select.Item value="referral">Referral</Select.Item>
+					<Select.Item value="repeat_customer">Repeat customer</Select.Item>
 					<Select.Item value="website_form">Website form</Select.Item>
 					<Select.Item value="live_chat">Live chat</Select.Item>
 					<Select.Item value="missed_call">Missed call</Select.Item>
-					<Select.Item value="referral">Referral</Select.Item>
+					<Select.Item value="google_ads">Google Ads</Select.Item>
+					<Select.Item value="facebook">Facebook / Instagram</Select.Item>
+					<Select.Item value="yelp">Yelp</Select.Item>
+					<Select.Item value="angi">Angi / HomeAdvisor</Select.Item>
+					<Select.Item value="nextdoor">Nextdoor</Select.Item>
+					<Select.Item value="door_hanger">Door hanger</Select.Item>
+					<Select.Item value="job_sign">Job sign / yard sign</Select.Item>
 					<Select.Item value="other">Other</Select.Item>
+				</Select.Content>
+			</Select.Root>
+		</div>
+
+		<div class="space-y-1.5">
+			<Label for="lead_temperature">Lead temperature</Label>
+			<Select.Root bind:value={lead_temperature}>
+				<Select.Trigger class="h-11 w-full">
+					<Select.Value placeholder="Not set" />
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="">Not set</Select.Item>
+					<Select.Item value="hot">Hot</Select.Item>
+					<Select.Item value="warm">Warm</Select.Item>
+					<Select.Item value="cold">Cold</Select.Item>
 				</Select.Content>
 			</Select.Root>
 		</div>

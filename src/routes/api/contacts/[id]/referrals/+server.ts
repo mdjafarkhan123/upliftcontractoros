@@ -38,7 +38,7 @@ export const GET: RequestHandler = async (event) => {
 				eq(contacts.org_id, auth.orgId),
 				eq(contacts.referred_by_contact_id, contactId),
 				isNull(contacts.deleted_at),
-				sql`${contacts.phone} NOT LIKE 'RELEASED:%'`
+				sql`(${contacts.phone} IS NULL OR ${contacts.phone} NOT LIKE 'RELEASED:%')`
 			)
 		)
 		.orderBy(sql`${contacts.created_at} DESC`);

@@ -17,7 +17,8 @@ export const mediaPurposeTagEnum = pgEnum('media_purpose_tag', [
 	'invoice_attachment',
 	'org_logo',
 	'message_attachment',
-	'contact_attachment'
+	'contact_attachment',
+	'contact_avatar'
 ]);
 
 export const media = pgTable(

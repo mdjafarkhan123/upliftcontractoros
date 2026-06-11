@@ -1,18 +1,21 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, isNotNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts } from '$lib/server/db/schema';
+import { contacts, media, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { toE164, isReleasedPhone, PhoneInvalidError } from '$lib/utils/phone';
 import { updateContactSchema } from '$lib/server/contacts/schemas';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 import {
 	findContactByPhone,
 	isAssigneeValid,
 	isReferrerValid,
 	loadContactDetail,
 	countLinkedRecords,
-	hasAnyLinks
+	hasAnyLinks,
+	cascadeDeleteContact,
+	hardPurgeContact
 } from '$lib/server/contacts/contactRepo';
 
 export const GET: RequestHandler = async (event) => {
@@ -117,8 +120,39 @@ export const PATCH: RequestHandler = async (event) => {
 	const next: Record<string, unknown> = { updated_at: new Date() };
 
 	if (updates.full_name !== undefined) next.full_name = updates.full_name;
+	if (updates.company_name !== undefined) next.company_name = updates.company_name;
 	if (updates.email !== undefined) next.email = updates.email;
 	if (updates.lead_source !== undefined) next.lead_source = updates.lead_source;
+	if (updates.lead_temperature !== undefined) next.lead_temperature = updates.lead_temperature;
+
+	if (updates.alt_phone !== undefined) {
+		if (updates.alt_phone === null || updates.alt_phone === '') {
+			next.alt_phone = null;
+			// A label without a number is meaningless — clear it alongside.
+			next.alt_phone_label = null;
+		} else {
+			try {
+				next.alt_phone = toE164(updates.alt_phone);
+			} catch (err) {
+				const message = err instanceof PhoneInvalidError ? err.message : 'Invalid alternate phone.';
+				return json({ error: message, code: 'ALT_PHONE_INVALID' }, { status: 422 });
+			}
+		}
+	}
+
+	// Apply an explicit label change unless the number was just cleared above.
+	if (updates.alt_phone_label !== undefined && next.alt_phone !== null) {
+		next.alt_phone_label = updates.alt_phone_label;
+	}
+
+	if (updates.do_not_contact !== undefined) {
+		next.do_not_contact = updates.do_not_contact;
+		if (updates.do_not_contact && !existing.do_not_contact) {
+			next.do_not_contact_at = new Date();
+		} else if (!updates.do_not_contact) {
+			next.do_not_contact_at = null;
+		}
+	}
 	if (updates.status !== undefined) next.status = updates.status;
 	if (updates.notes !== undefined) next.notes = updates.notes;
 	if (updates.tags !== undefined) next.tags = updates.tags;
@@ -129,6 +163,37 @@ export const PATCH: RequestHandler = async (event) => {
 		next.preferred_contact_method = updates.preferred_contact_method;
 	}
 	if (updates.email_opt_in !== undefined) next.email_opt_in = updates.email_opt_in;
+
+	// Profile photo. `avatar_url` carries an uploaded media row id (purpose_tag
+	// 'contact_avatar'); we store its r2_key. null clears the photo. The previous
+	// avatar media is soft-deleted in the write transaction below for storage
+	// reclamation (mirrors the org-logo replacement flow).
+	if (updates.avatar_url !== undefined) {
+		if (updates.avatar_url === null) {
+			next.avatar_url = null;
+		} else {
+			const [m] = await db
+				.select({ id: media.id, r2_key: media.r2_key })
+				.from(media)
+				.where(
+					and(
+						eq(media.id, updates.avatar_url),
+						eq(media.org_id, auth.orgId),
+						eq(media.contact_id, event.params.id),
+						eq(media.purpose_tag, 'contact_avatar'),
+						isNull(media.deleted_at)
+					)
+				)
+				.limit(1);
+			if (!m) {
+				return json(
+					{ error: 'Avatar must reference an uploaded image.', code: 'INVALID_AVATAR' },
+					{ status: 422 }
+				);
+			}
+			next.avatar_url = m.r2_key;
+		}
+	}
 
 	// Auto-set converted_at on the lead → customer transition. Never cleared
 	// when reverting to lead; preserved as historical first-conversion timestamp.
@@ -222,14 +287,60 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 	}
 
-	try {
-		const [updated] = await db
-			.update(contacts)
-			.set(next)
-			.where(and(eq(contacts.org_id, auth.orgId), eq(contacts.id, event.params.id)))
-			.returning();
+	// Soft-delete the previous avatar media when the photo is being replaced or
+	// cleared, so storage is reclaimed (same as the org-logo flow).
+	const avatarChanging = 'avatar_url' in next;
+	const prevAvatarKey = existing.avatar_url;
+	const newAvatarKey = (next.avatar_url ?? null) as string | null;
 
-		return json({ contact: updated });
+	try {
+		const updated = await db.transaction(async (tx) => {
+			const [row] = await tx
+				.update(contacts)
+				.set(next)
+				.where(and(eq(contacts.org_id, auth.orgId), eq(contacts.id, event.params.id)))
+				.returning();
+
+			if (avatarChanging && prevAvatarKey && prevAvatarKey !== newAvatarKey) {
+				const [prevMedia] = await tx
+					.select()
+					.from(media)
+					.where(
+						and(
+							eq(media.org_id, auth.orgId),
+							eq(media.r2_key, prevAvatarKey),
+							isNull(media.deleted_at)
+						)
+					)
+					.limit(1);
+				if (prevMedia) {
+					await tx
+						.update(media)
+						.set({ deleted_at: new Date(), updated_at: new Date() })
+						.where(and(eq(media.id, prevMedia.id), isNull(media.deleted_at)));
+					await tx.insert(outboxEvents).values({
+						org_id: auth.orgId,
+						event_type: 'media.deleted',
+						resource_type: 'media',
+						resource_id: prevMedia.id,
+						payload: {
+							media_id: prevMedia.id,
+							org_id: auth.orgId,
+							r2_key: prevMedia.r2_key,
+							thumbnail_key: prevMedia.thumbnail_key,
+							web_key: prevMedia.web_key
+						},
+						idempotency_key: `media.deleted:${prevMedia.id}`
+					});
+				}
+			}
+
+			return row;
+		});
+
+		return json({
+			contact: { ...updated, avatar_url: await resolveLogoUrl(updated.avatar_url) }
+		});
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Update failed';
 		if (/unique|duplicate/i.test(msg)) {
@@ -247,6 +358,11 @@ export const DELETE: RequestHandler = async (event) => {
 	assertOrgActive(auth);
 	if (!auth.member.can_delete_contacts) error(403, 'Forbidden');
 
+	// `?permanent=true` hard-purges a contact already in the recycle bin (the
+	// "delete forever" action). The default DELETE soft-deletes an active
+	// contact into the bin via the cascade.
+	const permanent = event.url.searchParams.get('permanent') === 'true';
+
 	const [existing] = await db
 		.select({ id: contacts.id, assigned_to: contacts.assigned_to })
 		.from(contacts)
@@ -254,7 +370,7 @@ export const DELETE: RequestHandler = async (event) => {
 			and(
 				eq(contacts.org_id, auth.orgId),
 				eq(contacts.id, event.params.id),
-				isNull(contacts.deleted_at)
+				permanent ? isNotNull(contacts.deleted_at) : isNull(contacts.deleted_at)
 			)
 		)
 		.limit(1);
@@ -264,22 +380,23 @@ export const DELETE: RequestHandler = async (event) => {
 		error(404, 'Contact not found');
 	}
 
-	const counts = await countLinkedRecords(auth.orgId, event.params.id);
-	if (hasAnyLinks(counts)) {
-		return json(
-			{
-				error: 'Contact has linked records. Archive or reassign them first.',
-				code: 'CONTACT_HAS_LINKS',
-				counts
-			},
-			{ status: 409 }
-		);
+	if (permanent) {
+		const result = await hardPurgeContact(auth.orgId, event.params.id);
+		if (!result.purged) {
+			if (result.reason === 'not_found') error(404, 'Contact not found');
+			return json(
+				{
+					error:
+						'This contact has linked records (jobs, quotes, invoices, conversations…) and can’t be permanently deleted. Restore it to keep its history, or remove the linked records first.',
+					code: 'CONTACT_HAS_LINKS'
+				},
+				{ status: 409 }
+			);
+		}
+		return json({ ok: true });
 	}
 
-	await db
-		.update(contacts)
-		.set({ deleted_at: new Date(), updated_at: new Date() })
-		.where(and(eq(contacts.org_id, auth.orgId), eq(contacts.id, event.params.id)));
+	await cascadeDeleteContact(auth.orgId, event.params.id);
 
 	return json({ ok: true });
 };

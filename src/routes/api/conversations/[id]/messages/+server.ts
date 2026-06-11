@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, desc, eq, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, isNotNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
@@ -102,12 +102,21 @@ export const GET: RequestHandler = async (event) => {
 	if (!conv) error(404, 'Conversation not found');
 	if (!canAccess(conv, auth.member)) error(403, 'Forbidden');
 
+	// Newest-first pagination: the first page is the latest PAGE_SIZE messages,
+	// the cursor walks older ("load earlier"). Rows are returned in ascending
+	// order so the client renders/prepends without re-sorting.
 	const cursor = event.url.searchParams.get('cursor');
 	const conditions = [eq(messages.conversation_id, conversationId)];
 	if (cursor) {
 		const [createdAt, id] = cursor.split('|');
 		if (createdAt && id) {
-			conditions.push(lt(messages.created_at, new Date(createdAt)));
+			const cursorDate = new Date(createdAt);
+			conditions.push(
+				or(
+					lt(messages.created_at, cursorDate),
+					and(eq(messages.created_at, cursorDate), lt(messages.id, id))
+				)!
+			);
 		}
 	}
 
@@ -115,13 +124,14 @@ export const GET: RequestHandler = async (event) => {
 		.select()
 		.from(messages)
 		.where(and(...conditions))
-		.orderBy(asc(messages.created_at), asc(messages.id))
+		.orderBy(desc(messages.created_at), desc(messages.id))
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-	const last = sliced[sliced.length - 1];
-	const nextCursor = hasMore && last ? `${last.created_at.toISOString()}|${last.id}` : null;
+	const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const oldest = page[page.length - 1];
+	const nextCursor = hasMore && oldest ? `${oldest.created_at.toISOString()}|${oldest.id}` : null;
+	const sliced = page.reverse();
 
 	// Attach media (photos/files) for this page of messages in one query.
 	const messageIds = sliced.map((m) => m.id);
@@ -312,6 +322,15 @@ export const POST: RequestHandler = async (event) => {
 		.where(and(eq(contacts.id, conv.contact_id), eq(contacts.org_id, auth.orgId)))
 		.limit(1);
 	if (!contact) return json({ error: 'Contact not found.' }, { status: 404 });
+
+	// Block all outbound messages (any channel) when the contact has a hard DNC flag.
+	// Internal notes are exempt — they are staff-only and never reach the contact.
+	if (contact.do_not_contact && !parsed.is_internal_note) {
+		return json(
+			{ error: 'This contact is marked Do Not Contact. Remove the flag before sending.' },
+			{ status: 422 }
+		);
+	}
 
 	const mediaIds = parsed.media_ids ?? [];
 

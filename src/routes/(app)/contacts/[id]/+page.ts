@@ -7,11 +7,15 @@ export type ContactDetailResponse = {
 		id: string;
 		org_id: string;
 		full_name: string;
+		company_name: string | null;
+		avatar_url: string | null;
 		email: string | null;
 		phone: string;
 		alt_phone: string | null;
+		alt_phone_label: 'mobile' | 'home' | 'work' | 'fax' | 'other' | null;
 		status: 'lead' | 'customer' | 'archived';
 		lead_source: string;
+		lead_temperature: 'hot' | 'warm' | 'cold' | null;
 		assigned_to: string | null;
 		referred_by_contact_id: string | null;
 		sms_opt_out: boolean;
@@ -25,6 +29,8 @@ export type ContactDetailResponse = {
 		converted_at: string | null;
 		preferred_contact_method: 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger' | null;
 		email_opt_in: boolean;
+		do_not_contact: boolean;
+		do_not_contact_at: string | null;
 		created_at: string;
 		updated_at: string;
 	};
@@ -55,6 +61,12 @@ export type ContactDetailResponse = {
 		quotes: number;
 		invoices: number;
 		conversations: number;
+	};
+	kpi: {
+		lifetime_revenue: number;
+		open_quotes_count: number;
+		open_quotes_value: number;
+		active_jobs_count: number;
 	};
 };
 

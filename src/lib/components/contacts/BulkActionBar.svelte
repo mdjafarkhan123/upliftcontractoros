@@ -233,7 +233,7 @@
 <ConfirmDialog
 	bind:open={archiveOpen}
 	title="Archive {count} contact{count === 1 ? '' : 's'}?"
-	description="Archived contacts leave your active lists but keep all their history. Any contact with open opportunities, jobs, quotes, invoices, or conversations will be skipped."
+	description="Archived contacts move off your active list but keep all their history — conversations, jobs, quotes, and invoices are all preserved. Contacts with open quotes, jobs, or invoices will be skipped."
 	confirmLabel="Archive"
 	loading={busy}
 	onConfirm={applyArchive}

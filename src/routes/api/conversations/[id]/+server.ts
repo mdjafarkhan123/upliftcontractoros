@@ -47,8 +47,9 @@ export const GET: RequestHandler = async (event) => {
 			ct.phone         AS ct_phone,
 			ct.email         AS ct_email,
 			ct.status        AS ct_status,
-			ct.sms_opt_out   AS ct_sms_opt_out,
-			ct.lead_source   AS ct_lead_source,
+			ct.sms_opt_out      AS ct_sms_opt_out,
+			ct.do_not_contact   AS ct_do_not_contact,
+			ct.lead_source      AS ct_lead_source,
 			om.full_name     AS assignee_name,
 			(EXISTS (
 				SELECT 1 FROM messages m
@@ -163,6 +164,7 @@ export const GET: RequestHandler = async (event) => {
 		email: row.ct_email as string | null,
 		status: row.ct_status as string,
 		sms_opt_out: Boolean(row.ct_sms_opt_out),
+		do_not_contact: Boolean(row.ct_do_not_contact),
 		lead_source: row.ct_lead_source as string | null
 	};
 

@@ -5,6 +5,7 @@
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { cn } from '$lib/utils/cn';
 	import { getMemberContext } from '$lib/context/member';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
@@ -133,6 +134,15 @@
 		negative: 'bg-destructive/10 text-destructive'
 	};
 
+	// Left accent bar color for typed activity cards — driven by tone so a
+	// contractor scans good/bad at a glance (paid = green edge, declined = amber).
+	const ACCENT: Record<Tone, string> = {
+		neutral: 'border-l-primary/30',
+		positive: 'border-l-emerald-500',
+		attention: 'border-l-amber-500',
+		negative: 'border-l-destructive'
+	};
+
 	async function load(cursor: string | null, term: string, filters: Set<string>) {
 		const params = new SvelteURLSearchParams();
 		if (cursor) params.set('cursor', cursor);
@@ -202,6 +212,33 @@
 
 	function getIcon(key: string): Component {
 		return ICONS[key] ?? Clock;
+	}
+
+	// Precise wall-clock time for chat bubbles (the day separator carries the date).
+	function formatClock(iso: string): string {
+		return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+	}
+
+	// Day-separator grouping. Items arrive newest-first; a header is emitted before
+	// the first entry of each calendar day.
+	function isNewDay(curr: string, prev: string | null): boolean {
+		if (!prev) return true;
+		return new Date(curr).toDateString() !== new Date(prev).toDateString();
+	}
+
+	function dayLabel(iso: string): string {
+		const d = new Date(iso);
+		const now = new Date();
+		const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+		const diffDays = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+		if (diffDays === 0) return 'Today';
+		if (diffDays === 1) return 'Yesterday';
+		if (diffDays > 1 && diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+		return d.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' })
+		});
 	}
 
 	function onEntryClick(entry: TimelineEntry) {
@@ -298,58 +335,101 @@
 		: 'Customer activity will appear here as your team communicates, schedules work, sends quotes, and records payments.'}
 	<EmptyState title={emptyTitle} description={emptyDesc} icon={hasFilter ? Search : Clock} />
 {:else}
-	<ol class="space-y-3">
-		{#each items as entry (entry.id)}
+	<ol class="space-y-2.5">
+		{#each items as entry, i (entry.id)}
 			{@const Icon = getIcon(entry.icon_key)}
 			{@const clickable = !!entry.link}
 			{@const isNote = entry.type === 'notes'}
-			<li
-				class="rounded-xl border border-border bg-card p-4 transition-colors {clickable
-					? 'cursor-pointer hover:border-primary/40 hover:bg-accent/40'
-					: ''}"
-			>
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<div
-					class="flex items-start gap-3"
-					role={clickable ? 'button' : undefined}
-					tabindex={clickable ? 0 : undefined}
-					onclick={() => onEntryClick(entry)}
-					onkeydown={(e) => {
-						if (clickable && (e.key === 'Enter' || e.key === ' ')) {
-							e.preventDefault();
-							onEntryClick(entry);
-						}
-					}}
-				>
+			{@const isMessage = entry.type === 'messages'}
+			{@const outbound = entry.metadata?.direction === 'sent'}
+			{@const bubbleText =
+				(entry.metadata?.preview as string | undefined)?.trim() || entry.description}
+
+			{#if isNewDay(entry.created_at, items[i - 1]?.created_at ?? null)}
+				<li class="flex items-center justify-center pb-1 pt-2 first:pt-0">
 					<span
-						class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full {TONE_CLASSES[
-							entry.tone
-						]}"
-						aria-hidden="true"
+						class="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/40"
 					>
-						<Icon class="h-4 w-4" />
+						{dayLabel(entry.created_at)}
 					</span>
-					<div class="min-w-0 flex-1">
-						<p class="text-sm text-foreground">{entry.description}</p>
-						<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-							<time title={entry.created_at}>{formatRelative(entry.created_at)}</time>
-							{#if entry.link}
-								<ExternalLink class="h-3 w-3" aria-hidden="true" />
-							{/if}
-						</div>
-					</div>
-					{#if isNote && canEdit}
-						<button
-							type="button"
-							class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-							aria-label="Delete note"
-							onclick={(e) => askDelete(entry, e)}
+				</li>
+			{/if}
+
+			{#if isMessage}
+				<!-- Chat-style bubble: outbound right/green, inbound left/gray -->
+				<li class={cn('flex flex-col', outbound ? 'items-end' : 'items-start')}>
+					<button
+						type="button"
+						onclick={() => onEntryClick(entry)}
+						aria-label={outbound
+							? 'Message you sent — open conversation'
+							: 'Message received — open conversation'}
+						class={cn(
+							'max-w-[82%] rounded-2xl px-3.5 py-2.5 text-left text-sm leading-relaxed shadow-sm transition-colors sm:max-w-[70%]',
+							outbound
+								? 'rounded-br-sm bg-primary text-primary-foreground hover:bg-primary/90'
+								: 'rounded-bl-sm bg-secondary text-foreground hover:bg-secondary/70'
+						)}
+					>
+						<p class="whitespace-pre-wrap break-words">{bubbleText}</p>
+					</button>
+					<span class="mt-1 px-1 text-[11px] text-muted-foreground">
+						{outbound ? 'Sent' : 'Received'} · {formatClock(entry.created_at)}
+					</span>
+				</li>
+			{:else}
+				<!-- Typed activity card: tone-colored left accent + icon badge -->
+				<li
+					class={cn(
+						'rounded-xl border-y border-r border-l-[3px] border-border/70 bg-card p-4 shadow-card transition-all',
+						ACCENT[entry.tone],
+						clickable && 'cursor-pointer hover:bg-card-raised hover:shadow-dropdown'
+					)}
+				>
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<div
+						class="flex items-start gap-3"
+						role={clickable ? 'button' : undefined}
+						tabindex={clickable ? 0 : undefined}
+						onclick={() => onEntryClick(entry)}
+						onkeydown={(e) => {
+							if (clickable && (e.key === 'Enter' || e.key === ' ')) {
+								e.preventDefault();
+								onEntryClick(entry);
+							}
+						}}
+					>
+						<span
+							class={cn(
+								'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+								TONE_CLASSES[entry.tone]
+							)}
+							aria-hidden="true"
 						>
-							<Trash2 class="h-4 w-4" />
-						</button>
-					{/if}
-				</div>
-			</li>
+							<Icon class="h-4 w-4" />
+						</span>
+						<div class="min-w-0 flex-1">
+							<p class="text-sm text-foreground">{entry.description}</p>
+							<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+								<time title={entry.created_at}>{formatRelative(entry.created_at)}</time>
+								{#if entry.link}
+									<ExternalLink class="h-3 w-3" aria-hidden="true" />
+								{/if}
+							</div>
+						</div>
+						{#if isNote && canEdit}
+							<button
+								type="button"
+								class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+								aria-label="Delete note"
+								onclick={(e) => askDelete(entry, e)}
+							>
+								<Trash2 class="h-4 w-4" />
+							</button>
+						{/if}
+					</div>
+				</li>
+			{/if}
 		{/each}
 	</ol>
 	{#if nextCursor}

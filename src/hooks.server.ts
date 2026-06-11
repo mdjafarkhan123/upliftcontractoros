@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle, RequestEvent } from '@sveltejs/kit';
+import type { JwtPayload, User } from '@supabase/supabase-js';
 import { createServerClient } from '$lib/server/auth/supabase';
 import { getJafarSession } from '$lib/server/auth/jafarSession';
 import { loadAuthContext, type AuthContext } from '$lib/server/auth/loadAuthContext';
@@ -43,6 +44,20 @@ function isPublicPath(pathname: string): boolean {
 	if (PUBLIC_EXACT.has(pathname)) return true;
 	for (const p of PUBLIC_PREFIXES) if (pathname.startsWith(p)) return true;
 	return false;
+}
+
+// Minimal User built from verified JWT claims — downstream consumers only read
+// `id` and `app_metadata` (password_changed gates) plus email for display.
+function userFromClaims(claims: JwtPayload): User {
+	return {
+		id: claims.sub,
+		aud: typeof claims.aud === 'string' ? claims.aud : (claims.aud?.[0] ?? 'authenticated'),
+		email: claims.email,
+		phone: claims.phone,
+		app_metadata: claims.app_metadata ?? {},
+		user_metadata: claims.user_metadata ?? {},
+		created_at: ''
+	} as User;
 }
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
@@ -105,12 +120,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// 3. Contractor auth context — skip for public routes and webhooks
 	event.locals.auth = null;
 	if (!isPublicPath(pathname)) {
-		// Single getUser() call — validates the JWT against Supabase Auth.
-		// getSession() is intentionally NOT called: it returns unverified data and
-		// is unsafe on its own per Supabase docs, so pairing the two is wasted RTT.
-		const {
-			data: { user }
-		} = await supabase.auth.getUser();
+		// getClaims() verifies the JWT locally against the project's ES256 JWKS
+		// (cached in-process) — no auth-server round trip. For legacy HS256 tokens
+		// it falls back to a network getUser() internally, so this is never weaker
+		// than the old getUser() call.
+		const { data: claimsData } = await supabase.auth.getClaims();
+		let user: User | null = claimsData ? userFromClaims(claimsData.claims) : null;
+		// JWT app_metadata lags admin-side updates until the token refreshes.
+		// password_changed=false drives redirects below, so confirm a falsy value
+		// against the auth server — only pre-onboarding users pay this round trip,
+		// and it prevents a redirect loop right after the password is changed.
+		if (user && !user.app_metadata.password_changed) {
+			const {
+				data: { user: freshUser }
+			} = await supabase.auth.getUser();
+			user = freshUser;
+		}
 		const auth = user ? await loadAuthContext(user) : null;
 		event.locals.auth = auth;
 

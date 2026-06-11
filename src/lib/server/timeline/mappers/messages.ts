@@ -24,7 +24,7 @@ function buildEntry(
 		tone: 'neutral',
 		description,
 		metadata: { conversation_id: d.conversation_id, preview, direction: verb },
-		link: d.conversation_id ? `/conversations/${d.conversation_id}` : null
+		link: d.conversation_id ? `/inbox/${d.conversation_id}` : null
 	};
 }
 

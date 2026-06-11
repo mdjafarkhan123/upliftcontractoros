@@ -46,17 +46,7 @@ When in doubt, read `references/color-system.md` first — every other file depe
 1. **Hierarchy through contrast, not size alone** — small text on a muted surface beats large text on a flat one. Use `text-muted-foreground` liberally for secondary info.
 2. **Surfaces have depth** — page → card → popover each sit on a visibly different layer. Never render content on a flat, uniform background.
 3. **Motion signals state, not decoration** — every transition communicates something (hover = interactive, fade = loading, slide = appeared). No gratuitous animation.
-4. Clean whitespace-heavy layouts
-   Soft neutral backgrounds
-   Minimal borders
-   Large rounded corners
-   Calm professional feel
-   Modern startup/SaaS dashboard style
-   Elegant typography hierarchy
-   Subtle shadows only
-   Smooth spacing rhythm
-   Lightweight UI, not dense enterprise UI
-   Premium but simple
+4. **Breathing room over density** — whitespace is the grid. Layouts are clean with soft neutrals, minimal borders, generous padding, large rounded corners, and subtle shadows. Think modern SaaS startup dashboard, not dense enterprise software.
 
 ### What "Premium" Looks Like in Practice
 
@@ -65,7 +55,7 @@ When in doubt, read `references/color-system.md` first — every other file depe
 ─────────────────────────────────────────────────────────────────
 Dark zinc-900 card as default          White card, gray-50 sidebar, white content area
 Heavy visible borders everywhere       border-border/60 — barely visible, 1px, soft gray
-Default shadcn blue focus ring         Indigo-500 ring, 2px, ring-offset-background
+Default shadcn blue focus ring         Green focus ring (--ring token), 2px, ring-offset-background
 Flat colored status text               Badge with colored bg-/10 + text- + border-/20 trifecta
 No hover state on list rows            hover:bg-muted/60 with 150ms ease transition
 Instant state changes                  150ms ease-out on ALL interactive elements
@@ -93,7 +83,7 @@ Borders:       border-border · border-border/50 · border-white/5
 Primary:       bg-primary · text-primary · ring-primary/20
 Danger:        bg-destructive/10 · text-destructive · border-destructive/30
 Radius:        rounded-lg (cards) · rounded-md (inputs/buttons) · rounded-full (badges/avatars)
-Shadow:        shadow-sm (default) · shadow-md (hover lift) · shadow-xl (modals)
+Shadow:        shadow-card (default) · shadow-dropdown (hover lift) · shadow-modal (dialogs/modals)
 ```
 
 ---
@@ -108,8 +98,8 @@ Shadow:        shadow-sm (default) · shadow-md (hover lift) · shadow-xl (modal
 - **Transitions on all interactive elements** — `transition-all duration-150 ease-out` minimum.
 - **Hover + focus always paired** — never hover-only; always include `focus-visible:ring-2 focus-visible:ring-ring`.
 - **Never `alert()` or native dialogs** — use `ConfirmDialog` from shared components.
-- **Color conveys meaning** — green = success/active, red = danger/error, yellow = warning,
-  indigo = info/primary. Never decorative color without semantic meaning.
+- **Color conveys meaning** — green = brand/primary/success/active, red = danger/error, yellow/amber = warning,
+  sky/blue = informational. Never decorative color without semantic meaning.
 - **Status always has a Badge** — never render raw status strings naked in the UI.
 - **Empty states are designed** — every list/table must have an `EmptyState` component.
 - **Loading states are designed** — every async operation shows `SkeletonLoader`.

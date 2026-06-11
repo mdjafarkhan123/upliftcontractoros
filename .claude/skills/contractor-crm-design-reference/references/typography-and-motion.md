@@ -6,33 +6,47 @@
 
 ## Font Setup — Geist Sans
 
-**Why Geist**: Sharp, geometric, optimised for UI. Used by Vercel. Reads clearly at small sizes on dark backgrounds — perfect for information-dense SaaS.
+**Why Geist**: Sharp, geometric, optimised for UI. Used by Vercel. Reads clearly at small sizes on both light and dark backgrounds — perfect for information-dense SaaS.
 
-### Installation
+### How it's loaded in this project
 
-Option A — Google Fonts (already in `app.css`):
-
-```css
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
-```
-
-Option B — Self-hosted (preferred for production — no FOUT, no external request):
-
-```bash
-npm install geist
-```
+Geist is **self-hosted** from `/static/fonts/` via `@font-face` declarations in `app.css`.
+No Google Fonts import. No `npm install geist`. No `font-display: block`.
 
 ```css
-/* app.css */
-@import 'geist/font/sans';
-```
-
-```typescript
-// tailwind.config.ts
-fontFamily: {
-  sans: ['Geist Sans', 'Inter', 'system-ui', 'sans-serif'],
+/* app.css — already configured, do NOT duplicate */
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 300 400;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-500.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Geist';
+	font-style: normal;
+	font-weight: 600 700;
+	font-display: swap;
+	src: url('/fonts/geist-v5-latin-600.woff2') format('woff2');
 }
 ```
+
+Applied at the `html` level in `app.css` — NOT in `tailwind.config.ts`:
+
+```css
+html {
+	font-family: 'Geist', 'Inter', system-ui, sans-serif;
+}
+```
+
+**Why NOT in Tailwind config**: The `font-bold` (700) weight uses the 600 face via the declared weight range. If Tailwind overrides `fontFamily.sans`, it can conflict with how the browser resolves the weight range. Leave `tailwind.config.ts` fontFamily as `[...fontFamily.sans]` — the `html` declaration takes precedence anyway.
 
 ---
 
@@ -59,9 +73,16 @@ Apply these patterns consistently. Never use arbitrary font sizes — always use
 <!-- Label / helper text -->
 <p class="text-xs text-muted-foreground">Last updated 2 hours ago</p>
 
-<!-- Stat / metric — large number display -->
-<p class="text-3xl font-bold tracking-tight text-foreground">$24,500</p>
+<!-- Stat / metric — compact KPI card (inside a card component) -->
+<p class="text-2xl font-bold tracking-tight text-foreground">$24,500</p>
 <p class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue this month</p>
+
+<!-- Stat / metric — dashboard hero (large featured number, more whitespace available) -->
+<p class="text-3xl font-bold tracking-tight text-foreground">$24,500</p>
+<p class="mt-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue this month</p>
+
+<!-- Rule: text-2xl inside cards (space is constrained). text-3xl only for large featured stats
+     with generous padding. Never mix these sizes on the same page for the same type of stat. -->
 
 <!-- Sidebar section label — group headers in the nav rail -->
 <p class="px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
@@ -120,9 +141,10 @@ transition-transform duration-150 ease-out
 ">
 
 <!-- Card hover lift (dashboard stat cards) -->
+<!-- Use shadow-dropdown, NOT shadow-lg — semantic tokens adapt between light/dark mode -->
 <Card.Root class="
   transition-all duration-200 ease-out
-  hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20
+  hover:-translate-y-0.5 hover:shadow-dropdown
   cursor-pointer
 ">
 
@@ -147,6 +169,24 @@ transition-transform duration-150 ease-out
   focus-visible:ring-2 focus-visible:ring-ring
 ">
 ```
+
+### Table Row Hover — Action Reveal
+
+Table action menus are hidden by default and revealed on hover. This is the only `opacity-0` pattern in the codebase — used exclusively for the `⋮` button on table rows.
+
+```svelte
+<!-- <tr> must have class="group" -->
+<tr class="group transition-colors hover:bg-muted/20">
+
+	<!-- ⋮ button: invisible at rest, visible on row hover or keyboard focus -->
+	<DropdownMenu.Trigger class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all ...">
+		<MoreHorizontal class="h-4 w-4" />
+	</DropdownMenu.Trigger>
+```
+
+Do NOT apply `opacity-0 group-hover:opacity-100` to anything other than the table action button. Cards use direct hover state changes instead.
+
+---
 
 ### Entry Animations (page / drawer / modal)
 
@@ -175,7 +215,9 @@ transition-transform duration-150 ease-out
 
 ### Loading States — Shimmer Skeleton
 
-The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.svelte`:
+The `skeleton-shimmer` class is defined in `app.css` with separate light and dark implementations.
+**Light mode**: soft gray-on-white sweep. **Dark mode**: mid-gray sweep on the deep navy surface.
+The `html:not(.dark)` selector handles the split automatically — no manual dark mode class needed.
 
 ```svelte
 <!-- src/lib/components/shared/SkeletonLoader.svelte -->
@@ -200,6 +242,8 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 	{/each}
 </div>
 ```
+
+Always use `SkeletonLoader` for loading states — never a static gray block or a spinner alone. Match the skeleton structure to the real content that will appear (same number of lines, similar heights).
 
 ### Spinner (inline loading indicator)
 
@@ -253,36 +297,32 @@ The `skeleton-shimmer` class is defined in `app.css`. Use it in `SkeletonLoader.
 
 ## Avatar / Initials Pattern
 
+Avatars use **status-coded ring colors** — never a single color for all records.
+See `component-aesthetics.md → Avatar Ring System` for the full color table.
+
 ```svelte
-<!-- Contact avatar with initials fallback -->
-<div
-	class="
-  flex h-9 w-9 shrink-0 items-center justify-center
-  rounded-full bg-primary/10 text-primary
-  text-sm font-semibold
-"
->
-	{contact.full_name
-		.split(' ')
-		.map((n) => n[0])
-		.join('')
-		.slice(0, 2)
-		.toUpperCase()}
+<!-- Status-colored avatar — used in both mobile cards and desktop table rows -->
+{@const initials = contact.full_name.split(/\s+/).map(p => p[0]?.toUpperCase() ?? '').slice(0, 2).join('')}
+
+<div class={cn(
+	'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1',
+	contact.status === 'customer' || contact.status === 'active'
+		? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400'
+		: contact.status === 'archived'
+			? 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400'
+			: contact.status === 'inactive'
+				? 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20'
+				: 'bg-primary/10 text-primary ring-primary/15' // lead / new — brand green
+)}>
+	{initials || '?'}
 </div>
 
 <!-- With image (when photo_url exists) -->
 {#if contact.photo_url}
-	<img src={contact.photo_url} alt={contact.full_name} class="h-9 w-9 rounded-full object-cover" />
+	<img src={contact.photo_url} alt={contact.full_name} class="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
 {:else}
-	<div
-		class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold"
-	>
-		{contact.full_name
-			.split(' ')
-			.map((n) => n[0])
-			.join('')
-			.slice(0, 2)
-			.toUpperCase()}
-	</div>
+	<!-- status-colored div above -->
 {/if}
 ```
+
+**Size variants**: `h-9 w-9` for table rows and detail pages, `h-11 w-11` for mobile list cards (larger touch target area).

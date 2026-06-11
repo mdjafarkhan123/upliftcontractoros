@@ -6,12 +6,24 @@ export const LEAD_SOURCES = [
 	'missed_call',
 	'manual',
 	'referral',
+	'google_ads',
+	'yelp',
+	'angi',
+	'facebook',
+	'nextdoor',
+	'door_hanger',
+	'job_sign',
+	'repeat_customer',
 	'other'
 ] as const;
 
 export const ADDRESS_LABELS = ['billing', 'service', 'mailing', 'other'] as const;
 
 export const CONTACT_STATUSES = ['lead', 'customer', 'archived'] as const;
+
+export const LEAD_TEMPERATURES = ['hot', 'warm', 'cold'] as const;
+
+export const PHONE_LABELS = ['mobile', 'home', 'work', 'fax', 'other'] as const;
 
 export const PREFERRED_CONTACT_METHODS = ['sms', 'call', 'email', 'whatsapp', 'messenger'] as const;
 
@@ -31,6 +43,8 @@ const optionalTrimmedString = (max: number) =>
 
 export const createContactSchema = z.object({
 	full_name: trimmedString(200),
+	company_name: optionalTrimmedString(200),
+	lead_temperature: z.enum(LEAD_TEMPERATURES).optional(),
 	// Optional since the Messenger channel — a contact may be identified by a PSID
 	// (or email) with no phone. Empty/whitespace normalizes to undefined; when
 	// present it is E.164-validated in the route.
@@ -42,6 +56,15 @@ export const createContactSchema = z.object({
 			const t = v?.trim();
 			return t && t.length > 0 ? t : undefined;
 		}),
+	alt_phone: z
+		.string()
+		.max(40)
+		.optional()
+		.transform((v) => {
+			const t = v?.trim();
+			return t && t.length > 0 ? t : undefined;
+		}),
+	alt_phone_label: z.enum(PHONE_LABELS).optional(),
 	email: z
 		.string()
 		.email()
@@ -60,6 +83,17 @@ export type CreateContactInput = z.infer<typeof createContactSchema>;
 export const updateContactSchema = z
 	.object({
 		full_name: trimmedString(200).optional(),
+		company_name: z
+			.string()
+			.max(200)
+			.nullable()
+			.optional()
+			.transform((v) => {
+				if (v === null) return null;
+				const t = v?.trim();
+				return t && t.length > 0 ? t : null;
+			}),
+		lead_temperature: z.enum(LEAD_TEMPERATURES).nullable().optional(),
 		// Empty/whitespace normalizes to undefined → treated as "no change" by the
 		// PATCH route (never clears an existing phone; that goes through the
 		// release-phone reservation flow). A present value is E.164-validated there.
@@ -71,6 +105,17 @@ export const updateContactSchema = z
 				const t = v?.trim();
 				return t && t.length > 0 ? t : undefined;
 			}),
+		alt_phone: z
+			.string()
+			.max(40)
+			.nullable()
+			.optional()
+			.transform((v) => {
+				if (v === null) return null;
+				const t = v?.trim();
+				return t && t.length > 0 ? t : null;
+			}),
+		alt_phone_label: z.enum(PHONE_LABELS).nullable().optional(),
 		email: z
 			.string()
 			.email()
@@ -101,6 +146,10 @@ export const updateContactSchema = z
 			.optional()
 			.or(z.literal('').transform(() => null)),
 		email_opt_in: z.boolean().optional(),
+		do_not_contact: z.boolean().optional(),
+		// Profile photo. Carries the id of an uploaded media row (purpose_tag
+		// 'contact_avatar'); the route resolves it to the stored r2_key. null clears.
+		avatar_url: z.string().uuid().nullable().optional(),
 		updated_at: z.string().datetime({ offset: true }).optional()
 	})
 	.strict();
