@@ -6,6 +6,11 @@ export type NotificationSpec = {
 	batchable: boolean;
 	throttleMinutes?: number;
 	requireInteraction: boolean;
+	// When true, an unread in-app notification of this type triggers a delayed
+	// escalation check (Stage 1.d): if still unread after the recipient's
+	// escalation_minutes, it is re-delivered on the louder email/SMS channels.
+	// Reserved for the few "ignoring this costs money/a customer" types.
+	escalate?: boolean;
 	route: (resourceId: string) => string;
 	label: string;
 	description: string;
@@ -17,6 +22,8 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		defaultVisible: true,
 		batchable: false,
 		requireInteraction: true,
+		// The canonical speed-to-lead case: an unopened lead escalates to email/SMS.
+		escalate: true,
 		route: (id) => `/contacts/${id}`,
 		label: 'New lead arrived',
 		description: 'Someone wants to hire you'
@@ -49,6 +56,15 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		route: (id) => `/appointments/${id}`,
 		label: "Customer didn't show up",
 		description: 'A booked appointment was a no-show'
+	},
+	appointment_quote_nudge: {
+		priority: 'high',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		route: (id) => `/appointments/${id}`,
+		label: 'Quote not sent yet',
+		description: "You visited a customer but haven't sent a quote"
 	},
 	appointment_cancelled: {
 		priority: 'critical',
@@ -160,6 +176,15 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		label: 'Changes requested',
 		description: 'A customer asked for changes to their quote'
 	},
+	quote_expired: {
+		priority: 'high',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		route: (id) => `/quotes/${id}`,
+		label: 'Quote expired',
+		description: 'A quote passed its validity date — extend, resend, or mark it lost'
+	},
 	contact_follow_up_due: {
 		priority: 'high',
 		defaultVisible: false,
@@ -168,6 +193,37 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		route: (id) => `/contacts/${id}`,
 		label: 'Follow-up due',
 		description: 'A follow-up you scheduled is due'
+	},
+	opportunity_follow_up_due: {
+		priority: 'high',
+		defaultVisible: false,
+		batchable: false,
+		requireInteraction: false,
+		// Deep-link opens the deal's detail sheet on the board (auto-opened on mount).
+		route: (id) => `/pipeline?deal=${id}`,
+		label: 'Deal follow-up due',
+		description: 'A follow-up you scheduled on a deal is due'
+	},
+	opportunity_stale_digest: {
+		priority: 'normal',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		// Org-level digest — links to the board so they can action the deals.
+		route: () => '/pipeline',
+		label: 'Deals need follow-up',
+		description: 'Some open deals have no follow-up scheduled'
+	},
+	contact_import_completed: {
+		priority: 'normal',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		// No import-history view yet (Stage 3) — land on the contacts list, where the
+		// freshly imported contacts now appear.
+		route: () => '/contacts',
+		label: 'Contact import finished',
+		description: 'Your contact import finished processing'
 	},
 	growth_feed_update: {
 		priority: 'silent',

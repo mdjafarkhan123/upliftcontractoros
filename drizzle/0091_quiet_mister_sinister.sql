@@ -1,0 +1,1 @@
+ALTER TABLE "automation_sequence_steps" ADD COLUMN "offset_minutes" integer;

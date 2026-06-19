@@ -7,12 +7,15 @@ import {
 	bulkAssignContacts,
 	bulkAddTags,
 	bulkRemoveTags,
-	bulkArchiveContacts
+	bulkArchiveContacts,
+	bulkUnarchiveContacts,
+	bulkSoftDeleteContacts
 } from '$lib/server/contacts/contactRepo';
 
-// Bulk actions on the contacts list: assign, add/remove tags, archive.
-// All gated by can_edit_contacts. Restricted members (no can_view_all_contacts)
-// are scoped to contacts assigned to them — the same boundary as single edits.
+// Bulk actions on the contacts list: assign, add/remove tags, archive, unarchive,
+// delete. All gated by can_edit_contacts; `delete` additionally requires
+// can_delete_contacts. Restricted members (no can_view_all_contacts) are scoped
+// to contacts assigned to them — the same boundary as single edits.
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
@@ -69,6 +72,15 @@ export const POST: RequestHandler = async (event) => {
 		case 'archive': {
 			const result = await bulkArchiveContacts(auth.orgId, input.contact_ids, restrictTo);
 			return json(result);
+		}
+		case 'unarchive': {
+			const restored = await bulkUnarchiveContacts(auth.orgId, input.contact_ids, restrictTo);
+			return json({ restored });
+		}
+		case 'delete': {
+			if (!auth.member.can_delete_contacts) error(403, 'Forbidden');
+			const deleted = await bulkSoftDeleteContacts(auth.orgId, input.contact_ids, restrictTo);
+			return json({ deleted });
 		}
 	}
 };

@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull, isNotNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
+import { and, eq, ne, isNull, isNotNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contacts, outboxEvents, orgMembers } from '$lib/server/db/schema';
@@ -12,6 +12,8 @@ import {
 	isReferrerValid
 } from '$lib/server/contacts/contactRepo';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
+import { textMatch, textRank } from '$lib/server/search/textSearch';
+import { isLeadSource } from '$lib/contacts/leadSource';
 
 const PAGE_SIZE = 25;
 
@@ -24,6 +26,8 @@ export const GET: RequestHandler = async (event) => {
 	const statusFilter = url.searchParams.get('status') ?? 'all';
 	const tagFilter = (url.searchParams.get('tag') ?? '').trim();
 	const tempFilter = (url.searchParams.get('temp') ?? '').trim();
+	const sourceFilter = (url.searchParams.get('source') ?? '').trim();
+	const followUpOverdue = url.searchParams.get('follow_up') === 'overdue';
 	const scope = url.searchParams.get('scope');
 	const cursor = url.searchParams.get('cursor');
 
@@ -48,6 +52,9 @@ export const GET: RequestHandler = async (event) => {
 	if (statusFilter === 'leads') conditions.push(eq(contacts.status, 'lead'));
 	else if (statusFilter === 'customers') conditions.push(eq(contacts.status, 'customer'));
 	else if (statusFilter === 'archived') conditions.push(eq(contacts.status, 'archived'));
+	// Default "All" view = active contacts only (leads + customers). Archived
+	// contacts live solely in their own tab — never mixed into the active list.
+	else if (!showDeleted) conditions.push(ne(contacts.status, 'archived'));
 
 	if (tagFilter.length > 0 && tagFilter.length <= 50) {
 		conditions.push(sql`${tagFilter} = ANY(${contacts.tags})`);
@@ -55,6 +62,17 @@ export const GET: RequestHandler = async (event) => {
 
 	if (tempFilter === 'hot' || tempFilter === 'warm' || tempFilter === 'cold') {
 		conditions.push(eq(contacts.lead_temperature, tempFilter));
+	}
+
+	// Lead source filter — validated against the enum before it touches SQL.
+	if (isLeadSource(sourceFilter)) {
+		conditions.push(eq(contacts.lead_source, sourceFilter));
+	}
+
+	// Overdue follow-up quick filter — past-due `next_follow_up_at`. Archived/deleted
+	// are already excluded above, matching the "Needs follow-up" KPI count.
+	if (followUpOverdue) {
+		conditions.push(sql`${contacts.next_follow_up_at} IS NOT NULL AND ${contacts.next_follow_up_at} <= now()`);
 	}
 
 	// Scope filter is only honored for full-access users. Restricted members
@@ -67,7 +85,17 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
-	if (searchRaw.length > 0) {
+	const isSearching = searchRaw.length > 0;
+	// Relevance bucket (lower = better match): exact name → name/company/email
+	// prefix → everything else (substring + trigram typo hits). Mirrors how
+	// Pipedrive/HubSpot order typeahead so the contact you typed surfaces first.
+	// The shared helper backs every searchable list; trigram indexes (migration
+	// 0079) make both the ILIKE substring and the fuzzy `%` match index-fast.
+	let relevance: SQL<number> | null = null;
+	if (isSearching) {
+		const nameFields = [contacts.full_name, contacts.company_name, contacts.email];
+		relevance = textRank(searchRaw, nameFields);
+
 		let e164: string | null = null;
 		try {
 			e164 = toE164(searchRaw);
@@ -75,32 +103,50 @@ export const GET: RequestHandler = async (event) => {
 			e164 = null;
 		}
 		const digits = searchRaw.replace(/\D+/g, '');
-		const searchClauses: SQL[] = [
-			ilike(contacts.full_name, `%${searchRaw}%`),
-			ilike(contacts.company_name, `%${searchRaw}%`),
-			ilike(contacts.email, `%${searchRaw}%`)
-		];
+		// Phone is matched separately from the fuzzy text fields: an exact E.164
+		// hit when the query parses as a number, otherwise a digit-substring scan.
+		const phoneClauses: SQL[] = [];
 		if (e164) {
-			searchClauses.push(eq(contacts.phone, e164));
-			searchClauses.push(eq(contacts.alt_phone, e164));
+			phoneClauses.push(eq(contacts.phone, e164));
+			phoneClauses.push(eq(contacts.alt_phone, e164));
 		} else if (digits.length >= 3) {
-			searchClauses.push(ilike(contacts.phone, `%${digits}%`));
-			searchClauses.push(ilike(contacts.alt_phone, `%${digits}%`));
+			phoneClauses.push(ilike(contacts.phone, `%${digits}%`));
+			phoneClauses.push(ilike(contacts.alt_phone, `%${digits}%`));
 		}
-		const combined = or(...searchClauses);
+		const combined = or(textMatch(searchRaw, nameFields), ...phoneClauses);
 		if (combined) conditions.push(combined);
 	}
 
 	if (cursor) {
-		// cursor format: "<iso_created_at>|<id>"
-		const [createdAt, id] = cursor.split('|');
-		if (createdAt && id) {
-			conditions.push(
-				or(
-					lt(contacts.created_at, new Date(createdAt)),
-					and(eq(contacts.created_at, new Date(createdAt)), lt(contacts.id, id))
-				) as SQL
-			);
+		if (isSearching && relevance) {
+			// While searching, rows are ordered by relevance first, so the keyset
+			// cursor carries the rank too: "<rank>|<iso_created_at>|<id>".
+			const [rankStr, createdAt, id] = cursor.split('|');
+			const rank = Number(rankStr);
+			if (Number.isFinite(rank) && createdAt && id) {
+				conditions.push(
+					or(
+						gt(relevance, rank),
+						and(eq(relevance, rank), lt(contacts.created_at, new Date(createdAt))),
+						and(
+							eq(relevance, rank),
+							eq(contacts.created_at, new Date(createdAt)),
+							lt(contacts.id, id)
+						)
+					) as SQL
+				);
+			}
+		} else {
+			// cursor format: "<iso_created_at>|<id>"
+			const [createdAt, id] = cursor.split('|');
+			if (createdAt && id) {
+				conditions.push(
+					or(
+						lt(contacts.created_at, new Date(createdAt)),
+						and(eq(contacts.created_at, new Date(createdAt)), lt(contacts.id, id))
+					) as SQL
+				);
+			}
 		}
 	}
 
@@ -121,12 +167,17 @@ export const GET: RequestHandler = async (event) => {
 			last_contacted_at: contacts.last_contacted_at,
 			created_at: contacts.created_at,
 			deleted_at: contacts.deleted_at,
-			assignee_name: orgMembers.full_name
+			assignee_name: orgMembers.full_name,
+			rank: relevance ?? sql<number>`0`
 		})
 		.from(contacts)
 		.leftJoin(orgMembers, eq(orgMembers.id, contacts.assigned_to))
 		.where(and(...conditions))
-		.orderBy(desc(contacts.created_at), desc(contacts.id))
+		.orderBy(
+			...(relevance ? [relevance] : []),
+			desc(contacts.created_at),
+			desc(contacts.id)
+		)
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
@@ -134,10 +185,17 @@ export const GET: RequestHandler = async (event) => {
 	// Resolve stored R2 keys to short-lived signed URLs (cached). Only the rows
 	// that actually have a photo hit the resolver.
 	const items = await Promise.all(
-		sliced.map(async (r) => ({ ...r, avatar_url: await resolveLogoUrl(r.avatar_url) }))
+		sliced.map(async ({ rank: _rank, ...r }) => ({
+			...r,
+			avatar_url: await resolveLogoUrl(r.avatar_url)
+		}))
 	);
-	const last = items[items.length - 1];
-	const nextCursor = hasMore && last ? `${last.created_at.toISOString()}|${last.id}` : null;
+	const last = sliced[sliced.length - 1];
+	const nextCursor = hasMore && last
+		? isSearching
+			? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
+			: `${last.created_at.toISOString()}|${last.id}`
+		: null;
 
 	return json({ items, next_cursor: nextCursor });
 };

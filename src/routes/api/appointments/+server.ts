@@ -12,8 +12,12 @@ import {
 	syncAppointmentAssignees,
 	validateAssigneesBelongToOrg
 } from '$lib/server/appointments/assignees';
+import { textMatch } from '$lib/server/search/textSearch';
 
 const MAX_ROWS = 500;
+// Search runs across *all* dates (not the calendar window), so it caps lower
+// than the windowed list to stay snappy. Filter-only: no relevance reorder.
+const SEARCH_MAX_ROWS = 100;
 const VALID_STATUSES = new Set(['scheduled', 'completed', 'cancelled', 'no_show']);
 
 export const GET: RequestHandler = async (event) => {
@@ -27,28 +31,48 @@ export const GET: RequestHandler = async (event) => {
 	const statusParam = url.searchParams.get('status');
 	const assignedToParam = url.searchParams.get('assigned_to');
 	const jobIdParam = url.searchParams.get('job_id');
-
-	if (!fromParam || !toParam) {
-		return json(
-			{ error: 'from and to query params are required (ISO timestamps).' },
-			{ status: 400 }
-		);
-	}
-	const from = new Date(fromParam);
-	const to = new Date(toParam);
-	if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-		return json({ error: 'Invalid from/to date.' }, { status: 400 });
-	}
-	if (to.getTime() <= from.getTime()) {
-		return json({ error: 'to must be after from.' }, { status: 400 });
-	}
+	const searchRaw = (url.searchParams.get('q') ?? '').trim();
+	const isSearching = searchRaw.length > 0;
 
 	const conditions: SQL[] = [
 		eq(appointments.org_id, auth.orgId),
-		isNull(appointments.deleted_at),
-		gte(appointments.scheduled_start, from),
-		lt(appointments.scheduled_start, to)
+		isNull(appointments.deleted_at)
 	];
+
+	// When searching, query across ALL dates (the user is hunting by name/title,
+	// not browsing a week) — so from/to are ignored. Otherwise they are required
+	// and bound the calendar window as before.
+	if (isSearching) {
+		// Fuzzy match over the appointment title + location + the linked contact's
+		// name/company. Indexed by 0081 (title/location) and 0079 (contacts.*).
+		conditions.push(
+			textMatch(searchRaw, [
+				appointments.title,
+				appointments.location,
+				contacts.full_name,
+				contacts.company_name
+			])
+		);
+	} else {
+		if (!fromParam || !toParam) {
+			return json(
+				{ error: 'from and to query params are required (ISO timestamps).' },
+				{ status: 400 }
+			);
+		}
+		const from = new Date(fromParam);
+		const to = new Date(toParam);
+		if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+			return json({ error: 'Invalid from/to date.' }, { status: 400 });
+		}
+		if (to.getTime() <= from.getTime()) {
+			return json({ error: 'to must be after from.' }, { status: 400 });
+		}
+		conditions.push(
+			gte(appointments.scheduled_start, from),
+			lt(appointments.scheduled_start, to)
+		);
+	}
 
 	if (statusParam && VALID_STATUSES.has(statusParam)) {
 		conditions.push(eq(appointments.status, statusParam as 'scheduled'));
@@ -87,8 +111,18 @@ export const GET: RequestHandler = async (event) => {
 		.innerJoin(contacts, eq(contacts.id, appointments.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, appointments.assigned_to))
 		.where(and(...conditions))
-		.orderBy(asc(appointments.scheduled_start), asc(appointments.id))
-		.limit(MAX_ROWS);
+		// Search: nearest-in-time first — upcoming before past, then closest to
+		// now (filter-only, no relevance reorder). Calendar: plain chronological.
+		.orderBy(
+			...(isSearching
+				? [
+						sql`(${appointments.scheduled_start} < now())`,
+						sql`abs(extract(epoch from (${appointments.scheduled_start} - now())))`,
+						asc(appointments.id)
+					]
+				: [asc(appointments.scheduled_start), asc(appointments.id)])
+		)
+		.limit(isSearching ? SEARCH_MAX_ROWS : MAX_ROWS);
 
 	const items = rows.map((r) => ({
 		...r,

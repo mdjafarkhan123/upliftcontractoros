@@ -56,11 +56,14 @@ export const GET: RequestHandler = async (event) => {
 				.values({
 					org_id: quote.org_id,
 					quote_id: quote.id,
+					version: quote.current_version,
 					ip_hash: ipHash,
 					user_agent_hash: uaHash
 				})
 				.returning({ id: quoteViews.id });
 
+			// viewed_at is null on a freshly (re)sent version — so the first view of each
+			// revision flips sent→viewed and fires a version-keyed notification.
 			if (!quote.viewed_at) {
 				await tx
 					.update(quotes)
@@ -69,7 +72,14 @@ export const GET: RequestHandler = async (event) => {
 
 				await tx
 					.insert(outboxEvents)
-					.values(quoteViewedEvent({ orgId: quote.org_id, quoteId: quote.id, viewId: view.id }))
+					.values(
+						quoteViewedEvent({
+							orgId: quote.org_id,
+							quoteId: quote.id,
+							viewId: view.id,
+							version: quote.current_version
+						})
+					)
 					.onConflictDoNothing({ target: outboxEvents.idempotency_key });
 			}
 		});

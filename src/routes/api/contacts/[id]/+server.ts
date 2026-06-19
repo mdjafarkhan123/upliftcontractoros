@@ -12,8 +12,6 @@ import {
 	isAssigneeValid,
 	isReferrerValid,
 	loadContactDetail,
-	countLinkedRecords,
-	hasAnyLinks,
 	cascadeDeleteContact,
 	hardPurgeContact
 } from '$lib/server/contacts/contactRepo';
@@ -203,23 +201,6 @@ export const PATCH: RequestHandler = async (event) => {
 		existing.converted_at === null
 	) {
 		next.converted_at = new Date();
-	}
-
-	// Archiving a contact with live linked records would make it disappear from
-	// default views while opportunities/jobs/quotes/invoices/conversations still
-	// reference it. Same guard pattern as DELETE — close or reassign first.
-	if (updates.status === 'archived' && existing.status !== 'archived') {
-		const counts = await countLinkedRecords(auth.orgId, event.params.id);
-		if (hasAnyLinks(counts)) {
-			return json(
-				{
-					error: 'Contact has linked records. Close or reassign them before archiving.',
-					code: 'CONTACT_HAS_LINKS',
-					counts
-				},
-				{ status: 409 }
-			);
-		}
 	}
 
 	if (updates.assigned_to !== undefined) {

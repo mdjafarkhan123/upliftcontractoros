@@ -18,9 +18,21 @@ const VAR_RE = /\{([a-zA-Z0-9_]+)\}/g;
 export type TemplateValidation = { ok: true } | { ok: false; unknown: string[] };
 
 export function validateTemplateVariables(template: string): TemplateValidation {
+	return validateTemplateVariablesAgainst(template, ALLOWED_TEMPLATE_VARIABLES);
+}
+
+// Validate a template against an explicit allow-list. The engine-backed
+// automation cards (Stage 3.d) each support a different set of wired variables
+// (e.g. quote/invoice vars), so they validate against their card's allowed set
+// rather than the narrow global default above.
+export function validateTemplateVariablesAgainst(
+	template: string,
+	allowedVars: readonly string[]
+): TemplateValidation {
 	const found = new Set<string>();
 	let m: RegExpExecArray | null;
-	const allowed = new Set<string>(ALLOWED_TEMPLATE_VARIABLES);
+	const allowed = new Set<string>(allowedVars);
+	VAR_RE.lastIndex = 0;
 	while ((m = VAR_RE.exec(template)) !== null) {
 		const name = m[1];
 		if (!allowed.has(name)) found.add(name);

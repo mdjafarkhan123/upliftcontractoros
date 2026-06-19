@@ -51,18 +51,22 @@ You are able to use the Svelte MCP server, where you have access to comprehensiv
 ## Available Svelte MCP Tools:
 
 ### 1. list-sections
+
 Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
 When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
 
 ### 2. get-documentation
+
 Retrieves full documentation content for specific sections. Accepts single or multiple sections.
 After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
 
 ### 3. svelte-autofixer
+
 Analyzes Svelte code and returns issues and suggestions.
 You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
 
 ### 4. playground-link
+
 Generates a Svelte Playground link with the provided code.
 After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
 
@@ -109,7 +113,7 @@ Full patterns and code examples live in skills — these are the guardrails.
 1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
 2. **Tailwind CSS only** — no raw CSS files (except `app.css` for Tailwind directives and Shadcn Svelte CSS variables), no inline `style` attributes, no `<style>` blocks in `.svelte` files. All styling via Tailwind utility classes. Use the `cn()` helper for conditional classes. Shadcn Svelte components are styled through Tailwind classes and CSS variable theming defined in `app.css`. Always add required mark for mandatory form field.
 3. **Mobile-first always** — 375px base, 44px touch targets, no hover-only interactions.
-4. **CSR only** — `ssr = false` globally. Never use `+page.server.ts` for UI data. Never override.
+4. **SSR layout shell, CSR page content** — The `/(app)/+layout.svelte` shell (sidebar, nav, session) is server-side rendered for instant first paint. All page content lives under `/(app)/(pages)/` and is CSR only — no `+page.server.ts` for page data, no store reads during SSR. The root `+layout.ts` does NOT set `ssr = false`; the `(pages)` group layout does. In `/(app)/+layout.ts`, always guard `sessionStore.update()` with a `browser` check to prevent module-level state leaking between server requests. `$lib/server/*` remains forbidden in `.svelte` files and `+page.ts`.
 5. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
 6. **Workers run standalone** — `npm run worker` in a separate terminal (runs `node --env-file=.env --import tsx worker.ts`; plain `npx tsx worker.ts` fails with `DATABASE_URL is required` because it skips `.env`). Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
 7. **All permission checks go through `checkPermission()`** — the 40 booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
@@ -130,13 +134,16 @@ Full patterns and code examples live in skills — these are the guardrails.
     ```
     Never use `message`, `msg`, `details`, or any other top-level key. `field_errors` keys match the form field names exactly. UI reads `error` for toast messages and `field_errors` to map to inline field errors.
 15. **List stores cache per filter key** — every tabbed/filtered list page (contacts, jobs, invoices, quotes, appointments, etc.) uses a `SvelteMap` keyed by the filter combination, with stale-while-revalidate semantics. Never single-slot caching. Never refetch on tab switch when cached. Always render `EmptyState` (never a stuck skeleton) when `items.length === 0 && status !== 'loading'`. Full pattern in `contractor-crm-svelte-ui` → `references/list-stores.md`. Reference implementations: `src/lib/stores/contacts.svelte.ts`, `src/lib/stores/jobs.svelte.ts`.
-16. **Expert Engineer Mindset** — You are a senior developer with 20 years of experience building industry-led CRM systems. Think critically, research when needed, always prioritize performance, avoid overengineering, and design with strong UI/UX thinking from a contractor’s perspective. If you have any suggestions, present them to the user first; only implement them if permission is granted.
+16. **Expert Engineer Mindset** — You are a senior developer with 20 years of experience building industry-led CRM systems. Think critically, research when needed, always prioritize performance, avoid overengineering, and design with strong UI/UX thinking from a contractor’s perspective.
 17. **Match effort to the task — no wasted tokens.** Size up the work before acting and spend proportionally:
     - **Trivial / single-file / low-risk** (copy edits, a Tailwind class, a small UI tweak, renaming a label, a one-line fix): act directly. Do NOT load skills, do NOT fan out exploration, do NOT spawn subagents, do NOT write long thinking. Make the change and report briefly.
     - **Standard feature work**: load ONLY the one or two specific skill reference files the task names — never the whole skill set — then implement. Read only the files you will actually touch or depend on; do not re-read files already in context.
     - **High-stakes work** (schema/migrations, permissions/auth, payments, outbox/workers, tenant isolation): this is the ONLY tier that justifies deep reading and careful step-by-step reasoning. Be thorough here — these rules above demand it.
     - **Stop conditions:** if you've understood the task, stop investigating and act. Don't re-derive context you already have, don't explore "just to be safe" on low-risk work, and don't keep thinking once the path is clear. When the user interrupts, treat it as a signal you were over-investigating — switch to acting.
     - Skills and deep reasoning are tools with a cost. Use them where the rules require it (high-stakes tiers), not by default.
+18. **Plain English Always** — When explaining problems, plans, proposals, errors, or architectural decisions, lead with a plain-English summary that a non-technical person can understand. If a technical term must be used (e.g. "RLS", "idempotency", "outbox pattern", "migration", "middleware"), define it immediately in plain language — either in parentheses or a short follow-up sentence using everyday words. Never assume I already know what a term means. The goal is that I understand _what_ you are doing and _why_, not just accept your output on faith.
+19. **Plain English First, Always** — Before giving any plan, fix, proposal, or explanation, Claude must first summarize it in plain English that a non-technical person can understand. If technical words are necessary, they must be explained immediately in simple everyday language. Claude must not assume the user knows the jargon.
+20. **Industry-First Feature Design** — Before proposing or building a new feature or workflow, first explain how leading contractor/CRM platforms (Jobber, Housecall Pro, ServiceTitan, JobNimbus, GoHighLevel, Pipedrive, HubSpot) solve the same problem. Explain it in plain English. Prefer the proven industry pattern unless there is a clear reason to improve or deviate from it. Do not reinvent battle-tested workflows without justification.
 
 ---
 

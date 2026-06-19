@@ -3,6 +3,8 @@
 	import { formatCurrency } from '$lib/utils/format';
 	import type { QuoteListItem } from '$lib/types/quotes';
 	import { ChevronRight } from '@lucide/svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { quotesStore } from '$lib/stores/quotes.svelte';
 
 	let { quote }: { quote: QuoteListItem } = $props();
 
@@ -13,6 +15,7 @@
 
 <a
 	href={`/quotes/${quote.id}`}
+	use:prefetchOnIntent={() => quotesStore.prefetchDetail(quote.id)}
 	class="group flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10"
 >
 	<div class="min-w-0 flex-1">

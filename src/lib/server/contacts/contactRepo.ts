@@ -1,4 +1,4 @@
-import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	contacts,
@@ -500,70 +500,6 @@ export async function mergeContacts(
 // Bulk list actions
 // ---------------------------------------------------------------------------
 
-/** ids (from the given set) that have at least one live linked record. */
-async function findContactIdsWithLinks(orgId: string, ids: string[]): Promise<Set<string>> {
-	if (ids.length === 0) return new Set();
-	const rows = await db
-		.select({ id: contacts.id })
-		.from(contacts)
-		.where(
-			and(
-				eq(contacts.org_id, orgId),
-				inArray(contacts.id, ids),
-				or(
-					exists(
-						db
-							.select({ x: sql`1` })
-							.from(opportunities)
-							.where(
-								and(
-									eq(opportunities.contact_id, contacts.id),
-									eq(opportunities.org_id, orgId),
-									isNull(opportunities.deleted_at)
-								)
-							)
-					),
-					exists(
-						db
-							.select({ x: sql`1` })
-							.from(jobs)
-							.where(
-								and(
-									eq(jobs.contact_id, contacts.id),
-									eq(jobs.org_id, orgId),
-									isNull(jobs.deleted_at)
-								)
-							)
-					),
-					exists(
-						db
-							.select({ x: sql`1` })
-							.from(quotes)
-							.where(
-								and(
-									eq(quotes.contact_id, contacts.id),
-									eq(quotes.org_id, orgId),
-									isNull(quotes.deleted_at)
-								)
-							)
-					),
-					exists(
-						db
-							.select({ x: sql`1` })
-							.from(invoices)
-							.where(
-								and(
-									eq(invoices.contact_id, contacts.id),
-									eq(invoices.org_id, orgId),
-									isNull(invoices.deleted_at)
-								)
-							)
-					)
-				)
-			)
-		);
-	return new Set(rows.map((r) => r.id));
-}
 
 export async function cascadeDeleteContact(orgId: string, contactId: string): Promise<void> {
 	const now = new Date();
@@ -782,18 +718,113 @@ export async function bulkArchiveContacts(
 	if (candidates.length === 0) return { archived: 0, skipped: [] };
 
 	const candidateIds = candidates.map((c) => c.id);
-	const blocked = await findContactIdsWithLinks(orgId, candidateIds);
-	const archivableIds = candidateIds.filter((id) => !blocked.has(id));
+	await db
+		.update(contacts)
+		.set({ status: 'archived', updated_at: new Date() })
+		.where(and(eq(contacts.org_id, orgId), inArray(contacts.id, candidateIds)));
 
-	if (archivableIds.length > 0) {
-		await db
+	// Archive keeps all history and is fully reversible, so linked records are
+	// expected and never block it (matches the single-contact archive path).
+	// `skipped` stays in the result shape for API compatibility but is now empty.
+	return { archived: candidateIds.length, skipped: [] };
+}
+
+/**
+ * Bulk unarchive (restore from the Archived view back to the active list).
+ * A contact that was ever converted (converted_at IS NOT NULL) returns to
+ * 'customer'; otherwise it returns to 'lead'. Only archived, in-scope,
+ * non-deleted contacts are affected. Returns the number of rows restored.
+ */
+export async function bulkUnarchiveContacts(
+	orgId: string,
+	ids: string[],
+	restrictToMemberId: string | null
+): Promise<number> {
+	const restored = await db
+		.update(contacts)
+		.set({
+			status: sql`CASE WHEN ${contacts.converted_at} IS NOT NULL THEN 'customer' ELSE 'lead' END`,
+			updated_at: new Date()
+		})
+		.where(and(scopeClause(orgId, ids, restrictToMemberId), eq(contacts.status, 'archived')))
+		.returning({ id: contacts.id });
+	return restored.length;
+}
+
+/**
+ * Bulk soft-delete contacts into the recycle bin. Mirrors cascadeDeleteContact
+ * (the single-contact path) but stamps every selected contact — and the
+ * opportunities/jobs/quotes/invoices/conversations that reference them — with a
+ * single shared deleted_at instant, so the restore path can reverse the cascade
+ * per contact. In-scope, not-already-deleted contacts only. Returns the count.
+ */
+export async function bulkSoftDeleteContacts(
+	orgId: string,
+	ids: string[],
+	restrictToMemberId: string | null
+): Promise<number> {
+	const now = new Date();
+	return db.transaction(async (tx) => {
+		// Resolve the in-scope candidate ids first; children are stamped by the
+		// same id set so restricted members can't cascade outside their scope.
+		const candidates = await tx
+			.select({ id: contacts.id })
+			.from(contacts)
+			.where(scopeClause(orgId, ids, restrictToMemberId));
+		const candidateIds = candidates.map((c) => c.id);
+		if (candidateIds.length === 0) return 0;
+
+		await tx
+			.update(opportunities)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(opportunities.org_id, orgId),
+					inArray(opportunities.contact_id, candidateIds),
+					isNull(opportunities.deleted_at)
+				)
+			);
+		await tx
+			.update(jobs)
+			.set({ deleted_at: now })
+			.where(
+				and(eq(jobs.org_id, orgId), inArray(jobs.contact_id, candidateIds), isNull(jobs.deleted_at))
+			);
+		await tx
+			.update(quotes)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(quotes.org_id, orgId),
+					inArray(quotes.contact_id, candidateIds),
+					isNull(quotes.deleted_at)
+				)
+			);
+		await tx
+			.update(invoices)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(invoices.org_id, orgId),
+					inArray(invoices.contact_id, candidateIds),
+					isNull(invoices.deleted_at)
+				)
+			);
+		await tx
+			.update(conversations)
+			.set({ deleted_at: now })
+			.where(
+				and(
+					eq(conversations.org_id, orgId),
+					inArray(conversations.contact_id, candidateIds),
+					isNull(conversations.deleted_at)
+				)
+			);
+		await tx
 			.update(contacts)
-			.set({ status: 'archived', updated_at: new Date() })
-			.where(and(eq(contacts.org_id, orgId), inArray(contacts.id, archivableIds)));
-	}
+			.set({ deleted_at: now, updated_at: now })
+			.where(and(eq(contacts.org_id, orgId), inArray(contacts.id, candidateIds)));
 
-	return {
-		archived: archivableIds.length,
-		skipped: candidates.filter((c) => blocked.has(c.id))
-	};
+		return candidateIds.length;
+	});
 }

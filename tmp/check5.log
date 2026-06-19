@@ -1,0 +1,592 @@
+
+> contractoros@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: d:\Projects\ContractorOs
+Getting Svelte diagnostics...
+
+d:\Projects\ContractorOs\[32msrc\lib\server\quotes\publicAccess.ts[39m:86:4
+[31mError[39m: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'. 
+[36m			contact_name: row.contact_name,
+			[35mcontact_phone[36m: row.contact_phone,
+			org_name: row.org_name,[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:1
+[31mError[39m: Unexpected keyword or identifier. 
+[36m[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:6
+[31mError[39m: Unexpected keyword or identifier. 
+[36mNeed [35mto[36m install the following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:9
+[31mError[39m: Unexpected keyword or identifier. 
+[36mNeed to [35minstall[36m the following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:17
+[31mError[39m: Unexpected keyword or identifier. 
+[36mNeed to install [35mthe[36m following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:21
+[31mError[39m: Unexpected keyword or identifier. 
+[36mNeed to install the [35mfollowing[36m packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:2:1
+[31mError[39m: Unexpected keyword or identifier. 
+[36mNeed to install the following packages:
+[35msupabase[36m@2.106.0
+Ok to proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:2:15
+[31mError[39m: Declaration expected. 
+[36m[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:1
+[31mError[39m: Unexpected keyword or identifier. 
+[36msupabase@2.106.0
+[35mOk[36m to proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:4
+[31mError[39m: Unexpected keyword or identifier. 
+[36msupabase@2.106.0
+Ok [35mto[36m proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:20
+[31mError[39m: ':' expected. 
+[36m[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:1
+[31mError[39m: Cannot find name 'Need'. 
+[36m[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:6
+[31mError[39m: Cannot find name 'to'. 
+[36mNeed [35mto[36m install the following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:9
+[31mError[39m: Cannot find name 'install'. 
+[36mNeed to [35minstall[36m the following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:17
+[31mError[39m: Cannot find name 'the'. 
+[36mNeed to install [35mthe[36m following packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:1:21
+[31mError[39m: Cannot find name 'following'. 
+[36mNeed to install the [35mfollowing[36m packages:
+supabase@2.106.0[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:2:1
+[31mError[39m: Cannot find name 'supabase'. 
+[36mNeed to install the following packages:
+[35msupabase[36m@2.106.0
+Ok to proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:1
+[31mError[39m: Cannot find name 'Ok'. 
+[36msupabase@2.106.0
+[35mOk[36m to proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:4
+[31mError[39m: Cannot find name 'to'. 
+[36msupabase@2.106.0
+Ok [35mto[36m proceed? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:7
+[31mError[39m: Cannot find name 'proceed'. 
+[36msupabase@2.106.0
+Ok to [35mproceed[36m? (y)[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\types\supabase.ts[39m:3:17
+[31mError[39m: Cannot find name 'y'. 
+[36msupabase@2.106.0
+Ok to proceed? ([35my[36m)[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\api\webhooks\telnyx\+server.ts[39m:133:17
+[31mError[39m: Conversion of type 'TelnyxMessagePayload' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'TelnyxMessagePayload'. 
+[36m			event_type: 'sms',
+			raw_payload: [35mdata as Record<string, unknown>[36m,
+			processed_at: new Date()[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\api\webhooks\telnyx\+server.ts[39m:396:18
+[31mError[39m: Conversion of type 'TelnyxMessagePayload' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'TelnyxMessagePayload'. 
+[36m				event_type: 'status',
+				raw_payload: [35mdata as Record<string, unknown>[36m,
+				processed_at: now[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\appointments\AppointmentForm.svelte[39m:72:22
+[33mWarn[39m: This reference only captures the initial value of `appointment`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let scheduledStart = $state(
+		dateTimeLocalValue([35mappointment[36m?.scheduled_start ?? initialStart ?? null)
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\appointments\AppointmentForm.svelte[39m:72:54
+[33mWarn[39m: This reference only captures the initial value of `initialStart`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let scheduledStart = $state(
+		dateTimeLocalValue(appointment?.scheduled_start ?? [35minitialStart[36m ?? null)
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\appointments\AppointmentForm.svelte[39m:74:47
+[33mWarn[39m: This reference only captures the initial value of `appointment`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	);
+	let scheduledEnd = $state(dateTimeLocalValue([35mappointment[36m?.scheduled_end ?? initialEnd ?? null));
+	let location = $derived(appointment?.location ?? '');[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\appointments\AppointmentForm.svelte[39m:74:77
+[33mWarn[39m: This reference only captures the initial value of `initialEnd`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	);
+	let scheduledEnd = $state(dateTimeLocalValue(appointment?.scheduled_end ?? [35minitialEnd[36m ?? null));
+	let location = $derived(appointment?.location ?? '');[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\appointments\AppointmentForm.svelte[39m:81:27
+[33mWarn[39m: This reference only captures the initial value of `appointment`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	// caller has no edit rights, these stay frozen at the initial values.
+	const initialAssignees = [35mappointment[36m?.assignees ?? [];
+	let selectedIds = $state<string[]>(initialAssignees.map((a) => a.id));[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\contacts\MergeContactDialog.svelte[39m:33:26
+[33mWarn[39m: This reference only captures the initial value of `current`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	// Which record survives. Defaults to the contact you're viewing.
+	let survivorId = $state([35mcurrent[36m.id);
+	let merging = $state(false);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\OrgEditorPanels.svelte[39m:559:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="space-y-2">
+					[35m<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+						Chat mode
+					</label>[36m
+					<div class="flex gap-3">[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\OrgEditorPanels.svelte[39m:592:6
+[33mWarn[39m: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+[36m					</div>
+					[35m<button
+						type="button"
+						role="switch"
+						aria-checked={webchatWidget.is_active}
+						onclick={() => {
+							if (webchatWidget) webchatWidget.is_active = !webchatWidget.is_active;
+						}}
+						class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
+							{webchatWidget.is_active ? 'bg-indigo-600' : 'bg-slate-800/60'}"
+					>
+						<span
+							class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
+								{webchatWidget.is_active ? 'translate-x-5' : 'translate-x-0'}"
+						></span>
+					</button>[36m
+				</div>[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\OrgEditorPanels.svelte[39m:647:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="space-y-2">
+					[35m<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+						Domain allowlist
+					</label>[36m
+					<p class="text-[11px] text-slate-400">[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\OrgEditorPanels.svelte[39m:699:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="space-y-1.5">
+					[35m<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+						Widget token
+					</label>[36m
+					<p class="text-[11px] text-slate-400">Generated once. Immutable. Never editable.</p>[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\OrgEditorPanels.svelte[39m:723:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="space-y-1.5">
+					[35m<label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+						Embed snippet
+					</label>[36m
+					<p class="text-[11px] text-slate-400">[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\ReviewLinkRowControls.svelte[39m:26:25
+[33mWarn[39m: This reference only captures the initial value of `org`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m
+	let linkInput = $state([35morg[36m.google_review_link ?? '');
+	let countInput = $state<number | ''>(org.last_known_review_count ?? 0);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jafar\ReviewLinkRowControls.svelte[39m:27:39
+[33mWarn[39m: This reference only captures the initial value of `org`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let linkInput = $state(org.google_review_link ?? '');
+	let countInput = $state<number | ''>([35morg[36m.last_known_review_count ?? 0);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jobs\EditJobSheet.svelte[39m:37:43
+[33mWarn[39m: This reference only captures the initial value of `job`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let assignedTo = $derived(job.assigned_to ?? '');
+	let scheduledStart = $state(toInputValue([35mjob[36m.scheduled_start));
+	let scheduledEnd = $state(toInputValue(job.scheduled_end));[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jobs\EditJobSheet.svelte[39m:38:41
+[33mWarn[39m: This reference only captures the initial value of `job`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let scheduledStart = $state(toInputValue(job.scheduled_start));
+	let scheduledEnd = $state(toInputValue([35mjob[36m.scheduled_end));
+	let notes = $state(job.notes ?? '');[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jobs\EditJobSheet.svelte[39m:39:21
+[33mWarn[39m: This reference only captures the initial value of `job`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let scheduledEnd = $state(toInputValue(job.scheduled_end));
+	let notes = $state([35mjob[36m.notes ?? '');
+	let scopeOfWork = $state(job.scope_of_work ?? '');[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\jobs\EditJobSheet.svelte[39m:40:27
+[33mWarn[39m: This reference only captures the initial value of `job`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let notes = $state(job.notes ?? '');
+	let scopeOfWork = $state([35mjob[36m.scope_of_work ?? '');[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\settings\StripeSetupGuide.svelte[39m:7:20
+[33mWarn[39m: This reference only captures the initial value of `defaultOpen`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m
+	let open = $state([35mdefaultOpen[36m);[39m
+
+d:\Projects\ContractorOs\[32msrc\lib\components\settings\StripeTestInvoice.svelte[39m:10:21
+[33mWarn[39m: This reference only captures the initial value of `defaultEmail`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m
+	let email = $state([35mdefaultEmail[36m);
+	let sending = $state(false);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+layout.svelte[39m:20:32
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	const tabs = [
+		{ href: `/settings/booking/${[35mdata[36m.id}`, label: 'Settings', exact: true },
+		{ href: `/settings/booking/${data.id}/availability`, label: 'Availability', exact: false },[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+layout.svelte[39m:21:32
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m		{ href: `/settings/booking/${data.id}`, label: 'Settings', exact: true },
+		{ href: `/settings/booking/${[35mdata[36m.id}/availability`, label: 'Availability', exact: false },
+		{ href: `/settings/booking/${data.id}/blocked`, label: 'Blocked Dates', exact: false }[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+layout.svelte[39m:22:32
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m		{ href: `/settings/booking/${data.id}/availability`, label: 'Availability', exact: false },
+		{ href: `/settings/booking/${[35mdata[36m.id}/blocked`, label: 'Blocked Dates', exact: false }
+	];[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:183:23
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m				<Label for="slot">Slot duration <span class="text-destructive">*</span></Label>
+				<Select.Root bind:[35mvalue[36m={link.slot_duration_minutes}>
+					<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:188:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m					<Select.Content>
+						<Select.Item [35mvalue[36m={30}>30 min</Select.Item>
+						<Select.Item value={45}>45 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:189:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={30}>30 min</Select.Item>
+						<Select.Item [35mvalue[36m={45}>45 min</Select.Item>
+						<Select.Item value={60}>60 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:190:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={45}>45 min</Select.Item>
+						<Select.Item [35mvalue[36m={60}>60 min</Select.Item>
+						<Select.Item value={90}>90 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:191:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={60}>60 min</Select.Item>
+						<Select.Item [35mvalue[36m={90}>90 min</Select.Item>
+						<Select.Item value={120}>120 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:192:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={90}>90 min</Select.Item>
+						<Select.Item [35mvalue[36m={120}>120 min</Select.Item>
+					</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:198:23
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m				<Label for="buf">Buffer <span class="text-destructive">*</span></Label>
+				<Select.Root bind:[35mvalue[36m={link.buffer_minutes}>
+					<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:203:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m					<Select.Content>
+						<Select.Item [35mvalue[36m={0}>None</Select.Item>
+						<Select.Item value={15}>15 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:204:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={0}>None</Select.Item>
+						<Select.Item [35mvalue[36m={15}>15 min</Select.Item>
+						<Select.Item value={30}>30 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:205:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={15}>15 min</Select.Item>
+						<Select.Item [35mvalue[36m={30}>30 min</Select.Item>
+					</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:211:23
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m				<Label for="adv">Min advance <span class="text-destructive">*</span></Label>
+				<Select.Root bind:[35mvalue[36m={link.min_advance_hours}>
+					<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:216:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m					<Select.Content>
+						<Select.Item [35mvalue[36m={1}>1 hour</Select.Item>
+						<Select.Item value={4}>4 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:217:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={1}>1 hour</Select.Item>
+						<Select.Item [35mvalue[36m={4}>4 hours</Select.Item>
+						<Select.Item value={24}>24 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:218:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={4}>4 hours</Select.Item>
+						<Select.Item [35mvalue[36m={24}>24 hours</Select.Item>
+						<Select.Item value={48}>48 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:219:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={24}>24 hours</Select.Item>
+						<Select.Item [35mvalue[36m={48}>48 hours</Select.Item>
+					</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:225:23
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m				<Label for="hor">Booking horizon <span class="text-destructive">*</span></Label>
+				<Select.Root bind:[35mvalue[36m={link.max_future_days}>
+					<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:230:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m					<Select.Content>
+						<Select.Item [35mvalue[36m={14}>14 days</Select.Item>
+						<Select.Item value={30}>30 days</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:231:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={14}>14 days</Select.Item>
+						<Select.Item [35mvalue[36m={30}>30 days</Select.Item>
+						<Select.Item value={60}>60 days</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\[id]\+page.svelte[39m:232:20
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m						<Select.Item value={30}>30 days</Select.Item>
+						<Select.Item [35mvalue[36m={60}>60 days</Select.Item>
+					</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:610:27
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m								<Label for="slot">Slot duration <span class="text-destructive">*</span></Label>
+								<Select.Root bind:[35mvalue[36m={slot_duration_minutes}>
+									<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:615:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m									<Select.Content>
+										<Select.Item [35mvalue[36m={30}>30 min</Select.Item>
+										<Select.Item value={45}>45 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:616:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={30}>30 min</Select.Item>
+										<Select.Item [35mvalue[36m={45}>45 min</Select.Item>
+										<Select.Item value={60}>60 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:617:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={45}>45 min</Select.Item>
+										<Select.Item [35mvalue[36m={60}>60 min</Select.Item>
+										<Select.Item value={90}>90 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:618:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={60}>60 min</Select.Item>
+										<Select.Item [35mvalue[36m={90}>90 min</Select.Item>
+										<Select.Item value={120}>120 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:619:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={90}>90 min</Select.Item>
+										<Select.Item [35mvalue[36m={120}>120 min</Select.Item>
+									</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:628:27
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m								>
+								<Select.Root bind:[35mvalue[36m={buffer_minutes}>
+									<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:633:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m									<Select.Content>
+										<Select.Item [35mvalue[36m={0}>None</Select.Item>
+										<Select.Item value={15}>15 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:634:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={0}>None</Select.Item>
+										<Select.Item [35mvalue[36m={15}>15 min</Select.Item>
+										<Select.Item value={30}>30 min</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:635:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={15}>15 min</Select.Item>
+										<Select.Item [35mvalue[36m={30}>30 min</Select.Item>
+									</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:644:27
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m								>
+								<Select.Root bind:[35mvalue[36m={min_advance_hours}>
+									<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:649:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m									<Select.Content>
+										<Select.Item [35mvalue[36m={1}>1 hour</Select.Item>
+										<Select.Item value={4}>4 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:650:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={1}>1 hour</Select.Item>
+										<Select.Item [35mvalue[36m={4}>4 hours</Select.Item>
+										<Select.Item value={24}>24 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:651:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={4}>4 hours</Select.Item>
+										<Select.Item [35mvalue[36m={24}>24 hours</Select.Item>
+										<Select.Item value={48}>48 hours</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:652:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={24}>24 hours</Select.Item>
+										<Select.Item [35mvalue[36m={48}>48 hours</Select.Item>
+									</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:659:27
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m								<Label for="horizon">Booking horizon <span class="text-destructive">*</span></Label>
+								<Select.Root bind:[35mvalue[36m={max_future_days}>
+									<Select.Trigger class="h-11 w-full">[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:664:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m									<Select.Content>
+										<Select.Item [35mvalue[36m={14}>14 days</Select.Item>
+										<Select.Item value={30}>30 days</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:665:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={14}>14 days</Select.Item>
+										<Select.Item [35mvalue[36m={30}>30 days</Select.Item>
+										<Select.Item value={60}>60 days</Select.Item>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\(app)\(pages)\settings\booking\new\+page.svelte[39m:666:24
+[31mError[39m: Type 'number' is not assignable to type 'string'. (ts)
+[36m										<Select.Item value={30}>30 days</Select.Item>
+										<Select.Item [35mvalue[36m={60}>60 days</Select.Item>
+									</Select.Content>[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\book\manage\[token]\+page.svelte[39m:30:21
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let { data }: { data: { token: string } } = $props();
+	let token = $state([35mdata[36m.token);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:17:45
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m
+	let phase = $state<Phase>(phaseFromInitial([35mdata[36m.initial));
+	let hoverScore = $state<number | null>(null);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:20:3
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let selectedScore = $state<number | null>(
+		[35mdata[36m.initial.state === 'already_submitted' ? data.initial.submitted_score : null
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:20:48
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let selectedScore = $state<number | null>(
+		data.initial.state === 'already_submitted' ? [35mdata[36m.initial.submitted_score : null
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:25:3
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let resultGoogleLink = $state<string | null>(
+		[35mdata[36m.initial.state === 'already_submitted' ? data.initial.google_review_link : null
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:25:48
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let resultGoogleLink = $state<string | null>(
+		data.initial.state === 'already_submitted' ? [35mdata[36m.initial.google_review_link : null
+	);[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:28:3
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let resultPath = $state<'review' | 'feedback' | null>(
+		[35mdata[36m.initial.state === 'already_submitted' && data.initial.submitted_score
+			? data.initial.submitted_score >= 4[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:28:49
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let resultPath = $state<'review' | 'feedback' | null>(
+		data.initial.state === 'already_submitted' && [35mdata[36m.initial.submitted_score
+			? data.initial.submitted_score >= 4[39m
+
+d:\Projects\ContractorOs\[32msrc\routes\r\[token]\+page.svelte[39m:29:6
+[33mWarn[39m: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m		data.initial.state === 'already_submitted' && data.initial.submitted_score
+			? [35mdata[36m.initial.submitted_score >= 4
+				? 'review'[39m
+
+====================================
+[31msvelte-check found 61 errors and 31 warnings in 15 files
+[39m

@@ -25,6 +25,7 @@ const ORG_SAFE_FIELDS = [
 	'state',
 	'zip',
 	'is_setup_complete',
+	'ghost_lead_days',
 	'feature_overrides_updated_at',
 	'created_at'
 ] as const;

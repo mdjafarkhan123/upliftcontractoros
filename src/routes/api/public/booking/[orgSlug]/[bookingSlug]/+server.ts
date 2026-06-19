@@ -7,7 +7,7 @@
 
 import { json } from '@sveltejs/kit';
 import { addMinutes } from 'date-fns';
-import { and, eq, gte, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -289,18 +289,23 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		| { ok: false; status: number; error: string };
 	try {
 		txResult = await db.transaction(async (tx) => {
-			// 10a. Default pipeline stage
-			const [defaultStage] = await tx
+			// 10a. Pipeline entry stage. Booking-link deals enter at the "Scheduled"
+			// column (3rd position, index 2) — the appointment is already on the
+			// calendar, so they skip New Lead + Contacted (industry pattern; matches
+			// the pipeline auto-advance ratchet). Clamps to the last column for orgs
+			// with fewer stages.
+			const stageRows = await tx
 				.select({ id: pipelineStages.id })
 				.from(pipelineStages)
 				.where(
 					and(
 						eq(pipelineStages.org_id, link.org_id),
-						eq(pipelineStages.is_default, true),
 						sql`${pipelineStages.deleted_at} IS NULL`
 					)
 				)
-				.limit(1);
+				.orderBy(asc(pipelineStages.position));
+
+			const defaultStage = stageRows[Math.min(2, stageRows.length - 1)];
 
 			if (!defaultStage) {
 				return {

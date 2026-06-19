@@ -114,6 +114,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 				description: 'Add new pipeline opportunities.'
 			},
 			{
+				key: 'can_manage_pipeline',
+				label: 'Manage pipeline stages',
+				description: 'Add, rename, reorder, and configure pipeline stages.'
+			},
+			{
 				key: 'can_view_assigned_jobs',
 				label: 'View assigned jobs',
 				description: 'See jobs assigned to them.'

@@ -1,4 +1,4 @@
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
 /**
  * Sentinel prefix used to "release" a soft-deleted contact's reserved phone
@@ -58,6 +58,28 @@ export function toE164(raw: string): string {
 		if (e instanceof PhoneInvalidError) throw e;
 		throw new PhoneInvalidError();
 	}
+}
+
+/**
+ * Lenient E.164 normalization for bulk CSV import. Unlike toE164, this accepts a
+ * national-format number (e.g. "738-551-9969") by interpreting it against a
+ * default country (the org's ISO country, falling back to caller's choice). It
+ * NEVER throws — an unparseable/invalid number returns null so the caller can
+ * decide what to do (we import the contact without a phone and flag the row).
+ * A fully-international "+..." number is still honored regardless of country.
+ */
+export function toE164Loose(raw: string, defaultCountry?: string): string | null {
+	if (!raw || !raw.trim() || isReleasedPhone(raw)) return null;
+	try {
+		const parsed = parsePhoneNumberFromString(
+			raw.trim(),
+			defaultCountry as CountryCode | undefined
+		);
+		if (parsed && parsed.isValid()) return parsed.format('E.164');
+	} catch {
+		// fall through to null
+	}
+	return null;
 }
 
 export function formatPhoneDisplay(e164: string | null | undefined): string {

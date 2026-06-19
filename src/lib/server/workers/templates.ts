@@ -10,6 +10,14 @@ export type TemplateVars = {
 	location?: string | null;
 	location_block?: string | null;
 	manage_link?: string | null;
+	phone?: string | null;
+	// Resource-anchored vars (Stage 3.c.2). Quote follow-up + invoice dunning.
+	quote_number?: string | null;
+	quote_amount?: string | null;
+	quote_link?: string | null;
+	invoice_number?: string | null;
+	payment_link?: string | null;
+	due_date?: string | null;
 };
 
 export function interpolate(template: string, vars: TemplateVars): string {
@@ -24,5 +32,12 @@ export function interpolate(template: string, vars: TemplateVars): string {
 		.replaceAll('{appointment_type}', vars.appointment_type ?? '')
 		.replaceAll('{location}', vars.location ?? '')
 		.replaceAll('{location_block}', vars.location_block ?? '')
-		.replaceAll('{manage_link}', vars.manage_link ?? '');
+		.replaceAll('{manage_link}', vars.manage_link ?? '')
+		.replaceAll('{phone}', vars.phone ?? '')
+		.replaceAll('{quote_number}', vars.quote_number ?? '')
+		.replaceAll('{quote_amount}', vars.quote_amount ?? '')
+		.replaceAll('{quote_link}', vars.quote_link ?? '')
+		.replaceAll('{invoice_number}', vars.invoice_number ?? '')
+		.replaceAll('{payment_link}', vars.payment_link ?? '')
+		.replaceAll('{due_date}', vars.due_date ?? '');
 }

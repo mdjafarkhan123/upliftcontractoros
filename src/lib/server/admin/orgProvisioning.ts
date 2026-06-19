@@ -11,6 +11,7 @@ import {
 	organizations
 } from '$lib/server/db/schema';
 import { seedPipelineStages } from '$lib/server/db/seed/pipeline_stages';
+import { seedAutomationSequences } from '$lib/server/db/seed/automation_sequences';
 import {
 	featureFlagsSchema,
 	limitsSchema,
@@ -79,7 +80,10 @@ const AUTOMATION_DEFAULTS = {
 	payment_receipt_sms_message:
 		'Hi {contact_name}, thanks for your payment of {amount} to {org_name}. Reply STOP to opt out.',
 	speed_to_lead_message:
-		"Hi {contact_name}, thanks for reaching out! We'll get back to you shortly."
+		"Hi {contact_name}, thanks for reaching out! We'll get back to you shortly.",
+	speed_to_lead_email_subject: 'Thanks for reaching out to {org_name}',
+	speed_to_lead_email_message:
+		"Hi {contact_name},\n\nThanks for reaching out to {org_name} — we've got your message and someone from our team will be in touch shortly.\n\nIf it's urgent, just reply to this email and we'll get right back to you.\n\nThanks,\n{org_name}"
 } as const;
 
 async function deleteAuthUser(userId: string): Promise<string | null> {
@@ -173,6 +177,12 @@ export async function createOrganizationWithAdmin(
 				org_id: orgId,
 				...AUTOMATION_DEFAULTS
 			});
+
+			// Seed the engine recipes (speed_to_lead + missed_call) from the settings
+			// just inserted. The 3.b migration only backfilled existing orgs, so
+			// without this new orgs would have no sequences and the engine would
+			// silently no-op on enroll.
+			await seedAutomationSequences(orgId, tx);
 
 			// role is display metadata; the permission booleans are the authority.
 			await tx.insert(orgMembers).values({

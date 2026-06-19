@@ -8,6 +8,7 @@ import { updateOpportunitySchema } from '$lib/server/pipeline/schemas';
 import { canViewOpportunity, pipelineScopeFor } from '$lib/server/pipeline/permissions';
 import { loadOpportunityQuotes } from '$lib/server/pipeline/opportunityQuotes';
 import { loadOpportunityActivity } from '$lib/server/pipeline/activity';
+import { loadOpportunityFollowUps } from '$lib/server/pipeline/followUps';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -21,6 +22,7 @@ export const GET: RequestHandler = async (event) => {
 			title: opportunities.title,
 			value: opportunities.value,
 			stage_id: opportunities.stage_id,
+			status: opportunities.status,
 			contact_id: opportunities.contact_id,
 			contact_name: contacts.full_name,
 			contact_phone: contacts.phone,
@@ -28,10 +30,12 @@ export const GET: RequestHandler = async (event) => {
 			assigned_to: opportunities.assigned_to,
 			assignee_name: orgMembers.full_name,
 			lost_reason: opportunities.lost_reason,
+			lost_reason_note: opportunities.lost_reason_note,
 			closed_at: opportunities.closed_at,
 			created_at: opportunities.created_at,
 			stage_entered_at: opportunities.stage_entered_at,
-			expected_close_date: opportunities.expected_close_date
+			expected_close_date: opportunities.expected_close_date,
+			next_follow_up_at: opportunities.next_follow_up_at
 		})
 		.from(opportunities)
 		.innerJoin(contacts, eq(contacts.id, opportunities.contact_id))
@@ -48,15 +52,16 @@ export const GET: RequestHandler = async (event) => {
 	if (!row) error(404, 'Opportunity not found');
 	if (!canViewOpportunity(auth.member, row)) error(404, 'Opportunity not found');
 
-	// Inline quotes + latest 5 activity events — saves a second network round trip
-	// on mobile. The dedicated /activity endpoint exists for paginated "View all".
+	// Inline quotes + latest 5 activity events + latest 5 follow-up log entries —
+	// saves multiple round trips on mobile.
 	const includeRevenue = auth.member.can_view_revenue;
-	const [quotes, activity] = await Promise.all([
+	const [quotes, activity, follow_ups] = await Promise.all([
 		includeRevenue ? loadOpportunityQuotes(auth.orgId, row.id, 10) : Promise.resolve([]),
-		loadOpportunityActivity(auth.orgId, row.id, 5)
+		loadOpportunityActivity(auth.orgId, row.id, 5),
+		loadOpportunityFollowUps(auth.orgId, row.id, 5)
 	]);
 
-	return json({ opportunity: { ...row, quotes, activity } });
+	return json({ opportunity: { ...row, quotes, activity, follow_ups } });
 };
 
 export const PATCH: RequestHandler = async (event) => {
@@ -129,6 +134,13 @@ export const PATCH: RequestHandler = async (event) => {
 	if (input.assigned_to !== undefined) updates.assigned_to = input.assigned_to;
 	if (input.expected_close_date !== undefined)
 		updates.expected_close_date = input.expected_close_date;
+	if (input.next_follow_up_at !== undefined) {
+		updates.next_follow_up_at = input.next_follow_up_at ? new Date(input.next_follow_up_at) : null;
+		// Scheduling a follow-up resets the stale-digest dedupe guard so the deal
+		// re-enters the daily digest after this reminder fires and next_follow_up_at
+		// returns to null.
+		if (input.next_follow_up_at) updates.stale_nudged_at = null;
+	}
 
 	const assigneeChanged =
 		input.assigned_to !== undefined &&

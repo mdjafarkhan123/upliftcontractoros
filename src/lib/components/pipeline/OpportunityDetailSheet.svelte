@@ -6,12 +6,17 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
+	import ActiveAutomations from '$lib/components/automation/ActiveAutomations.svelte';
 	import LostReasonDialog from './LostReasonDialog.svelte';
 	import OpportunityQuotesSection from './OpportunityQuotesSection.svelte';
 	import OpportunityActivitySection from './OpportunityActivitySection.svelte';
+	import OpportunityFollowUpPopover from './OpportunityFollowUpPopover.svelte';
+	import OpportunityFollowUpHistory from './OpportunityFollowUpHistory.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatCurrency, formatDate } from '$lib/utils/format';
-	import type { OpportunityDetail, PipelineStageRow } from '$lib/types/pipeline';
+	import { SvelteMap } from 'svelte/reactivity';
+	import type { OpportunityDetail, OpportunityFollowUp, PipelineStageRow } from '$lib/types/pipeline';
+	import { LOST_REASON_LABELS } from '$lib/types/pipeline';
 
 	type Assignee = { id: string; full_name: string };
 
@@ -54,6 +59,20 @@
 	let lostOpen = $state(false);
 	let actionLoading = $state(false);
 	let errorMsg = $state<string | null>(null);
+	let followUpPopoverOpen = $state(false);
+
+	// New entries logged this session, keyed by opportunity.id so they scope
+	// automatically when the sheet re-opens for a different deal.
+	const followUpAdditions = new SvelteMap<string, OpportunityFollowUp[]>();
+	const localFollowUps = $derived([
+		...(followUpAdditions.get(opportunity.id) ?? []),
+		...(opportunity.follow_ups ?? [])
+	]);
+
+	function onFollowUpLogged(entry: OpportunityFollowUp) {
+		const current = followUpAdditions.get(opportunity.id) ?? [];
+		followUpAdditions.set(opportunity.id, [entry, ...current]);
+	}
 
 	$effect(() => {
 		title = opportunity.title;
@@ -63,9 +82,8 @@
 		expectedCloseDate = opportunity.expected_close_date ?? '';
 	});
 
-	const wonStage = $derived(stages.find((s) => s.is_won));
-	const lostStage = $derived(stages.find((s) => s.is_lost));
 	const currentStage = $derived(stages.find((s) => s.id === opportunity.stage_id));
+	const isOpen = $derived(opportunity.status === 'open');
 
 	const daysInStage = $derived(
 		Math.max(
@@ -106,7 +124,8 @@
 		}
 	}
 
-	async function moveToStage(targetStageId: string, lost_reason?: string) {
+	// Open→open stage move between board columns.
+	async function moveToStage(targetStageId: string) {
 		const fromStageId = opportunity.stage_id;
 		const res = await fetch(`/api/pipeline/opportunities/${opportunity.id}/stage`, {
 			method: 'PATCH',
@@ -114,23 +133,39 @@
 			body: JSON.stringify({
 				stage_id: targetStageId,
 				from_stage_id: fromStageId,
-				move_request_id: crypto.randomUUID(),
-				lost_reason
+				move_request_id: crypto.randomUUID()
 			})
 		});
 		const body = await res.json().catch(() => ({}));
 		if (res.status === 409) {
 			errorMsg = body.error ?? 'This opportunity has already moved.';
-			if (body?.current_stage_id) {
-				onChanged({ ...opportunity, stage_id: body.current_stage_id });
-			}
 			return null;
 		}
 		if (!res.ok) {
 			errorMsg = body.error ?? 'Could not move stage.';
 			return null;
 		}
-		onChanged({ ...opportunity, ...body.opportunity });
+		onChanged({ ...opportunity, ...body.data.opportunity });
+		return body;
+	}
+
+	// Terminal status transition (won/lost) via the pure-status endpoint.
+	async function markStatus(
+		status: 'won' | 'lost',
+		lost_reason?: string,
+		lost_reason_note?: string
+	) {
+		const res = await fetch(`/api/pipeline/opportunities/${opportunity.id}/status`, {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ status, request_id: crypto.randomUUID(), lost_reason, lost_reason_note })
+		});
+		const body = await res.json().catch(() => ({}));
+		if (!res.ok) {
+			errorMsg = body.error ?? 'Could not update status.';
+			return null;
+		}
+		onChanged({ ...opportunity, ...body.data.opportunity });
 		return body;
 	}
 
@@ -138,34 +173,21 @@
 		if (stageId === opportunity.stage_id) return;
 		const target = stages.find((s) => s.id === stageId);
 		if (!target) return;
-
-		if (target.is_won) {
-			wonOpen = true;
-			stageId = opportunity.stage_id;
-			return;
-		}
-		if (target.is_lost) {
-			lostOpen = true;
-			stageId = opportunity.stage_id;
-			return;
-		}
 		stageSaving = true;
 		await moveToStage(target.id);
 		stageSaving = false;
 	}
 
 	async function confirmWon() {
-		if (!wonStage) return;
 		actionLoading = true;
-		await moveToStage(wonStage.id);
+		await markStatus('won');
 		actionLoading = false;
 		wonOpen = false;
 	}
 
-	async function confirmLost(reason: string) {
-		if (!lostStage) return;
+	async function confirmLost(reason: string, note?: string) {
 		actionLoading = true;
-		await moveToStage(lostStage.id, reason);
+		await markStatus('lost', reason, note);
 		actionLoading = false;
 		lostOpen = false;
 	}
@@ -176,6 +198,7 @@
 		<Sheet.Header>
 			<Sheet.Title>Opportunity</Sheet.Title>
 		</Sheet.Header>
+
 
 		<div class="mt-4 space-y-5">
 			<div class="rounded-xl border border-border bg-muted/40 p-3">
@@ -208,7 +231,7 @@
 					<Label for="d-assignee">Assigned to</Label>
 					<Select.Root bind:value={assignedTo} disabled={!canEdit}>
 						<Select.Trigger class="h-11 w-full" disabled={!canEdit}>
-							<Select.Value />
+							{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
 						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="">Unassigned</Select.Item>
@@ -220,25 +243,37 @@
 				</div>
 			</div>
 
-			<div class="space-y-1.5">
-				<Label for="d-expected-close">Expected close date</Label>
-				<Input
-					id="d-expected-close"
-					type="date"
-					bind:value={expectedCloseDate}
-					disabled={!canEdit}
-				/>
+			<div class="grid grid-cols-2 gap-3">
+				<div class="space-y-1.5">
+					<Label for="d-expected-close">Expected close date</Label>
+					<Input
+						id="d-expected-close"
+						type="date"
+						bind:value={expectedCloseDate}
+						disabled={!canEdit}
+					/>
+				</div>
+				<div class="space-y-1.5">
+					<Label for="d-follow-up">Next follow-up</Label>
+					<OpportunityFollowUpPopover
+						opportunityId={opportunity.id}
+						currentValue={opportunity.next_follow_up_at}
+						disabled={!canEdit}
+						bind:open={followUpPopoverOpen}
+						onUpdated={(iso) => onChanged({ ...opportunity, next_follow_up_at: iso })}
+					/>
+				</div>
 			</div>
 
 			<div class="space-y-1.5">
 				<Label for="d-stage">Stage</Label>
 				<Select.Root
 					bind:value={stageId}
-					disabled={!canEdit || stageSaving}
+					disabled={!canEdit || !isOpen || stageSaving}
 					onValueChange={changeStage}
 				>
-					<Select.Trigger class="h-11 w-full" disabled={!canEdit || stageSaving}>
-						<Select.Value />
+					<Select.Trigger class="h-11 w-full" disabled={!canEdit || !isOpen || stageSaving}>
+						{stages.find((s) => s.id === stageId)?.name ?? 'Select stage'}
 					</Select.Trigger>
 					<Select.Content>
 						{#each stages as s (s.id)}
@@ -269,10 +304,20 @@
 				</div>
 			{/if}
 
-			{#if currentStage?.is_lost && opportunity.lost_reason}
+			{#if opportunity.status === 'lost' && opportunity.lost_reason}
 				<div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
 					<div class="text-xs font-medium uppercase tracking-wide text-rose-600">Lost reason</div>
-					<p class="mt-1 text-sm text-foreground">{opportunity.lost_reason}</p>
+					<p class="mt-1 text-sm font-medium text-foreground">{LOST_REASON_LABELS[opportunity.lost_reason]}</p>
+					{#if opportunity.lost_reason_note}
+						<p class="mt-1 text-sm text-muted-foreground">{opportunity.lost_reason_note}</p>
+					{/if}
+				</div>
+			{/if}
+
+			{#if opportunity.status === 'won'}
+				<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+					<div class="text-xs font-medium uppercase tracking-wide text-emerald-600">Won</div>
+					<p class="mt-1 text-sm text-foreground">A job was created for this opportunity.</p>
 				</div>
 			{/if}
 
@@ -285,12 +330,22 @@
 				/>
 			{/if}
 
+			<OpportunityFollowUpHistory
+				opportunityId={opportunity.id}
+				followUps={localFollowUps}
+				{canEdit}
+				onLogged={onFollowUpLogged}
+				onScheduleNext={() => (followUpPopoverOpen = true)}
+			/>
+
 			<OpportunityActivitySection
 				activity={opportunity.activity ?? []}
 				hasQuotes={(opportunity.quotes?.length ?? 0) > 0}
 				canCreate={canViewRevenue && canCreateQuotes}
 				{newQuoteHref}
 			/>
+
+			<ActiveAutomations contactId={opportunity.contact_id} />
 
 			{#if opportunity.closed_at}
 				<p class="text-xs text-muted-foreground">
@@ -314,7 +369,7 @@
 					/>
 				</div>
 
-				{#if !currentStage?.is_won && !currentStage?.is_lost}
+				{#if isOpen}
 					<div class="grid grid-cols-2 gap-2 pt-2">
 						<Button
 							variant="outline"
@@ -335,20 +390,20 @@
 			{/if}
 		</div>
 	</Sheet.Content>
+
+	<ConfirmDialog
+		bind:open={wonOpen}
+		title="Mark as won?"
+		description="A job will be created automatically and the contact will become a customer."
+		confirmLabel="Mark won"
+		loading={actionLoading}
+		onConfirm={confirmWon}
+	/>
+
+	<LostReasonDialog
+		bind:open={lostOpen}
+		loading={actionLoading}
+		onCancel={() => (lostOpen = false)}
+		onConfirm={confirmLost}
+	/>
 </Sheet.Root>
-
-<ConfirmDialog
-	bind:open={wonOpen}
-	title="Mark as won?"
-	description="A job will be created automatically and the contact will become a customer."
-	confirmLabel="Mark won"
-	loading={actionLoading}
-	onConfirm={confirmWon}
-/>
-
-<LostReasonDialog
-	bind:open={lostOpen}
-	loading={actionLoading}
-	onCancel={() => (lostOpen = false)}
-	onConfirm={confirmLost}
-/>

@@ -32,6 +32,12 @@ export function getNotificationHref(n: NotificationItem): string | null {
 			return id ? `/inbox/${id}` : null;
 		case 'contact_follow_up_due':
 			return id ? `/contacts/${id}` : null;
+		case 'opportunity_follow_up_due':
+			return id ? `/pipeline?deal=${id}` : null;
+		case 'opportunity_stale_digest':
+			return '/pipeline';
+		case 'contact_import_completed':
+			return '/contacts';
 		case 'appointment_booked':
 			return id ? `/appointments/${id}` : null;
 		default:

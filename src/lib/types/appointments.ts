@@ -63,4 +63,7 @@ export type AppointmentsFilters = {
 	to: string;
 	status: AppointmentStatus | 'all';
 	assignedTo: string | null;
+	// Free-text search term. When non-empty, the query searches across ALL dates
+	// (from/to ignored) and the result is a flat, nearest-first list.
+	search: string;
 };

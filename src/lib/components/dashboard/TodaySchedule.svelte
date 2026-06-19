@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { DashboardTodayJob } from '$lib/types/dashboard';
 	import { CalendarClock, ChevronRight, Clock } from '@lucide/svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 
 	let { jobs, timezone }: { jobs: DashboardTodayJob[]; timezone: string } = $props();
 
@@ -55,6 +57,7 @@
 				<li>
 					<a
 						href={`/jobs/${job.id}`}
+						use:prefetchOnIntent={() => jobDetailStore.prefetch(job.id)}
 						class="group flex min-h-[64px] items-center gap-3 px-4 py-3 transition-colors duration-150 ease-out hover:bg-card-raised focus-visible:bg-card-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<span

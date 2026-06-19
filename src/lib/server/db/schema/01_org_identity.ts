@@ -42,6 +42,35 @@ export const smsApprovalStatusEnum = pgEnum('sms_approval_status', [
 
 export const memberRoleEnum = pgEnum('member_role', ['admin', 'manager', 'member']);
 
+// When a deal flips to Won (PLAN.md §9). 'quote_acceptance' (default) = the moment the
+// client taps Accept on the public quote. 'deposit_paid' = larger contractors only count
+// the deal Won once the deposit lands. Edge: if a quote has no deposit required, acceptance
+// still wins under 'deposit_paid' (can't wait for money that was never requested).
+export const wonTriggerEnum = pgEnum('won_trigger', ['quote_acceptance', 'deposit_paid']);
+
+// Speed-to-Lead channel pick (Notification system Stage 2.a). Admin chooses how a new
+// lead gets auto-acknowledged. 'smart' = system picks per the lead's contact info +
+// consent (SMS if mobile + SMS consent, else email); 'sms'/'email' force one channel;
+// 'both' sends SMS now + an email companion. Consent (sms_opt_out / email_opt_in) always
+// overrides the setting at send time (enforced in Stage 2.b). Default 'smart'.
+export const speedToLeadChannelEnum = pgEnum('speed_to_lead_channel', [
+	'smart',
+	'sms',
+	'email',
+	'both'
+]);
+
+// Member "My Status" presets (Notification system Stage 1.b). Drives the per-status
+// channel ceiling in the notification resolver: in_office = at desk (no SMS), on_job =
+// in the field (SMS for critical/high), deep_work / off_duty = quiet down to push/SMS
+// for critical only. Default in_office.
+export const memberNotificationStatusEnum = pgEnum('member_notification_status', [
+	'in_office',
+	'on_job',
+	'deep_work',
+	'off_duty'
+]);
+
 export const organizations = pgTable('organizations', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
@@ -205,7 +234,14 @@ export const organizations = pgTable('organizations', {
 	// end_hour are 0–23; start > end means an overnight window (the common case).
 	quiet_hours_enabled: boolean('quiet_hours_enabled').notNull().default(true),
 	quiet_hours_start_hour: integer('quiet_hours_start_hour').notNull().default(21),
-	quiet_hours_end_hour: integer('quiet_hours_end_hour').notNull().default(8)
+	quiet_hours_end_hour: integer('quiet_hours_end_hour').notNull().default(8),
+
+	// --- Pipeline behavior (PLAN.md v3.1 §8/§9, Stage 1.3.A) ---
+	// When a deal counts as Won (see wonTriggerEnum). Default = on quote acceptance.
+	won_trigger: wonTriggerEnum('won_trigger').notNull().default('quote_acceptance'),
+	// After this many days of an open deal going quiet, the UI *suggests* marking it Lost
+	// (a nudge, never an auto-action). PLAN §8 Auto-Ghost rule: 7/14/21/30, default 14.
+	ghost_lead_days: integer('ghost_lead_days').notNull().default(14)
 });
 
 export type Organization = InferSelectModel<typeof organizations>;
@@ -225,6 +261,36 @@ export const orgMembers = pgTable('org_members', {
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+
+	// --- Notification identity & admin gates (Notification system Stage 1.a) ---
+	// Where this member's internal alerts go. Separate from `email` (login) — a member
+	// may receive SMS alerts on a personal mobile while logging in with a shared email.
+	// Nullable; stored E.164. NOT prefixed `can_`/named as a permission on purpose:
+	// PermissionKey is derived from every `can_*` column, so these allowance switches
+	// follow the org-layer `*_allowed` convention instead (payment_receipt_sms_allowed…).
+	notification_phone: text('notification_phone'),
+	// Admin ceiling: may this member be sent SMS alerts at all? One-way precedence —
+	// when false, no member status/preference can re-enable SMS. Default false (SMS = money).
+	sms_notifications_allowed: boolean('sms_notifications_allowed').notNull().default(false),
+	// Admin ceiling for email alerts. Default true — email is free and the safe baseline.
+	email_notifications_allowed: boolean('email_notifications_allowed').notNull().default(true),
+
+	// --- Member status + personal quiet hours (Notification system Stage 1.b) ---
+	// "My Status" preset that narrows which channels this member receives (see resolver).
+	// Default in_office. Expiry lets a temporary status auto-revert (handled in 1.f).
+	notification_status: memberNotificationStatusEnum('notification_status')
+		.notNull()
+		.default('in_office'),
+	notification_status_expires_at: timestamp('notification_status_expires_at', {
+		withTimezone: true
+	}),
+	// Personal "don't ping me" window — SEPARATE from the org's customer-facing TCPA quiet
+	// hours. Default OFF. start/end are 0–23 in the org timezone; start > end = overnight.
+	personal_quiet_hours_enabled: boolean('personal_quiet_hours_enabled').notNull().default(false),
+	personal_quiet_hours_start_hour: integer('personal_quiet_hours_start_hour'),
+	personal_quiet_hours_end_hour: integer('personal_quiet_hours_end_hour'),
+	// Minutes before an unread critical alert escalates (Stage 1.d). Default 5.
+	escalation_minutes: integer('escalation_minutes').notNull().default(5),
 
 	// Module 1: Dashboard
 	can_view_dashboard: boolean('can_view_dashboard').notNull().default(false),
@@ -256,6 +322,10 @@ export const orgMembers = pgTable('org_members', {
 		.default(false),
 	can_move_pipeline_stages: boolean('can_move_pipeline_stages').notNull().default(false),
 	can_create_opportunities: boolean('can_create_opportunities').notNull().default(false),
+	// Manage the pipeline definition itself: add/rename/reorder/recolor stages,
+	// edit probability/stale rules. Distinct from can_move_pipeline_stages
+	// (which only drags deals). Admin-tier; office managers can be granted it.
+	can_manage_pipeline: boolean('can_manage_pipeline').notNull().default(false),
 
 	// Module 4 (cont.): Jobs
 	can_view_assigned_jobs: boolean('can_view_assigned_jobs').notNull().default(false),
@@ -348,6 +418,16 @@ export const automationSettings = pgTable('automation_settings', {
 	payment_receipt_sms_message: text('payment_receipt_sms_message').notNull(),
 	speed_to_lead_enabled: boolean('speed_to_lead_enabled').notNull().default(true),
 	speed_to_lead_message: text('speed_to_lead_message').notNull(),
+	// Stage 2.a: how a new lead gets auto-acknowledged. 'smart' default picks the channel
+	// per the lead's contact info + consent (see speedToLeadChannelEnum). Email template
+	// is used for the 'email'/'both'/'smart→email' paths (send logic lands in Stage 2.b).
+	speed_to_lead_channel: speedToLeadChannelEnum('speed_to_lead_channel').notNull().default('smart'),
+	speed_to_lead_email_subject: text('speed_to_lead_email_subject').notNull(),
+	speed_to_lead_email_message: text('speed_to_lead_email_message').notNull(),
+	// Stage 3.a: auto-create a pipeline opportunity in the default stage when a
+	// genuine inbound lead arrives (lead.created). Default-on, GHL/HubSpot pattern.
+	// Gates auto-create only; the first-contact ratchet auto-advance is always on.
+	auto_create_opp_on_lead: boolean('auto_create_opp_on_lead').notNull().default(true),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });

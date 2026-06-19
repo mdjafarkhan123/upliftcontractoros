@@ -14,6 +14,7 @@ export type ValidQuoteRow = {
 	quote_number: number;
 	title: string;
 	status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'changes_requested';
+	current_version: number;
 	subtotal: string;
 	tax_rate: string;
 	tax_amount: string;
@@ -43,6 +44,7 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			quote_number: quotes.quote_number,
 			title: quotes.title,
 			status: quotes.status,
+			current_version: quotes.current_version,
 			subtotal: quotes.subtotal,
 			tax_rate: quotes.tax_rate,
 			tax_amount: quotes.tax_amount,
@@ -88,6 +90,7 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			quote_number: row.quote_number,
 			title: row.title,
 			status: row.status,
+			current_version: row.current_version,
 			subtotal: row.subtotal,
 			tax_rate: row.tax_rate,
 			tax_amount: row.tax_amount,

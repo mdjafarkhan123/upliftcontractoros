@@ -482,9 +482,160 @@ async function processSmsSend(job: Job<SmsJobData>) {
 	}
 }
 
+/**
+ * Staff-alert SMS (Notification system Stage 1.c-2). A team member gets a text on
+ * their `notification_phone` (NOT a customer number) for a critical/high alert. This
+ * path is intentionally separate from processSmsSend: it writes NO messages /
+ * conversation row and skips every customer-facing gate (contact opt-out, released
+ * number, org quiet hours — those are customer-TCPA concerns). It still passes the org
+ * SMS master-gate + carrier-approval gate and reserves real credit before sending.
+ *
+ * Idempotency: the credit reservation is keyed on a synthetic message id
+ * `member_notif:{outbox_event_id}:{member_id}`, so a retry never double-charges; the
+ * BullMQ jobId (set by the outbox dispatcher) blocks duplicate enqueues.
+ *
+ * Staff opt-out is governed upstream by `sms_notifications_allowed` + per-type prefs
+ * (resolveChannels), so there is no per-SMS STOP footer here — Twilio still honors
+ * carrier-level STOP keywords per recipient.
+ */
+async function processMemberSmsSend(job: Job<SmsJobData>) {
+	const data = job.data;
+	const p = data.payload as {
+		org_id?: string;
+		member_id?: string;
+		notification_phone?: string;
+		body?: string;
+	};
+	const orgId = p.org_id ?? data.org_id ?? undefined;
+	const memberId = p.member_id;
+	const toPhone = p.notification_phone?.trim();
+	const body = p.body;
+	if (!orgId || !memberId || !toPhone || !body) {
+		log.warn({
+			phase: 'member_sms_missing_fields',
+			outbox_event_id: data.outbox_event_id,
+			has_org: Boolean(orgId),
+			has_member: Boolean(memberId),
+			has_phone: Boolean(toPhone),
+			has_body: Boolean(body)
+		});
+		return;
+	}
+
+	const [org] = await db
+		.select({
+			sms_enabled: organizations.sms_enabled,
+			twilio_phone_number: organizations.twilio_phone_number,
+			twilio_subaccount_sid: organizations.twilio_subaccount_sid,
+			sms_approval_status: organizations.sms_approval_status
+		})
+		.from(organizations)
+		.where(eq(organizations.id, orgId))
+		.limit(1);
+
+	// Org SMS master-gate — the same chokepoint customer SMS passes. Off / unconfigured
+	// / unapproved → drop silently (the member still got in-app + push upstream). No row
+	// to mark, so we just return; nothing is charged.
+	if (!org || !org.sms_enabled || !org.twilio_phone_number) {
+		log.info({ phase: 'member_sms_gate_blocked', org_id: orgId, member_id: memberId });
+		return;
+	}
+	if (org.sms_approval_status === 'pending' || org.sms_approval_status === 'rejected') {
+		log.info({
+			phase: 'member_sms_carrier_blocked',
+			org_id: orgId,
+			member_id: memberId,
+			approval: org.sms_approval_status
+		});
+		return;
+	}
+
+	const credit = await getCreditState(db, orgId);
+	if (!credit) {
+		log.warn({ phase: 'member_sms_no_credit_account', org_id: orgId, member_id: memberId });
+		return;
+	}
+	const costStr = credit.per_sms_cost.toFixed(4);
+	const synthMessageId = `member_notif:${data.outbox_event_id}:${memberId}`;
+
+	// Reserve credit BEFORE the Twilio call (committed first so the balance can never go
+	// negative). Idempotent on the synthetic id — a retry returns 'already_charged'.
+	try {
+		await db.transaction(async (tx) => {
+			await reserveSmsCredit(tx, {
+				orgId,
+				messageId: synthMessageId,
+				cost: costStr,
+				monthlyIncludedCredit: credit.monthly_included_credit
+			});
+		});
+	} catch (err) {
+		if (err instanceof InsufficientCreditError) {
+			log.warn({
+				phase: 'member_sms_insufficient_credit',
+				org_id: orgId,
+				member_id: memberId,
+				balance: err.balance,
+				cost: err.cost
+			});
+			return; // dropped, not charged
+		}
+		throw err;
+	}
+
+	const attemptNumber = job.attemptsMade + 1;
+
+	try {
+		await sendSms(org.twilio_phone_number, toPhone, body, {
+			subaccountSid: org.twilio_subaccount_sid
+		});
+		log.info({ phase: 'member_sms_sent', org_id: orgId, member_id: memberId });
+	} catch (err) {
+		const reason = err instanceof Error ? err.message : String(err);
+		const permanent = isPermanentFailure(err);
+		log.error({
+			phase: 'member_sms_send_failed',
+			org_id: orgId,
+			member_id: memberId,
+			attempt: attemptNumber,
+			permanent,
+			error: reason
+		});
+
+		if (permanent) {
+			// Twilio rejected it outright — refund so the org isn't charged for a send
+			// that never went out. Idempotent on the synthetic id.
+			await db.transaction(async (tx) => {
+				await refundSmsCredit(tx, {
+					orgId,
+					messageId: synthMessageId,
+					note: 'Permanent member SMS failure'
+				});
+			});
+			return;
+		}
+
+		if (attemptNumber >= (job.opts.attempts ?? 3)) {
+			// All retries exhausted — refund the reservation.
+			await db.transaction(async (tx) => {
+				await refundSmsCredit(tx, {
+					orgId,
+					messageId: synthMessageId,
+					note: 'Member SMS retries exhausted'
+				});
+			});
+		}
+		throw err; // let BullMQ retry transient failures
+	}
+}
+
 export const smsWorker = new Worker<SmsJobData>(
 	SMS_QUEUE,
 	async (job) => {
+		if (job.name === 'member_notification.sms.requested') {
+			await processMemberSmsSend(job);
+			return;
+		}
 		if (job.name !== 'sms.send.requested') {
 			log.warn({ phase: 'unknown_job', name: job.name });
 			return;

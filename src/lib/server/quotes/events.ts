@@ -33,14 +33,16 @@ export function quoteViewedEvent(args: {
 	orgId: string;
 	quoteId: string;
 	viewId: string;
+	version: number;
 }): NewOutboxEvent {
 	return {
 		org_id: args.orgId,
 		event_type: 'quote.viewed',
 		resource_type: 'quote',
 		resource_id: args.quoteId,
-		payload: { quote_id: args.quoteId, view_id: args.viewId },
-		idempotency_key: `quote.viewed:${args.quoteId}`
+		payload: { quote_id: args.quoteId, view_id: args.viewId, version: args.version },
+		// Keyed per version so the first view of each revision (v1, v2…) notifies once.
+		idempotency_key: `quote.viewed:${args.quoteId}:v${args.version}`
 	};
 }
 

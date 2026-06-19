@@ -4,6 +4,8 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { Calendar, MapPin, User } from '@lucide/svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 
 	let {
 		appointment,
@@ -15,6 +17,7 @@
 
 <a
 	href={`/appointments/${appointment.id}`}
+	use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(appointment.id)}
 	class={[
 		'block rounded-xl border p-4 transition-colors hover:bg-accent/40 active:bg-accent/60',
 		highlight ? 'border-primary bg-primary/5' : 'border-border bg-card'

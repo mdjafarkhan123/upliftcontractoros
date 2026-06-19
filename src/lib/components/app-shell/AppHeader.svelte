@@ -4,6 +4,8 @@
 	import OrgAvatar from './OrgAvatar.svelte';
 	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
 	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
+	import { Search } from '@lucide/svelte';
+	import { commandPalette } from '$lib/stores/commandPalette.svelte';
 
 	let { org, member }: { org: Org; member: OrgMember } = $props();
 </script>
@@ -40,6 +42,14 @@
 				<NotificationBell />
 			</div>
 			<div class="flex items-center gap-1.5 md:hidden">
+				<button
+					type="button"
+					onclick={() => (commandPalette.open = true)}
+					class="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					aria-label="Search"
+				>
+					<Search class="h-5 w-5" />
+				</button>
 				<ThemeToggle />
 				<NotificationBell />
 			</div>

@@ -219,9 +219,10 @@ export const AUTOMATION_JOB_FEATURE_MAP: Record<string, FeatureFlagKey> = {
 	'review.nudge_1': 'feature_review_funnel',
 	'review.nudge_2': 'feature_review_funnel',
 	'review.expire': 'feature_review_funnel',
+	// appointment_reminder enrolls into the engine sequence (Stage 3.c.3); the old
+	// per-fire appointment_reminder_24h/1h jobs are gone. appointment_cancel_reminders
+	// is intentionally ungated so a stop always lands even if the feature was disabled.
 	appointment_reminder: 'feature_appointment_reminders',
-	appointment_reminder_24h: 'feature_appointment_reminders',
-	appointment_reminder_1h: 'feature_appointment_reminders',
 	appointment_reschedule: 'feature_appointment_reminders',
 	appointment_confirmation: 'feature_appointment_reminders'
 };

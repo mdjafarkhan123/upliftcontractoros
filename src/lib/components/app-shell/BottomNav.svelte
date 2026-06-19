@@ -3,12 +3,15 @@
 	import { cn } from '$lib/utils/cn';
 	import type { NavItem } from '$lib/permissions/nav';
 	import { MORE_ITEM } from '$lib/permissions/nav';
+	import { inboxUnreadStore } from '$lib/stores/inboxUnread.svelte';
 
 	let {
 		primary,
 		hasSecondary,
 		onMoreClick
 	}: { primary: NavItem[]; hasSecondary: boolean; onMoreClick: () => void } = $props();
+
+	const inboxBadge = $derived(inboxUnreadStore.count > 9 ? '9+' : String(inboxUnreadStore.count));
 
 	function isActive(href: string): boolean {
 		const path = page.url.pathname;
@@ -34,7 +37,17 @@
 			)}
 			aria-current={active ? 'page' : undefined}
 		>
-			<Icon class="h-5 w-5" />
+			<span class="relative">
+				<Icon class="h-5 w-5" />
+				{#if item.key === 'inbox' && inboxUnreadStore.count > 0}
+					<span
+						class="absolute -right-2 -top-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[10px] font-semibold leading-none text-white tabular-nums"
+						aria-label="{inboxUnreadStore.count} unread conversations"
+					>
+						{inboxBadge}
+					</span>
+				{/if}
+			</span>
 			<span class="truncate">{item.label}</span>
 		</a>
 	{/each}

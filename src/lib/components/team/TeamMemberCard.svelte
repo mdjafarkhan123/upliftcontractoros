@@ -2,6 +2,8 @@
 	import { cn } from '$lib/utils/cn';
 	import { ChevronRight } from '@lucide/svelte';
 	import type { TeamMemberItem } from '$lib/stores/team.svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { teamDetailStore } from '$lib/stores/teamDetail.svelte';
 
 	let {
 		member,
@@ -50,6 +52,7 @@
 <button
 	type="button"
 	{onclick}
+	use:prefetchOnIntent={() => teamDetailStore.prefetch(member.id)}
 	class={cn(
 		'group flex w-full min-h-[72px] items-center gap-4 rounded-xl border border-border/60 bg-card px-4 py-4 text-left shadow-sm',
 		'transition-all duration-150 ease-out hover:border-border hover:bg-muted/30 hover:shadow-md',

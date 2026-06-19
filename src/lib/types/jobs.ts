@@ -56,6 +56,7 @@ export type JobsFilters = {
 	scope: JobsFilterScope | null;
 	assignedTo: string | null;
 	contactId: string | null;
+	search: string;
 };
 
 export type JobsStats = {

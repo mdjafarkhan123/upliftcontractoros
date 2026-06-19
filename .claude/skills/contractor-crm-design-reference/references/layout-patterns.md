@@ -228,6 +228,45 @@ The app has **two navigation modes**:
 
 ---
 
+## Settings & Form Pages — Desktop Treatment (DO NOT ship mobile-only)
+
+> **Mobile-first ≠ mobile-only.** A single stacked column of full-bleed cards is the
+> *mobile* layout. If you ship that same layout untouched on desktop it looks like a
+> blown-up phone screen — this is a defect, not a neutral default. Every settings /
+> form / config page MUST add a desktop treatment on top of the mobile stack.
+
+**Non-negotiables for any settings or multi-section form page:**
+
+1. **Centre the content with a max-width.** Never let a form/settings page run wall-to-wall
+   on desktop. Wrap the content in `mx-auto w-full max-w-3xl` (single-column forms) or
+   `max-w-5xl` (card grids). Full-bleed text fields stretched across a 1440px monitor are
+   the #1 "looks like mobile" tell.
+2. **Use the horizontal space — multi-column at `lg`.** A list of independent setting cards
+   becomes `grid grid-cols-1 lg:grid-cols-2 gap-4`. Do not stack 10 cards in one column on
+   desktop. (Keep the editor *inside* a card single-column for readability.)
+3. **Collapse long, repeated content — accordions, not endless scroll.** If a page shows
+   many sections or a card contains a variable number of sub-items (steps, rules, follow-ups),
+   they MUST be collapsible. Default to collapsed with a one-line summary (status · count ·
+   key setting) so the user can scan "how many / what state" at a glance, then expand to edit.
+   Never render every section fully-expanded as one long wall.
+4. **Cards get a real identity — big icon tile + title + status + summary.** A settings card
+   header is an icon tile (`h-11 w-11`/`h-12 w-12 rounded-xl` with a colored accent —
+   `bg-{accent}-50 text-{accent}-600 dark:bg-{accent}-500/10 dark:text-{accent}-400`), the
+   title, a one-line description, and a meta/status line. A bare title + switch reads as a
+   cheap mobile list row.
+5. **"Add" affordances must look like buttons.** An add-item control is a clearly clickable
+   button — `border-2 border-dashed` with an icon in a filled `rounded-full` chip and a bold
+   label, plus a hover state (`hover:border-primary/50 hover:bg-primary/5`). A thin flat line
+   of muted text is NOT a discoverable action.
+6. **Cards expand to full width when opened in a grid.** In an `lg:grid-cols-2` card grid, the
+   actively-expanded card takes `lg:col-span-2` so its editor isn't cramped into half a column.
+
+Reference implementation: `src/routes/(app)/(pages)/settings/automation/+page.svelte` +
+`src/lib/components/settings/automation/AutomationCardShell.svelte` (icon-tile accordion card),
+`SequenceCard.svelte` / `SequenceStepEditor.svelte` (nested step accordion + add button).
+
+---
+
 ## Content Grids
 
 ```svelte

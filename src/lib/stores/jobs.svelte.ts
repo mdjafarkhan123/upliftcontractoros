@@ -21,7 +21,7 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: JobsFilters): string {
-	return `${f.status}|${f.scope ?? ''}|${f.assignedTo ?? ''}|${f.contactId ?? ''}`;
+	return `${f.status}|${f.scope ?? ''}|${f.assignedTo ?? ''}|${f.contactId ?? ''}|${f.search}`;
 }
 
 function buildParams(f: JobsFilters, cursor: string | null): URLSearchParams {
@@ -33,6 +33,7 @@ function buildParams(f: JobsFilters, cursor: string | null): URLSearchParams {
 	}
 	if (f.assignedTo) params.set('assigned_to', f.assignedTo);
 	if (f.contactId) params.set('contact_id', f.contactId);
+	if (f.search) params.set('q', f.search);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }
@@ -69,6 +70,18 @@ export const jobsStore = {
 	},
 	get lastFetchedAt() {
 		return cache.get(currentKey)?.fetchedAt ?? 0;
+	},
+
+	/**
+	 * Find an already-loaded list row by id across every cached filter key.
+	 * Used to seed the detail page header instantly while the full record loads.
+	 */
+	getById(id: string): JobListItem | null {
+		for (const entry of cache.values()) {
+			const found = entry.items.find((i) => i.id === id);
+			if (found) return found;
+		}
+		return null;
 	},
 
 	async load(filters: JobsFilters, force = false): Promise<void> {

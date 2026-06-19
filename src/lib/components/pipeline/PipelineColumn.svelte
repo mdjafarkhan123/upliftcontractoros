@@ -5,41 +5,50 @@
 	import OpportunityCard from './OpportunityCard.svelte';
 	import { formatCurrency } from '$lib/utils/format';
 	import type { OpportunityRow } from '$lib/types/pipeline';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { opportunityDetailStore } from '$lib/stores/opportunityDetail.svelte';
+	import { cn } from '$lib/utils/cn';
 
 	type Props = {
 		stageId: string;
 		stageName: string;
 		stageColor: string;
-		isWon: boolean;
-		isLost: boolean;
 		staleAfterDays: number | null;
 		items: OpportunityRow[];
 		canDrag: boolean;
 		canAdd?: boolean;
+		canMarkStatus?: boolean;
 		showStageTotal?: boolean;
 		isFiltering?: boolean;
+		ghostLeadDays?: number | null;
+		fill?: boolean;
 		onConsider: (e: CustomEvent<DndEvent<OpportunityRow>>) => void;
 		onFinalize: (e: CustomEvent<DndEvent<OpportunityRow>>) => void;
 		onCardClick: (id: string) => void;
 		onAdd?: (stageId: string) => void;
+		onMarkStatus?: (id: string, status: 'won' | 'lost') => void;
+		onQuickFollowUp?: (id: string, preset: 'tomorrow' | 'in3days' | 'clear') => void;
 	};
 
 	let {
 		stageId,
 		stageName,
 		stageColor,
-		isWon,
-		isLost,
 		staleAfterDays,
 		items,
 		canDrag,
 		canAdd = false,
+		canMarkStatus = false,
 		showStageTotal = true,
 		isFiltering = false,
+		ghostLeadDays = null,
+		fill = false,
 		onConsider,
 		onFinalize,
 		onCardClick,
-		onAdd
+		onAdd,
+		onMarkStatus,
+		onQuickFollowUp
 	}: Props = $props();
 
 	const totalValue = $derived(
@@ -64,9 +73,12 @@
 </script>
 
 <section
-	class="relative flex h-full w-[280px] shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/30 shadow-card sm:w-[300px]"
-	class:border-l-4={isWon || isLost}
-	style:border-left-color={isWon || isLost ? stageColor : undefined}
+	class={cn(
+		'relative flex h-full snap-start flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/30 shadow-card',
+		fill
+			? 'min-w-[220px] flex-1'
+			: 'w-[280px] shrink-0 sm:w-[300px]'
+	)}
 	data-stage-id={stageId}
 >
 	<div class="h-[3px] w-full shrink-0" style:background-color={stageColor} aria-hidden="true"></div>
@@ -113,6 +125,7 @@
 					tabindex="0"
 					aria-label={`${opp.contact_name} — ${opp.title}`}
 					class="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					use:prefetchOnIntent={() => opportunityDetailStore.prefetch(opp.id)}
 					onclick={() => onCardClick(opp.id)}
 					onkeydown={(e) => onCardKey(e, opp.id)}
 				>
@@ -123,6 +136,15 @@
 						assignee_name={opp.assignee_name}
 						stage_entered_at={opp.stage_entered_at}
 						stale_after_days={staleAfterDays}
+						next_follow_up_at={opp.next_follow_up_at}
+						expected_close_date={opp.expected_close_date}
+						last_contacted_at={opp.last_contacted_at ?? null}
+						quote={opp.quote ?? null}
+						{ghostLeadDays}
+						{canMarkStatus}
+						onMarkWon={() => onMarkStatus?.(opp.id, 'won')}
+						onMarkLost={() => onMarkStatus?.(opp.id, 'lost')}
+						onQuickFollowUp={(preset) => onQuickFollowUp?.(opp.id, preset)}
 					/>
 				</div>
 			{/each}
@@ -141,7 +163,7 @@
 		{/if}
 	</div>
 
-	{#if canAdd && !isWon && !isLost && onAdd}
+	{#if canAdd && onAdd}
 		<button
 			type="button"
 			class="flex items-center justify-center gap-1.5 border-t border-border/60 bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"

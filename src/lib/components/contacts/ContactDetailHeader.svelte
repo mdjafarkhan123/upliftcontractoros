@@ -7,6 +7,7 @@
 	import { formatPhoneDisplay } from '$lib/utils/phone';
 	import { TEMPERATURE_META, type LeadTemperature } from '$lib/contacts/temperature';
 	import { PHONE_LABEL_DISPLAY, type PhoneLabel } from '$lib/contacts/phoneLabel';
+	import { leadSourceLabel } from '$lib/contacts/leadSource';
 	import {
 		ArrowLeft,
 		Trash2,
@@ -15,6 +16,7 @@
 		Pencil,
 		UserPlus,
 		Merge,
+		Radio,
 		Flame,
 		Ban,
 		Archive,
@@ -33,6 +35,7 @@
 		status,
 		assignee_name,
 		referrer,
+		lead_source = null,
 		lead_temperature = null,
 		next_follow_up_at = null,
 		do_not_contact = false,
@@ -59,6 +62,7 @@
 		status: 'lead' | 'customer' | 'archived';
 		assignee_name?: string | null;
 		referrer?: { id: string; name: string } | null;
+		lead_source?: string | null;
 		lead_temperature?: LeadTemperature | null;
 		next_follow_up_at?: string | null;
 		do_not_contact?: boolean;
@@ -85,6 +89,11 @@
 		next_follow_up_at !== null && new Date(next_follow_up_at).getTime() <= Date.now()
 	);
 	const temp = $derived(lead_temperature ? TEMPERATURE_META[lead_temperature] : null);
+	// "Manual" carries no marketing signal (staff typed the contact in), so we hide
+	// it — the chip is only worth showing when it tells you where a lead came from.
+	const sourceLabel = $derived(
+		lead_source && lead_source !== 'manual' ? leadSourceLabel(lead_source) : null
+	);
 </script>
 
 <header class="space-y-4">
@@ -230,6 +239,13 @@
 						<UserPlus class="h-3.5 w-3.5" />
 						Ref: {referrer.name}
 					</a>
+				{/if}
+				{#if sourceLabel}
+					<span class="inline-flex items-center gap-1 text-sm text-muted-foreground">
+						<Radio class="h-3.5 w-3.5 text-muted-foreground/60" />
+						<span class="text-muted-foreground/60">Source</span>
+						<span class="font-medium text-foreground">{sourceLabel}</span>
+					</span>
 				{/if}
 			</div>
 		</div>

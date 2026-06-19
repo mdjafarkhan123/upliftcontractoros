@@ -58,31 +58,31 @@ SUPABASE REALTIME
 ### Flow 2 — Opportunity Won → Job Created
 
 ```
-API ROUTE: PATCH /api/opportunities/:id/stage
+API ROUTE: PATCH /api/pipeline/opportunities/:id/status   (body: { status: 'won', request_id })
 
 BEGIN TRANSACTION
-  → UPDATE opportunities SET stage_id = won_stage_id, closed_at = now()
+  → UPDATE opportunities SET status = 'won', closed_at = now()   (stage_id UNCHANGED)
   → INSERT jobs (opportunity_id, contact_id, title, status = 'scheduled')
   → UPDATE contacts SET status = 'customer'
-  → INSERT outbox_events × 4 (single batch):
-        1. opportunity.stage_changed  idempotency: stage_changed:{move_request_id}
-                                       payload includes from/to_stage_name, contact_id, assigned_to
-        2. opportunity.won            idempotency: opportunity.won:{opp_id}
+  → INSERT outbox_events × 3 (single batch):
+        1. opportunity.won            idempotency: opportunity.won:{opp_id}
                                        payload includes contact_id, title, value, assigned_to
-        3. job.created                idempotency: job.created:{job_id}
-        4. contact.status_changed     idempotency: status_changed:{contact_id}:{opp_id}
+        2. job.created                idempotency: job.created:{job_id}
+        3. contact.status_changed     idempotency: status_changed:{contact_id}:{opp_id}
                                        payload: { new_status: 'customer', triggered_by_opportunity_id }
 COMMIT
 
-NOTE: Jobs are ONLY created by the Won stage trigger. No other path creates a job.
+NOTE: Pure-status model. Won is a STATUS transition, not a stage move — the deal
+      keeps its stage_id, so NO opportunity.stage_changed is emitted (3 events, not 4).
+NOTE: Jobs are ONLY created by the Won trigger. No other path creates a job.
+      Duplicate Won is idempotent (UNIQUE on jobs.opportunity_id).
 
 OUTBOX WORKER (single tick, single tx)
-→ Claims all 4 events (ordered by sequence ASC)
-→ opportunity.stage_changed → no queue (feed-only); INSERT activity_events
+→ Claims all 3 events (ordered by sequence ASC)
 → opportunity.won           → queue:notification-dispatch; INSERT activity_events
 → job.created               → queue:notification-dispatch; INSERT activity_events
 → contact.status_changed    → no queue (feed-only); INSERT activity_events
-→ Marks all 4 outbox rows processed
+→ Marks all 3 outbox rows processed
 
 BULLMQ NOTIFICATION WORKER
 → opportunity.won: assignee (or admin/manager) — type 'opportunity.won'
@@ -90,7 +90,7 @@ BULLMQ NOTIFICATION WORKER
 
 SUPABASE REALTIME
 → Contractor sees "Opportunity won" and "New job created" notifications
-→ Dashboard Recent Activity feed populates with 4 entries (one per event)
+→ Dashboard Recent Activity feed populates with 3 entries (one per event)
 ```
 
 ---
@@ -115,13 +115,14 @@ opportunity.assignee_changed   (NEW — replaces opportunity.updated)
   Same-target reassignment is idempotent; reassigning to someone new is a fresh event.
 
 opportunity.stage_changed
-  Producer: PATCH /api/pipeline/opportunities/[id]/stage (every move, including won/lost)
+  Producer: PATCH /api/pipeline/opportunities/[id]/stage (every open→open move)
   Routing:  activity_events ONLY — no notification, no queue
   Idempotency: opportunity.stage_changed:{move_request_id}  (client UUID, double-click safe)
   Payload includes from/to_stage_name so the feed can render "moved to {stage}" without joins.
 
 opportunity.lost
-  Producer: Stage move into is_lost stage (always co-emitted with stage_changed)
+  Producer: PATCH /api/pipeline/opportunities/[id]/status (body: { status: 'lost', request_id, lost_reason })
+            Pure-status model — Lost is a status transition, NOT a stage move. Not co-emitted with stage_changed.
   Routing:  queue:notification-dispatch + activity_events
   Notify:   assignee if set; else admin + manager
   Idempotency: opportunity.lost:{opp_id}
@@ -130,6 +131,82 @@ opportunity.lost
 The `opportunity.updated` event was removed. Title/value edits emit no
 event. If you need an edit audit trail later, model it as a dedicated
 table — do **not** revive `opportunity.updated`.
+
+---
+
+### Flow 2c — Opportunity Follow-up Due (cron-driven reminder)
+
+Per-deal follow-up reminder. Mirrors the contact `follow-up-due-sweep` stack.
+`next_follow_up_at` is set on a deal (detail-sheet popover, card kebab quick-set,
+or notification deep-link); a cron sweep fires the reminder when it comes due.
+
+```
+opportunity.follow_up_due
+  Producer: cron opportunity-follow-up-due-sweep (*/15 * * * *, UTC)
+            Claims open, non-deleted deals where next_follow_up_at <= now()
+            (FOR UPDATE OF o SKIP LOCKED), clears next_follow_up_at in the SAME
+            tx it inserts the outbox row — fires exactly once; re-dating re-arms.
+            Joins contacts for full_name + last_contacted_at (rich copy).
+  Routing:  queue:notification only (no activity_events, no SMS/email — internal reminder)
+  Notify:   assignee if set; else admin + manager (pipelineRecipients) — never dropped.
+            Unlike contact.follow_up_due, UNASSIGNED deals are still claimed and
+            routed to the manager fallback.
+  Idempotency (outbox):       opportunity.follow_up_due:{opp_id}:{due_at ISO}
+  Idempotency (per recipient): opportunity.follow_up_due:{opp_id}:{due_at ISO}:{member_id}
+  Notification copy: "Follow up with {name}" / "{deal} · ${value} · last contact {N}d ago"
+  Deep-link: /pipeline?deal={id}  (board auto-opens the detail sheet on mount, then strips the param)
+```
+
+`next_follow_up_at` is distinct from `expected_close_date`: the former is an
+actionable task (drives the reminder + card signal dot); the latter is a forecast
+date only. Setting/clearing the follow-up via PATCH emits **no** outbox event — only
+the cron sweep does, when the time arrives.
+
+---
+
+### Flow 2d — Inbound Lead → Auto-Create Deal + Milestone Ratchet (Stage 3.a + 1.1)
+
+Reactive pipeline automation. No new endpoints — it hangs off the existing
+inbound-capture events via two ungated automation jobs.
+
+```
+AUTO-CREATE (lead.created)
+  Producer: any genuine inbound capture (twilio/telnyx SMS, webchat, messenger,
+            email inbound) emits lead.created ONLY for a brand-new contact.
+  Outbox routes lead.created → speed_to_lead + new_lead notification +
+            pipeline_auto_create.
+  pipeline_auto_create handler:
+    → exits if automation_settings.auto_create_opp_on_lead = false
+    → exits if the contact already has any non-deleted opportunity (race guard)
+    → resolves the org's default (is_default) stage
+    → INSERT opportunities (entry stage, title = contact.full_name,
+        next_follow_up_at from stage default) + emit opportunity.created
+      (idempotency opportunity.created:{opp_id}; payload.source='auto_lead_capture')
+  Result: the deal shows on the board + fires the normal created notification/feed.
+
+MILESTONE RATCHET (Stage 1.1 — "board reflects work done, not a to-do list")
+  pipeline_auto_advance is now POSITION-TARGETED: each milestone advances the
+  contact's OPEN deal to a SPECIFIC column (by position, since stages are
+  org-configurable), forward-only, never past a column a human already set.
+  Targets (clamped to the last column for orgs with fewer stages):
+    pos 1 (Contacted) ← message.sent by a HUMAN (sent_by != null) OR call.logged
+                        outcome=spoke. INBOUND message.received does NOT advance.
+    pos 2 (Scheduled) ← appointment.created / appointment.booked (any booked
+                        appointment; no tentative gate — appointment_status has no
+                        'confirmed' value). Cancelling never pulls it back.
+    pos 3 (Quoted)    ← quote.sent. First quote only — re-sends no-op via the gate.
+  Handler: loads active stages in position order (needs ≥2); resolves the target
+  stage (Math.min(targetPos, len-1)); earlierStageIds = every column before the
+  target; finds the contact's OPEN deal sitting in one of those earlier columns
+  (else no-op); conditional UPDATE … WHERE stage_id IN (earlierStageIds) AND
+  status='open' (forward-only ratchet: 0 rows on a race/manual move → no-op) +
+  emit opportunity.stage_changed (idempotency
+  opportunity.stage_changed:{source}:{opp_id}; source =
+  auto_contacted | auto_scheduled | auto_quoted). A deal may skip columns (e.g.
+  a booking jumps pos 0 → pos 2). Always on — no toggle (auto-CREATE still gated
+  on auto_create_opp_on_lead). Direct booking-link deals are created directly at
+  pos 2 (Scheduled), skipping New Lead + Contacted.
+```
 
 ---
 

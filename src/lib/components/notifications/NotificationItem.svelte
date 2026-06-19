@@ -14,7 +14,8 @@
 		Reply,
 		Star,
 		ThumbsDown,
-		Trophy
+		Trophy,
+		Upload
 	} from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { cn } from '$lib/utils/cn';
@@ -45,7 +46,10 @@
 		'message.received': MessageSquare,
 		'call.missed': PhoneMissed,
 		appointment_booked: CalendarCheck,
-		contact_follow_up_due: CalendarClock
+		contact_follow_up_due: CalendarClock,
+		opportunity_follow_up_due: CalendarClock,
+		opportunity_stale_digest: CalendarClock,
+		contact_import_completed: Upload
 	};
 
 	type IconColorScheme = 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -63,7 +67,10 @@
 		'review.received': 'primary',
 		'job.created': 'info',
 		appointment_booked: 'info',
-		contact_follow_up_due: 'info'
+		contact_follow_up_due: 'info',
+		opportunity_follow_up_due: 'info',
+		opportunity_stale_digest: 'warning',
+		contact_import_completed: 'info'
 	};
 
 	const iconColorClasses: Record<
@@ -117,7 +124,9 @@
 		'quote.deposit_paid': { priority: 'high', label: 'Deposit' },
 		'job.created': { priority: 'medium', label: 'New job' },
 		appointment_booked: { priority: 'medium', label: 'Upcoming' },
-		contact_follow_up_due: { priority: 'low', label: 'Reminder' }
+		contact_follow_up_due: { priority: 'low', label: 'Reminder' },
+		opportunity_follow_up_due: { priority: 'medium', label: 'Reminder' },
+		opportunity_stale_digest: { priority: 'medium', label: 'Action needed' }
 	};
 
 	const priorityColors: Record<PriorityLevel, string> = {
@@ -142,7 +151,10 @@
 		'job.created': { label: 'View job', icon: ArrowRight },
 		appointment_booked: { label: 'View', icon: ArrowRight },
 		'opportunity.won': { label: 'View deal', icon: ArrowRight },
-		contact_follow_up_due: { label: 'Follow up', icon: ArrowRight }
+		contact_follow_up_due: { label: 'Follow up', icon: ArrowRight },
+		opportunity_follow_up_due: { label: 'View deal', icon: ArrowRight },
+		opportunity_stale_digest: { label: 'View pipeline', icon: ArrowRight },
+		contact_import_completed: { label: 'View contacts', icon: ArrowRight }
 	};
 
 	const Icon = $derived<Component>(iconByType[notification.type] ?? Bell);

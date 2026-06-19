@@ -222,6 +222,14 @@ export const bulkContactActionSchema = z.discriminatedUnion('action', [
 	z.object({
 		action: z.literal('archive'),
 		contact_ids: contactIds
+	}),
+	z.object({
+		action: z.literal('unarchive'),
+		contact_ids: contactIds
+	}),
+	z.object({
+		action: z.literal('delete'),
+		contact_ids: contactIds
 	})
 ]);
 

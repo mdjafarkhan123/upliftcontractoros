@@ -64,11 +64,12 @@ export const POST: RequestHandler = async (event) => {
 			org_id: string;
 			status: string;
 			quote_number: number;
+			current_version: number;
 			stored_hash: string;
 			deleted_at: Date | null;
 			expires_at: Date | null;
 		}>(sql`
-			SELECT id, org_id, status, quote_number,
+			SELECT id, org_id, status, quote_number, current_version,
 				public_token_hash AS stored_hash, deleted_at, expires_at
 			FROM quotes WHERE public_token_hash = ${tokenHash}
 			FOR UPDATE
@@ -89,6 +90,7 @@ export const POST: RequestHandler = async (event) => {
 			.values({
 				org_id: row.org_id,
 				quote_id: row.id,
+				version: row.current_version,
 				message: clean,
 				requested_at: now
 			})

@@ -41,10 +41,11 @@ import './src/lib/server/workers/emailWorker';
 import './src/lib/server/workers/smsWorker';
 import './src/lib/server/workers/mediaWorker';
 import './src/lib/server/workers/messengerWorker';
+import './src/lib/server/workers/contactImportWorker';
 import { registerCronJobs } from './src/lib/server/cron';
 
 registerCronJobs();
 
 console.log(
-	'[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m \x1b[35mmessenger\x1b[0m + cron active'
+	'[worker] Started — \x1b[36moutbox\x1b[0m \x1b[32mautomation\x1b[0m \x1b[33mnotification\x1b[0m \x1b[35memail\x1b[0m \x1b[34msms\x1b[0m \x1b[35mmessenger\x1b[0m \x1b[32mcontact-import\x1b[0m + cron active'
 );

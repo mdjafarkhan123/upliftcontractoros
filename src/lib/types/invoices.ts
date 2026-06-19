@@ -8,6 +8,7 @@ export type InvoicesStatusChip = 'all' | InvoiceStatus;
 export type InvoicesFilters = {
 	group: InvoicesGroup;
 	status: InvoicesStatusChip;
+	search: string;
 };
 
 export type InvoiceListItem = {

@@ -10,6 +10,7 @@ import {
 } from '$lib/server/db/schema';
 import { verifyTelnyxSignature } from '$lib/server/telnyx/client';
 import { detectOptKeyword } from '$lib/server/twilio/optOut';
+import { stopEnrollmentsForContact } from '$lib/server/automation/engine';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/conversations';
@@ -157,6 +158,8 @@ async function handleInbound(data: TelnyxMessagePayload): Promise<Response> {
 				updated_at: new Date()
 			})
 			.where(eq(contacts.id, existingContact.id));
+		// Hard stop any active sequence-engine enrollment for this contact (Stage 3.b).
+		await stopEnrollmentsForContact(org.id, existingContact.id, 'opt_out');
 		return new Response(null, { status: 204 });
 	}
 

@@ -105,6 +105,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 				key: 'can_create_opportunities',
 				label: 'Create opportunities',
 				description: 'Add new pipeline opportunities'
+			},
+			{
+				key: 'can_manage_pipeline',
+				label: 'Manage pipeline stages',
+				description: 'Add, rename, reorder, and configure pipeline stages'
 			}
 		]
 	},
@@ -291,6 +296,7 @@ export const MANAGER_TEMPLATE: PermissionValues = {
 	can_view_assigned_opportunities: true,
 	can_move_pipeline_stages: true,
 	can_create_opportunities: true,
+	can_manage_pipeline: false,
 	can_view_assigned_jobs: true,
 	can_view_all_quotes: true,
 	can_create_quotes: true,
@@ -336,6 +342,7 @@ export const MEMBER_TEMPLATE: PermissionValues = {
 	can_view_assigned_opportunities: false,
 	can_move_pipeline_stages: false,
 	can_create_opportunities: false,
+	can_manage_pipeline: false,
 	can_view_assigned_jobs: true,
 	can_view_all_quotes: false,
 	can_create_quotes: false,

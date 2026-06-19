@@ -161,10 +161,9 @@ export const GET: RequestHandler = async (event) => {
 							coalesce(sum(o.value) filter (where o.closed_at >= ${periodStart}), 0)::text as value,
 							count(*) filter (where o.closed_at >= ${lastPeriodStart} and o.closed_at < ${periodStart})::int as count_last_period
 						from opportunities o
-						join pipeline_stages s on s.id = o.stage_id
 						where o.org_id = ${orgId}
 							and o.deleted_at is null
-							and s.is_won = true
+							and o.status = 'won'
 							and o.closed_at is not null
 							and o.closed_at >= ${lastPeriodStart}
 					`);
@@ -381,8 +380,6 @@ export const GET: RequestHandler = async (event) => {
 							name: string;
 							color: string;
 							position: number;
-							is_won: boolean;
-							is_lost: boolean;
 							count: number;
 							value: string;
 						}>(sql`
@@ -391,14 +388,12 @@ export const GET: RequestHandler = async (event) => {
 									s.name,
 									s.color,
 									s.position,
-									s.is_won,
-									s.is_lost,
-									count(o.id) filter (where o.id is not null and o.deleted_at is null)::int as count,
-									coalesce(sum(o.value) filter (where o.deleted_at is null), 0)::text as value
+									count(o.id) filter (where o.id is not null and o.deleted_at is null and o.status = 'open')::int as count,
+									coalesce(sum(o.value) filter (where o.deleted_at is null and o.status = 'open'), 0)::text as value
 								from pipeline_stages s
 								left join opportunities o on o.stage_id = s.id and o.org_id = s.org_id
 								where s.org_id = ${orgId} and s.deleted_at is null
-								group by s.id, s.name, s.color, s.position, s.is_won, s.is_lost
+								group by s.id, s.name, s.color, s.position
 								order by s.position asc
 							`);
 						return rows as unknown as DashboardPipelineStage[];

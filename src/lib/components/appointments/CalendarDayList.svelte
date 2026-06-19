@@ -6,6 +6,8 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
 	let { anchor, days, items }: { anchor: Date; days: number; items: AppointmentListItem[] } =
@@ -57,6 +59,7 @@
 						<li>
 							<a
 								href={`/appointments/${item.id}`}
+								use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(item.id)}
 								class="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40 active:bg-accent/60"
 							>
 								<div class="w-16 shrink-0 text-xs font-medium text-muted-foreground">

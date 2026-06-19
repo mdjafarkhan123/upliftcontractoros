@@ -7,13 +7,16 @@
  * Idempotency:
  *   - UPDATE only matches sent/viewed rows past expires_at, so re-runs are
  *     no-ops once everything has flipped.
- *   - outbox_events.idempotency_key = `quote.expired:{quote_id}` — once
- *     emitted, the unique index blocks duplicates.
+ *   - outbox_events.idempotency_key = `quote.expired:{quote_id}:{expires_at}` —
+ *     keyed per validity cycle so a quote that is Extended (gets a NEW expires_at,
+ *     status back to sent) can expire and notify again next time around.
  * Failure behavior:
  *   - Errors bubble to runGuarded() which catches, logs, and continues.
  */
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
+import { contacts } from '$lib/server/db/schema';
+import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format';
 import type { CronJobResult } from './index';
 
 type ExpiredRow = {
@@ -41,13 +44,36 @@ export async function runQuoteExpirySweep(): Promise<CronJobResult> {
 		const rows = updated as unknown as ExpiredRow[];
 		let processed = 0;
 
+		// One batched lookup of customer names so the expiry notification can read
+		// "Your quote to Sarah expired" without an N+1 per row.
+		const nameById = new Map<string, string>();
+		if (rows.length > 0) {
+			const names = await tx
+				.select({ id: contacts.id, full_name: contacts.full_name })
+				.from(contacts)
+				.where(
+					inArray(
+						contacts.id,
+						rows.map((r) => r.contact_id)
+					)
+				);
+			for (const n of names) nameById.set(n.id, n.full_name);
+		}
+
 		for (const q of rows) {
+			const customerName = nameById.get(q.contact_id) ?? '';
+			const quoteNumberDisplay = formatQuoteNumber(q.quote_number);
+			const amountFormatted = formatCurrencyUsd(q.total);
 			const payload = {
 				quote_id: q.id,
 				contact_id: q.contact_id,
 				quote_number: q.quote_number,
+				quote_number_display: quoteNumberDisplay,
 				total: q.total,
-				expires_at: q.expires_at
+				amount_formatted: amountFormatted,
+				customer_name: customerName,
+				expires_at: q.expires_at,
+				summary: `Quote ${quoteNumberDisplay}${customerName ? ` to ${customerName}` : ''} expired`
 			};
 
 			await tx.execute(sql`
@@ -57,7 +83,7 @@ export async function runQuoteExpirySweep(): Promise<CronJobResult> {
 				) VALUES (
 					${q.org_id}, 'quote.expired', 1, 'quote', ${q.id},
 					${JSON.stringify(payload)}::jsonb,
-					${`quote.expired:${q.id}`}
+					${`quote.expired:${q.id}:${q.expires_at}`}
 				)
 				ON CONFLICT (idempotency_key) DO NOTHING
 			`);

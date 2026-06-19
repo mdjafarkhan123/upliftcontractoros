@@ -28,6 +28,7 @@ import {
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { createInvoiceSchema } from '$lib/server/invoices/schemas';
+import { textMatch, textRank } from '$lib/server/search/textSearch';
 import { generateToken } from '$lib/server/quotes/token';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
@@ -46,6 +47,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const url = event.url;
 	const statusParam = url.searchParams.get('status') ?? 'all';
+	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const cursor = url.searchParams.get('cursor');
 
 	const conditions: SQL[] = [eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at)];
@@ -72,15 +74,47 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(eq(invoices.status, statusParam as 'draft'));
 	}
 
+	// Fuzzy search across invoice title + linked contact name/company, plus an
+	// exact/prefix match on the invoice number so typing "1042" finds invoice #1042.
+	const isSearching = searchRaw.length > 0;
+	const searchFields = [invoices.title, contacts.full_name, contacts.company_name];
+	let relevance: SQL<number> | null = null;
+	if (isSearching) {
+		relevance = textRank(searchRaw, searchFields);
+		const matchClauses: SQL[] = [textMatch(searchRaw, searchFields)];
+		if (/^\d+$/.test(searchRaw)) {
+			matchClauses.push(sql`CAST(${invoices.invoice_number} AS text) LIKE ${`${searchRaw}%`}`);
+		}
+		conditions.push(or(...matchClauses) as SQL);
+	}
+
 	if (cursor) {
-		const [createdAt, id] = cursor.split('|');
-		if (createdAt && id) {
-			conditions.push(
-				or(
-					lt(invoices.created_at, new Date(createdAt)),
-					and(eq(invoices.created_at, new Date(createdAt)), lt(invoices.id, id))
-				) as SQL
-			);
+		if (isSearching && relevance) {
+			const [rankStr, createdAt, id] = cursor.split('|');
+			const rank = Number(rankStr);
+			if (Number.isFinite(rank) && createdAt && id) {
+				conditions.push(
+					or(
+						gt(relevance, rank),
+						and(eq(relevance, rank), lt(invoices.created_at, new Date(createdAt))),
+						and(
+							eq(relevance, rank),
+							eq(invoices.created_at, new Date(createdAt)),
+							lt(invoices.id, id)
+						)
+					) as SQL
+				);
+			}
+		} else {
+			const [createdAt, id] = cursor.split('|');
+			if (createdAt && id) {
+				conditions.push(
+					or(
+						lt(invoices.created_at, new Date(createdAt)),
+						and(eq(invoices.created_at, new Date(createdAt)), lt(invoices.id, id))
+					) as SQL
+				);
+			}
 		}
 	}
 
@@ -98,24 +132,31 @@ export const GET: RequestHandler = async (event) => {
 			contact_name: contacts.full_name,
 			sent_at: invoices.sent_at,
 			paid_at: invoices.paid_at,
-			created_at: invoices.created_at
+			created_at: invoices.created_at,
+			rank: relevance ?? sql<number>`0`
 		})
 		.from(invoices)
 		.innerJoin(contacts, eq(contacts.id, invoices.contact_id))
 		.where(and(...conditions))
-		.orderBy(desc(invoices.created_at), desc(invoices.id))
+		.orderBy(...(relevance ? [relevance] : []), desc(invoices.created_at), desc(invoices.id))
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const items = (hasMore ? rows.slice(0, PAGE_SIZE) : rows).map((r) => ({
+	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const items = sliced.map(({ rank: _rank, ...r }) => ({
 		...r,
 		invoice_number_display: formatInvoiceNumber(r.invoice_number),
 		created_at: r.created_at.toISOString(),
 		sent_at: r.sent_at?.toISOString() ?? null,
 		paid_at: r.paid_at?.toISOString() ?? null
 	}));
-	const last = items[items.length - 1];
-	const nextCursor = hasMore && last ? `${last.created_at}|${last.id}` : null;
+	const last = sliced[sliced.length - 1];
+	const nextCursor =
+		hasMore && last
+			? isSearching
+				? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
+				: `${last.created_at.toISOString()}|${last.id}`
+			: null;
 
 	return json({ items, next_cursor: nextCursor });
 };

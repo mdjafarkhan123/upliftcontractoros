@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { ChevronRight, FileText, Calendar, GitBranch, Hand, Plus } from '@lucide/svelte';
 	import { getMemberContext } from '$lib/context/member';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { opportunityDetailStore } from '$lib/stores/opportunityDetail.svelte';
 
 	let {
 		job_id,
@@ -43,6 +45,7 @@
 	{#if opportunity_id}
 		<a
 			href={`/pipeline/${opportunity_id}`}
+			use:prefetchOnIntent={() => opportunityDetailStore.prefetch(opportunity_id)}
 			class="flex items-center justify-between gap-3 border-b border-border p-4 transition-colors hover:bg-accent/40 active:bg-accent/60"
 		>
 			<div class="flex items-center gap-3">

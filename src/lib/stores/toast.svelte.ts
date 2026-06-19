@@ -1,10 +1,13 @@
 export type ToastVariant = 'success' | 'error' | 'info';
 
+export type ToastAction = { label: string; href: string };
+
 export type Toast = {
 	id: string;
 	variant: ToastVariant;
 	message: string;
 	description?: string;
+	action?: ToastAction;
 	createdAt: number;
 };
 
@@ -24,11 +27,19 @@ function makeId(): string {
 function push(
 	variant: ToastVariant,
 	message: string,
-	opts?: { description?: string; duration?: number }
+	opts?: { description?: string; duration?: number; action?: ToastAction }
 ): string {
 	const id = makeId();
-	items.push({ id, variant, message, description: opts?.description, createdAt: Date.now() });
-	const duration = opts?.duration ?? DEFAULT_DURATIONS[variant];
+	items.push({
+		id,
+		variant,
+		message,
+		description: opts?.description,
+		action: opts?.action,
+		createdAt: Date.now()
+	});
+	// Toasts with an action get extra time so the user can tap it.
+	const duration = opts?.duration ?? (opts?.action ? 7000 : DEFAULT_DURATIONS[variant]);
 	if (duration > 0) {
 		const handle = setTimeout(() => dismiss(id), duration);
 		timers.set(id, handle);
@@ -56,13 +67,13 @@ export const toast = {
 	get items(): Toast[] {
 		return items;
 	},
-	success(message: string, opts?: { description?: string; duration?: number }): string {
+	success(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
 		return push('success', message, opts);
 	},
-	error(message: string, opts?: { description?: string; duration?: number }): string {
+	error(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
 		return push('error', message, opts);
 	},
-	info(message: string, opts?: { description?: string; duration?: number }): string {
+	info(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
 		return push('info', message, opts);
 	},
 	dismiss,

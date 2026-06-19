@@ -37,7 +37,8 @@ export const callOutcomeEnum = pgEnum('call_outcome', [
 	'spoke',
 	'voicemail',
 	'no_answer',
-	'follow_up_scheduled'
+	'follow_up_scheduled',
+	'wrong_number'
 ]);
 
 export const messageStatusEnum = pgEnum('message_status', [

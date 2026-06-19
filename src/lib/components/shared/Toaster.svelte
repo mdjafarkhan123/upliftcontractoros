@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle2, AlertCircle, Info, X } from '@lucide/svelte';
+	import { CheckCircle2, AlertCircle, Info, X, ArrowRight } from '@lucide/svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast, type ToastVariant } from '$lib/stores/toast.svelte';
@@ -45,6 +45,16 @@
 				<p class="font-medium leading-snug text-foreground">{t.message}</p>
 				{#if t.description}
 					<p class="mt-0.5 text-xs leading-snug text-muted-foreground">{t.description}</p>
+				{/if}
+				{#if t.action}
+					<a
+						href={t.action.href}
+						onclick={() => toast.dismiss(t.id)}
+						class="mt-2 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg border border-current/20 bg-current/5 px-3 text-xs font-semibold transition-colors hover:bg-current/10 active:scale-[0.98]"
+					>
+						{t.action.label}
+						<ArrowRight class="h-3.5 w-3.5 shrink-0" />
+					</a>
 				{/if}
 			</div>
 			<button

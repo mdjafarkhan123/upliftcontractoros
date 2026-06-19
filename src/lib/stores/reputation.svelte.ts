@@ -1,3 +1,4 @@
+import { SvelteMap } from 'svelte/reactivity';
 import type {
 	FunnelPeriod,
 	FunnelSummary,
@@ -77,7 +78,71 @@ function makeListStore<T>(endpoint: string) {
 	};
 }
 
-export const reviewsStore = makeListStore<ReviewListItem>('/api/reviews');
+// Reviews use server-side trigram search (incl. the review body), so unlike the
+// other two lists they cache per search term with stale-while-revalidate — each
+// term gets its own slot, switching back to a prior term is instant.
+function makeSearchableReviewsStore() {
+	const cache = new SvelteMap<string, CacheEntry<ReviewListItem>>();
+	let currentKey = $state('');
+	let status = $state<Status>('idle');
+	let error = $state<string | null>(null);
+	let controller: AbortController | null = null;
+
+	return {
+		get items(): ReviewListItem[] {
+			return cache.get(currentKey)?.items ?? [];
+		},
+		get status() {
+			return status;
+		},
+		get error() {
+			return error;
+		},
+		async load(rawTerm = '', force = false): Promise<void> {
+			const term = rawTerm.trim();
+			currentKey = term;
+
+			const cached = cache.get(term);
+			const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
+			if (fresh && !force) {
+				status = 'ready';
+				error = null;
+				return;
+			}
+
+			if (controller) controller.abort();
+			controller = new AbortController();
+			status = cached ? 'revalidating' : 'loading';
+			error = null;
+			try {
+				const url = term ? `/api/reviews?q=${encodeURIComponent(term)}` : '/api/reviews';
+				const res = await fetch(url, { signal: controller.signal });
+				if (!res.ok) throw new Error(`Failed (${res.status})`);
+				const body = (await res.json()) as { items: ReviewListItem[] };
+				cache.set(term, { items: body.items, fetchedAt: Date.now() });
+				status = 'ready';
+			} catch (e) {
+				if ((e as { name?: string })?.name === 'AbortError') return;
+				error = e instanceof Error ? e.message : 'Failed to load';
+				status = cached ? 'ready' : 'error';
+			} finally {
+				controller = null;
+			}
+		},
+		invalidate(): void {
+			cache.clear();
+			currentKey = '';
+			status = 'idle';
+			error = null;
+			if (controller) {
+				controller.abort();
+				controller = null;
+			}
+		}
+	};
+}
+
+export const reviewsStore = makeSearchableReviewsStore();
 export const privateFeedbackStore = makeListStore<PrivateFeedbackListItem>('/api/private-feedback');
 export const reviewRequestsStore = makeListStore<ReviewRequestListItem>('/api/review-requests');
 

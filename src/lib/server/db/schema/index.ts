@@ -31,9 +31,11 @@ export {
 	contactStatusEnum,
 	addressLabelEnum,
 	leadSourceTypeEnum,
+	contactImportStatusEnum,
 	contacts,
 	contactAddresses,
-	contactNotes
+	contactNotes,
+	contactImports
 } from './02_contacts';
 export type {
 	Contact,
@@ -41,12 +43,29 @@ export type {
 	ContactAddress,
 	NewContactAddress,
 	ContactNote,
-	NewContactNote
+	NewContactNote,
+	ContactImport,
+	NewContactImport,
+	ContactImportErrorRow
 } from './02_contacts';
 
 // Domain 3 — Pipeline
-export { pipelineStages, opportunities } from './03_pipeline';
-export type { PipelineStage, NewPipelineStage, Opportunity, NewOpportunity } from './03_pipeline';
+export {
+	pipelineStatusEnum,
+	pipelineLostReasonEnum,
+	pipelineStages,
+	opportunities,
+	followUpOutcomeEnum,
+	opportunityFollowUps
+} from './03_pipeline';
+export type {
+	PipelineStage,
+	NewPipelineStage,
+	Opportunity,
+	NewOpportunity,
+	OpportunityFollowUp,
+	NewOpportunityFollowUp
+} from './03_pipeline';
 
 // Domain 4 — Jobs
 export { jobStatusEnum, jobs } from './04_jobs';
@@ -79,6 +98,7 @@ export {
 	paymentMethodEnum,
 	quotes,
 	quoteLineItems,
+	quoteVersions,
 	quoteViews,
 	quoteChangeRequests,
 	quoteTemplates,
@@ -93,6 +113,9 @@ export type {
 	NewQuote,
 	QuoteLineItem,
 	NewQuoteLineItem,
+	QuoteVersion,
+	NewQuoteVersion,
+	QuoteVersionLineItem,
 	QuoteView,
 	NewQuoteView,
 	QuoteChangeRequest,
@@ -204,6 +227,23 @@ export type {
 	MessengerContact,
 	NewMessengerContact
 } from './15_messenger';
+
+// Domain 18 — Automation Engine (card/template multi-step sequences)
+export {
+	automationStepChannelEnum,
+	automationEnrollmentStatusEnum,
+	automationSequences,
+	automationSequenceSteps,
+	automationEnrollments
+} from './18_automation_engine';
+export type {
+	AutomationSequence,
+	NewAutomationSequence,
+	AutomationSequenceStep,
+	NewAutomationSequenceStep,
+	AutomationEnrollment,
+	NewAutomationEnrollment
+} from './18_automation_engine';
 
 // Domain 10 — Growth, Automation & System
 export {

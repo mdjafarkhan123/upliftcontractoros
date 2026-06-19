@@ -1,5 +1,5 @@
 import { Worker, type Job } from 'bullmq';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
 	appointments,
@@ -7,12 +7,15 @@ import {
 	automationSettings,
 	contacts,
 	invoices,
+	opportunities,
 	organizations,
 	outboxEvents,
+	pipelineStages,
 	quotes,
 	reviewRequests,
 	type AutomationJob
 } from '$lib/server/db/schema';
+import { markOpportunityWon, markOpportunityLost } from '$lib/server/pipeline/transitions';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
 import { deactivatePaymentLink, getOrgStripeClient } from '$lib/server/invoices/stripe';
@@ -23,6 +26,15 @@ import {
 	redisConnection
 } from '$lib/server/queue/bullmq';
 import { interpolate } from './templates';
+import {
+	enroll,
+	advanceEnrollment,
+	resumeEnrollment,
+	pauseEnrollmentsForLeadReply,
+	stopEnrollmentsForContact,
+	stopEnrollmentsForResource,
+	reanchorEnrollments
+} from '$lib/server/automation/engine';
 import { generateReviewToken, reviewTokenExpiry } from '$lib/server/reputation/token';
 import { buildReviewLink } from '$lib/server/reputation/reviewLink';
 import { buildManageLink } from '$lib/server/tokens/appointmentManageToken';
@@ -135,174 +147,324 @@ async function isJobCancelled(automationJobId: string): Promise<boolean> {
 	return row?.status === 'cancelled';
 }
 
-async function cancelPendingJobs(
-	orgId: string,
-	type: AutomationJob['type'],
-	resourceId: string
-): Promise<void> {
-	const pending = await db
-		.select()
-		.from(automationJobs)
-		.where(
-			and(
-				eq(automationJobs.org_id, orgId),
-				eq(automationJobs.type, type),
-				eq(automationJobs.resource_id, resourceId),
-				eq(automationJobs.status, 'pending')
-			)
-		);
-	if (pending.length === 0) return;
-	const q = automationQueue();
-	for (const row of pending) {
-		try {
-			const bullJob = await q.getJob(row.bull_job_id);
-			if (bullJob) await bullJob.remove();
-		} catch (err) {
-			console.warn(`[automation] failed to remove bull job ${row.bull_job_id}:`, err);
-		}
-	}
-	await db
-		.update(automationJobs)
-		.set({ status: 'cancelled', updated_at: new Date() })
-		.where(
-			inArray(
-				automationJobs.id,
-				pending.map((r) => r.id)
-			)
-		);
-}
-
 // ---- Handlers ----
 
-async function handleSpeedToLead(data: EventJobData) {
+// Speed-to-Lead now runs on the sequence engine (Stage 3.b). `lead.created`
+// enrolls the contact into the org's `speed_to_lead` sequence; the engine sends
+// the instant reply (step 0) and drives the follow-up steps, channel fallback,
+// quiet hours, and stop/pause conditions. The enrollment's partial-unique index
+// is the idempotency guard (one non-terminal enrollment per contact+sequence).
+async function handleSpeedToLeadEnroll(data: EventJobData) {
 	if (!data.org_id) return;
-	const { org, settings } = await loadContext(data.org_id);
-	// Master SMS gate: speed-to-lead is SMS-only, so skip when the org's master SMS
-	// switch is off — avoids creating a doomed automation job + undeliverable message.
-	if (!org || !org.sms_enabled || !settings || !settings.speed_to_lead_enabled) return;
-	const contact = await loadContact(data.org_id, data.resource_id);
-	if (!contact || contact.sms_opt_out) return;
+	const contactId = (data.payload.contact_id as string | undefined) ?? data.resource_id;
+	if (!contactId) return;
+	await enroll({
+		orgId: data.org_id,
+		sequenceKey: 'speed_to_lead',
+		contactId,
+		resourceType: 'contact',
+		resourceId: contactId
+	});
+}
 
-	// Idempotency guard: one lead gets exactly one speed-to-lead text, ever. The
-	// outbox redelivers at-least-once, so without this a re-dispatched
-	// contact.created would queue another SMS each time. (This is the class of
-	// bug that produced the runaway auto-reply loop.)
+// ---- Engine lifecycle hooks (Stage 3.b) ----
+
+// Lead replied (inbound message.received) → pause active sequences for the
+// contact and auto-resume in 2h if no staff reply intervenes.
+async function handleEngineLeadReply(data: EventJobData) {
+	if (!data.org_id) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	await pauseEnrollmentsForLeadReply(data.org_id, contactId);
+}
+
+// Staff sent a message (message.sent with a member sent_by) → stop the
+// sequence. Automation sends carry sent_by=null and are ignored here.
+async function handleEngineStaffReply(data: EventJobData) {
+	if (!data.org_id) return;
+	const sentBy = data.payload.sent_by as string | null | undefined;
+	if (!sentBy) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	// Appointment reminders are exempt — a staff reply must not cancel a customer's
+	// upcoming visit reminder. They stop only on the appointment's own lifecycle.
+	await stopEnrollmentsForContact(data.org_id, contactId, 'staff_reply', ['appointment']);
+}
+
+// Staff logged a call with outcome=spoke → stop the sequence.
+async function handleEngineCallSpoke(data: EventJobData) {
+	if (!data.org_id) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	await stopEnrollmentsForContact(data.org_id, contactId, 'call_spoke', ['appointment']);
+}
+
+// Opportunity marked won/lost → stop the sequence.
+async function handleEngineOppClosed(data: EventJobData, reason: 'won' | 'lost') {
+	if (!data.org_id) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	await stopEnrollmentsForContact(data.org_id, contactId, reason, ['appointment']);
+}
+
+// Missed-call text-back now runs on the sequence engine (Stage 3.c.1). `call.missed`
+// enrolls the contact into the org's `missed_call` sequence; the engine sends the
+// instant text-back (step 0) and drives the SMS-only follow-up steps, quiet hours,
+// and the shared pause/stop conditions (lead reply, staff reply, call=spoke,
+// won/lost, opt-out). The enrollment's partial-unique index is the idempotency
+// guard. The instant reply still lands in the contact's open conversation — which
+// is the missed-call thread — via findOrCreateOpenConversation in the SMS pipeline.
+// The org master SMS gate is enforced inside the engine's channel resolution
+// (sms_only step + smsCapable check), so no separate gate is needed here.
+async function handleMissedCallTextbackEnroll(data: EventJobData) {
+	if (!data.org_id) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	await enroll({
+		orgId: data.org_id,
+		sequenceKey: 'missed_call',
+		contactId,
+		resourceType: 'contact',
+		resourceId: contactId
+	});
+}
+
+// ---- Pipeline auto-create + ratchet auto-advance (Stage 3.a) ----
+
+// `lead.created` → create a pipeline deal in the org's default (entry) stage,
+// unless the org disabled it or the contact already has a deal. Mirrors the
+// manual POST /api/pipeline/opportunities path (same opportunity.created event).
+async function handlePipelineAutoCreate(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const contactId = (data.payload.contact_id as string | undefined) ?? data.resource_id;
+	if (!contactId) return;
+
+	const { settings } = await loadContext(orgId);
+	if (!settings || !settings.auto_create_opp_on_lead) return;
+
+	const contact = await loadContact(orgId, contactId);
+	if (!contact) return;
+
+	// Dedup: a brand-new lead shouldn't have a deal yet, but guard against a manual
+	// create racing the inbound capture — skip if any non-deleted deal exists.
 	const existing = await db
-		.select({ id: automationJobs.id })
-		.from(automationJobs)
+		.select({ id: opportunities.id })
+		.from(opportunities)
 		.where(
 			and(
-				eq(automationJobs.org_id, data.org_id),
-				eq(automationJobs.type, 'speed_to_lead'),
-				eq(automationJobs.resource_id, contact.id)
+				eq(opportunities.org_id, orgId),
+				eq(opportunities.contact_id, contactId),
+				isNull(opportunities.deleted_at)
 			)
 		)
 		.limit(1);
 	if (existing.length > 0) return;
 
-	const bullJobId = `speed_to_lead:${data.outbox_event_id}`;
-	const automationJob = await insertAutomationJob({
-		org_id: data.org_id,
-		type: 'speed_to_lead',
-		resource_type: 'contact',
-		resource_id: contact.id,
-		bull_job_id: bullJobId,
-		status: 'processing',
-		scheduled_for: new Date()
-	});
-	try {
-		const body = interpolate(settings.speed_to_lead_message, {
-			contact_name: contact.full_name,
-			org_name: org.name
-		});
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: 'automation.speed_to_lead'
-		});
-		await markJobCompleted(automationJob.id);
-	} catch (err) {
-		await markJobFailed(automationJob.id, err);
-		throw err;
+	// Entry stage = the org's default stage (same resolution as manual create).
+	const [defaultStage] = await db
+		.select({
+			id: pipelineStages.id,
+			default_follow_up_days: pipelineStages.default_follow_up_days
+		})
+		.from(pipelineStages)
+		.where(
+			and(
+				eq(pipelineStages.org_id, orgId),
+				eq(pipelineStages.is_default, true),
+				isNull(pipelineStages.deleted_at)
+			)
+		)
+		.orderBy(asc(pipelineStages.position))
+		.limit(1);
+	if (!defaultStage) {
+		console.warn(`[automation] pipeline_auto_create: no default stage for org ${orgId}`);
+		return;
 	}
-}
 
-async function handleMissedCallTextback(data: EventJobData) {
-	if (!data.org_id) return;
-	const { org, settings } = await loadContext(data.org_id);
-	// Master SMS gate: missed-call textback is SMS-only, so skip when the org's master
-	// SMS switch is off — avoids a doomed automation job + undeliverable message.
-	if (!org || !org.sms_enabled || !settings || !settings.missed_call_textback_enabled) return;
+	const autoFollowUpAt =
+		defaultStage.default_follow_up_days !== null
+			? new Date(Date.now() + defaultStage.default_follow_up_days * 86_400_000)
+			: null;
 
-	const missedCallConversationId = data.payload.conversation_id as string | undefined;
-	const contactId = data.payload.contact_id as string | undefined;
-	if (!missedCallConversationId || !contactId) return;
+	await db.transaction(async (tx) => {
+		// Re-check inside the tx to close the race with a concurrent manual create.
+		const [dupe] = await tx
+			.select({ id: opportunities.id })
+			.from(opportunities)
+			.where(
+				and(
+					eq(opportunities.org_id, orgId),
+					eq(opportunities.contact_id, contactId),
+					isNull(opportunities.deleted_at)
+				)
+			)
+			.limit(1);
+		if (dupe) return;
 
-	const contact = await loadContact(data.org_id, contactId);
-	if (!contact || contact.sms_opt_out) return;
+		const [inserted] = await tx
+			.insert(opportunities)
+			.values({
+				org_id: orgId,
+				contact_id: contactId,
+				stage_id: defaultStage.id,
+				title: contact.full_name,
+				next_follow_up_at: autoFollowUpAt
+			})
+			.returning();
 
-	const bullJobId = `missed_call_textback:${data.outbox_event_id}`;
-	const automationJob = await insertAutomationJob({
-		org_id: data.org_id,
-		type: 'missed_call_textback',
-		resource_type: 'conversation',
-		resource_id: missedCallConversationId,
-		bull_job_id: bullJobId,
-		status: 'processing',
-		scheduled_for: new Date()
-	});
-
-	try {
-		const body = interpolate(settings.missed_call_textback_message, {
-			contact_name: contact.full_name,
-			org_name: org.name
-		});
-
-		// Unified inbox: the missed-call conversation IS the customer thread.
-		// Queue the outbound SMS on that conversation; smsWorker drives delivery.
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: 'automation.missed_call_textback',
-			conversationId: missedCallConversationId
-		});
-
-		await markJobCompleted(automationJob.id);
-	} catch (err) {
-		await markJobFailed(automationJob.id, err);
-		throw err;
-	}
-}
-
-async function scheduleQuoteFollowup(
-	orgId: string,
-	quoteId: string,
-	followupNumber: 1 | 2,
-	delayMs: number
-) {
-	const bullJob = await addJob(
-		automationQueue(),
-		'quote_followup',
-		{
-			outbox_event_id: `quote_followup:${quoteId}:${followupNumber}`,
-			event_type: 'quote.followup',
+		await tx.insert(outboxEvents).values({
 			org_id: orgId,
-			resource_type: 'quote',
-			resource_id: quoteId,
-			payload: { quote_id: quoteId, followup_number: followupNumber }
-		},
-		{ delay: delayMs }
-	);
-	await insertAutomationJob({
-		org_id: orgId,
-		type: 'quote_followup',
-		resource_type: 'quote',
-		resource_id: quoteId,
-		bull_job_id: String(bullJob.id),
-		status: 'pending',
-		scheduled_for: new Date(Date.now() + delayMs)
+			event_type: 'opportunity.created',
+			resource_type: 'opportunity',
+			resource_id: inserted.id,
+			payload: {
+				event_version: 1,
+				opportunity_id: inserted.id,
+				org_id: orgId,
+				contact_id: inserted.contact_id,
+				stage_id: inserted.stage_id,
+				title: inserted.title,
+				value: inserted.value,
+				assigned_to: inserted.assigned_to,
+				source: 'auto_lead_capture'
+			},
+			idempotency_key: `opportunity.created:${inserted.id}`
+		});
+	});
+}
+
+// Pipeline ratchet — "the board reflects work done, not a to-do list."
+// Each milestone advances a contact's open deal to a SPECIFIC column (by
+// position, since stages are org-configurable), never backward and never past a
+// column a human already set. Forward-only is enforced by a conditional UPDATE
+// that only matches deals still sitting in an EARLIER column. Runs on every
+// triggering event, so it exits fast when there's nothing to advance.
+//
+//   pos 1 (Contacted) ← first HUMAN outbound: staff SMS/email, or a `spoke` call
+//   pos 2 (Scheduled) ← an appointment lands on the calendar
+//   pos 3 (Quoted)    ← the first quote is sent
+const ADVANCE_TARGET_POSITION: Record<string, number> = {
+	'message.sent': 1,
+	'call.logged': 1,
+	'appointment.created': 2,
+	'appointment.booked': 2,
+	'quote.sent': 3
+};
+
+const ADVANCE_SOURCE: Record<number, string> = {
+	1: 'auto_contacted',
+	2: 'auto_scheduled',
+	3: 'auto_quoted'
+};
+
+async function handlePipelineAutoAdvance(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+
+	const targetPosition = ADVANCE_TARGET_POSITION[data.event_type];
+	if (targetPosition === undefined) return;
+
+	// An outbound message only counts as "Contacted" when a HUMAN sent it.
+	// Automation sends carry sent_by=null and must never advance the pipeline.
+	if (data.event_type === 'message.sent' && data.payload.sent_by == null) return;
+
+	const contactId = (data.payload.contact_id as string | undefined) ?? data.resource_id;
+	if (!contactId) return;
+
+	// Active stages in board order.
+	const stages = await db
+		.select({
+			id: pipelineStages.id,
+			name: pipelineStages.name,
+			position: pipelineStages.position,
+			default_follow_up_days: pipelineStages.default_follow_up_days
+		})
+		.from(pipelineStages)
+		.where(and(eq(pipelineStages.org_id, orgId), isNull(pipelineStages.deleted_at)))
+		.orderBy(asc(pipelineStages.position));
+	if (stages.length < 2) return;
+
+	// Clamp the target to the last column for orgs with fewer stages than the
+	// canonical New Lead/Contacted/Scheduled/Quoted layout.
+	const targetIdx = Math.min(targetPosition, stages.length - 1);
+	const targetStage = stages[targetIdx];
+	// The only columns we ratchet FROM — anything strictly before the target.
+	const earlierStageIds = stages.slice(0, targetIdx).map((s) => s.id);
+	if (earlierStageIds.length === 0) return; // target is the entry column — nothing earlier
+
+	// The contact's OPEN deal currently sitting in an earlier column.
+	const [deal] = await db
+		.select({
+			id: opportunities.id,
+			stage_id: opportunities.stage_id,
+			next_follow_up_at: opportunities.next_follow_up_at
+		})
+		.from(opportunities)
+		.where(
+			and(
+				eq(opportunities.org_id, orgId),
+				eq(opportunities.contact_id, contactId),
+				eq(opportunities.status, 'open'),
+				inArray(opportunities.stage_id, earlierStageIds),
+				isNull(opportunities.deleted_at)
+			)
+		)
+		.orderBy(asc(opportunities.created_at))
+		.limit(1);
+	if (!deal) return;
+
+	const fromStage = stages.find((s) => s.id === deal.stage_id) ?? null;
+	const source = ADVANCE_SOURCE[targetIdx] ?? `auto_position_${targetIdx}`;
+
+	const autoFollowUpAt =
+		targetStage.default_follow_up_days !== null && deal.next_follow_up_at === null
+			? new Date(Date.now() + targetStage.default_follow_up_days * 86_400_000)
+			: undefined;
+
+	await db.transaction(async (tx) => {
+		const now = new Date();
+		const stageSet: Record<string, unknown> = {
+			stage_id: targetStage.id,
+			stage_entered_at: now,
+			updated_at: now
+		};
+		if (autoFollowUpAt !== undefined) stageSet.next_follow_up_at = autoFollowUpAt;
+
+		// Conditional ratchet: advance only if still open AND still in an earlier
+		// column. A concurrent move/manual advance gets 0 rows and no-ops.
+		const [updated] = await tx
+			.update(opportunities)
+			.set(stageSet)
+			.where(
+				and(
+					eq(opportunities.id, deal.id),
+					inArray(opportunities.stage_id, earlierStageIds),
+					eq(opportunities.status, 'open')
+				)
+			)
+			.returning();
+		if (!updated) return;
+
+		await tx.insert(outboxEvents).values({
+			org_id: orgId,
+			event_type: 'opportunity.stage_changed',
+			resource_type: 'opportunity',
+			resource_id: updated.id,
+			payload: {
+				event_version: 1,
+				opportunity_id: updated.id,
+				org_id: orgId,
+				contact_id: updated.contact_id,
+				assigned_to: updated.assigned_to ?? null,
+				from_stage_id: fromStage?.id ?? null,
+				to_stage_id: targetStage.id,
+				from_stage_name: fromStage?.name ?? null,
+				to_stage_name: targetStage.name,
+				source
+			},
+			idempotency_key: `opportunity.stage_changed:${source}:${updated.id}`
+		});
 	});
 }
 
@@ -376,81 +538,31 @@ ${url}`;
 	}
 }
 
+// Quote send (event quote.sent). Always dispatches the actual quote (transactional
+// delivery — not gated by the follow-up card), then enrolls the quote into the
+// engine-driven follow-up sequence (Stage 3.c.2). The sequence's own `enabled`
+// flag + steps drive cadence/copy; stop happens on accept/decline/view/won/lost.
 async function handleQuoteFollowupSetup(data: EventJobData) {
 	if (!data.org_id) return;
-	// Resends: cancel any existing pending follow-ups first.
+	const contactId = data.payload.contact_id as string | undefined;
+
+	// Resends: stop any live follow-up enrollment for this quote before re-enrolling
+	// (the active-enrollment unique index would otherwise block the new one).
 	if (data.payload.is_resend) {
-		await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+		await stopEnrollmentsForResource(data.org_id, 'quote', data.resource_id, 'quote_resent');
 	}
-	// Send initial SMS/email synchronously (with internal try/catch — failures
-	// must not block follow-up scheduling).
+	// Send initial SMS/email synchronously (internal try/catch — failures must not
+	// block enrollment).
 	await dispatchInitialQuote(data);
-	const { settings } = await loadContext(data.org_id);
-	if (!settings || !settings.quote_followup_enabled) return;
-	await scheduleQuoteFollowup(
-		data.org_id,
-		data.resource_id,
-		1,
-		settings.quote_followup_delay_1_hours * 3600_000
-	);
-}
 
-async function handleQuoteFollowup(job: Job, data: EventJobData) {
-	if (!data.org_id) return;
-	const followupNumber = (data.payload.followup_number as 1 | 2) ?? 1;
-
-	const [automationJobRow] = await db
-		.select()
-		.from(automationJobs)
-		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.quote_followup_enabled) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const [quote] = await db
-		.select()
-		.from(quotes)
-		.where(and(eq(quotes.id, data.resource_id), isNull(quotes.deleted_at)));
-	if (!quote || (quote.status !== 'sent' && quote.status !== 'viewed')) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const contact = await loadContact(data.org_id, quote.contact_id);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		const body = interpolate(settings.quote_followup_message, {
-			contact_name: contact.full_name,
-			org_name: org.name
-		});
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: `automation.quote_followup_${followupNumber}`
-		});
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-
-		if (followupNumber === 1) {
-			const delta =
-				(settings.quote_followup_delay_2_hours - settings.quote_followup_delay_1_hours) * 3600_000;
-			if (delta > 0) {
-				await scheduleQuoteFollowup(data.org_id, quote.id, 2, delta);
-			}
-		}
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
-	}
+	if (!contactId) return;
+	await enroll({
+		orgId: data.org_id,
+		sequenceKey: 'quote_followup',
+		contactId,
+		resourceType: 'quote',
+		resourceId: data.resource_id
+	});
 }
 
 async function handleInvoiceDispatch(data: EventJobData) {
@@ -523,116 +635,27 @@ ${url}${fallbackEmail}`;
 		}
 	}
 
-	// Pre-schedule the multi-step dunning cadence (Day 0/3/7/14 past due).
-	// Cancelled in bulk by handleInvoicePaidCancel when the invoice is paid.
-	await scheduleInvoiceDunning(orgId, data.resource_id, dueDate ?? null);
-}
-
-// Dunning cadence offsets in days, anchored to the invoice's due_date.
-// Day 0 fires at the moment the invoice becomes overdue; subsequent steps
-// escalate at 3, 7, and 14 days past due. If the invoice is sent past its
-// due_date, earlier steps fire immediately (delay clamps to 0).
-const DUNNING_STEP_DAYS = [0, 3, 7, 14] as const;
-
-async function scheduleInvoiceDunning(
-	orgId: string,
-	invoiceId: string,
-	dueDate: string | null | undefined
-) {
-	if (!dueDate) return;
-	const { settings } = await loadContext(orgId);
-	if (!settings || !settings.invoice_reminder_enabled) return;
-
-	// Treat due_date as UTC midnight, matching the cron's CURRENT_DATE semantics.
-	const dueAtMs = new Date(dueDate + 'T00:00:00Z').getTime();
-	if (!Number.isFinite(dueAtMs)) return;
-	const now = Date.now();
-
-	// Clear any prior schedule for this invoice (e.g., a previous send before
-	// the customer was re-invoiced). cancelPendingJobs removes BullMQ jobs and
-	// marks the automation_jobs rows as 'cancelled'.
-	await cancelPendingJobs(orgId, 'invoice_reminder', invoiceId);
-
-	for (const day of DUNNING_STEP_DAYS) {
-		const fireAtMs = dueAtMs + day * 86_400_000;
-		const delay = Math.max(0, fireAtMs - now);
-		const bullJobId = `invoice_reminder:${invoiceId}:day${day}`;
-		try {
-			const bullJob = await addJob(
-				automationQueue(),
-				'invoice_reminder',
-				{
-					outbox_event_id: bullJobId,
-					event_type: 'invoice.dunning',
-					org_id: orgId,
-					resource_type: 'invoice',
-					resource_id: invoiceId,
-					payload: { dunning_day: day }
-				},
-				{ delay, jobId: bullJobId }
-			);
-			await insertAutomationJob({
-				org_id: orgId,
-				type: 'invoice_reminder',
-				resource_type: 'invoice',
-				resource_id: invoiceId,
-				bull_job_id: String(bullJob.id),
-				status: 'pending',
-				scheduled_for: new Date(fireAtMs)
+	// Enroll the invoice into the engine-driven dunning sequence (Stage 3.c.2),
+	// anchored to the due_date so steps fire at due_date + step delays. No due
+	// date → no dunning (matches the prior behaviour). The sequence's own
+	// `enabled` flag + steps drive cadence/copy; stop happens on paid/cancelled.
+	// invoice_dispatch is ungated (it also sends the actual invoice), so the
+	// dunning feature gate — previously enforced at the fire job — must be applied
+	// here at enrollment time, mirroring how quote_followup's entry job carries
+	// feature_quote_followup.
+	if (dueDate && contactId && (await isFeatureEnabled(orgId, 'feature_invoice_reminders'))) {
+		// Treat due_date as UTC midnight, matching the overdue cron's semantics.
+		const anchor = new Date(dueDate + 'T00:00:00Z');
+		if (Number.isFinite(anchor.getTime())) {
+			await enroll({
+				orgId,
+				sequenceKey: 'invoice_dunning',
+				contactId,
+				resourceType: 'invoice',
+				resourceId: data.resource_id,
+				anchorAt: anchor
 			});
-		} catch (err) {
-			console.error(
-				`[automation] failed to schedule dunning day ${day} for invoice ${invoiceId}:`,
-				err
-			);
 		}
-	}
-}
-
-async function handleInvoiceReminder(job: Job, data: EventJobData) {
-	if (!data.org_id) return;
-	const [automationJobRow] = await db
-		.select()
-		.from(automationJobs)
-		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.invoice_reminder_enabled) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const [invoice] = await db
-		.select()
-		.from(invoices)
-		.where(and(eq(invoices.id, data.resource_id), isNull(invoices.deleted_at)));
-	if (!invoice || invoice.status === 'paid' || invoice.status === 'cancelled') {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-	const contact = await loadContact(data.org_id, invoice.contact_id);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		const body = interpolate(settings.invoice_reminder_message, {
-			contact_name: contact.full_name,
-			org_name: org.name
-		});
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: 'automation.invoice_reminder'
-		});
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
 	}
 }
 
@@ -990,71 +1013,34 @@ async function handleReviewExpire(job: Job, data: EventJobData) {
 	}
 }
 
+// Appointment reminders now run on the sequence engine (Stage 3.c.3). The
+// `appointment_reminder` sequence is anchored to the appointment's
+// scheduled_start; its steps carry NEGATIVE offset_minutes (-1440 = 24h before,
+// -60 = 1h before), so the engine schedules each reminder relative to the visit
+// and skips any window already past (short-notice bookings). Reschedule
+// re-anchors (handleAppointmentRescheduled); cancel/complete/no_show stops it
+// (handleAppointmentCancelReminders). The `feature_appointment_reminders` gate is
+// applied at the worker dispatcher; the sequence's own `enabled` flag (seeded
+// from appointment_reminder_enabled) is the on/off switch.
+async function enrollAppointmentReminder(orgId: string, appt: { id: string; contact_id: string; scheduled_start: Date }) {
+	await enroll({
+		orgId,
+		sequenceKey: 'appointment_reminder',
+		contactId: appt.contact_id,
+		resourceType: 'appointment',
+		resourceId: appt.id,
+		anchorAt: appt.scheduled_start
+	});
+}
+
 async function handleAppointmentReminderSetup(data: EventJobData) {
 	if (!data.org_id) return;
-	const { settings } = await loadContext(data.org_id);
-	if (!settings || !settings.appointment_reminder_enabled) return;
-
-	const appointmentId = data.resource_id;
 	const [appointment] = await db
 		.select()
 		.from(appointments)
-		.where(and(eq(appointments.id, appointmentId), isNull(appointments.deleted_at)));
+		.where(and(eq(appointments.id, data.resource_id), isNull(appointments.deleted_at)));
 	if (!appointment || appointment.status !== 'scheduled') return;
-
-	const now = Date.now();
-	const scheduledStartMs = appointment.scheduled_start.getTime();
-	const delay24 = scheduledStartMs - 24 * 3600_000 - now;
-	const delay1 = scheduledStartMs - 1 * 3600_000 - now;
-
-	if (delay24 > 0) {
-		const bullJob = await addJob(
-			automationQueue(),
-			'appointment_reminder_24h',
-			{
-				outbox_event_id: `appt_24h:${appointmentId}`,
-				event_type: 'appointment.reminder_24h',
-				org_id: data.org_id,
-				resource_type: 'appointment',
-				resource_id: appointmentId,
-				payload: { scheduled_start: appointment.scheduled_start.toISOString() }
-			},
-			{ delay: delay24 }
-		);
-		await insertAutomationJob({
-			org_id: data.org_id,
-			type: 'appointment_reminder',
-			resource_type: 'appointment',
-			resource_id: appointmentId,
-			bull_job_id: String(bullJob.id),
-			status: 'pending',
-			scheduled_for: new Date(now + delay24)
-		});
-	}
-	if (delay1 > 0) {
-		const bullJob = await addJob(
-			automationQueue(),
-			'appointment_reminder_1h',
-			{
-				outbox_event_id: `appt_1h:${appointmentId}`,
-				event_type: 'appointment.reminder_1h',
-				org_id: data.org_id,
-				resource_type: 'appointment',
-				resource_id: appointmentId,
-				payload: { scheduled_start: appointment.scheduled_start.toISOString() }
-			},
-			{ delay: delay1 }
-		);
-		await insertAutomationJob({
-			org_id: data.org_id,
-			type: 'appointment_reminder',
-			resource_type: 'appointment',
-			resource_id: appointmentId,
-			bull_job_id: String(bullJob.id),
-			status: 'pending',
-			scheduled_for: new Date(now + delay1)
-		});
-	}
+	await enrollAppointmentReminder(data.org_id, appointment);
 }
 
 // Format a JS Date for the org's timezone using Intl. We intentionally split
@@ -1182,114 +1168,205 @@ async function handleAppointmentConfirmation(data: EventJobData) {
 	}
 }
 
+// Reschedule → re-anchor the live reminder enrollment to the new scheduled_start
+// (preserving already-sent steps so a later move never resends the 24h reminder).
+// If no active enrollment exists (booked while the feature was off, or its
+// reminders already completed before the move), set up a fresh one — matching the
+// old "always have reminders after a reschedule" behaviour. A reschedule that also
+// closed the appointment stops the sequence.
 async function handleAppointmentRescheduled(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'appointment_reminder', data.resource_id);
-	await handleAppointmentReminderSetup(data);
-}
-
-async function handleAppointmentReminder(job: Job, data: EventJobData, variant: '24h' | '1h') {
-	if (!data.org_id) return;
-	const [automationJobRow] = await db
-		.select()
-		.from(automationJobs)
-		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.appointment_reminder_enabled) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
 	const [appointment] = await db
 		.select()
 		.from(appointments)
 		.where(and(eq(appointments.id, data.resource_id), isNull(appointments.deleted_at)));
-	if (!appointment || appointment.status !== 'scheduled') {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
+	if (!appointment) return;
+	if (appointment.status !== 'scheduled') {
+		await stopEnrollmentsForResource(
+			data.org_id,
+			'appointment',
+			data.resource_id,
+			'appointment_rescheduled_closed'
+		);
 		return;
 	}
+	const touched = await reanchorEnrollments(
+		data.org_id,
+		'appointment',
+		data.resource_id,
+		appointment.scheduled_start
+	);
+	if (touched === 0) await enrollAppointmentReminder(data.org_id, appointment);
+}
 
-	// Drift guard: silent exit if scheduled_start moved since enqueue.
-	const expected = data.payload.scheduled_start as string | undefined;
-	if (expected && new Date(expected).getTime() !== appointment.scheduled_start.getTime()) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
+// completed / cancelled / no_show → stop the reminder sequence. Ungated so a stop
+// always lands even if the feature was later disabled. (The engine's fire-time
+// appointment guard also stops a non-scheduled appointment, but stopping here
+// proactively frees the pending BullMQ job.)
+const APPOINTMENT_CLOSE_REASON: Record<string, string> = {
+	'appointment.completed': 'appointment_completed',
+	'appointment.cancelled': 'appointment_cancelled',
+	'appointment.no_show': 'appointment_no_show'
+};
 
-	const sentFlag = variant === '24h' ? appointment.reminder_24h_sent : appointment.reminder_1h_sent;
-	if (sentFlag) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
+async function handleAppointmentCancelReminders(data: EventJobData) {
+	if (!data.org_id) return;
+	const reason = APPOINTMENT_CLOSE_REASON[data.event_type] ?? 'appointment_closed';
+	await stopEnrollmentsForResource(data.org_id, 'appointment', data.resource_id, reason);
+}
 
-	const contact = await loadContact(data.org_id, appointment.contact_id);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
+// Stage 3.c.3b — no-show re-engagement. A customer SMS nurture enrolled when staff
+// mark an appointment no_show. Contact-anchored (mechanically identical to
+// missed_call): fires immediately + follow-ups, and pauses/stops on the normal
+// nurture signals (lead reply, staff reply, call=spoke, won/lost, opt-out). The
+// sequence's `enabled` flag (seeded off) is the on/off switch.
+async function handleAppointmentNoShowFollowup(data: EventJobData) {
+	if (!data.org_id) return;
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	await enroll({
+		orgId: data.org_id,
+		sequenceKey: 'appointment_no_show',
+		contactId,
+		resourceType: 'contact',
+		resourceId: contactId
+	});
+}
 
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		// Use separate 1h message when enabled; fall back to the shared message.
-		let messageTemplate = settings.appointment_reminder_message;
-		if (
-			variant === '1h' &&
-			settings.appointment_reminder_1h_enabled &&
-			settings.appointment_reminder_1h_message
-		) {
-			messageTemplate = settings.appointment_reminder_1h_message;
-		}
-		const body = interpolate(messageTemplate, {
-			contact_name: contact.full_name,
-			org_name: org.name
-		});
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: `automation.appointment_reminder_${variant}`
-		});
-		await db
-			.update(appointments)
-			.set({
-				...(variant === '24h' ? { reminder_24h_sent: true } : { reminder_1h_sent: true }),
-				updated_at: new Date()
-			})
-			.where(eq(appointments.id, appointment.id));
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
-	}
+// Stage 3.c.3b — post-appointment "no quote sent" STAFF nudge. Enrolled when an
+// appointment is marked completed; a single offset step fires a few hours after the
+// slot and (via the no_quote_since_anchor condition) only alerts the office/crew when
+// no quote was raised for the contact since the visit. Appointment-anchored to the
+// slot end so the offset + no-quote window measure from after the visit.
+async function handleAppointmentQuoteNudge(data: EventJobData) {
+	if (!data.org_id) return;
+	const [appointment] = await db
+		.select()
+		.from(appointments)
+		.where(and(eq(appointments.id, data.resource_id), isNull(appointments.deleted_at)));
+	if (!appointment || appointment.status !== 'completed') return;
+	await enroll({
+		orgId: data.org_id,
+		sequenceKey: 'appointment_quote_nudge',
+		contactId: appointment.contact_id,
+		resourceType: 'appointment',
+		resourceId: appointment.id,
+		anchorAt: appointment.scheduled_end ?? appointment.scheduled_start
+	});
 }
 
 // ---- Cancellation hooks invoked by outbox routing ----
 
 async function handleQuoteAcceptedCancel(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+	await stopEnrollmentsForResource(data.org_id, 'quote', data.resource_id, 'quote_accepted');
 }
 
 async function handleQuoteDeclinedCancel(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+	await stopEnrollmentsForResource(data.org_id, 'quote', data.resource_id, 'quote_declined');
 }
 
 async function handleQuoteViewedCancel(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+	await stopEnrollmentsForResource(data.org_id, 'quote', data.resource_id, 'quote_viewed');
 }
 
 async function handleQuoteChangesRequestedCancel(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'quote_followup', data.resource_id);
+	await stopEnrollmentsForResource(
+		data.org_id,
+		'quote',
+		data.resource_id,
+		'quote_changes_requested'
+	);
+}
+
+// ---- Quote decision → pipeline Won/Lost (Stage 1.2.A) ----
+// A client accepting/declining on the public quote page must move the linked
+// deal. The transition is idempotent (no-op if the deal is missing, not linked,
+// or already closed) and reuses the exact Flow-2 side effects of the manual
+// "Mark Won"/"Mark Lost" buttons via the shared transition helpers.
+
+async function loadOpenOpportunityForQuote(orgId: string, quoteId: string) {
+	const [quote] = await db
+		.select({
+			opportunity_id: quotes.opportunity_id,
+			decline_reason: quotes.decline_reason,
+			decline_reason_note: quotes.decline_reason_note,
+			deposit_required: quotes.deposit_required
+		})
+		.from(quotes)
+		.where(and(eq(quotes.id, quoteId), eq(quotes.org_id, orgId)))
+		.limit(1);
+	if (!quote?.opportunity_id) return null;
+
+	const [opp] = await db
+		.select()
+		.from(opportunities)
+		.where(
+			and(
+				eq(opportunities.id, quote.opportunity_id),
+				eq(opportunities.org_id, orgId),
+				isNull(opportunities.deleted_at)
+			)
+		)
+		.limit(1);
+	if (!opp || opp.status !== 'open') return null;
+	return { opp, quote };
+}
+
+async function handleQuoteAcceptedWon(data: EventJobData) {
+	if (!data.org_id) return;
+	const found = await loadOpenOpportunityForQuote(data.org_id, data.resource_id);
+	if (!found) return;
+
+	// Org setting (PLAN §9): when Won is gated on the deposit, acceptance alone does NOT
+	// win the deal — it stays in Quoted until quote.deposit_paid arrives (pipeline_deposit_won).
+	// Exception: a quote with no deposit required can never produce a deposit event, so
+	// acceptance still wins (industry-standard fallback).
+	const [org] = await db
+		.select({ won_trigger: organizations.won_trigger })
+		.from(organizations)
+		.where(eq(organizations.id, data.org_id))
+		.limit(1);
+	if (org?.won_trigger === 'deposit_paid' && found.quote.deposit_required) return;
+
+	await markOpportunityWon(found.opp);
+}
+
+// quote.deposit_paid → mark the linked deal Won, but ONLY when the org gates Won on the
+// deposit. Under the default 'quote_acceptance' trigger the deal is already Won (the
+// open-check in loadOpenOpportunityForQuote no-ops here), so this is gated for clarity.
+// Idempotent: no-op if no linked open deal (already closed / never linked).
+async function handleQuoteDepositWon(data: EventJobData) {
+	if (!data.org_id) return;
+	const [org] = await db
+		.select({ won_trigger: organizations.won_trigger })
+		.from(organizations)
+		.where(eq(organizations.id, data.org_id))
+		.limit(1);
+	if (org?.won_trigger !== 'deposit_paid') return;
+
+	const found = await loadOpenOpportunityForQuote(data.org_id, data.resource_id);
+	if (!found) return;
+	await markOpportunityWon(found.opp);
+}
+
+async function handleQuoteDeclinedLost(data: EventJobData) {
+	if (!data.org_id) return;
+	const found = await loadOpenOpportunityForQuote(data.org_id, data.resource_id);
+	if (!found) return;
+	await markOpportunityLost(
+		found.opp,
+		found.quote.decline_reason ?? 'other',
+		found.quote.decline_reason_note ?? null
+	);
 }
 
 async function handleInvoicePaidCancel(data: EventJobData) {
 	if (!data.org_id) return;
-	await cancelPendingJobs(data.org_id, 'invoice_reminder', data.resource_id);
+	await stopEnrollmentsForResource(data.org_id, 'invoice', data.resource_id, 'invoice_paid');
 	await deactivateInvoicePaymentLink(data.org_id, data.resource_id);
 }
 
@@ -1336,16 +1413,39 @@ export const automationWorker = new Worker<EventJobData>(
 		}
 		switch (job.name) {
 			case 'speed_to_lead':
-				return handleSpeedToLead(data);
+				return handleSpeedToLeadEnroll(data);
+			case 'automation.advance':
+				return advanceEnrollment(data.payload.enrollment_id as string);
+			case 'automation.resume':
+				return resumeEnrollment(data.payload.enrollment_id as string);
+			case 'automation.lead_reply':
+				return handleEngineLeadReply(data);
+			case 'automation.staff_reply':
+				return handleEngineStaffReply(data);
+			case 'automation.call_spoke':
+				return handleEngineCallSpoke(data);
+			case 'automation.opp_won':
+				return handleEngineOppClosed(data, 'won');
+			case 'automation.opp_lost':
+				return handleEngineOppClosed(data, 'lost');
 			case 'missed_call_textback':
-				return handleMissedCallTextback(data);
+				return handleMissedCallTextbackEnroll(data);
+			case 'pipeline_auto_create':
+				return handlePipelineAutoCreate(data);
+			case 'pipeline_auto_advance':
+				return handlePipelineAutoAdvance(data);
+			case 'pipeline_quote_won':
+				return handleQuoteAcceptedWon(data);
+			case 'pipeline_deposit_won':
+				return handleQuoteDepositWon(data);
+			case 'pipeline_quote_lost':
+				return handleQuoteDeclinedLost(data);
 			case 'invoice_dispatch':
 				return handleInvoiceDispatch(data);
 			case 'quote_followup':
-				if (data.event_type === 'quote.sent') return handleQuoteFollowupSetup(data);
-				return handleQuoteFollowup(job, data);
-			case 'invoice_reminder':
-				return handleInvoiceReminder(job, data);
+				// Only ever enqueued for quote.sent now; follow-ups run on the engine
+				// (automation.advance). Stage 3.c.2.
+				return handleQuoteFollowupSetup(data);
 			case 'review.send':
 				if (data.event_type === 'job.completed') return handleReviewSendSetup(data);
 				return handleReviewSend(job, data);
@@ -1363,10 +1463,12 @@ export const automationWorker = new Worker<EventJobData>(
 				return handleAppointmentConfirmation(data);
 			case 'appointment_reschedule':
 				return handleAppointmentRescheduled(data);
-			case 'appointment_reminder_24h':
-				return handleAppointmentReminder(job, data, '24h');
-			case 'appointment_reminder_1h':
-				return handleAppointmentReminder(job, data, '1h');
+			case 'appointment_cancel_reminders':
+				return handleAppointmentCancelReminders(data);
+			case 'appointment_no_show_followup':
+				return handleAppointmentNoShowFollowup(data);
+			case 'appointment_quote_nudge':
+				return handleAppointmentQuoteNudge(data);
 			default:
 				console.warn(`[automation] unknown job name: ${job.name}`);
 		}

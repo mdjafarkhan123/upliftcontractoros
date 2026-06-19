@@ -28,6 +28,8 @@ export type ContactsFilters = {
 	statusFilter: ContactStatusFilterValue;
 	tag: string;
 	temperature: ContactTemperatureFilterValue;
+	source: string;
+	followUp: boolean;
 	scope: 'mine' | 'team' | 'unassigned';
 };
 
@@ -48,7 +50,7 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: ContactsFilters): string {
-	return `${f.q.trim()}|${f.statusFilter}|${f.tag}|${f.temperature}|${f.scope}`;
+	return `${f.q.trim()}|${f.statusFilter}|${f.tag}|${f.temperature}|${f.source}|${f.followUp ? 'fu' : ''}|${f.scope}`;
 }
 
 function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams {
@@ -57,6 +59,8 @@ function buildParams(f: ContactsFilters, cursor: string | null): URLSearchParams
 	if (f.statusFilter !== 'all') params.set('status', f.statusFilter);
 	if (f.tag) params.set('tag', f.tag);
 	if (f.temperature) params.set('temp', f.temperature);
+	if (f.source) params.set('source', f.source);
+	if (f.followUp) params.set('follow_up', 'overdue');
 	if (f.scope !== 'team') params.set('scope', f.scope);
 	if (cursor) params.set('cursor', cursor);
 	return params;
@@ -87,6 +91,19 @@ export const contactsStore = {
 	},
 	get lastFetchedAt() {
 		return cache.get(currentKey)?.fetchedAt ?? 0;
+	},
+
+	/**
+	 * Find an already-loaded list row by id across every cached filter key.
+	 * Used to seed the detail page header instantly (name, avatar, phone,
+	 * status) while the full record loads.
+	 */
+	getById(id: string): ContactListItem | null {
+		for (const entry of cache.values()) {
+			const found = entry.items.find((i) => i.id === id);
+			if (found) return found;
+		}
+		return null;
 	},
 
 	async load(filters: ContactsFilters, force = false): Promise<void> {

@@ -38,7 +38,8 @@
 		'message.received': 'medium',
 		'job.created': 'medium',
 		appointment_booked: 'medium',
-		contact_follow_up_due: 'low'
+		contact_follow_up_due: 'low',
+		opportunity_follow_up_due: 'medium'
 	};
 
 	const priorityOrder: Record<PriorityLevel, number> = { high: 0, medium: 1, low: 2 };

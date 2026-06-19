@@ -8,6 +8,7 @@ import { canSendQuote } from '$lib/server/quotes/permissions';
 import { generateToken, hashToken } from '$lib/server/quotes/token';
 import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteSentEvent } from '$lib/server/quotes/events';
+import { snapshotQuoteVersion } from '$lib/server/quotes/versions';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
@@ -59,6 +60,14 @@ export const POST: RequestHandler = async (event) => {
 				updated_at: sentAt
 			})
 			.where(eq(quotes.id, id));
+
+		// Freeze v1 — the first send. current_version stays at its default of 1.
+		await snapshotQuoteVersion(tx, {
+			orgId: auth.orgId,
+			quoteId: existing.id,
+			version: 1,
+			sentAt
+		});
 
 		const [contactRow] = await tx
 			.select({ email: contacts.email })

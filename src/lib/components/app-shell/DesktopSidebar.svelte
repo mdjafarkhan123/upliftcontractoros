@@ -6,8 +6,13 @@
 	import type { Org, OrgMember } from '$lib/types';
 	import { can } from '$lib/permissions/can';
 	import OrgAvatar from './OrgAvatar.svelte';
+	import { Search } from '@lucide/svelte';
+	import { commandPalette } from '$lib/stores/commandPalette.svelte';
+	import { inboxUnreadStore } from '$lib/stores/inboxUnread.svelte';
 
 	let { items, member, org }: { items: NavItem[]; member: OrgMember; org: Org } = $props();
+
+	const inboxBadge = $derived(inboxUnreadStore.count > 9 ? '9+' : String(inboxUnreadStore.count));
 
 	const showSettings = $derived(can(member, 'can_view_team_members'));
 	const mainItems = $derived(
@@ -67,6 +72,20 @@
 	</a>
 
 	<nav class="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+		<!-- Global search trigger -->
+		<button
+			type="button"
+			onclick={() => (commandPalette.open = true)}
+			class="group flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border/50 bg-muted/40 px-3 text-sm text-muted-foreground transition-all duration-150 ease-out hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+		>
+			<Search class="h-4 w-4 shrink-0" />
+			<span class="flex-1 truncate text-left">Search…</span>
+			<kbd
+				class="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] opacity-50 transition-opacity group-hover:opacity-80"
+				>⌘K</kbd
+			>
+		</button>
+
 		{#if mainItems.length > 0}
 			<div>
 				<p
@@ -81,6 +100,14 @@
 						<a href={item.href} class={navClass(active)} aria-current={active ? 'page' : undefined}>
 							<Icon class={cn('h-4 w-4 shrink-0', !active && navIconColor[item.key])} />
 							<span class="truncate">{item.label}</span>
+							{#if item.key === 'inbox' && inboxUnreadStore.count > 0}
+								<span
+									class="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-sky-500 px-1.5 text-[11px] font-semibold leading-none text-white tabular-nums"
+									aria-label="{inboxUnreadStore.count} unread conversations"
+								>
+									{inboxBadge}
+								</span>
+							{/if}
 						</a>
 					{/each}
 				</div>

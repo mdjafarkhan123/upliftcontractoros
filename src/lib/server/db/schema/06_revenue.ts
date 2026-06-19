@@ -7,12 +7,14 @@ import {
 	integer,
 	numeric,
 	timestamp,
-	date
+	date,
+	jsonb,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
-import { opportunities } from './03_pipeline';
+import { opportunities, pipelineLostReasonEnum } from './03_pipeline';
 import { jobs } from './04_jobs';
 
 export const quoteStatusEnum = pgEnum('quote_status', [
@@ -55,6 +57,10 @@ export const quotes = pgTable('quotes', {
 	quote_number: integer('quote_number').notNull(),
 	title: text('title').notNull(),
 	status: quoteStatusEnum('status').notNull().default('draft'),
+	// Current version number, denormalized pointer to the latest quote_versions row.
+	// Bumps only when a quote is re-sent out of changes_requested (i.e. a real revision),
+	// never on a plain re-delivery of unchanged content. See quote_versions.
+	current_version: integer('current_version').notNull().default(1),
 	subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
 	tax_rate: numeric('tax_rate', { precision: 5, scale: 4 }).notNull().default('0'),
 	tax_amount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull().default('0'),
@@ -73,6 +79,10 @@ export const quotes = pgTable('quotes', {
 	viewed_at: timestamp('viewed_at', { withTimezone: true }),
 	accepted_at: timestamp('accepted_at', { withTimezone: true }),
 	declined_at: timestamp('declined_at', { withTimezone: true }),
+	// Reason the client picked when declining on the public quote page. Reuses the
+	// pipeline lost-reason enum so it maps 1:1 onto opportunities.lost_reason.
+	decline_reason: pipelineLostReasonEnum('decline_reason'),
+	decline_reason_note: text('decline_reason_note'),
 	deleted_at: timestamp('deleted_at', { withTimezone: true }),
 	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -102,6 +112,45 @@ export const quoteLineItems = pgTable('quote_line_items', {
 export type QuoteLineItem = InferSelectModel<typeof quoteLineItems>;
 export type NewQuoteLineItem = InferInsertModel<typeof quoteLineItems>;
 
+// Frozen snapshot of a quote at the moment it was sent. Immutable dispute record —
+// no updated_at, no deleted_at. One row per send (v1) and per re-send out of
+// changes_requested (v2, v3…). Captures the totals AND a JSON snapshot of the line
+// items so a past version can be reconstructed exactly ("v3 was $11,500 and you
+// accepted it"). line_items shape mirrors quote_line_items display fields.
+export const quoteVersions = pgTable(
+	'quote_versions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		quote_id: uuid('quote_id')
+			.notNull()
+			.references(() => quotes.id),
+		version: integer('version').notNull(),
+		subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
+		tax_rate: numeric('tax_rate', { precision: 5, scale: 4 }).notNull(),
+		tax_amount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
+		total: numeric('total', { precision: 12, scale: 2 }).notNull(),
+		line_items: jsonb('line_items').notNull(),
+		sent_at: timestamp('sent_at', { withTimezone: true }).notNull(),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [uniqueIndex('quote_versions_quote_version_uq').on(t.quote_id, t.version)]
+);
+
+export type QuoteVersion = InferSelectModel<typeof quoteVersions>;
+export type NewQuoteVersion = InferInsertModel<typeof quoteVersions>;
+
+// A single frozen line item inside quote_versions.line_items (jsonb array).
+export type QuoteVersionLineItem = {
+	description: string;
+	quantity: string;
+	unit_price: string;
+	total: string;
+	position: number;
+};
+
 // Append-only view tracking log — no updated_at, no deleted_at
 export const quoteViews = pgTable('quote_views', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -111,6 +160,9 @@ export const quoteViews = pgTable('quote_views', {
 	quote_id: uuid('quote_id')
 		.notNull()
 		.references(() => quotes.id),
+	// Quote version that was live when this view happened — anchors the view to a
+	// version in the history timeline. Defaults to 1 for backfilled pre-versioning rows.
+	version: integer('version').notNull().default(1),
 	ip_hash: text('ip_hash'),
 	user_agent_hash: text('user_agent_hash'),
 	viewed_at: timestamp('viewed_at', { withTimezone: true }).notNull().defaultNow(),
@@ -132,6 +184,9 @@ export const quoteChangeRequests = pgTable('quote_change_requests', {
 	quote_id: uuid('quote_id')
 		.notNull()
 		.references(() => quotes.id, { onDelete: 'cascade' }),
+	// Quote version that was live when the client requested changes — anchors the
+	// revision-requested event to a version in the history timeline.
+	version: integer('version').notNull().default(1),
 	message: text('message').notNull(),
 	requested_at: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
 	resolved_at: timestamp('resolved_at', { withTimezone: true }),

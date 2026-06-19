@@ -33,8 +33,6 @@ export type DashboardPipelineStage = {
 	name: string;
 	color: string;
 	position: number;
-	is_won: boolean;
-	is_lost: boolean;
 	count: number;
 	value: string;
 };

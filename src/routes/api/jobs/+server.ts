@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, gte, inArray, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -13,6 +13,7 @@ import {
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewAnyJob } from '$lib/server/jobs/permissions';
 import { createJobSchema } from '$lib/server/jobs/schemas';
+import { textMatch, textRank } from '$lib/server/search/textSearch';
 
 const PAGE_SIZE = 30;
 const VALID_STATUSES = new Set(['scheduled', 'in_progress', 'completed', 'cancelled']);
@@ -40,6 +41,7 @@ export const GET: RequestHandler = async (event) => {
 	const scopeFilter = url.searchParams.get('scope');
 	const assignedToFilter = url.searchParams.get('assigned_to');
 	const contactIdFilter = url.searchParams.get('contact_id');
+	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const cursor = url.searchParams.get('cursor');
 
 	const conditions: SQL[] = [eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)];
@@ -81,15 +83,42 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(eq(jobs.assigned_to, auth.member.id));
 	}
 
+	// Fuzzy search across the job title + the linked contact's name/company.
+	// Same shared helper + relevance buckets as the Contacts list; the trigram
+	// indexes (jobs.title from 0080, contacts.* from 0079) keep it index-fast.
+	const isSearching = searchRaw.length > 0;
+	const searchFields = [jobs.title, contacts.full_name, contacts.company_name];
+	let relevance: SQL<number> | null = null;
+	if (isSearching) {
+		relevance = textRank(searchRaw, searchFields);
+		conditions.push(textMatch(searchRaw, searchFields));
+	}
+
 	if (cursor) {
-		const [createdAt, id] = cursor.split('|');
-		if (createdAt && id) {
-			conditions.push(
-				or(
-					lt(jobs.created_at, new Date(createdAt)),
-					and(eq(jobs.created_at, new Date(createdAt)), lt(jobs.id, id))
-				) as SQL
-			);
+		if (isSearching && relevance) {
+			// Searching orders by relevance first, so the cursor carries the rank:
+			// "<rank>|<iso_created_at>|<id>".
+			const [rankStr, createdAt, id] = cursor.split('|');
+			const rank = Number(rankStr);
+			if (Number.isFinite(rank) && createdAt && id) {
+				conditions.push(
+					or(
+						gt(relevance, rank),
+						and(eq(relevance, rank), lt(jobs.created_at, new Date(createdAt))),
+						and(eq(relevance, rank), eq(jobs.created_at, new Date(createdAt)), lt(jobs.id, id))
+					) as SQL
+				);
+			}
+		} else {
+			const [createdAt, id] = cursor.split('|');
+			if (createdAt && id) {
+				conditions.push(
+					or(
+						lt(jobs.created_at, new Date(createdAt)),
+						and(eq(jobs.created_at, new Date(createdAt)), lt(jobs.id, id))
+					) as SQL
+				);
+			}
 		}
 	}
 
@@ -105,13 +134,14 @@ export const GET: RequestHandler = async (event) => {
 			assignee_name: orgMembers.full_name,
 			scheduled_start: jobs.scheduled_start,
 			scheduled_end: jobs.scheduled_end,
-			created_at: jobs.created_at
+			created_at: jobs.created_at,
+			rank: relevance ?? sql<number>`0`
 		})
 		.from(jobs)
 		.innerJoin(contacts, eq(contacts.id, jobs.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, jobs.assigned_to))
 		.where(and(...conditions))
-		.orderBy(desc(jobs.created_at), desc(jobs.id))
+		.orderBy(...(relevance ? [relevance] : []), desc(jobs.created_at), desc(jobs.id))
 		.limit(PAGE_SIZE + 1);
 
 	const filterContextPromise =
@@ -132,9 +162,15 @@ export const GET: RequestHandler = async (event) => {
 	const [rows, contactRow] = await Promise.all([rowsPromise, filterContextPromise]);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-	const last = items[items.length - 1];
-	const nextCursor = hasMore && last ? `${last.created_at.toISOString()}|${last.id}` : null;
+	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const last = sliced[sliced.length - 1];
+	const items = sliced.map(({ rank: _rank, ...r }) => r);
+	const nextCursor =
+		hasMore && last
+			? isSearching
+				? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
+				: `${last.created_at.toISOString()}|${last.id}`
+			: null;
 
 	const filterContext =
 		contactIdFilter && contactRow && contactRow[0]

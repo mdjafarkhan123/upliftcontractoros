@@ -51,8 +51,9 @@ reminder fires exactly once; re-dating the field arms a fresh reminder.
 | `opportunity.created`          | New opportunity added to pipeline                     | notification + activity feed         |
 | `opportunity.assignee_changed` | `assigned_to` changes on an existing opportunity      | notification (new assignee only)     |
 | `opportunity.stage_changed`    | Opportunity moved between pipeline stages             | activity feed only (no notification) |
-| `opportunity.won`              | Opportunity reaches Won stage — triggers job creation | notification + activity feed         |
-| `opportunity.lost`             | Opportunity reaches Lost stage                        | notification + activity feed         |
+| `opportunity.won`              | PATCH opportunities/[id]/status → won — triggers job creation | notification + activity feed |
+| `opportunity.lost`             | PATCH opportunities/[id]/status → lost                | notification + activity feed         |
+| `opportunity.follow_up_due`    | `opportunity-follow-up-due-sweep` cron finds `next_follow_up_at <= now()` on an open deal | notification |
 
 > Removed: `opportunity.updated`. The previous catch-all "PATCH happened"
 > event was never routed to a consumer. Granular per-field events
@@ -123,6 +124,33 @@ Reassigning to the same member is a no-op; reassigning to someone new fires a fr
 }
 ```
 
+### `opportunity.follow_up_due`
+
+```json
+{
+	"event_version": 1,
+	"opportunity_id": "uuid",
+	"org_id": "uuid",
+	"contact_id": "uuid",
+	"assigned_to": "uuid | null",
+	"title": "string",
+	"value": "decimal string | null",
+	"full_name": "string (contact name)",
+	"last_contacted_at": "ISO8601 timestamp | null (for 'last contact Nd ago' copy)",
+	"due_at": "ISO8601 timestamp (the next_follow_up_at that fired)"
+}
+```
+
+Idempotency key (outbox): `opportunity.follow_up_due:{opportunity_id}:{due_at ISO}`.
+Per-recipient notification key: `opportunity.follow_up_due:{opportunity_id}:{due_at ISO}:{member_id}`.
+
+Routes to the notification queue only. Recipient is the assigned member, or — when
+the deal is unassigned — the admin/manager fallback (`pipelineRecipients()`), so a
+reminder is never silently dropped (unlike `contact.follow_up_due`, which only fires
+for assigned contacts). The cron clears `next_follow_up_at` in the same transaction it
+emits the event, so the reminder fires exactly once; re-dating arms a fresh one.
+Notification deep-links to `/pipeline?deal={id}` (auto-opens the detail sheet).
+
 ---
 
 ### Domain: Jobs
@@ -145,6 +173,13 @@ Reassigning to the same member is a no-op; reassigning to someone new fires a fr
 | `message.received`     | Inbound message from contact            | message      |
 | `message.sent`         | Outbound message to contact             | message      |
 | `call.missed`          | Missed call received via Twilio webhook | conversation |
+| `call.logged`          | Staff manually logs a phone call (POST /api/conversations/[id]/calls) | message |
+
+> `message.received` and `call.logged` (outcome=`spoke`) both route to the
+> `pipeline_auto_advance` automation job — the first two-way contact ratchets the
+> contact's open deal from the entry stage to the next stage (Stage 3.a). A
+> `call.logged` with any other outcome (voicemail/no_answer/wrong_number) is
+> emitted for audit but routes nowhere (feed-only).
 
 ---
 
@@ -201,6 +236,8 @@ automation events over its lifetime.
 | ------------------------------------- | ---------------------------------------- | -------------- |
 | `automation.missed_call_textback`     | `call.missed` + near-instant delay       | conversation   |
 | `automation.speed_to_lead`            | `contact.created` + near-instant delay   | contact        |
+| `pipeline_auto_create`                | `lead.created` (gated on `automation_settings.auto_create_opp_on_lead`) | opportunity |
+| `pipeline_auto_advance`               | `message.received` or `call.logged` (spoke) — ratchet entry→next stage  | opportunity |
 | `automation.quote_followup`           | `quote.sent` + 24h delay / 72h delay     | quote          |
 | `automation.invoice_reminder`         | `invoice.overdue` + configurable delay   | invoice        |
 | `automation.payment_receipt`          | `payment.recorded` + near-instant delay  | payment        |
@@ -281,6 +318,22 @@ Idempotency key: `contact.follow_up_due:{contact_id}:{due_at ISO}`.
 	"missed_at": "ISO8601 timestamp"
 }
 ```
+
+### `call.logged`
+
+```json
+{
+	"message_id": "uuid (the `call`-channel messages row)",
+	"conversation_id": "uuid",
+	"contact_id": "uuid",
+	"org_id": "uuid",
+	"outcome": "spoke | voicemail | no_answer | follow_up_scheduled | wrong_number",
+	"logged_at": "ISO8601 timestamp"
+}
+```
+
+Idempotency key: `call.logged:{message_id}`. Routes to `pipeline_auto_advance`
+only when `outcome = 'spoke'`; all other outcomes are audit/feed-only.
 
 ### `opportunity.won`
 

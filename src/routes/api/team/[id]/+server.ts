@@ -6,8 +6,17 @@ import { db } from '$lib/server/db/client';
 import { orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { ALL_PERMISSION_KEYS, isKnownPermissionKey } from '$lib/team/permissions-config';
+import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 
 const nameSchema = z.string().min(1, 'Name is required').max(200).trim();
+
+// Notification identity + admin gates (Stage 1.a) — handled alongside, but
+// separately from, the can_* permission keys.
+const NOTIFICATION_FIELD_KEYS = [
+	'notification_phone',
+	'sms_notifications_allowed',
+	'email_notifications_allowed'
+] as const;
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -77,6 +86,7 @@ export const PATCH: RequestHandler = async (event) => {
 	// Reject any unrecognised keys up front
 	for (const key of Object.keys(body)) {
 		if (key === 'full_name') continue;
+		if ((NOTIFICATION_FIELD_KEYS as readonly string[]).includes(key)) continue;
 		if (!isKnownPermissionKey(key)) {
 			fieldErrors[key] = 'Unknown field';
 		}
@@ -89,6 +99,30 @@ export const PATCH: RequestHandler = async (event) => {
 			fieldErrors.full_name = result.error.issues[0]?.message ?? 'Invalid name';
 		} else {
 			updates.full_name = result.data;
+		}
+	}
+
+	// Notification identity + admin gates. Empty/null phone clears it.
+	if ('notification_phone' in body) {
+		const raw = body.notification_phone;
+		if (raw == null || (typeof raw === 'string' && raw.trim() === '')) {
+			updates.notification_phone = null;
+		} else if (typeof raw !== 'string') {
+			fieldErrors.notification_phone = 'Invalid phone number.';
+		} else {
+			try {
+				updates.notification_phone = toE164(raw);
+			} catch (e) {
+				fieldErrors.notification_phone =
+					e instanceof PhoneInvalidError ? e.message : 'Invalid phone number.';
+			}
+		}
+	}
+
+	for (const key of ['sms_notifications_allowed', 'email_notifications_allowed'] as const) {
+		if (key in body) {
+			if (typeof body[key] !== 'boolean') fieldErrors[key] = 'Must be true or false';
+			else updates[key] = body[key] as boolean;
 		}
 	}
 

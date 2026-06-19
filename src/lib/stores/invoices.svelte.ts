@@ -31,7 +31,7 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: InvoicesFilters): string {
-	return `${f.group}|${f.status}`;
+	return `${f.group}|${f.status}|${f.search}`;
 }
 
 function statusParam(f: InvoicesFilters): string {
@@ -44,6 +44,7 @@ function buildParams(f: InvoicesFilters, cursor: string | null): URLSearchParams
 	const params = new URLSearchParams();
 	const s = statusParam(f);
 	if (s !== 'all') params.set('status', s);
+	if (f.search) params.set('q', f.search);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }
@@ -170,6 +171,17 @@ export const invoicesStore = {
 	setDetail(invoice: InvoiceDetail): void {
 		details.set(invoice.id, { invoice, fetchedAt: Date.now() });
 		detailState.set(invoice.id, { status: 'ready', error: null });
+	},
+
+	/**
+	 * Warm the detail cache on hover / touch-start. Unlike loadDetail it never
+	 * aborts/restarts an in-flight request, so rapid hovers don't churn.
+	 */
+	prefetchDetail(id: string): void {
+		const cached = details.get(id);
+		const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
+		if (fresh || detailControllers.has(id)) return;
+		void this.loadDetail(id);
 	},
 
 	async loadDetail(id: string, force = false): Promise<void> {

@@ -2,7 +2,7 @@
 // `tags` are operational descriptors (homeowner, company, vip, hot, …).
 // Never put lifecycle values inside `tags` — UI vocabulary lives in
 // $lib/contacts/tags.ts.
-import { pgTable, pgEnum, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, uuid, text, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
@@ -140,3 +140,69 @@ export const contactNotes = pgTable('contact_notes', {
 
 export type ContactNote = InferSelectModel<typeof contactNotes>;
 export type NewContactNote = InferInsertModel<typeof contactNotes>;
+
+// Bulk CSV import runs as a server-side background job (Jobber/HCP pattern), not
+// a single blocking request. One row per uploaded file. The raw CSV lives in R2
+// (file_key); the contactImportWorker streams it in batches, updating the
+// progress/result counters here as it goes. The UI subscribes to this row via
+// Supabase Realtime for live progress and a refresh-proof resume.
+//   pending     → uploaded, job enqueued, not yet started
+//   processing  → worker is inserting batches
+//   completed   → finished (some rows may still have failed — see error_rows)
+//   cancelling  → user requested cancel; worker will stop after current batch
+//   cancelled   → worker observed the cancel and stopped
+//   failed      → worker crashed/aborted (see last_error)
+export const contactImportStatusEnum = pgEnum('contact_import_status', [
+	'pending',
+	'processing',
+	'completed',
+	'cancelling',
+	'cancelled',
+	'failed'
+]);
+
+// How the worker treats a row that matches an existing contact (by phone OR email):
+//   skip   → leave the existing contact untouched, count it as skipped (default)
+//   update → overwrite the matched contact's CSV-provided fields, count as updated
+export const contactImportOnDuplicateEnum = pgEnum('contact_import_on_duplicate', [
+	'skip',
+	'update'
+]);
+
+export const contactImports = pgTable('contact_imports', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	org_id: uuid('org_id')
+		.notNull()
+		.references(() => organizations.id),
+	uploaded_by: uuid('uploaded_by')
+		.notNull()
+		.references(() => orgMembers.id),
+	// R2 object key of the raw uploaded CSV; original filename for display.
+	file_key: text('file_key').notNull(),
+	file_name: text('file_name').notNull(),
+	status: contactImportStatusEnum('status').notNull().default('pending'),
+	// Duplicate-handling mode chosen on the import screen (match is phone OR email).
+	on_duplicate: contactImportOnDuplicateEnum('on_duplicate').notNull().default('skip'),
+	// total_rows = data rows detected at upload; the rest advance as the worker runs.
+	total_rows: integer('total_rows').notNull().default(0),
+	processed_rows: integer('processed_rows').notNull().default(0),
+	imported: integer('imported').notNull().default(0),
+	// Rows that matched an existing contact and were overwritten (update mode only).
+	updated: integer('updated').notNull().default(0),
+	skipped: integer('skipped').notNull().default(0),
+	failed: integer('failed').notNull().default(0),
+	// Array of { row: number; reason: string } for every rejected row — backs the
+	// downloadable failed-rows CSV. Not sliced.
+	error_rows: jsonb('error_rows')
+		.notNull()
+		.default(sql`'[]'::jsonb`),
+	// Worker-level fatal error (distinct from per-row errors in error_rows).
+	last_error: text('last_error'),
+	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+	completed_at: timestamp('completed_at', { withTimezone: true })
+});
+
+export type ContactImport = InferSelectModel<typeof contactImports>;
+export type NewContactImport = InferInsertModel<typeof contactImports>;
+export type ContactImportErrorRow = { row: number; reason: string };

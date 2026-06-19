@@ -15,14 +15,27 @@ import {
 	pushSubscriptions,
 	type NewNotification
 } from '$lib/server/db/schema';
-import { NOTIFICATION_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
+import {
+	NOTIFICATION_QUEUE,
+	redisConnection,
+	notificationQueue,
+	addJob
+} from '$lib/server/queue/bullmq';
 import { automationCancelHooks } from './automationWorker';
 import { loadAssigneeMemberIds } from '$lib/server/appointments/assignees';
 import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { interpolate } from './templates';
 import { NOTIFICATION_SPEC } from '$lib/notifications/spec';
-import { preferenceFor } from '$lib/server/notifications/preferences';
+import { effectiveStatus } from '$lib/notifications/memberStatus';
+import { preferenceFor, resolveChannels } from '$lib/server/notifications/preferences';
+import {
+	emitMemberEmail,
+	emitMemberSms,
+	renderMemberSms,
+	quietHoursSuppressed,
+	memberDeepLink
+} from '$lib/server/notifications/memberDelivery';
 import { sendPush } from '$lib/server/push/index';
 import type { NotificationType, PushPayload } from '$lib/notifications/types';
 
@@ -102,6 +115,9 @@ type DispatchOptions = {
 	route: string;
 	metadata?: Record<string, unknown>;
 	idempotencyKey?: string | null;
+	// Originating business-event id (EventJobData.outbox_event_id). Anchors the
+	// per-channel dedup key so a worker retry never double-sends a staff email/SMS.
+	outboxEventId: string;
 };
 
 async function dispatchToMember(opts: DispatchOptions): Promise<void> {
@@ -109,7 +125,57 @@ async function dispatchToMember(opts: DispatchOptions): Promise<void> {
 	if (!spec) return;
 
 	const pref = await preferenceFor(opts.memberId, opts.type);
-	if (!pref.in_app_enabled && !pref.push_enabled) return;
+
+	// One joined read: the member's admin gate + status + personal quiet hours + the
+	// org timezone. Drives the email/SMS channels only — in-app/push keep their
+	// existing pref-based behavior (1.c scope: add channels BEYOND in-app/push).
+	const [member] = await db
+		.select({
+			email: orgMembers.email,
+			notification_phone: orgMembers.notification_phone,
+			sms_notifications_allowed: orgMembers.sms_notifications_allowed,
+			email_notifications_allowed: orgMembers.email_notifications_allowed,
+			notification_status: orgMembers.notification_status,
+			notification_status_expires_at: orgMembers.notification_status_expires_at,
+			personal_quiet_hours_enabled: orgMembers.personal_quiet_hours_enabled,
+			personal_quiet_hours_start_hour: orgMembers.personal_quiet_hours_start_hour,
+			personal_quiet_hours_end_hour: orgMembers.personal_quiet_hours_end_hour,
+			escalation_minutes: orgMembers.escalation_minutes,
+			timezone: organizations.timezone
+		})
+		.from(orgMembers)
+		.innerJoin(organizations, eq(organizations.id, orgMembers.org_id))
+		.where(eq(orgMembers.id, opts.memberId))
+		.limit(1);
+
+	const channels = member
+		? resolveChannels(opts.type, pref, {
+				sms_notifications_allowed: member.sms_notifications_allowed,
+				email_notifications_allowed: member.email_notifications_allowed,
+				has_notification_phone: Boolean(member.notification_phone?.trim()),
+				// Honor expiry: an elapsed temporary status reverts to the default.
+				notification_status: effectiveStatus(
+					member.notification_status,
+					member.notification_status_expires_at
+				)
+			})
+		: { in_app: false, push: false, email: false, sms: false };
+
+	const suppressed = member
+		? quietHoursSuppressed({
+				enabled: member.personal_quiet_hours_enabled,
+				startHour: member.personal_quiet_hours_start_hour,
+				endHour: member.personal_quiet_hours_end_hour,
+				timezone: member.timezone,
+				priority: spec.priority
+			})
+		: false;
+
+	const wantEmail = Boolean(member?.email) && channels.email && !suppressed;
+	const wantSms = Boolean(member?.notification_phone?.trim()) && channels.sms && !suppressed;
+
+	// Bail before any DB write only when NO channel wants this alert.
+	if (!pref.in_app_enabled && !pref.push_enabled && !wantEmail && !wantSms) return;
 
 	let notificationId: string | null = null;
 
@@ -162,7 +228,12 @@ async function dispatchToMember(opts: DispatchOptions): Promise<void> {
 						metadata: opts.metadata ?? {},
 						idempotency_key: opts.idempotencyKey
 					})
-					.onConflictDoNothing({ target: notifications.idempotency_key })
+					.onConflictDoNothing({
+						target: notifications.idempotency_key,
+						// Partial unique index (WHERE idempotency_key IS NOT NULL) —
+						// the predicate is required for ON CONFLICT to match it.
+						where: sql`idempotency_key IS NOT NULL`
+					})
 					.returning({ id: notifications.id });
 				notificationId = inserted?.id ?? null;
 			} else {
@@ -184,6 +255,69 @@ async function dispatchToMember(opts: DispatchOptions): Promise<void> {
 				notificationId = inserted?.id ?? null;
 			}
 		}
+	}
+
+	// Escalation engine (1.d). When the type is escalation-eligible and an in-app
+	// row exists (the thing whose read_at defines "acknowledged"), schedule a
+	// delayed check. If still unread after the member's escalation_minutes, it is
+	// re-delivered on the louder email/SMS channels. Deterministic jobId so a
+	// redelivered business event never schedules two escalations for the same row.
+	if (spec.escalate && notificationId && member) {
+		const minutes = Math.max(0, member.escalation_minutes ?? 5);
+		await addJob(
+			notificationQueue(),
+			'notification.escalate',
+			{
+				outbox_event_id: opts.outboxEventId,
+				event_type: 'notification.escalate',
+				org_id: opts.orgId,
+				resource_type: opts.resourceType,
+				resource_id: opts.resourceId,
+				payload: {
+					notification_id: notificationId,
+					member_id: opts.memberId,
+					type: opts.type,
+					route: opts.route,
+					title: opts.title,
+					body: opts.body ?? null
+				}
+			},
+			{ jobId: `escalate-${notificationId}`, delay: minutes * 60_000 }
+		);
+	}
+
+	// Staff email channel (1.c-1). Emitted independently of in-app/push so a member
+	// who enabled ONLY email still receives the alert. Durable, deduped per
+	// (business event × recipient); delivered inline by the outbox worker.
+	if (wantEmail && member) {
+		await emitMemberEmail(db, {
+			orgId: opts.orgId,
+			memberId: opts.memberId,
+			type: opts.type,
+			toEmail: member.email,
+			title: opts.title,
+			body: opts.body ?? null,
+			url: memberDeepLink(opts.route),
+			outboxEventId: opts.outboxEventId
+		});
+	}
+
+	// Staff SMS channel (1.c-2). Resolver already hard-gates SMS to critical/high +
+	// phone-on-file + admin allowance; quiet hours suppress it unless critical. Routes
+	// to the SMS queue (credit/money path) — never the customer conversation pipeline.
+	if (wantSms && member?.notification_phone) {
+		await emitMemberSms(db, {
+			orgId: opts.orgId,
+			memberId: opts.memberId,
+			type: opts.type,
+			notificationPhone: member.notification_phone,
+			body: renderMemberSms({
+				title: opts.title,
+				body: opts.body ?? null,
+				url: memberDeepLink(opts.route)
+			}),
+			outboxEventId: opts.outboxEventId
+		});
 	}
 
 	if (!pref.push_enabled || !notificationId) return;
@@ -468,6 +602,7 @@ async function handleQuoteViewed(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'quote_viewed',
 			title,
 			body: 'Tap to view and follow up',
@@ -493,6 +628,7 @@ async function handleQuoteDeclined(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'quote_declined',
 			title,
 			body: (data.payload.summary as string | undefined) ?? null,
@@ -515,6 +651,7 @@ async function handleQuoteChangesRequested(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'quote_changes_requested',
 			title,
 			body: (data.payload.summary as string | undefined) ?? null,
@@ -541,6 +678,7 @@ async function handleQuoteDepositPaid(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'quote_deposit_paid',
 			title,
 			body: (data.payload.summary as string | undefined) ?? null,
@@ -565,6 +703,7 @@ async function handleQuoteAccepted(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'quote_accepted',
 			title,
 			body: 'They said yes',
@@ -576,6 +715,35 @@ async function handleQuoteAccepted(data: EventJobData) {
 		});
 	}
 	await automationCancelHooks.quoteAccepted(data);
+}
+
+async function handleQuoteExpired(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	const customerName = (data.payload.customer_name as string | undefined) ?? '';
+	const quoteNumber = (data.payload.quote_number_display as string | undefined) ?? '';
+	const title = customerName
+		? `Your quote to ${customerName} expired`
+		: quoteNumber
+			? `Quote ${quoteNumber} expired`
+			: 'A quote expired';
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'quote_expired',
+			title,
+			body: 'Extend, resend, or mark it lost',
+			resourceType: 'quote',
+			resourceId: data.resource_id,
+			route: NOTIFICATION_SPEC.quote_expired.route(data.resource_id),
+			metadata: { customer_name: customerName, quote_number: quoteNumber },
+			// Keyed per validity cycle (expires_at) so a quote that is Extended and
+			// expires again re-notifies, mirroring the cron's outbox key.
+			idempotencyKey: `quote.expired:${data.resource_id}:${(data.payload.expires_at as string | undefined) ?? ''}:${r.id}`
+		});
+	}
 }
 
 async function handleMessageReceived(data: EventJobData) {
@@ -591,6 +759,7 @@ async function handleMessageReceived(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'message_received',
 			title,
 			body: preview || null,
@@ -615,6 +784,7 @@ async function handleReviewReceived(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'new_review',
 			title,
 			body: (data.payload.summary as string | undefined) ?? null,
@@ -637,6 +807,7 @@ async function handlePrivateFeedback(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'negative_feedback',
 			title,
 			body: (data.payload.summary as string | undefined) ?? null,
@@ -767,6 +938,7 @@ async function handleContactFollowUpDue(data: EventJobData) {
 	await dispatchToMember({
 		orgId: data.org_id,
 		memberId: assignedTo,
+		outboxEventId: data.outbox_event_id,
 		type: 'contact_follow_up_due',
 		title,
 		body: 'A follow-up you scheduled is due',
@@ -777,6 +949,127 @@ async function handleContactFollowUpDue(data: EventJobData) {
 		// One reminder per scheduled due instant; survives outbox retries.
 		idempotencyKey: `contact.follow_up_due:${data.resource_id}:${dueAt}`
 	});
+}
+
+async function handleOpportunityStaleDigest(data: EventJobData) {
+	if (!data.org_id) return;
+	const dealCount = Number(data.payload.deal_count ?? 0);
+	if (dealCount === 0) return;
+
+	// Assignees of the stale deals + admin/manager fallback — everyone who owns or
+	// oversees these deals should see the digest.
+	const assigneeIds = Array.isArray(data.payload.assignee_ids)
+		? (data.payload.assignee_ids as string[])
+		: [];
+
+	const [admins, ...assignees] = await Promise.all([
+		adminManagerMembers(data.org_id),
+		...assigneeIds.map((id) =>
+			db
+				.select({ id: orgMembers.id })
+				.from(orgMembers)
+				.where(
+					and(
+						eq(orgMembers.id, id),
+						eq(orgMembers.org_id, data.org_id!),
+						eq(orgMembers.is_active, true),
+						isNull(orgMembers.deleted_at)
+					)
+				)
+				.limit(1)
+		)
+	]);
+
+	// Dedupe recipients — assignees who are also admins should get one notification.
+	const seen = new Set<string>();
+	const recipients: { id: string }[] = [];
+	for (const r of [...admins, ...assignees.flat()]) {
+		if (!seen.has(r.id)) {
+			seen.add(r.id);
+			recipients.push(r);
+		}
+	}
+
+	const title =
+		dealCount === 1
+			? '1 deal has no follow-up scheduled'
+			: `${dealCount} deals have no follow-up scheduled`;
+	const body = 'Tap to review your pipeline and add reminders.';
+	const dateUtc = new Date().toISOString().slice(0, 10);
+
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'opportunity_stale_digest',
+			title,
+			body,
+			resourceType: 'organization',
+			resourceId: data.org_id,
+			route: NOTIFICATION_SPEC.opportunity_stale_digest.route(data.org_id),
+			metadata: { deal_count: dealCount },
+			// One digest per org per day per member — safe across outbox retries.
+			idempotencyKey: `opportunity.stale_digest:${data.org_id}:${dateUtc}:${r.id}`
+		});
+	}
+}
+
+async function handleOpportunityFollowUpDue(data: EventJobData) {
+	if (!data.org_id) return;
+	// Resolve recipients: the assignee, else admin/manager fallback (the sweep
+	// claims unassigned deals too, so the reminder always reaches someone).
+	const recipients = await pipelineRecipients(data.org_id, data.payload.assigned_to);
+	if (recipients.length === 0) return;
+
+	const fullName = (data.payload.full_name as string | undefined) ?? '';
+	const dealTitle = (data.payload.title as string | undefined) ?? '';
+	const dueAt = (data.payload.due_at as string | undefined) ?? null;
+	const value = data.payload.value;
+	const lastContactedAt = data.payload.last_contacted_at;
+
+	const title = fullName ? `Follow up with ${fullName}` : 'Deal follow-up due';
+
+	// Rich body: "{deal} · $1,200 · last contact 5d ago" — each segment optional.
+	const segments: string[] = [];
+	if (dealTitle) segments.push(dealTitle);
+	if (typeof value === 'string' && value.trim()) {
+		const n = Number(value);
+		if (Number.isFinite(n)) {
+			segments.push(
+				new Intl.NumberFormat('en-US', {
+					style: 'currency',
+					currency: 'USD',
+					maximumFractionDigits: 0
+				}).format(n)
+			);
+		}
+	}
+	if (typeof lastContactedAt === 'string' && lastContactedAt) {
+		const days = Math.floor((Date.now() - new Date(lastContactedAt).getTime()) / 86_400_000);
+		if (Number.isFinite(days) && days >= 0) {
+			segments.push(days === 0 ? 'last contact today' : `last contact ${days}d ago`);
+		}
+	}
+	const body = segments.length > 0 ? segments.join(' · ') : 'A follow-up you scheduled is due';
+
+	// One reminder per (deal, due instant, member) — survives outbox retries and
+	// fan-out to multiple fallback recipients.
+	for (const recipient of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: recipient.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'opportunity_follow_up_due',
+			title,
+			body,
+			resourceType: 'opportunity',
+			resourceId: data.resource_id,
+			route: NOTIFICATION_SPEC.opportunity_follow_up_due.route(data.resource_id),
+			metadata: { contact_name: fullName, deal_title: dealTitle, due_at: dueAt },
+			idempotencyKey: `opportunity.follow_up_due:${data.resource_id}:${dueAt}:${recipient.id}`
+		});
+	}
 }
 
 async function handleInvoiceViewed(data: EventJobData) {
@@ -798,6 +1091,7 @@ async function handleInvoiceViewed(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'invoice_viewed',
 			title,
 			body: 'Tap to view and follow up',
@@ -831,6 +1125,7 @@ async function handlePaymentRecorded(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'payment_received',
 			title,
 			body: 'Money landed in your account',
@@ -991,6 +1286,7 @@ async function handleAppointmentCancelled(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'appointment_cancelled',
 			title,
 			body: null,
@@ -1014,6 +1310,7 @@ async function handleAppointmentRescheduled(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'appointment_rescheduled',
 			title,
 			body: null,
@@ -1038,6 +1335,7 @@ async function handleAppointmentNoShow(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'appointment_no_show',
 			title,
 			body: 'You had a no-show appointment',
@@ -1058,6 +1356,7 @@ async function handleSmsCreditLow(data: EventJobData) {
 		await dispatchToMember({
 			orgId: data.org_id,
 			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
 			type: 'sms_credit_low',
 			title: 'SMS credit running low',
 			body: `Only $${balance} left. Contact support to top up so your texts keep sending.`,
@@ -1070,11 +1369,216 @@ async function handleSmsCreditLow(data: EventJobData) {
 	}
 }
 
+// A bulk CSV import reached a terminal state — tell ONLY the member who started it
+// (fire-and-forget: they can close the modal and get pinged when it's done). This is
+// a single targeted notification to the uploader, never a per-contact event.
+async function handleContactImportFinished(data: EventJobData) {
+	if (!data.org_id) return;
+	const p = data.payload as {
+		uploaded_by?: string;
+		file_name?: string | null;
+		status?: string;
+		imported?: number;
+		updated?: number;
+		skipped?: number;
+		failed?: number;
+	};
+	const memberId = p.uploaded_by;
+	if (typeof memberId !== 'string' || memberId.length === 0) return;
+
+	const failedImport = p.status === 'failed';
+	const imported = Number(p.imported ?? 0);
+	const updated = Number(p.updated ?? 0);
+	const skipped = Number(p.skipped ?? 0);
+	const failed = Number(p.failed ?? 0);
+
+	let title: string;
+	let body: string;
+	if (failedImport) {
+		title = 'Contact import failed';
+		body = p.file_name ? `${p.file_name} didn't finish importing` : "Your import didn't finish";
+	} else {
+		title = 'Contact import complete';
+		const segments = [`${imported} added`];
+		if (updated > 0) segments.push(`${updated} updated`);
+		if (skipped > 0) segments.push(`${skipped} skipped`);
+		if (failed > 0) segments.push(`${failed} flagged`);
+		body = segments.join(' · ');
+	}
+
+	await dispatchToMember({
+		orgId: data.org_id,
+		memberId,
+		outboxEventId: data.outbox_event_id,
+		type: 'contact_import_completed',
+		title,
+		body,
+		resourceType: 'contact_import',
+		resourceId: data.resource_id,
+		route: NOTIFICATION_SPEC.contact_import_completed.route(data.resource_id),
+		metadata: {
+			status: failedImport ? 'failed' : 'completed',
+			imported,
+			updated,
+			skipped,
+			failed,
+			file_name: p.file_name ?? null
+		},
+		// One notification per import's terminal event — survives outbox redelivery.
+		idempotencyKey: `contact_import.finished:${data.resource_id}`
+	});
+}
+
+// A genuine inbound lead arrived (lead.created). Inbound captures are unassigned at
+// creation, so notify admins/managers. type='new_lead' is escalation-eligible, so
+// dispatchToMember schedules the unread-escalation check automatically.
+async function handleNewLead(data: EventJobData) {
+	if (!data.org_id) return;
+	const recipients = await adminManagerMembers(data.org_id);
+	if (recipients.length === 0) return;
+
+	const [contact] = await db
+		.select({ full_name: contacts.full_name })
+		.from(contacts)
+		.where(eq(contacts.id, data.resource_id))
+		.limit(1);
+	const fullName = contact?.full_name?.trim() ?? '';
+	const leadSource = (data.payload.lead_source as string | undefined) ?? '';
+	const title = fullName ? `New lead: ${fullName}` : 'New lead arrived';
+
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'new_lead',
+			title,
+			body: `Someone wants to hire you. Respond fast`,
+			resourceType: 'contact',
+			resourceId: data.resource_id,
+			route: NOTIFICATION_SPEC.new_lead.route(data.resource_id),
+			metadata: { contact_name: fullName, lead_source: leadSource },
+			// One notification per (lead, member) — survives outbox redelivery.
+			idempotencyKey: `new_lead:${data.resource_id}:${r.id}`
+		});
+	}
+}
+
+// Escalation check (1.d), fired as a delayed job scheduled by dispatchToMember. Re-reads
+// the in-app notification at fire time: if it's been read (acknowledged) or is gone, no-op.
+// Otherwise re-deliver on the louder channels. Escalation OVERRIDES the member's per-type
+// channel preference (forces email/SMS), but still RESPECTS the admin gate, phone-on-file,
+// the status ceiling, the SMS critical/high hard rule, and personal quiet hours — all of
+// which live inside resolveChannels / quietHoursSuppressed. Idempotent across BullMQ retries
+// via a stable per-escalation dedup anchor on the outbox emit.
+async function handleEscalationCheck(data: EventJobData) {
+	if (!data.org_id) return;
+	const notificationId = data.payload.notification_id as string | undefined;
+	const memberId = data.payload.member_id as string | undefined;
+	const type = data.payload.type as NotificationType | undefined;
+	if (!notificationId || !memberId || !type) return;
+
+	const spec = NOTIFICATION_SPEC[type];
+	if (!spec) return;
+
+	// Re-read state at fire time — never trust the queued payload alone.
+	const [notif] = await db
+		.select({ read_at: notifications.read_at })
+		.from(notifications)
+		.where(eq(notifications.id, notificationId))
+		.limit(1);
+	if (!notif || notif.read_at) return; // acknowledged (or deleted) → no escalation
+
+	const [member] = await db
+		.select({
+			email: orgMembers.email,
+			notification_phone: orgMembers.notification_phone,
+			sms_notifications_allowed: orgMembers.sms_notifications_allowed,
+			email_notifications_allowed: orgMembers.email_notifications_allowed,
+			notification_status: orgMembers.notification_status,
+			notification_status_expires_at: orgMembers.notification_status_expires_at,
+			personal_quiet_hours_enabled: orgMembers.personal_quiet_hours_enabled,
+			personal_quiet_hours_start_hour: orgMembers.personal_quiet_hours_start_hour,
+			personal_quiet_hours_end_hour: orgMembers.personal_quiet_hours_end_hour,
+			timezone: organizations.timezone
+		})
+		.from(orgMembers)
+		.innerJoin(organizations, eq(organizations.id, orgMembers.org_id))
+		.where(eq(orgMembers.id, memberId))
+		.limit(1);
+	if (!member) return;
+
+	// Force the loud channels ON (in_app/push are pointless — the member already
+	// ignored them); the gate + ceiling + SMS-priority rule still apply.
+	const channels = resolveChannels(
+		type,
+		{ in_app_enabled: false, push_enabled: false, email_enabled: true, sms_enabled: true },
+		{
+			sms_notifications_allowed: member.sms_notifications_allowed,
+			email_notifications_allowed: member.email_notifications_allowed,
+			has_notification_phone: Boolean(member.notification_phone?.trim()),
+			notification_status: effectiveStatus(
+				member.notification_status,
+				member.notification_status_expires_at
+			)
+		}
+	);
+
+	const suppressed = quietHoursSuppressed({
+		enabled: member.personal_quiet_hours_enabled,
+		startHour: member.personal_quiet_hours_start_hour,
+		endHour: member.personal_quiet_hours_end_hour,
+		timezone: member.timezone,
+		priority: spec.priority
+	});
+
+	const route = (data.payload.route as string | undefined)?.trim() || spec.route(data.resource_id);
+	const baseTitle = (data.payload.title as string | undefined)?.trim() || spec.label;
+	const escTitle = `Still unanswered: ${baseTitle}`;
+	const escBody = (data.payload.body as string | undefined) ?? null;
+
+	const wantEmail = channels.email && Boolean(member.email) && !suppressed;
+	const wantSms = channels.sms && Boolean(member.notification_phone?.trim()) && !suppressed;
+
+	// Dedup anchor unique to THIS escalation (one per notification row), so a BullMQ
+	// retry never double-sends the staff email/SMS.
+	const escAnchor = `escalate:${notificationId}`;
+
+	if (wantEmail && member.email) {
+		await emitMemberEmail(db, {
+			orgId: data.org_id,
+			memberId,
+			type,
+			toEmail: member.email,
+			title: escTitle,
+			body: escBody,
+			url: memberDeepLink(route),
+			outboxEventId: escAnchor
+		});
+	}
+
+	if (wantSms && member.notification_phone) {
+		await emitMemberSms(db, {
+			orgId: data.org_id,
+			memberId,
+			type,
+			notificationPhone: member.notification_phone,
+			body: renderMemberSms({ title: escTitle, body: escBody, url: memberDeepLink(route) }),
+			outboxEventId: escAnchor
+		});
+	}
+}
+
 export const notificationWorker = new Worker<EventJobData>(
 	NOTIFICATION_QUEUE,
 	async (job: Job<EventJobData>) => {
 		const data = job.data;
 		switch (job.name) {
+			case 'lead.created':
+			case 'new_lead':
+				return handleNewLead(data);
+			case 'notification.escalate':
+				return handleEscalationCheck(data);
 			case 'opportunity.created':
 				return handleOpportunityCreated(data);
 			case 'opportunity.assignee_changed':
@@ -1097,6 +1601,8 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleQuoteDeclined(data);
 			case 'quote.changes_requested':
 				return handleQuoteChangesRequested(data);
+			case 'quote.expired':
+				return handleQuoteExpired(data);
 			case 'message.received':
 				return handleMessageReceived(data);
 			case 'message.delivery_failed':
@@ -1113,8 +1619,14 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleContactSmsOptedIn(data);
 			case 'contact.follow_up_due':
 				return handleContactFollowUpDue(data);
+			case 'opportunity.follow_up_due':
+				return handleOpportunityFollowUpDue(data);
+			case 'opportunity.stale_digest':
+				return handleOpportunityStaleDigest(data);
 			case 'sms.credit_low':
 				return handleSmsCreditLow(data);
+			case 'contact_import.finished':
+				return handleContactImportFinished(data);
 			case 'invoice.viewed':
 				return handleInvoiceViewed(data);
 			case 'payment.recorded':

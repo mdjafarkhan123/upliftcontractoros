@@ -11,6 +11,7 @@
 		Zap,
 		MessageSquare,
 		Mail,
+		Columns3,
 		Lock
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
@@ -19,11 +20,13 @@
 	let {
 		role,
 		featureAutomation,
-		featureOnlineBooking
+		featureOnlineBooking,
+		canManagePipeline
 	}: {
 		role: 'admin' | 'manager' | 'member';
 		featureAutomation: boolean;
 		featureOnlineBooking: boolean;
+		canManagePipeline: boolean;
 	} = $props();
 
 	function isActive(href: string): boolean {
@@ -114,6 +117,16 @@
 			lockedReason: role !== 'admin' ? 'Admin only' : undefined,
 			iconBg: 'bg-sky-50 dark:bg-sky-500/10',
 			iconColor: 'text-sky-600 dark:text-sky-400'
+		},
+		{
+			href: '/settings/stages',
+			label: 'Pipeline Stages',
+			description: 'Customize your pipeline columns',
+			icon: Columns3,
+			locked: !canManagePipeline,
+			lockedReason: !canManagePipeline ? 'No access' : undefined,
+			iconBg: 'bg-indigo-50 dark:bg-indigo-500/10',
+			iconColor: 'text-indigo-600 dark:text-indigo-400'
 		},
 		{
 			href: '/settings/quick-replies',

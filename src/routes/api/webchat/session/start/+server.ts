@@ -6,7 +6,7 @@
  * Security: Origin/Referer must match domain_allowlist
  */
 import { json } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
@@ -26,11 +26,38 @@ import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 import { sha256 } from '$lib/utils/hash';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 
-const startSchema = z.object({
-	widget_token: z.string().uuid('Invalid widget token'),
-	name: z.string().min(1, 'Name is required').max(200),
-	phone: z.string().min(1, 'Phone is required')
-});
+const startSchema = z
+	.object({
+		widget_token: z.string().uuid('Invalid widget token'),
+		name: z.string().min(1, 'Name is required').max(200),
+		// Phone OR email — at least one is required (enforced by the refine below).
+		// Matches GHL's pre-chat contact form: name mandatory, one contact method.
+		phone: z
+			.string()
+			.max(40)
+			.optional()
+			.transform((v) => {
+				const t = v?.trim();
+				return t && t.length > 0 ? t : undefined;
+			}),
+		email: z
+			.string()
+			.max(200)
+			.optional()
+			.transform((v) => {
+				const t = v?.trim().toLowerCase();
+				return t && t.length > 0 ? t : undefined;
+			}),
+		// Express consent (TCPA): the visitor must tick the consent box before we may
+		// send automated texts/emails. Required — must be exactly true.
+		consent: z.boolean().refine((v) => v === true, {
+			message: 'Please agree to be contacted so we can reply.'
+		})
+	})
+	.refine((d) => Boolean(d.phone || d.email), {
+		message: 'Enter a phone number or email so we can reply.',
+		path: ['phone']
+	});
 
 function getIpHash(request: Request): string {
 	const forwarded = request.headers.get('x-forwarded-for');
@@ -101,42 +128,80 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Origin not permitted' }, { status: 403 });
 	}
 
-	// Normalize phone to E.164
-	let phone: string;
-	try {
-		phone = toE164(parsed.phone);
-	} catch (e) {
-		if (e instanceof PhoneInvalidError) {
-			return json(
-				{
-					error: e.message,
-					field_errors: { phone: e.message }
-				},
-				{ status: 400 }
-			);
-		}
-		return json({ error: 'Invalid phone number' }, { status: 400 });
+	// Validate email format when provided.
+	if (parsed.email && !z.string().email().safeParse(parsed.email).success) {
+		return json(
+			{
+				error: 'Enter a valid email address.',
+				field_errors: { email: 'Enter a valid email address.' }
+			},
+			{ status: 400 }
+		);
 	}
+
+	// Normalize phone to E.164 when provided. Phone is optional now (email-only
+	// visitors are allowed), but a present value must still be valid.
+	let phone: string | undefined;
+	if (parsed.phone) {
+		try {
+			phone = toE164(parsed.phone);
+		} catch (e) {
+			if (e instanceof PhoneInvalidError) {
+				return json(
+					{
+						error: e.message,
+						field_errors: { phone: e.message }
+					},
+					{ status: 400 }
+				);
+			}
+			return json({ error: 'Invalid phone number' }, { status: 400 });
+		}
+	}
+	const email = parsed.email;
 
 	const name = sanitizeMessageBody(parsed.name);
 	const userAgentHash = sha256(request.headers.get('user-agent') ?? 'unknown');
 
 	// Run in transaction
 	const result = await db.transaction(async (tx) => {
-		// Find or create contact
-		const [existing] = await tx
-			.select()
-			.from(contacts)
-			.where(
-				and(eq(contacts.org_id, org.id), eq(contacts.phone, phone), isNull(contacts.deleted_at))
-			)
-			.limit(1);
+		// Find or create contact. Dedup by phone (the UNIQUE(org_id, phone) key)
+		// when a phone was given; otherwise best-effort match by email (no DB
+		// uniqueness on email — case-insensitive lookup, same as the import flow).
+		const [existing] = phone
+			? await tx
+					.select()
+					.from(contacts)
+					.where(
+						and(eq(contacts.org_id, org.id), eq(contacts.phone, phone), isNull(contacts.deleted_at))
+					)
+					.limit(1)
+			: await tx
+					.select()
+					.from(contacts)
+					.where(
+						and(
+							eq(contacts.org_id, org.id),
+							sql`lower(${contacts.email}) = ${email}`,
+							isNull(contacts.deleted_at)
+						)
+					)
+					.limit(1);
 
 		let contact: typeof existing;
 		let isNewContact = false;
 
 		if (existing) {
 			contact = existing;
+			// Enrich a matched contact with a missing email (never phone — phone is
+			// the unique dedup key and backfilling it could collide with another row).
+			if (email && !existing.email) {
+				await tx
+					.update(contacts)
+					.set({ email, email_opt_in: true, updated_at: new Date() })
+					.where(eq(contacts.id, existing.id));
+				contact = { ...existing, email, email_opt_in: true };
+			}
 			// Emit duplicate detected event
 			await tx.insert(outboxEvents).values({
 				org_id: org.id,
@@ -153,7 +218,14 @@ export const POST: RequestHandler = async ({ request }) => {
 				.values({
 					org_id: org.id,
 					full_name: name,
-					phone,
+					phone: phone ?? null,
+					email: email ?? null,
+					// The visitor ticked the required express-consent box, so opt them into
+					// the channel(s) they gave us. email_opt_in lets the email side of
+					// Speed-to-Lead (and other sequences) send; sms_opted_in_at records the
+					// TCPA consent timestamp for any phone we'll auto-text.
+					email_opt_in: Boolean(email),
+					sms_opted_in_at: phone ? new Date() : null,
 					status: 'lead',
 					lead_source: 'live_chat'
 				})
@@ -169,10 +241,28 @@ export const POST: RequestHandler = async ({ request }) => {
 					contact_id: contact.id,
 					org_id: org.id,
 					full_name: name,
-					phone,
+					phone: phone ?? null,
+					email: email ?? null,
 					lead_source: 'live_chat'
 				},
 				idempotency_key: `contact.created:${contact.id}`
+			});
+			// Live web chat is a genuine inbound capture, so it ALSO emits
+			// lead.created — the event that drives Speed-to-Lead. (contact.created
+			// alone is feed-only and no longer auto-texts.) Mirrors how the inbound
+			// SMS/call/Messenger channels co-emit both events.
+			await tx.insert(outboxEvents).values({
+				org_id: org.id,
+				event_type: 'lead.created',
+				resource_type: 'contact',
+				resource_id: contact.id,
+				payload: {
+					contact_id: contact.id,
+					org_id: org.id,
+					lead_source: 'live_chat',
+					origin: 'webchat'
+				},
+				idempotency_key: `lead.created:${contact.id}`
 			});
 		}
 

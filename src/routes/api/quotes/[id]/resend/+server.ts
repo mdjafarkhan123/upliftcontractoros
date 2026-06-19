@@ -8,6 +8,7 @@ import { canSendQuote } from '$lib/server/quotes/permissions';
 import { generateToken, hashToken } from '$lib/server/quotes/token';
 import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteSentEvent } from '$lib/server/quotes/events';
+import { snapshotQuoteVersion } from '$lib/server/quotes/versions';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -26,8 +27,9 @@ export const POST: RequestHandler = async (event) => {
 			contact_id: string;
 			total: string;
 			quote_number: number;
+			current_version: number;
 		}>(sql`
-			SELECT id, status, contact_id, total, quote_number FROM quotes
+			SELECT id, status, contact_id, total, quote_number, current_version FROM quotes
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
@@ -42,14 +44,20 @@ export const POST: RequestHandler = async (event) => {
 
 		const now = new Date();
 		const wasChangesRequested = existing.status === 'changes_requested';
+		// A re-send out of changes_requested is a real revision → new version.
+		// A plain re-delivery of unchanged sent/viewed content keeps the same version.
+		const newVersion = wasChangesRequested ? existing.current_version + 1 : existing.current_version;
 
 		await tx
 			.update(quotes)
 			.set({
 				public_token_hash: tokenHash,
 				// Re-send returns a change-requested quote to the normal sent lifecycle
-				// so existing quote.sent follow-up automation resumes.
-				...(wasChangesRequested ? { status: 'sent' as const } : {}),
+				// so existing quote.sent follow-up automation resumes. Reset viewed_at so the
+				// new version can register its own "Viewed" + fire a fresh view notification.
+				...(wasChangesRequested
+					? { status: 'sent' as const, current_version: newVersion, viewed_at: null }
+					: {}),
 				updated_at: now
 			})
 			.where(eq(quotes.id, id));
@@ -65,6 +73,14 @@ export const POST: RequestHandler = async (event) => {
 						isNull(quoteChangeRequests.resolved_at)
 					)
 				);
+
+			// Freeze the revised quote as the new version snapshot.
+			await snapshotQuoteVersion(tx, {
+				orgId: auth.orgId,
+				quoteId: existing.id,
+				version: newVersion,
+				sentAt: now
+			});
 		}
 
 		const [contactRow] = await tx

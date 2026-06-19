@@ -22,6 +22,9 @@
 
 	let busy = $state<'accept' | 'decline' | 'changes' | 'deposit' | null>(null);
 	let confirmingDecline = $state(false);
+	let declineReason = $state<'price' | 'competitor' | 'timing' | 'scope' | 'other' | null>(null);
+	let declineNote = $state('');
+	let declineError = $state<string | null>(null);
 	let changesOpen = $state(false);
 	let changesMessage = $state('');
 	let changesError = $state<string | null>(null);
@@ -52,16 +55,53 @@
 
 	const taxPct = $derived(data.quote ? (Number(data.quote.tax_rate) * 100).toFixed(2) + '%' : '0%');
 
-	async function doAction(kind: 'accept' | 'decline') {
-		busy = kind;
+	const declineReasons = [
+		{ value: 'price', label: 'Price is too high' },
+		{ value: 'competitor', label: 'Going with someone else' },
+		{ value: 'timing', label: "Timing isn't right" },
+		{ value: 'scope', label: 'Scope changed' },
+		{ value: 'other', label: 'Other' }
+	] as const;
+
+	async function acceptQuote() {
+		busy = 'accept';
 		try {
-			const res = await fetch(`/q/${token}/${kind}`, { method: 'POST' });
+			const res = await fetch(`/q/${token}/accept`, { method: 'POST' });
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok) {
 				action = null;
 				return;
 			}
-			action = (body.data?.status as 'accepted' | 'declined') ?? null;
+			action = (body.data?.status as 'accepted') ?? null;
+		} finally {
+			busy = null;
+		}
+	}
+
+	async function submitDecline() {
+		if (!declineReason) {
+			declineError = 'Please choose a reason.';
+			return;
+		}
+		busy = 'decline';
+		declineError = null;
+		try {
+			const res = await fetch(`/q/${token}/decline`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					reason: declineReason,
+					note: declineNote.trim() || undefined
+				})
+			});
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				declineError = body.error ?? 'Could not submit. Please try again.';
+				return;
+			}
+			action = (body.data?.status as 'declined') ?? null;
+		} catch {
+			declineError = 'Network error. Please try again.';
 		} finally {
 			busy = null;
 		}
@@ -298,7 +338,7 @@
 							successLabel="Accepted"
 							state={busy === 'accept' ? 'loading' : 'idle'}
 							disabled={busy !== null && busy !== 'accept'}
-							onclick={() => doAction('accept')}
+							onclick={acceptQuote}
 						>
 							{#snippet icon()}<Check class="h-5 w-5" />{/snippet}
 						</JetEngineButton>
@@ -320,12 +360,46 @@
 								Decline
 							</Button>
 						{:else}
-							<div class="rounded-xl border border-border bg-card p-3 text-sm">
-								<p class="text-muted-foreground">Decline this quote?</p>
-								<div class="mt-2 grid grid-cols-2 gap-2">
+							<div class="rounded-xl border border-border bg-card p-4 text-sm">
+								<p class="font-medium">Why are you declining?</p>
+								<div class="mt-3 space-y-2">
+									{#each declineReasons as r (r.value)}
+										<label
+											class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+										>
+											<input
+												type="radio"
+												name="decline-reason"
+												value={r.value}
+												bind:group={declineReason}
+												disabled={busy !== null}
+												class="h-4 w-4 accent-primary"
+											/>
+											<span>{r.label}</span>
+										</label>
+									{/each}
+								</div>
+								{#if declineReason === 'other'}
+									<Textarea
+										rows={3}
+										maxlength={2000}
+										placeholder="Tell us a bit more (optional)"
+										bind:value={declineNote}
+										disabled={busy !== null}
+										class="mt-3"
+									/>
+								{/if}
+								{#if declineError}
+									<p class="mt-2 text-xs text-destructive">{declineError}</p>
+								{/if}
+								<div class="mt-3 grid grid-cols-2 gap-2">
 									<Button
 										variant="outline"
-										onclick={() => (confirmingDecline = false)}
+										class="min-h-[44px]"
+										onclick={() => {
+											confirmingDecline = false;
+											declineError = null;
+										}}
 										disabled={busy !== null}
 									>
 										Cancel
@@ -336,8 +410,8 @@
 										loadingLabel="Declining…"
 										successLabel="Declined"
 										state={busy === 'decline' ? 'loading' : 'idle'}
-										disabled={busy !== null && busy !== 'decline'}
-										onclick={() => doAction('decline')}
+										disabled={(busy !== null && busy !== 'decline') || !declineReason}
+										onclick={submitDecline}
 									/>
 								</div>
 							</div>

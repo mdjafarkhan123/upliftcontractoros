@@ -13,12 +13,28 @@ export type QuoteChangeRequestSummary = {
 	requested_at: string;
 };
 
+export type QuoteTimelineEventType =
+	| 'sent'
+	| 'viewed'
+	| 'revision_requested'
+	| 'accepted'
+	| 'declined';
+
+export type QuoteTimelineEvent = {
+	type: QuoteTimelineEventType;
+	version: number;
+	at: string;
+	total?: string;
+	view_count?: number;
+};
+
 export type QuotesGroup = 'all' | 'active' | 'closed';
 export type QuotesStatusChip = 'all' | QuoteStatus;
 
 export type QuotesFilters = {
 	group: QuotesGroup;
 	status: QuotesStatusChip;
+	search: string;
 };
 
 export type QuoteListItem = {
@@ -60,6 +76,7 @@ export type QuoteDetail = {
 	quote_number_display: string;
 	title: string;
 	status: QuoteStatus;
+	current_version: number;
 	subtotal: string;
 	tax_rate: string;
 	tax_amount: string;

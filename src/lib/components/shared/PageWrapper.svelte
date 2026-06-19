@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { cn } from '$lib/utils/cn';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { ArrowLeft, Search } from '@lucide/svelte';
 	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
 	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
 	import UserMenu from '$lib/components/app-shell/UserMenu.svelte';
 	import { getOrgContext } from '$lib/context/org';
 	import { getMemberContext } from '$lib/context/member';
+	import { commandPalette } from '$lib/stores/commandPalette.svelte';
 	import type { Org, OrgMember } from '$lib/types';
 
 	let {
@@ -102,6 +103,14 @@
 						<div
 							class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/70 p-1 shadow-card"
 						>
+							<button
+								type="button"
+								onclick={() => (commandPalette.open = true)}
+								class="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								aria-label="Search (⌘K)"
+							>
+								<Search class="h-4 w-4" />
+							</button>
 							<ThemeToggle />
 							<NotificationBell />
 						</div>

@@ -4,9 +4,23 @@
 	import { formatRelativeShort } from '$lib/utils/format';
 	import { formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
 	import { TEMPERATURE_META, type LeadTemperature } from '$lib/contacts/temperature';
+	import { leadSourceLabel } from '$lib/contacts/leadSource';
 	import ContactAvatar from './ContactAvatar.svelte';
+	import { goto } from '$app/navigation';
 	import { cn } from '$lib/utils/cn';
-	import { Check, Phone, MessageSquare } from '@lucide/svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { contactDetailStore } from '$lib/stores/contactDetail.svelte';
+	import {
+		Check,
+		Phone,
+		MessageSquare,
+		MoreHorizontal,
+		Pencil,
+		Trash2,
+		Archive,
+		RotateCcw
+	} from '@lucide/svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	let {
 		id,
@@ -17,13 +31,17 @@
 		email,
 		status,
 		assignee_name,
+		lead_source = null,
 		lead_temperature = null,
 		sms_opt_out,
 		tags = [],
 		last_contacted_at = null,
 		selectable = false,
 		selected = false,
-		onToggleSelect
+		onToggleSelect,
+		onArchiveRequest,
+		onRestoreRequest,
+		onDeleteRequest
 	}: {
 		id: string;
 		full_name: string;
@@ -33,6 +51,7 @@
 		email: string | null;
 		status: 'lead' | 'customer' | 'archived';
 		assignee_name?: string | null;
+		lead_source?: string | null;
 		lead_temperature?: LeadTemperature | null;
 		sms_opt_out?: boolean;
 		tags?: string[];
@@ -40,9 +59,16 @@
 		selectable?: boolean;
 		selected?: boolean;
 		onToggleSelect?: (id: string) => void;
+		onArchiveRequest?: (id: string, name: string) => void;
+		onRestoreRequest?: (id: string, name: string) => void;
+		onDeleteRequest?: (id: string, name: string) => void;
 	} = $props();
 
 	const temp = $derived(lead_temperature ? TEMPERATURE_META[lead_temperature] : null);
+	// "Manual" carries no channel signal — only surface a real lead source.
+	const sourceLabel = $derived(
+		lead_source && lead_source !== 'manual' ? leadSourceLabel(lead_source) : null
+	);
 
 	const visibleTags = $derived(tags.slice(0, 3));
 	const extraTagCount = $derived(Math.max(0, tags.length - visibleTags.length));
@@ -86,18 +112,73 @@
 						<p class="truncate text-xs text-muted-foreground">{email}</p>
 					{/if}
 				</div>
-				<div class="flex shrink-0 flex-col items-end gap-1">
-					<Badge variant={statusVariant} label={statusLabel} />
-					{#if temp}
-						<span
-							class={cn(
-								'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-								temp.badge
-							)}
-						>
-							<span class={cn('h-1.5 w-1.5 rounded-full', temp.dot)}></span>
-							{temp.label}
-						</span>
+				<div class="flex shrink-0 items-start gap-1.5">
+					<div class="flex flex-col items-end gap-1">
+						<Badge variant={statusVariant} label={statusLabel} />
+						{#if temp}
+							<span
+								class={cn(
+									'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+									temp.badge
+								)}
+							>
+								<span class={cn('h-1.5 w-1.5 rounded-full', temp.dot)}></span>
+								{temp.label}
+							</span>
+						{/if}
+					</div>
+					{#if !selectable}
+						<div onclick={(e) => e.stopPropagation()} role="none">
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger
+									class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									aria-label="Actions for {full_name}"
+								>
+									<MoreHorizontal class="h-4 w-4" />
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content align="end">
+									{#if isArchived}
+										{#if onRestoreRequest}
+											<DropdownMenu.Item onclick={() => onRestoreRequest(id, full_name)}>
+												<RotateCcw class="h-4 w-4" />
+												Restore contact
+											</DropdownMenu.Item>
+										{/if}
+										{#if onDeleteRequest}
+											<DropdownMenu.Separator />
+											<DropdownMenu.Item
+												class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+												onclick={() => onDeleteRequest(id, full_name)}
+											>
+												<Trash2 class="h-4 w-4" />
+												Delete contact
+											</DropdownMenu.Item>
+										{/if}
+									{:else}
+										<DropdownMenu.Item onclick={() => goto(`/contacts/${id}/edit`)}>
+											<Pencil class="h-4 w-4" />
+											Edit contact
+										</DropdownMenu.Item>
+										{#if onArchiveRequest}
+											<DropdownMenu.Item onclick={() => onArchiveRequest(id, full_name)}>
+												<Archive class="h-4 w-4" />
+												Archive contact
+											</DropdownMenu.Item>
+										{/if}
+										{#if onDeleteRequest}
+											<DropdownMenu.Separator />
+											<DropdownMenu.Item
+												class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+												onclick={() => onDeleteRequest(id, full_name)}
+											>
+												<Trash2 class="h-4 w-4" />
+												Delete contact
+											</DropdownMenu.Item>
+										{/if}
+									{/if}
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -112,6 +193,10 @@
 					<span>Last contacted {formatRelativeShort(last_contacted_at)}</span>
 				{:else}
 					<span class="italic">Never contacted</span>
+				{/if}
+				{#if sourceLabel}
+					<span aria-hidden="true">•</span>
+					<span>{sourceLabel}</span>
 				{/if}
 				{#if sms_opt_out}
 					<span aria-hidden="true">•</span>
@@ -176,8 +261,7 @@
 		onclick={() => onToggleSelect?.(id)}
 		class={cn(
 			'group block w-full rounded-xl border border-border/70 bg-card p-4 text-left shadow-card transition-all duration-150 ease-out active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10',
-			selected && 'border-primary/50 bg-primary/5',
-			isArchived && 'opacity-70 saturate-50'
+			selected && 'border-primary/50 bg-primary/5'
 		)}
 	>
 		{@render inner()}
@@ -185,9 +269,9 @@
 {:else}
 	<a
 		href={`/contacts/${id}`}
+		use:prefetchOnIntent={() => contactDetailStore.prefetch(id)}
 		class={cn(
-			'group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10',
-			isArchived && 'opacity-70 saturate-50'
+			'group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10'
 		)}
 	>
 		{@render inner()}

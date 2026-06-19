@@ -6,6 +6,7 @@ export const NOTIFICATION_TYPES = [
 	'quote_deposit_paid',
 	'quote_declined',
 	'quote_changes_requested',
+	'quote_expired',
 	// Money
 	'payment_received',
 	'invoice_viewed',
@@ -15,13 +16,18 @@ export const NOTIFICATION_TYPES = [
 	'appointment_rescheduled',
 	'appointment_cancelled',
 	'appointment_no_show',
+	'appointment_quote_nudge',
 	'missed_call_handled',
 	'contact_follow_up_due',
+	'opportunity_follow_up_due',
+	'opportunity_stale_digest',
 	// Reputation
 	'new_review',
 	'negative_feedback',
 	// Growth
 	'growth_feed_update',
+	// Data
+	'contact_import_completed',
 	// Infrastructure
 	'sms_credit_low'
 ] as const;

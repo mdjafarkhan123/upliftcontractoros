@@ -11,6 +11,7 @@
 		cancelLabel = 'Cancel',
 		variant = 'default' as 'default' | 'destructive',
 		onConfirm,
+		onCancel,
 		loading = false
 	}: {
 		open?: boolean;
@@ -20,6 +21,7 @@
 		cancelLabel?: string;
 		variant?: 'default' | 'destructive';
 		onConfirm: () => void | Promise<void>;
+		onCancel?: () => void;
 		loading?: boolean;
 	} = $props();
 
@@ -29,7 +31,7 @@
 	}
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root bind:open onOpenChange={(o) => !o && onCancel?.()}>
 	<Dialog.Content showClose={false}>
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>

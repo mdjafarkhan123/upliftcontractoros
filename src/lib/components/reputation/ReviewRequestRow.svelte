@@ -5,6 +5,8 @@
 	import StarRating from './StarRating.svelte';
 	import ReviewRequestRowActions from './ReviewRequestRowActions.svelte';
 	import ReviewRequestTimeline from './ReviewRequestTimeline.svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 
 	let { request }: { request: ReviewRequestListItem } = $props();
 
@@ -56,6 +58,7 @@
 		<div class="min-w-0">
 			<a
 				href="/jobs/{request.job_id}"
+				use:prefetchOnIntent={() => jobDetailStore.prefetch(request.job_id)}
 				class="block truncate text-sm font-semibold text-foreground hover:text-primary hover:underline focus-visible:text-primary focus-visible:underline focus-visible:outline-none"
 			>
 				{request.job_title ?? 'Untitled job'}

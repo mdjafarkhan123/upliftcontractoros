@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -15,6 +15,7 @@ import { createQuoteSchema } from '$lib/server/quotes/schemas';
 import { computeLineTotal, recalcQuoteTotals } from '$lib/server/quotes/recalc';
 import { randomPlaceholderHash } from '$lib/server/quotes/token';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
+import { textMatch, textRank } from '$lib/server/search/textSearch';
 
 const PAGE_SIZE = 30;
 const ALL_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired'] as const;
@@ -28,6 +29,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const url = event.url;
 	const statusParam = url.searchParams.get('status') ?? 'all';
+	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const cursor = url.searchParams.get('cursor');
 
 	const conditions: SQL[] = [eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)];
@@ -40,15 +42,43 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(eq(quotes.status, statusParam as 'draft'));
 	}
 
+	// Fuzzy search across quote title + linked contact name/company, plus an
+	// exact/prefix match on the quote number so typing "1042" finds quote #1042.
+	const isSearching = searchRaw.length > 0;
+	const searchFields = [quotes.title, contacts.full_name, contacts.company_name];
+	let relevance: SQL<number> | null = null;
+	if (isSearching) {
+		relevance = textRank(searchRaw, searchFields);
+		const matchClauses: SQL[] = [textMatch(searchRaw, searchFields)];
+		if (/^\d+$/.test(searchRaw)) {
+			matchClauses.push(sql`CAST(${quotes.quote_number} AS text) LIKE ${`${searchRaw}%`}`);
+		}
+		conditions.push(or(...matchClauses) as SQL);
+	}
+
 	if (cursor) {
-		const [createdAt, id] = cursor.split('|');
-		if (createdAt && id) {
-			conditions.push(
-				or(
-					lt(quotes.created_at, new Date(createdAt)),
-					and(eq(quotes.created_at, new Date(createdAt)), lt(quotes.id, id))
-				) as SQL
-			);
+		if (isSearching && relevance) {
+			const [rankStr, createdAt, id] = cursor.split('|');
+			const rank = Number(rankStr);
+			if (Number.isFinite(rank) && createdAt && id) {
+				conditions.push(
+					or(
+						gt(relevance, rank),
+						and(eq(relevance, rank), lt(quotes.created_at, new Date(createdAt))),
+						and(eq(relevance, rank), eq(quotes.created_at, new Date(createdAt)), lt(quotes.id, id))
+					) as SQL
+				);
+			}
+		} else {
+			const [createdAt, id] = cursor.split('|');
+			if (createdAt && id) {
+				conditions.push(
+					or(
+						lt(quotes.created_at, new Date(createdAt)),
+						and(eq(quotes.created_at, new Date(createdAt)), lt(quotes.id, id))
+					) as SQL
+				);
+			}
 		}
 	}
 
@@ -66,16 +96,18 @@ export const GET: RequestHandler = async (event) => {
 			accepted_at: quotes.accepted_at,
 			declined_at: quotes.declined_at,
 			expires_at: quotes.expires_at,
-			created_at: quotes.created_at
+			created_at: quotes.created_at,
+			rank: relevance ?? sql<number>`0`
 		})
 		.from(quotes)
 		.innerJoin(contacts, eq(contacts.id, quotes.contact_id))
 		.where(and(...conditions))
-		.orderBy(desc(quotes.created_at), desc(quotes.id))
+		.orderBy(...(relevance ? [relevance] : []), desc(quotes.created_at), desc(quotes.id))
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
-	const items = (hasMore ? rows.slice(0, PAGE_SIZE) : rows).map((r) => ({
+	const sliced = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+	const items = sliced.map(({ rank: _rank, ...r }) => ({
 		...r,
 		quote_number_display: formatQuoteNumber(r.quote_number),
 		created_at: r.created_at.toISOString(),
@@ -85,8 +117,13 @@ export const GET: RequestHandler = async (event) => {
 		declined_at: r.declined_at?.toISOString() ?? null,
 		expires_at: r.expires_at?.toISOString() ?? null
 	}));
-	const last = items[items.length - 1];
-	const nextCursor = hasMore && last ? `${last.created_at}|${last.id}` : null;
+	const last = sliced[sliced.length - 1];
+	const nextCursor =
+		hasMore && last
+			? isSearching
+				? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
+				: `${last.created_at.toISOString()}|${last.id}`
+			: null;
 
 	return json({ items, next_cursor: nextCursor });
 };

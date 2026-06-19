@@ -53,10 +53,22 @@ interface SessionState {
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 	let pollInFlight = false;
 	let contractorTyping = false;
-	let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
+	let unreadCount = 0;
+	// Tracks the sender of the previously appended bubble so consecutive
+	// messages from the same side can collapse under one avatar (iMessage-style).
+	let lastMsgDirection: 'in' | 'out' | null = null;
+	let greetingTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const POLL_INTERVAL_MS = 3000;
-	const AUTO_CLOSE_MS = 20000;
+	// Polling cadence adapts to engagement to minimize DB load:
+	//  - panel open + tab visible → fast, this is a live conversation
+	//  - panel closed but tab visible → slow, we only need the unread badge
+	//  - tab hidden → paused entirely; we catch up on the next visibility change
+	// This replaces the old idle auto-close, which closed the panel but never
+	// actually stopped the 3s poll loop, so it saved no DB calls.
+	const POLL_ACTIVE_MS = 3000;
+	const POLL_IDLE_MS = 20000;
+	const GREETING_DELAY_MS = 6000;
+	const GREETED_KEY = `wc_greeted_${widgetToken}`;
 
 	function loadCursor(): string | null {
 		try {
@@ -88,6 +100,8 @@ interface SessionState {
 	let panelEl: HTMLDivElement | null = null;
 	let bodyEl: HTMLDivElement | null = null;
 	let btnEl: HTMLButtonElement | null = null;
+	let badgeEl: HTMLSpanElement | null = null;
+	let greetingEl: HTMLDivElement | null = null;
 	let composerEl: HTMLDivElement | null = null;
 
 	// ── Styles (scoped inside Shadow DOM, cannot leak in/out) ───────────────
@@ -113,6 +127,47 @@ input, textarea { font: inherit; }
 .wc-launcher:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 14px 36px ${hexToRgba(primary, 0.45)}, 0 6px 14px rgba(15, 23, 42, 0.18); }
 .wc-launcher:active { transform: translateY(0) scale(.98); }
 .wc-launcher .wc-icon { width: 28px; height: 28px; transition: opacity .18s, transform .22s; }
+
+.wc-badge {
+	position: absolute; top: -2px; right: -2px;
+	min-width: 22px; height: 22px; padding: 0 6px;
+	border-radius: 999px;
+	background: #ef4444; color: #fff;
+	font-size: 12px; font-weight: 700; line-height: 22px; text-align: center;
+	box-shadow: 0 2px 6px rgba(239, 68, 68, .5), 0 0 0 2px #fff;
+	display: none;
+	transform: scale(0);
+	transition: transform .2s cubic-bezier(.2,.9,.3,1.6);
+}
+.wc-badge[data-show="true"] { display: block; transform: scale(1); }
+
+.wc-greeting {
+	position: fixed; bottom: 96px; right: 24px;
+	max-width: 260px;
+	background: #ffffff; color: #0f172a;
+	padding: 14px 38px 14px 16px;
+	border-radius: 16px 16px 4px 16px;
+	box-shadow: 0 18px 44px rgba(15, 23, 42, .18), 0 0 0 1px rgba(15, 23, 42, .04);
+	font-size: 14px; line-height: 1.5;
+	z-index: 2147483644;
+	cursor: pointer;
+	opacity: 0;
+	transform: translateY(10px) scale(.96);
+	transform-origin: bottom right;
+	transition: opacity .26s ease, transform .3s cubic-bezier(.2,.9,.3,1.3);
+}
+.wc-greeting[data-show="true"] { opacity: 1; transform: translateY(0) scale(1); }
+.wc-greeting-close {
+	position: absolute; top: 8px; right: 8px;
+	width: 20px; height: 20px; border-radius: 50%;
+	background: #f1f5f9; color: #64748b; border: none;
+	display: flex; align-items: center; justify-content: center;
+	transition: background .15s;
+}
+.wc-greeting-close:hover { background: #e2e8f0; }
+@media (max-width: 480px) {
+	.wc-greeting { right: 18px; bottom: 84px; max-width: calc(100vw - 84px); }
+}
 .wc-launcher .wc-icon-close { position: absolute; opacity: 0; transform: rotate(-45deg) scale(.6); }
 .wc-launcher[data-open="true"] .wc-icon-chat { opacity: 0; transform: rotate(45deg) scale(.6); }
 .wc-launcher[data-open="true"] .wc-icon-close { opacity: 1; transform: rotate(0) scale(1); }
@@ -148,17 +203,13 @@ input, textarea { font: inherit; }
 	display: flex; align-items: center; gap: 12px;
 	flex-shrink: 0;
 }
-.wc-header::after {
-	content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 24px;
-	background: linear-gradient(to bottom, ${hexToRgba(primary, 0)} 0%, ${hexToRgba(primary, 0)} 100%);
-	pointer-events: none;
-}
 .wc-logo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.22); flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
 .wc-logo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.28); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); font-size: 15px; font-weight: 600; color: #fff; letter-spacing: .02em; text-transform: uppercase; }
 .wc-header-text { flex: 1; min-width: 0; }
 .wc-org-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 .wc-org-status { font-size: 12px; opacity: .85; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
 .wc-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(74, 222, 128, .25); }
+.wc-status-dot.wc-status-async { background: #fbbf24; box-shadow: 0 0 0 2px rgba(251, 191, 36, .25); }
 .wc-close {
 	background: rgba(255,255,255,.16);
 	border: none; color: #fff;
@@ -184,7 +235,11 @@ input, textarea { font: inherit; }
 .wc-form-intro { font-size: 14px; color: #475569; line-height: 1.55; }
 .wc-field { display: flex; flex-direction: column; gap: 6px; }
 .wc-label { font-size: 12px; font-weight: 500; color: #475569; letter-spacing: .01em; }
-.wc-label::after { content: ' *'; color: ${primary}; }
+.wc-label.wc-required::after { content: ' *'; color: ${primary}; }
+.wc-field-hint { font-size: 12px; color: #94a3b8; line-height: 1.5; margin-top: -4px; }
+.wc-consent { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.wc-consent-check { width: 17px; height: 17px; margin: 1px 0 0; flex-shrink: 0; accent-color: ${primary}; cursor: pointer; }
+.wc-consent-text { font-size: 12px; color: #64748b; line-height: 1.5; }
 .wc-input {
 	width: 100%; padding: 12px 14px;
 	background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
@@ -255,6 +310,19 @@ input, textarea { font: inherit; }
 	box-shadow: 0 2px 6px ${hexToRgba(primary, 0.25)};
 }
 .wc-msg-time { font-size: 10.5px; opacity: .65; display: block; margin-top: 4px; letter-spacing: .02em; }
+
+/* Consecutive bubbles from the same sender collapse under one avatar. */
+.wc-msg-row.wc-grouped { margin-top: -6px; }
+.wc-msg-avatar-spacer { width: 28px; min-width: 28px; }
+.wc-msg-avatar-spacer.wc-org { margin-right: 8px; }
+.wc-msg-avatar-spacer.wc-visitor { margin-left: 8px; }
+.wc-msg-grouped.wc-msg-in .wc-msg { border-top-left-radius: 6px; }
+.wc-msg-grouped.wc-msg-out .wc-msg { border-top-right-radius: 6px; }
+
+/* Links inside message bodies. */
+.wc-msg a { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-word; }
+.wc-msg-out .wc-msg a { color: #fff; }
+.wc-msg-in .wc-msg a { color: ${shadeColor(primary, -10)}; }
 
 @keyframes wcSlideIn {
 	from { opacity: 0; transform: translateY(8px); }
@@ -417,6 +485,11 @@ input, textarea { font: inherit; }
 		btn.setAttribute('aria-label', 'Open chat');
 		btn.setAttribute('type', 'button');
 		btn.innerHTML = chatIcon + closeIcon;
+		const badge = document.createElement('span');
+		badge.className = 'wc-badge';
+		badge.setAttribute('aria-hidden', 'true');
+		btn.appendChild(badge);
+		badgeEl = badge;
 		btn.addEventListener('click', togglePanel);
 		return btn;
 	}
@@ -457,7 +530,12 @@ input, textarea { font: inherit; }
 		headerText.appendChild(orgName);
 		const status = document.createElement('span');
 		status.className = 'wc-org-status';
-		status.innerHTML = `<span class="wc-status-dot"></span><span>${config.webchat_mode === 'instant' ? 'We reply in minutes' : 'We reply by text'}</span>`;
+		const isInstant = config.webchat_mode === 'instant';
+		const dot = document.createElement('span');
+		dot.className = isInstant ? 'wc-status-dot' : 'wc-status-dot wc-status-async';
+		const statusLabel = document.createElement('span');
+		statusLabel.textContent = isInstant ? 'Online · replies in minutes' : 'Replies by text';
+		status.append(dot, statusLabel);
 		headerText.appendChild(status);
 		header.appendChild(headerText);
 
@@ -497,7 +575,7 @@ input, textarea { font: inherit; }
 		const nameField = document.createElement('div');
 		nameField.className = 'wc-field';
 		const nameLabel = document.createElement('label');
-		nameLabel.className = 'wc-label';
+		nameLabel.className = 'wc-label wc-required';
 		nameLabel.textContent = 'Your name';
 		const nameInput = document.createElement('input');
 		nameInput.className = 'wc-input';
@@ -519,6 +597,38 @@ input, textarea { font: inherit; }
 		phoneInput.autocomplete = 'tel';
 		phoneField.append(phoneLabel, phoneInput);
 		form.appendChild(phoneField);
+
+		const emailField = document.createElement('div');
+		emailField.className = 'wc-field';
+		const emailLabel = document.createElement('label');
+		emailLabel.className = 'wc-label';
+		emailLabel.textContent = 'Email';
+		const emailInput = document.createElement('input');
+		emailInput.className = 'wc-input';
+		emailInput.type = 'email';
+		emailInput.placeholder = 'you@example.com';
+		emailInput.autocomplete = 'email';
+		emailField.append(emailLabel, emailInput);
+		form.appendChild(emailField);
+
+		// Phone or email — at least one is needed so the team can reply.
+		const contactHint = document.createElement('p');
+		contactHint.className = 'wc-field-hint';
+		contactHint.textContent = 'Add a phone number or email so we can get back to you.';
+		form.appendChild(contactHint);
+
+		// Required express-consent checkbox (TCPA): automated texts/emails need the
+		// visitor's explicit agreement. Must be ticked to start the chat.
+		const consentField = document.createElement('label');
+		consentField.className = 'wc-consent';
+		const consentInput = document.createElement('input');
+		consentInput.type = 'checkbox';
+		consentInput.className = 'wc-consent-check';
+		const consentText = document.createElement('span');
+		consentText.className = 'wc-consent-text';
+		consentText.textContent = `I agree to receive text messages and emails from ${config.org_name} about my inquiry. Message & data rates may apply; reply STOP to opt out.`;
+		consentField.append(consentInput, consentText);
+		form.appendChild(consentField);
 
 		const errorEl = document.createElement('div');
 		errorEl.className = 'wc-error';
@@ -545,17 +655,29 @@ input, textarea { font: inherit; }
 		const hideError = () => errorEl.classList.remove('wc-visible');
 
 		submitBtn.addEventListener('click', async () => {
-			resetAutoClose();
 			const name = nameInput.value.trim();
 			const phone = phoneInput.value.trim();
-			if (!name || !phone) {
-				showError('Please enter your name and phone number.');
+			const email = emailInput.value.trim();
+			if (!name) {
+				showError('Please enter your name.');
+				return;
+			}
+			if (!phone && !email) {
+				showError('Add a phone number or email so we can reply.');
+				return;
+			}
+			if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+				showError('Please enter a valid email address.');
+				return;
+			}
+			if (!consentInput.checked) {
+				showError('Please tick the box to agree to be contacted.');
 				return;
 			}
 			hideError();
 			submitBtn.disabled = true;
 			submitBtn.textContent = 'Starting…';
-			const err = await startSession(name, phone, config);
+			const err = await startSession(name, phone, email, consentInput.checked, config);
 			if (err) {
 				showError(err);
 				submitBtn.disabled = false;
@@ -563,10 +685,8 @@ input, textarea { font: inherit; }
 			}
 		});
 
-		[nameInput, phoneInput].forEach((el) => {
-			el.addEventListener('click', resetAutoClose);
+		[nameInput, phoneInput, emailInput].forEach((el) => {
 			el.addEventListener('keydown', (e) => {
-				resetAutoClose();
 				if (e.key === 'Enter') {
 					e.preventDefault();
 					submitBtn.click();
@@ -584,10 +704,11 @@ input, textarea { font: inherit; }
 		if (session.config.intro_message) {
 			const intro = document.createElement('div');
 			intro.className = 'wc-intro-bubble';
-			intro.textContent = session.config.intro_message;
+			renderBody(intro, session.config.intro_message);
 			bodyEl.appendChild(intro);
 		}
 
+		lastMsgDirection = null;
 		for (const msg of session.messages) {
 			appendMessage(msg, msg.direction === 'inbound' ? 'out' : 'in');
 		}
@@ -615,16 +736,13 @@ input, textarea { font: inherit; }
 
 		const send = () => sendMessage(textarea, sendBtn);
 		sendBtn.addEventListener('click', send);
-		textarea.addEventListener('click', resetAutoClose);
 		textarea.addEventListener('keydown', (e) => {
-			resetAutoClose();
 			if (e.key === 'Enter' && !e.shiftKey) {
 				e.preventDefault();
 				send();
 			}
 		});
 		textarea.addEventListener('input', () => {
-			resetAutoClose();
 			textarea.style.height = 'auto';
 			textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 		});
@@ -635,36 +753,49 @@ input, textarea { font: inherit; }
 
 	function appendMessage(msg: WidgetMessage, direction: 'in' | 'out') {
 		if (!bodyEl || !session) return;
+		// Collapse consecutive bubbles from the same side under one avatar.
+		const grouped = direction === lastMsgDirection;
+		lastMsgDirection = direction;
+
 		const row = document.createElement('div');
-		row.className = `wc-msg-row wc-${direction}`;
+		// Both tokens matter: `wc-${direction}` drives row justification,
+		// `wc-msg-${direction}` drives bubble colour + grouping radii.
+		row.className = `wc-msg-row wc-${direction} wc-msg-${direction}`;
+		if (grouped) row.classList.add('wc-grouped', 'wc-msg-grouped');
 		row.dataset.msgId = msg.id;
 
 		if (direction === 'in') {
-			const avatar = document.createElement('div');
-			avatar.className = 'wc-msg-avatar wc-msg-avatar-org';
-			const logo = session.config.logo_url;
-			const orgName = session.config.org_name;
-			if (logo) {
-				const img = document.createElement('img');
-				img.src = logo;
-				img.alt = orgName;
-				img.addEventListener('error', () => {
+			if (grouped) {
+				const spacer = document.createElement('div');
+				spacer.className = 'wc-msg-avatar-spacer wc-org';
+				row.appendChild(spacer);
+			} else {
+				const avatar = document.createElement('div');
+				avatar.className = 'wc-msg-avatar wc-msg-avatar-org';
+				const logo = session.config.logo_url;
+				const orgName = session.config.org_name;
+				if (logo) {
+					const img = document.createElement('img');
+					img.src = logo;
+					img.alt = orgName;
+					img.addEventListener('error', () => {
+						avatar.textContent = getInitials(orgName);
+						avatar.classList.add('wc-msg-avatar-fallback');
+					});
+					avatar.appendChild(img);
+				} else {
 					avatar.textContent = getInitials(orgName);
 					avatar.classList.add('wc-msg-avatar-fallback');
-				});
-				avatar.appendChild(img);
-			} else {
-				avatar.textContent = getInitials(orgName);
-				avatar.classList.add('wc-msg-avatar-fallback');
+				}
+				row.appendChild(avatar);
 			}
-			row.appendChild(avatar);
 		}
 
 		const bubble = document.createElement('div');
 		bubble.className = 'wc-msg';
 
 		const text = document.createElement('span');
-		text.textContent = msg.body;
+		renderBody(text, msg.body);
 		bubble.appendChild(text);
 
 		const time = document.createElement('span');
@@ -675,14 +806,57 @@ input, textarea { font: inherit; }
 		row.appendChild(bubble);
 
 		if (direction === 'out') {
-			const avatar = document.createElement('div');
-			avatar.className = 'wc-msg-avatar wc-msg-avatar-visitor';
-			avatar.textContent = getInitials(session.visitor_name || '?');
-			row.appendChild(avatar);
+			if (grouped) {
+				const spacer = document.createElement('div');
+				spacer.className = 'wc-msg-avatar-spacer wc-visitor';
+				row.appendChild(spacer);
+			} else {
+				const avatar = document.createElement('div');
+				avatar.className = 'wc-msg-avatar wc-msg-avatar-visitor';
+				avatar.textContent = getInitials(session.visitor_name || '?');
+				row.appendChild(avatar);
+			}
 		}
 
 		bodyEl.appendChild(row);
 		scrollToBottom();
+	}
+
+	// Renders message text safely: real DOM text nodes (never innerHTML), with
+	// URLs turned into clickable links and newlines into <br>. Because we only
+	// ever create text nodes + anchors, visitor/contractor input can't inject
+	// markup.
+	function renderBody(target: HTMLElement, body: string) {
+		const urlRe = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+		const lines = body.split('\n');
+		lines.forEach((line, li) => {
+			if (li > 0) target.appendChild(document.createElement('br'));
+			let lastIndex = 0;
+			let match: RegExpExecArray | null;
+			urlRe.lastIndex = 0;
+			while ((match = urlRe.exec(line)) !== null) {
+				if (match.index > lastIndex) {
+					target.appendChild(document.createTextNode(line.slice(lastIndex, match.index)));
+				}
+				const raw = match[0];
+				// Trim trailing punctuation so "(see https://x.com)." links cleanly.
+				const trimmed = raw.replace(/[.,!?;:)\]]+$/, '');
+				const href = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+				const a = document.createElement('a');
+				a.href = href;
+				a.target = '_blank';
+				a.rel = 'noopener noreferrer';
+				a.textContent = trimmed;
+				target.appendChild(a);
+				if (raw.length > trimmed.length) {
+					target.appendChild(document.createTextNode(raw.slice(trimmed.length)));
+				}
+				lastIndex = match.index + raw.length;
+			}
+			if (lastIndex < line.length) {
+				target.appendChild(document.createTextNode(line.slice(lastIndex)));
+			}
+		});
 	}
 
 	function scrollToBottom() {
@@ -738,37 +912,137 @@ input, textarea { font: inherit; }
 			.join('') || '?';
 	}
 
-	// ── Toggle ──────────────────────────────────────────────────────────────
+	// ── Unread badge ──────────────────────────────────────────────────────────
 
-	function clearAutoClose() {
-		if (autoCloseTimer) {
-			clearTimeout(autoCloseTimer);
-			autoCloseTimer = null;
+	function updateBadge() {
+		if (!badgeEl) return;
+		if (unreadCount > 0 && !open) {
+			badgeEl.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+			badgeEl.setAttribute('data-show', 'true');
+			if (btnEl) btnEl.setAttribute('aria-label', `Open chat, ${unreadCount} new message${unreadCount === 1 ? '' : 's'}`);
+		} else {
+			badgeEl.setAttribute('data-show', 'false');
 		}
 	}
 
-	function scheduleAutoClose() {
-		clearAutoClose();
-		autoCloseTimer = setTimeout(() => {
-			if (open) togglePanel();
-		}, AUTO_CLOSE_MS);
+	// ── Proactive greeting bubble (shown once per visitor) ────────────────────
+
+	function maybeShowGreeting(config: WidgetConfig) {
+		const text = config.intro_message?.trim();
+		if (!text) return;
+		try {
+			if (localStorage.getItem(GREETED_KEY)) return;
+		} catch {
+			/* ignore */
+		}
+		greetingTimer = setTimeout(() => {
+			if (open || !shadow) return;
+			try {
+				localStorage.setItem(GREETED_KEY, '1');
+			} catch {
+				/* ignore */
+			}
+			const bubble = document.createElement('div');
+			bubble.className = 'wc-greeting';
+			bubble.setAttribute('role', 'button');
+			bubble.setAttribute('tabindex', '0');
+			const msg = document.createElement('span');
+			renderBody(msg, text);
+			bubble.appendChild(msg);
+			const close = document.createElement('button');
+			close.className = 'wc-greeting-close';
+			close.setAttribute('aria-label', 'Dismiss');
+			close.setAttribute('type', 'button');
+			close.innerHTML = closeIconSmall;
+			close.addEventListener('click', (e) => {
+				e.stopPropagation();
+				dismissGreeting();
+			});
+			bubble.appendChild(close);
+			bubble.addEventListener('click', () => {
+				dismissGreeting();
+				if (!open) togglePanel();
+			});
+			greetingEl = bubble;
+			shadow.appendChild(bubble);
+			requestAnimationFrame(() => bubble.setAttribute('data-show', 'true'));
+		}, GREETING_DELAY_MS);
 	}
 
-	function resetAutoClose() {
-		if (open) scheduleAutoClose();
+	function dismissGreeting() {
+		if (greetingTimer) {
+			clearTimeout(greetingTimer);
+			greetingTimer = null;
+		}
+		if (greetingEl) {
+			const el = greetingEl;
+			greetingEl = null;
+			el.setAttribute('data-show', 'false');
+			setTimeout(() => el.remove(), 300);
+		}
 	}
+
+	// ── Toggle + focus management ─────────────────────────────────────────────
 
 	function togglePanel() {
 		open = !open;
 		if (panelEl) panelEl.setAttribute('data-open', String(open));
-		if (btnEl) {
-			btnEl.setAttribute('data-open', String(open));
-			btnEl.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
-		}
+		if (btnEl) btnEl.setAttribute('data-open', String(open));
 		if (open) {
-			scheduleAutoClose();
+			dismissGreeting();
+			unreadCount = 0;
+			updateBadge();
+			// Catch up immediately and switch to the fast live cadence.
+			if (session) startPolling();
+			focusPanel();
 		} else {
-			clearAutoClose();
+			updateBadge();
+			if (btnEl) btnEl.setAttribute('aria-label', 'Open chat');
+			// Drop to the idle cadence now that the panel is closed.
+			if (session) schedulePoll();
+			if (btnEl) btnEl.focus();
+		}
+	}
+
+	function focusPanel() {
+		setTimeout(() => {
+			if (!panelEl) return;
+			const target = panelEl.querySelector<HTMLElement>(
+				'textarea, input, button.wc-submit'
+			);
+			(target ?? panelEl).focus();
+		}, 80);
+	}
+
+	function getFocusable(): HTMLElement[] {
+		if (!panelEl) return [];
+		return Array.from(
+			panelEl.querySelectorAll<HTMLElement>(
+				'a[href], button:not([disabled]), textarea, input, [tabindex]:not([tabindex="-1"])'
+			)
+		).filter((el) => el.offsetParent !== null || el === document.activeElement);
+	}
+
+	function onKeydown(e: KeyboardEvent) {
+		if (!open) return;
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			togglePanel();
+			return;
+		}
+		if (e.key === 'Tab') {
+			const focusable = getFocusable();
+			if (focusable.length === 0) return;
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = (shadow?.activeElement ?? document.activeElement) as HTMLElement | null;
+			if (e.shiftKey && active === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && active === last) {
+				e.preventDefault();
+				first.focus();
+			}
 		}
 	}
 
@@ -804,6 +1078,8 @@ input, textarea { font: inherit; }
 
 		mount(cfg);
 		if (bodyEl) bodyEl.appendChild(renderPreChatForm(cfg));
+		// Only nudge brand-new visitors (no session yet) with the greeting.
+		maybeShowGreeting(cfg);
 	}
 
 	function mount(config: WidgetConfig) {
@@ -816,6 +1092,19 @@ input, textarea { font: inherit; }
 		panelEl = renderPanel(config);
 		shadow.appendChild(btnEl);
 		shadow.appendChild(panelEl);
+		document.addEventListener('keydown', onKeydown);
+		document.addEventListener('visibilitychange', onVisibilityChange);
+	}
+
+	function onVisibilityChange() {
+		if (!session) return;
+		if (document.hidden) {
+			// Pause polling entirely while the tab is backgrounded.
+			stopPolling();
+		} else {
+			// Came back into view — catch up immediately, then resume cadence.
+			startPolling();
+		}
 	}
 
 	async function fetchWidgetConfig(): Promise<WidgetConfig | null> {
@@ -883,13 +1172,22 @@ input, textarea { font: inherit; }
 	async function startSession(
 		name: string,
 		phone: string,
+		email: string,
+		consent: boolean,
 		_config: WidgetConfig
 	): Promise<string | null> {
 		try {
 			const res = await fetch(`${BASE}/api/webchat/session/start`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ widget_token: widgetToken, name, phone })
+				// Omit empty contact fields — the server requires at least one of phone/email.
+				body: JSON.stringify({
+					widget_token: widgetToken,
+					name,
+					phone: phone || undefined,
+					email: email || undefined,
+					consent
+				})
 			});
 			const json = (await res.json()) as {
 				data?: {
@@ -988,11 +1286,13 @@ input, textarea { font: inherit; }
 		if (row) row.remove();
 	}
 
-	// Short-poll the messages endpoint every 3s for new contractor (outbound)
-	// messages. Replaces the prior SSE stream, which was unreliable on Vercel
-	// serverless (10s function timeout, response buffering). Cursor in
-	// localStorage guarantees no gap across reloads, tab switches, or network
-	// blips.
+	// Short-poll the messages endpoint for new contractor (outbound) messages.
+	// Cadence adapts (see schedulePoll): 3s while the panel is open, 20s while
+	// closed, paused while the tab is hidden. Replaces the prior SSE stream,
+	// which was unreliable on Vercel serverless (10s function timeout, response
+	// buffering). Cursor in localStorage guarantees no gap across reloads, tab
+	// switches, or network blips. startPolling() fires one immediate catch-up
+	// poll, then schedulePoll() takes over the cadence.
 	function startPolling() {
 		if (!session) return;
 		stopPolling();
@@ -1008,9 +1308,13 @@ input, textarea { font: inherit; }
 
 	function schedulePoll() {
 		stopPolling();
+		// Tab backgrounded → stay paused; onVisibilityChange restarts us.
+		if (document.hidden) return;
+		// Live conversation when open; just-watching-for-replies cadence when closed.
+		const interval = open ? POLL_ACTIVE_MS : POLL_IDLE_MS;
 		pollTimer = setTimeout(() => {
 			void pollOnce();
-		}, POLL_INTERVAL_MS);
+		}, interval);
 	}
 
 	async function pollOnce() {
@@ -1037,6 +1341,7 @@ input, textarea { font: inherit; }
 					};
 				};
 				const rows = json.data?.messages ?? [];
+				let newWhileClosed = 0;
 				for (const row of rows) {
 					if (!session) break;
 					saveCursor(row.created_at);
@@ -1044,6 +1349,11 @@ input, textarea { font: inherit; }
 					const incoming: WidgetMessage = { ...row, direction: 'outbound' };
 					session.messages.push(incoming);
 					appendMessage(incoming, 'in');
+					if (!open) newWhileClosed++;
+				}
+				if (newWhileClosed > 0) {
+					unreadCount += newWhileClosed;
+					updateBadge();
 				}
 
 				const typing = json.data?.contractor_is_typing ?? false;

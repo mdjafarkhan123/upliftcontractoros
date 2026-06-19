@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { conversations } from '$lib/server/db/schema';
+import { conversations, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { createLogger } from '$lib/server/log';
 import { recordOutboundMessage } from '$lib/server/conversations';
@@ -15,7 +15,7 @@ const log = createLogger('inbox.call.log');
 const MAX_CALL_DURATION_SECONDS = 8 * 60 * 60;
 
 const logCallSchema = z.object({
-	outcome: z.enum(['spoke', 'voicemail', 'no_answer', 'follow_up_scheduled']),
+	outcome: z.enum(['spoke', 'voicemail', 'no_answer', 'follow_up_scheduled', 'wrong_number']),
 	duration_seconds: z.number().int().nonnegative().max(MAX_CALL_DURATION_SECONDS).optional(),
 	body: z.string().trim().max(2000).optional()
 });
@@ -34,10 +34,12 @@ function canAccess(
 }
 
 /**
- * Log a manually-placed phone call into the conversation timeline. Pure local
- * write — the contractor called from their native dialer (a `tel:` tap), so
- * there is no transport and no outbox event. Stored as a `messages` row with
- * channel `call`, direction `outbound`, status `sent`.
+ * Log a manually-placed phone call into the conversation timeline. The
+ * contractor called from their native dialer (a `tel:` tap), so there is no
+ * transport — but the log IS a business event. Stored as a `messages` row
+ * (channel `call`, direction `outbound`, status `sent`) and accompanied by a
+ * `call.logged` outbox event so the pipeline can ratchet-advance on a `spoke`
+ * outcome (Stage 3.a). Mutation + outbox live in one transaction (Rule #8).
  */
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -93,6 +95,25 @@ export const POST: RequestHandler = async (event) => {
 				source: 'manual_call_log',
 				callOutcome: parsed.outcome,
 				callDurationSeconds: parsed.duration_seconds ?? null
+			});
+
+			// Emit the business event in the same tx. The pipeline auto-advance worker
+			// only acts on outcome=spoke, but we emit for every outcome so future
+			// consumers (and the timeline/audit) see the full call history.
+			await tx.insert(outboxEvents).values({
+				org_id: auth.orgId,
+				event_type: 'call.logged',
+				resource_type: 'message',
+				resource_id: row.id,
+				payload: {
+					message_id: row.id,
+					conversation_id: conv.id,
+					contact_id: conv.contact_id,
+					org_id: auth.orgId,
+					outcome: parsed.outcome,
+					logged_at: new Date().toISOString()
+				},
+				idempotency_key: `call.logged:${row.id}`
 			});
 
 			// A logged call is an outbound touch — reopen a closed/snoozed thread so

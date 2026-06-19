@@ -1,10 +1,16 @@
 import { SvelteMap } from 'svelte/reactivity';
+import { inboxUnreadStore } from './inboxUnread.svelte';
 
 // ───── Types ───────────────────────────────────────────────────────────────
 
 export type MessageChannel = 'sms' | 'missed_call' | 'email' | 'webchat' | 'messenger' | 'call';
 export type MessageDirection = 'inbound' | 'outbound';
-export type CallOutcome = 'spoke' | 'voicemail' | 'no_answer' | 'follow_up_scheduled';
+export type CallOutcome =
+	| 'spoke'
+	| 'voicemail'
+	| 'no_answer'
+	| 'follow_up_scheduled'
+	| 'wrong_number';
 export type MessageStatus =
 	| 'sending'
 	| 'sent'
@@ -740,6 +746,8 @@ export const inboxStore = {
 		} catch {
 			// silent
 		}
+		// Reconcile the sidebar Inbox badge — this conversation is no longer unread.
+		inboxUnreadStore.scheduleRefresh();
 	},
 
 	async setStatus(

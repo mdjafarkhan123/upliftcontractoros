@@ -27,6 +27,7 @@ export const GET: RequestHandler = async (event) => {
 			quote_number: quotes.quote_number,
 			title: quotes.title,
 			status: quotes.status,
+			current_version: quotes.current_version,
 			subtotal: quotes.subtotal,
 			tax_rate: quotes.tax_rate,
 			tax_amount: quotes.tax_amount,

@@ -4,6 +4,8 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { cn } from '$lib/utils/cn';
 	import type { AppointmentListItem } from '$lib/types/appointments';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 
 	let {
 		anchor,
@@ -325,6 +327,7 @@
 					{@const leftPct = ev.col * widthPct}
 					<a
 						href={`/appointments/${ev.item.id}`}
+						use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.item.id)}
 						onclick={(e) => e.stopPropagation()}
 						class={cn(
 							'absolute z-10 overflow-hidden rounded-md border px-1.5 py-1 text-[11px] leading-tight shadow-sm transition-all hover:z-30 hover:shadow-md',

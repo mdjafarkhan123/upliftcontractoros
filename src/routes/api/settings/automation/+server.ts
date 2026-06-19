@@ -64,7 +64,12 @@ const automationPatchSchema = z
 		payment_receipt_sms_message: z.string().min(1).max(MSG_MAX).optional(),
 
 		speed_to_lead_enabled: z.boolean().optional(),
-		speed_to_lead_message: z.string().min(1).max(MSG_MAX).optional()
+		speed_to_lead_message: z.string().min(1).max(MSG_MAX).optional(),
+		speed_to_lead_channel: z.enum(['smart', 'sms', 'email', 'both']).optional(),
+		speed_to_lead_email_subject: z.string().min(1).max(200).optional(),
+		speed_to_lead_email_message: z.string().min(1).max(2000).optional(),
+
+		auto_create_opp_on_lead: z.boolean().optional()
 	})
 	.strict();
 
@@ -81,7 +86,9 @@ const TEMPLATE_FIELDS = [
 	'appointment_confirmation_email_message',
 	'payment_receipt_message',
 	'payment_receipt_sms_message',
-	'speed_to_lead_message'
+	'speed_to_lead_message',
+	'speed_to_lead_email_subject',
+	'speed_to_lead_email_message'
 ] as const;
 
 const RETURN_COLUMNS = {
@@ -117,6 +124,10 @@ const RETURN_COLUMNS = {
 	payment_receipt_sms_message: automationSettings.payment_receipt_sms_message,
 	speed_to_lead_enabled: automationSettings.speed_to_lead_enabled,
 	speed_to_lead_message: automationSettings.speed_to_lead_message,
+	speed_to_lead_channel: automationSettings.speed_to_lead_channel,
+	speed_to_lead_email_subject: automationSettings.speed_to_lead_email_subject,
+	speed_to_lead_email_message: automationSettings.speed_to_lead_email_message,
+	auto_create_opp_on_lead: automationSettings.auto_create_opp_on_lead,
 	// Cast to text so the canonical PostgreSQL microsecond precision survives
 	// the round-trip — JS Date truncates to milliseconds and breaks the
 	// optimistic-concurrency equality check.

@@ -20,6 +20,7 @@ import {
 } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
 import { sendSystemEmail } from '$lib/server/email/sendSystemEmail';
+import { renderMemberEmail } from '$lib/server/notifications/memberDelivery';
 import { featureForWorkerEvent } from '$lib/permissions/featureMap';
 import type { FeatureFlagKey } from '$lib/types';
 
@@ -54,9 +55,18 @@ type QueueTarget = {
 const FEED_ONLY_EVENTS = new Set<string>([
 	'opportunity.stage_changed',
 	'contact.status_changed',
+	// Feed/audit only — every new contact (manual, import, inbound, web) writes a
+	// "New lead" activity row, but contact.created is NOT a Speed-to-Lead trigger.
+	// The auto-text is gated on 'lead.created', which only genuine inbound-capture
+	// channels emit. Keeping contact.created here preserves the dashboard feed row.
+	'contact.created',
 	// Audit-only: merge has no downstream automation/notification consumer. The
 	// row is preserved in outbox_events as a permanent record of the merge.
-	'contact.merged'
+	'contact.merged',
+	// A logged call with a non-spoke outcome (voicemail/no answer/wrong number)
+	// has no consumer — the row stays in outbox_events as a permanent audit record.
+	// (The 'spoke' outcome routes to pipeline_auto_advance and never reaches here.)
+	'call.logged'
 ]);
 
 function routeEvent(event: OutboxEvent): QueueTarget[] {
@@ -66,15 +76,64 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			// it to R2 + the media table so the photo shows in the thread.
 			return [{ queue: 'media', jobName: 'message.media.received' }];
 		case 'contact.created':
+			// Feed/audit only — NOT a Speed-to-Lead trigger (see FEED_ONLY_EVENTS).
+			// Manual entry and CSV import create contacts but never emit lead.created,
+			// so they never auto-text. Genuine inbound captures emit BOTH events: this
+			// one writes the activity-feed row, lead.created fires the auto-text.
+			return [];
 		case 'lead.created':
-			return [{ queue: 'automation', jobName: 'speed_to_lead' }];
+			// Speed-to-Lead auto-text (gated per-org inside the automation handler)
+			// AND a staff `new_lead` notification (Stage 1.d escalation source). The
+			// notification is never feature-gated — a new lead must always be seen.
+			return [
+				{ queue: 'automation', jobName: 'speed_to_lead' },
+				{ queue: 'notification', jobName: 'new_lead' },
+				// Stage 3.a: auto-create a pipeline deal in the default stage (gated on
+				// the org's auto_create_opp_on_lead toggle inside the handler).
+				{ queue: 'automation', jobName: 'pipeline_auto_create' }
+			];
 		case 'call.missed':
 			return [
 				{ queue: 'automation', jobName: 'missed_call_textback' },
 				{ queue: 'notification', jobName: event.event_type }
 			];
+		case 'message.received':
+			// Notification (existing) + sequence-engine pause on lead reply (Stage
+			// 3.b, no-ops unless the contact has an active enrollment). Inbound does
+			// NOT advance the pipeline — "Contacted" means staff reached out (see
+			// message.sent / call.logged below).
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'automation.lead_reply' }
+			];
+		case 'message.sent':
+			// Sequence-engine stop on staff reply (Stage 3.b) + pipeline ratchet to
+			// "Contacted" on first HUMAN outbound (Stage 1.1). Both handlers ignore
+			// automation sends (sent_by=null) and no-op without something to act on.
+			return [
+				{ queue: 'automation', jobName: 'automation.staff_reply' },
+				{ queue: 'automation', jobName: 'pipeline_auto_advance' }
+			];
+		case 'call.logged': {
+			// A logged call only counts as two-way contact when staff actually spoke
+			// to the lead. Other outcomes (voicemail/no answer/wrong number) emit the
+			// event for audit but route nowhere — marked processed via FEED_ONLY_EVENTS.
+			const outcome = (event.payload as { outcome?: string } | null)?.outcome;
+			if (outcome === 'spoke') {
+				return [
+					{ queue: 'automation', jobName: 'pipeline_auto_advance' },
+					{ queue: 'automation', jobName: 'automation.call_spoke' }
+				];
+			}
+			return [];
+		}
 		case 'quote.sent':
-			return [{ queue: 'automation', jobName: 'quote_followup' }];
+			// Quote follow-up nurture + pipeline ratchet to "Quoted" (Stage 1.1).
+			// The ratchet no-ops on re-sends (deal already at/past Quoted).
+			return [
+				{ queue: 'automation', jobName: 'quote_followup' },
+				{ queue: 'automation', jobName: 'pipeline_auto_advance' }
+			];
 		case 'invoice.sent':
 			return [{ queue: 'automation', jobName: 'invoice_dispatch' }];
 		case 'job.completed':
@@ -120,25 +179,43 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'appointment.created':
 		case 'appointment.booked':
 			// Confirmation fires immediately (gated to booking_link inside the
-			// handler); reminders are pre-scheduled by appointment_reminder.
+			// handler); reminders are pre-scheduled by appointment_reminder; pipeline
+			// ratchets to "Scheduled" (Stage 1.1 — any booked appointment, no
+			// tentative gate; no-ops if the deal is already at/past Scheduled).
 			return [
 				{ queue: 'automation', jobName: 'appointment_reminder' },
-				{ queue: 'automation', jobName: 'appointment_confirmation' }
+				{ queue: 'automation', jobName: 'appointment_confirmation' },
+				{ queue: 'automation', jobName: 'pipeline_auto_advance' }
 			];
 		case 'appointment.rescheduled':
 			return [{ queue: 'automation', jobName: 'appointment_reschedule' }];
-		case 'appointment.completed':
 		case 'appointment.cancelled':
-		case 'appointment.no_show':
 			return [{ queue: 'automation', jobName: 'appointment_cancel_reminders' }];
+		case 'appointment.completed':
+			// Stop reminders + enroll the post-appointment "no quote sent" staff nudge.
+			return [
+				{ queue: 'automation', jobName: 'appointment_cancel_reminders' },
+				{ queue: 'automation', jobName: 'appointment_quote_nudge' }
+			];
+		case 'appointment.no_show':
+			// Stop reminders + enroll the customer no-show re-engagement nurture.
+			return [
+				{ queue: 'automation', jobName: 'appointment_cancel_reminders' },
+				{ queue: 'automation', jobName: 'appointment_no_show_followup' }
+			];
 		case 'payment.recorded':
 			return [{ queue: 'notification', jobName: 'payment.recorded' }];
 		case 'invoice.viewed':
 			return [{ queue: 'notification', jobName: 'invoice.viewed' }];
 		case 'opportunity.created':
 		case 'opportunity.assignee_changed':
-		case 'opportunity.lost':
 			return [{ queue: 'notification', jobName: event.event_type }];
+		case 'opportunity.lost':
+			// Notification (existing) + sequence-engine stop (Stage 3.b).
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'automation.opp_lost' }
+			];
 		case 'opportunity.stage_changed':
 		case 'contact.status_changed':
 			// Feed-only events: persisted to activity_events for the dashboard,
@@ -146,21 +223,47 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			// "no route" warning while still marking the outbox row processed.
 			return [];
 		case 'opportunity.won':
+			// Notification (existing) + sequence-engine stop (Stage 3.b).
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'automation.opp_won' }
+			];
+		case 'quote.accepted':
+			// Notification + cancel-hook (existing) AND move the linked deal to Won
+			// (Stage 1.2.A — full Flow 2 runs in the worker, idempotent).
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'pipeline_quote_won' }
+			];
+		case 'quote.declined':
+			// Notification + cancel-hook (existing) AND move the linked deal to Lost
+			// with the client's decline reason (Stage 1.2.A).
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'pipeline_quote_lost' }
+			];
+		case 'quote.deposit_paid':
+			// Notification (existing) AND — when the org gates Won on the deposit —
+			// move the linked deal to Won (Stage 1.3.A). The automation handler is a
+			// no-op under the default 'quote_acceptance' trigger.
+			return [
+				{ queue: 'notification', jobName: event.event_type },
+				{ queue: 'automation', jobName: 'pipeline_deposit_won' }
+			];
 		case 'job.created':
 		case 'invoice.paid':
 		case 'quote.viewed':
-		case 'quote.accepted':
-		case 'quote.declined':
 		case 'quote.changes_requested':
-		case 'quote.deposit_paid':
-		case 'message.received':
+		case 'quote.expired':
 		case 'message.delivery_failed':
 		case 'review.received':
 		case 'private_feedback.received':
 		case 'negative_feedback':
 		case 'contact.sms_opted_in':
 		case 'contact.follow_up_due':
+		case 'opportunity.follow_up_due':
 		case 'sms.credit_low':
+		case 'contact_import.finished':
 			return [{ queue: 'notification', jobName: event.event_type }];
 		case 'media.deleted':
 			return [];
@@ -168,6 +271,11 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [{ queue: 'email', jobName: 'email.send.requested' }];
 		case 'sms.send.requested':
 			return [{ queue: 'sms', jobName: 'sms.send.requested' }];
+		case 'member_notification.sms.requested':
+			// Staff alert SMS (1.c-2). Routed to the SMS queue (not inline like the
+			// member email) because it must pass the org SMS master-gate + reserve
+			// credit. The smsWorker branches on this job name — no messages row.
+			return [{ queue: 'sms', jobName: 'member_notification.sms.requested' }];
 		case 'messenger.send.requested':
 			return [{ queue: 'messenger', jobName: 'messenger.send.requested' }];
 		default:
@@ -328,6 +436,31 @@ async function handleEmailDomainChangeRequested(event: OutboxEvent): Promise<voi
 	console.log(`[outbox] email_domain.change_requested: PO notified for org ${event.org_id}`);
 }
 
+// Staff-facing notification email (Notification system Stage 1.c-1). Delivered
+// inline via sendSystemEmail — mirrors carrier.submitted/email_domain.change_requested
+// (no BullMQ queue). The recipient is a team member's address, never a customer; the
+// copy + deep link were rendered upstream and carried on the payload.
+async function handleMemberNotificationEmail(event: OutboxEvent): Promise<void> {
+	const p = event.payload as {
+		to_email?: string;
+		title?: string;
+		body?: string | null;
+		url?: string;
+	};
+	if (!p.to_email || !p.title || !p.url) {
+		console.warn(
+			`[outbox] member_notification.email ${event.id}: missing to_email/title/url — skipping`
+		);
+		return;
+	}
+	const { subject, text, html } = renderMemberEmail({
+		title: p.title,
+		body: p.body ?? null,
+		url: p.url
+	});
+	await sendSystemEmail({ to: p.to_email, subject, text, html });
+}
+
 type DispatchResult = { status: 'routed' } | { status: 'unrouted'; reason: string };
 
 async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
@@ -341,6 +474,10 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 	}
 	if (event.event_type === 'email_domain.change_requested') {
 		await handleEmailDomainChangeRequested(event);
+		return { status: 'routed' };
+	}
+	if (event.event_type === 'member_notification.email.requested') {
+		await handleMemberNotificationEmail(event);
 		return { status: 'routed' };
 	}
 	if (event.org_id) {

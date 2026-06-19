@@ -6,11 +6,20 @@
 		Receipt,
 		Phone,
 		Sparkles,
-		CalendarClock
+		CalendarClock,
+		CalendarPlus,
+		Plus
 	} from '@lucide/svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
+	import ActiveAutomations from '$lib/components/automation/ActiveAutomations.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { getMemberContext } from '$lib/context/member';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
 	import { formatCurrency } from '$lib/utils/format';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import { quotesStore } from '$lib/stores/quotes.svelte';
+	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import type { ContactSummary, ThreadContext } from '$lib/stores/inbox.svelte';
 
 	let {
@@ -20,6 +29,26 @@
 		contact: ContactSummary | null;
 		context: ThreadContext | null;
 	} = $props();
+
+	const member = getMemberContext();
+	const canCreateAppt = $derived(member().can_create_appointments);
+	const canCreateQuote = $derived(member().can_create_quotes);
+	const canCreateInvoice = $derived(member().can_create_invoices);
+	const showQuickActions = $derived(
+		Boolean(contact) && (canCreateAppt || canCreateQuote || canCreateInvoice)
+	);
+
+	const appointmentHref = $derived(
+		contact
+			? `/appointments/new?contact_id=${encodeURIComponent(contact.id)}&contact_name=${encodeURIComponent(contact.full_name)}`
+			: '/appointments/new'
+	);
+	const quoteHref = $derived(
+		contact ? `/quotes/new?contact_id=${encodeURIComponent(contact.id)}` : '/quotes/new'
+	);
+	const invoiceHref = $derived(
+		contact ? `/invoices/new?contact_id=${encodeURIComponent(contact.id)}` : '/invoices/new'
+	);
 
 	const quoteVariant = $derived.by(() => {
 		const s = context?.latest_quote?.status;
@@ -67,6 +96,51 @@
 </script>
 
 <div class="space-y-4">
+	{#if showQuickActions}
+		<section class="space-y-2">
+			<div
+				class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+			>
+				<Plus class="h-3.5 w-3.5" />
+				Quick actions
+			</div>
+			<div class="grid grid-cols-3 gap-1.5">
+				{#if canCreateAppt}
+					<Button
+						href={appointmentHref}
+						variant="secondary"
+						class="h-auto flex-col gap-1 px-2 py-2.5 text-[11px] font-medium"
+						aria-label={`Schedule appointment with ${contact?.full_name ?? 'contact'}`}
+					>
+						<CalendarPlus class="h-4 w-4 text-primary" />
+						<span>Schedule</span>
+					</Button>
+				{/if}
+				{#if canCreateQuote}
+					<Button
+						href={quoteHref}
+						variant="secondary"
+						class="h-auto flex-col gap-1 px-2 py-2.5 text-[11px] font-medium"
+						aria-label={`Create quote for ${contact?.full_name ?? 'contact'}`}
+					>
+						<FileText class="h-4 w-4 text-primary" />
+						<span>Quote</span>
+					</Button>
+				{/if}
+				{#if canCreateInvoice}
+					<Button
+						href={invoiceHref}
+						variant="secondary"
+						class="h-auto flex-col gap-1 px-2 py-2.5 text-[11px] font-medium"
+						aria-label={`Create invoice for ${contact?.full_name ?? 'contact'}`}
+					>
+						<Receipt class="h-4 w-4 text-primary" />
+						<span>Invoice</span>
+					</Button>
+				{/if}
+			</div>
+		</section>
+	{/if}
 	{#if contact}
 		<section class="space-y-2">
 			<div
@@ -91,6 +165,10 @@
 				{/if}
 			</div>
 		</section>
+	{/if}
+
+	{#if contact}
+		<ActiveAutomations contactId={contact.id} />
 	{/if}
 
 	{#if leadSourceLabel}
@@ -118,6 +196,8 @@
 			{#if context?.next_appointment}
 				<a
 					href={`/appointments/${context.next_appointment.id}`}
+					use:prefetchOnIntent={() =>
+						appointmentsStore.prefetchDetail(context!.next_appointment!.id)}
 					class="block transition-colors hover:text-primary"
 				>
 					<div class="text-sm font-medium text-foreground">
@@ -160,6 +240,7 @@
 			{#if context?.latest_quote}
 				<a
 					href={`/quotes/${context.latest_quote.id}`}
+					use:prefetchOnIntent={() => quotesStore.prefetchDetail(context!.latest_quote!.id)}
 					class="flex items-center justify-between gap-2 transition-colors hover:text-primary"
 				>
 					<span class="text-sm font-medium text-foreground">
@@ -187,6 +268,7 @@
 			{#if context?.latest_invoice}
 				<a
 					href={`/invoices/${context.latest_invoice.id}`}
+					use:prefetchOnIntent={() => invoicesStore.prefetchDetail(context!.latest_invoice!.id)}
 					class="flex items-center justify-between gap-2 transition-colors hover:text-primary"
 				>
 					<span class="text-sm font-medium text-foreground">

@@ -55,6 +55,8 @@
 				return { label: 'No answer', icon: PhoneOff };
 			case 'follow_up_scheduled':
 				return { label: 'Follow-up scheduled', icon: CalendarPlus };
+			case 'wrong_number':
+				return { label: 'Wrong number', icon: Ban };
 			default:
 				return { label: 'Logged call', icon: PhoneOutgoing };
 		}

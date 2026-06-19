@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { cn } from '$lib/utils/cn';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { contactDetailStore } from '$lib/stores/contactDetail.svelte';
 	import type { ContactListItem } from '$lib/stores/contacts.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import ContactAvatar from './ContactAvatar.svelte';
@@ -9,7 +11,8 @@
 	import { formatRelativeShort } from '$lib/utils/format';
 	import { formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
 	import { TEMPERATURE_META } from '$lib/contacts/temperature';
-	import { Check, MoreHorizontal } from '@lucide/svelte';
+	import { leadSourceLabel } from '$lib/contacts/leadSource';
+	import { Check, MoreHorizontal, Trash2, Archive, RotateCcw, Pencil } from '@lucide/svelte';
 
 	let {
 		items,
@@ -17,7 +20,10 @@
 		selected,
 		onToggleSelect,
 		onToggleAll,
-		allSelected = false
+		allSelected = false,
+		onArchiveRequest,
+		onRestoreRequest,
+		onDeleteRequest
 	}: {
 		items: ContactListItem[];
 		selectable?: boolean;
@@ -25,6 +31,9 @@
 		onToggleSelect?: (id: string) => void;
 		onToggleAll?: () => void;
 		allSelected?: boolean;
+		onArchiveRequest?: (id: string, name: string) => void;
+		onRestoreRequest?: (id: string, name: string) => void;
+		onDeleteRequest?: (id: string, name: string) => void;
 	} = $props();
 
 	function statusVariant(s: ContactListItem['status']) {
@@ -87,6 +96,10 @@
 					>
 					<th
 						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground 2xl:table-cell"
+						>Source</th
+					>
+					<th
+						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground 2xl:table-cell"
 						>Tags</th
 					>
 					<th class="w-12 px-4 py-3"></th>
@@ -100,12 +113,14 @@
 					{@const extraTags = Math.max(0, c.tags.length - 2)}
 					<tr
 						class={cn(
-							'group transition-colors',
-							selectable ? 'cursor-pointer select-none hover:bg-muted/40' : 'hover:bg-muted/20',
-							isSelected && 'bg-primary/5 hover:bg-primary/[0.08]',
-							isArchived && 'opacity-60'
+							'group cursor-pointer transition-colors',
+							selectable ? 'select-none hover:bg-muted/40' : 'hover:bg-muted/40',
+							isSelected && 'bg-primary/5 hover:bg-primary/[0.08]'
 						)}
-						onclick={selectable ? () => onToggleSelect?.(c.id) : undefined}
+						use:prefetchOnIntent={() => {
+							if (!selectable) contactDetailStore.prefetch(c.id);
+						}}
+						onclick={selectable ? () => onToggleSelect?.(c.id) : () => goto(`/contacts/${c.id}`)}
 					>
 						{#if selectable}
 							<td class="w-11 px-4 py-4">
@@ -213,6 +228,17 @@
 							{/if}
 						</td>
 
+						<!-- Source -->
+						<td class="hidden px-4 py-3.5 2xl:table-cell">
+							{#if c.lead_source && c.lead_source !== 'manual'}
+								<span class="whitespace-nowrap text-muted-foreground">
+									{leadSourceLabel(c.lead_source)}
+								</span>
+							{:else}
+								<span class="text-xs text-muted-foreground/30">—</span>
+							{/if}
+						</td>
+
 						<!-- Tags -->
 						<td class="hidden px-4 py-3.5 2xl:table-cell">
 							{#if visibleTags.length > 0}
@@ -255,12 +281,45 @@
 										<MoreHorizontal class="h-4 w-4" />
 									</DropdownMenu.Trigger>
 									<DropdownMenu.Content align="end">
-										<DropdownMenu.Item onclick={() => goto(`/contacts/${c.id}`)}>
-											View contact
-										</DropdownMenu.Item>
-										<DropdownMenu.Item onclick={() => goto(`/contacts/${c.id}/edit`)}>
-											Edit contact
-										</DropdownMenu.Item>
+										{#if isArchived}
+											{#if onRestoreRequest}
+												<DropdownMenu.Item onclick={() => onRestoreRequest(c.id, c.full_name)}>
+													<RotateCcw class="h-4 w-4" />
+													Restore contact
+												</DropdownMenu.Item>
+											{/if}
+											{#if onDeleteRequest}
+												<DropdownMenu.Separator />
+												<DropdownMenu.Item
+													class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+													onclick={() => onDeleteRequest(c.id, c.full_name)}
+												>
+													<Trash2 class="h-4 w-4" />
+													Delete contact
+												</DropdownMenu.Item>
+											{/if}
+										{:else}
+											<DropdownMenu.Item onclick={() => goto(`/contacts/${c.id}/edit`)}>
+												<Pencil class="h-4 w-4" />
+												Edit contact
+											</DropdownMenu.Item>
+											{#if onArchiveRequest}
+												<DropdownMenu.Item onclick={() => onArchiveRequest(c.id, c.full_name)}>
+													<Archive class="h-4 w-4" />
+													Archive contact
+												</DropdownMenu.Item>
+											{/if}
+											{#if onDeleteRequest}
+												<DropdownMenu.Separator />
+												<DropdownMenu.Item
+													class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+													onclick={() => onDeleteRequest(c.id, c.full_name)}
+												>
+													<Trash2 class="h-4 w-4" />
+													Delete contact
+												</DropdownMenu.Item>
+											{/if}
+										{/if}
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
 							{/if}

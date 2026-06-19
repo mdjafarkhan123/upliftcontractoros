@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PhoneOutgoing, Voicemail, PhoneOff, CalendarPlus, Loader2 } from '@lucide/svelte';
+	import { PhoneOutgoing, Voicemail, PhoneOff, CalendarPlus, Ban, Loader2 } from '@lucide/svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils/cn';
@@ -27,7 +27,8 @@
 		{ value: 'spoke', label: 'Spoke', icon: PhoneOutgoing },
 		{ value: 'voicemail', label: 'Left voicemail', icon: Voicemail },
 		{ value: 'no_answer', label: 'No answer', icon: PhoneOff },
-		{ value: 'follow_up_scheduled', label: 'Follow-up', icon: CalendarPlus }
+		{ value: 'follow_up_scheduled', label: 'Follow-up', icon: CalendarPlus },
+		{ value: 'wrong_number', label: 'Wrong number', icon: Ban }
 	];
 
 	let outcome = $state<CallOutcome | null>(null);

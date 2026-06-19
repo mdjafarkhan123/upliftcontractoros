@@ -13,6 +13,7 @@ import {
 } from '$lib/team/permissions-config';
 import type { PermissionValues } from '$lib/team/permissions-config';
 import type { PermissionKey } from '$lib/types';
+import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 
 const createSchema = z.object({
 	full_name: z.string().min(1).max(200).trim(),
@@ -20,6 +21,15 @@ const createSchema = z.object({
 	password: z.string().min(8),
 	role: z.enum(['manager', 'member'])
 });
+
+// Notification identity + admin gates (Stage 1.a). Not permissions — handled
+// separately from the can_* permission loop. Phone normalized to E.164; empty/
+// absent clears it. Booleans optional (schema defaults apply when omitted).
+const NOTIFICATION_FIELD_KEYS = [
+	'notification_phone',
+	'sms_notifications_allowed',
+	'email_notifications_allowed'
+] as const;
 
 function logCleanupFailure(context: {
 	org_id: string;
@@ -137,6 +147,7 @@ export const POST: RequestHandler = async (event) => {
 
 	for (const key of Object.keys(body)) {
 		if (['full_name', 'email', 'password', 'role'].includes(key)) continue;
+		if ((NOTIFICATION_FIELD_KEYS as readonly string[]).includes(key)) continue;
 		if (!isKnownPermissionKey(key)) {
 			permErrors[key] = 'Unknown field';
 			continue;
@@ -146,6 +157,36 @@ export const POST: RequestHandler = async (event) => {
 			permErrors[key] = 'Must be true or false';
 		} else {
 			finalPermissions[key as PermissionKey] = val;
+		}
+	}
+
+	// Notification identity + admin gates
+	const notificationFields: {
+		notification_phone?: string | null;
+		sms_notifications_allowed?: boolean;
+		email_notifications_allowed?: boolean;
+	} = {};
+
+	if ('notification_phone' in body) {
+		const raw = body.notification_phone;
+		if (raw == null || (typeof raw === 'string' && raw.trim() === '')) {
+			notificationFields.notification_phone = null;
+		} else if (typeof raw !== 'string') {
+			permErrors.notification_phone = 'Invalid phone number.';
+		} else {
+			try {
+				notificationFields.notification_phone = toE164(raw);
+			} catch (e) {
+				permErrors.notification_phone =
+					e instanceof PhoneInvalidError ? e.message : 'Invalid phone number.';
+			}
+		}
+	}
+
+	for (const key of ['sms_notifications_allowed', 'email_notifications_allowed'] as const) {
+		if (key in body) {
+			if (typeof body[key] !== 'boolean') permErrors[key] = 'Must be true or false';
+			else notificationFields[key] = body[key] as boolean;
 		}
 	}
 
@@ -252,7 +293,8 @@ export const POST: RequestHandler = async (event) => {
 				full_name,
 				role,
 				is_active: true,
-				...finalPermissions
+				...finalPermissions,
+				...notificationFields
 			})
 			.returning({
 				id: orgMembers.id,

@@ -34,13 +34,23 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: AppointmentsFilters): string {
-	return `${f.from}|${f.to}|${f.status}|${f.assignedTo ?? ''}`;
+	const search = f.search.trim();
+	// While searching, the date window is irrelevant (server ignores it), so it
+	// stays out of the cache key — every term gets its own SWR slot.
+	return search
+		? `q:${search}|${f.status}|${f.assignedTo ?? ''}`
+		: `${f.from}|${f.to}|${f.status}|${f.assignedTo ?? ''}`;
 }
 
 function buildParams(f: AppointmentsFilters): URLSearchParams {
 	const params = new URLSearchParams();
-	params.set('from', f.from);
-	params.set('to', f.to);
+	const search = f.search.trim();
+	if (search) {
+		params.set('q', search);
+	} else {
+		params.set('from', f.from);
+		params.set('to', f.to);
+	}
 	if (f.status !== 'all') params.set('status', f.status);
 	if (f.assignedTo) params.set('assigned_to', f.assignedTo);
 	return params;
@@ -118,6 +128,17 @@ export const appointmentsStore = {
 		detailState.set(appointment.id, { status: 'ready', error: null });
 	},
 
+	/**
+	 * Warm the detail cache on hover / touch-start. Unlike loadDetail it never
+	 * aborts/restarts an in-flight request, so rapid hovers don't churn.
+	 */
+	prefetchDetail(id: string): void {
+		const cached = details.get(id);
+		const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
+		if (fresh || detailControllers.has(id)) return;
+		void this.loadDetail(id);
+	},
+
 	async loadDetail(id: string, force = false): Promise<void> {
 		const cached = details.get(id);
 		const fresh = cached && Date.now() - cached.fetchedAt < TTL_MS;
@@ -154,6 +175,22 @@ export const appointmentsStore = {
 			});
 		} finally {
 			if (detailControllers.get(id) === controller) detailControllers.delete(id);
+		}
+	},
+
+	/**
+	 * Clear only the list cache, keeping loaded detail records. Use after a
+	 * detail-page mutation so the list refetches on next visit but the open
+	 * record stays on screen (the page reads it from the detail cache).
+	 */
+	invalidateList(): void {
+		cache.clear();
+		currentKey = '';
+		status = 'idle';
+		error = null;
+		if (activeController) {
+			activeController.abort();
+			activeController = null;
 		}
 	},
 

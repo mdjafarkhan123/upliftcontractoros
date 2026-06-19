@@ -175,6 +175,11 @@ export const memberNotificationPreferences = pgTable(
 		notification_type: text('notification_type').notNull(),
 		in_app_enabled: boolean('in_app_enabled').notNull().default(true),
 		push_enabled: boolean('push_enabled').notNull().default(true),
+		// Email/SMS default OFF — email needs opt-in, SMS costs real money (Stage 1.b).
+		// In-app/push stay default ON. The resolver intersects these with the admin
+		// ceiling on org_members and the member's status profile.
+		email_enabled: boolean('email_enabled').notNull().default(false),
+		sms_enabled: boolean('sms_enabled').notNull().default(false),
 		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},

@@ -9,6 +9,7 @@ const TTL_MS = 30_000;
 let stages = $state<PipelineStageRow[]>([]);
 let opportunities = $state<OpportunityRow[]>([]);
 let assignees = $state<Assignee[]>([]);
+let wonMtd = $state('0');
 let status = $state<Status>('idle');
 let error = $state<string | null>(null);
 let lastFetchedAt = $state(0);
@@ -18,6 +19,7 @@ async function fetchAll(signal: AbortSignal): Promise<{
 	stages: PipelineStageRow[];
 	opportunities: OpportunityRow[];
 	assignees: Assignee[];
+	won_mtd: string;
 }> {
 	const [stagesRes, oppsRes, assigneesRes] = await Promise.all([
 		fetch('/api/pipeline/stages', { signal }),
@@ -26,7 +28,7 @@ async function fetchAll(signal: AbortSignal): Promise<{
 	]);
 	if (!stagesRes.ok || !oppsRes.ok) throw new Error('Failed to load pipeline.');
 	const stagesBody = (await stagesRes.json()) as { stages: PipelineStageRow[] };
-	const oppsBody = (await oppsRes.json()) as { opportunities: OpportunityRow[] };
+	const oppsBody = (await oppsRes.json()) as { opportunities: OpportunityRow[]; won_mtd: string };
 	let assigneesList: Assignee[] = [];
 	if (assigneesRes.ok) {
 		const a = (await assigneesRes.json()) as { assignees: Assignee[] };
@@ -35,15 +37,18 @@ async function fetchAll(signal: AbortSignal): Promise<{
 	return {
 		stages: stagesBody.stages,
 		opportunities: oppsBody.opportunities,
-		assignees: assigneesList
+		assignees: assigneesList,
+		won_mtd: oppsBody.won_mtd ?? '0'
 	};
 }
 
-async function fetchOpportunities(signal: AbortSignal): Promise<OpportunityRow[]> {
+async function fetchOpportunities(
+	signal: AbortSignal
+): Promise<{ opportunities: OpportunityRow[]; won_mtd: string }> {
 	const res = await fetch('/api/pipeline/opportunities', { signal });
 	if (!res.ok) throw new Error('Failed to load opportunities.');
-	const body = (await res.json()) as { opportunities: OpportunityRow[] };
-	return body.opportunities;
+	const body = (await res.json()) as { opportunities: OpportunityRow[]; won_mtd: string };
+	return { opportunities: body.opportunities, won_mtd: body.won_mtd ?? '0' };
 }
 
 export const pipelineStore = {
@@ -55,6 +60,9 @@ export const pipelineStore = {
 	},
 	get assignees() {
 		return assignees;
+	},
+	get wonMtd() {
+		return wonMtd;
 	},
 	get status() {
 		return status;
@@ -83,6 +91,7 @@ export const pipelineStore = {
 			stages = body.stages;
 			opportunities = body.opportunities;
 			assignees = body.assignees;
+			wonMtd = body.won_mtd;
 			lastFetchedAt = Date.now();
 			status = 'ready';
 		} catch (e) {
@@ -97,7 +106,9 @@ export const pipelineStore = {
 	async refreshOpportunities(): Promise<void> {
 		const controller = new AbortController();
 		try {
-			opportunities = await fetchOpportunities(controller.signal);
+			const body = await fetchOpportunities(controller.signal);
+			opportunities = body.opportunities;
+			wonMtd = body.won_mtd;
 			lastFetchedAt = Date.now();
 		} catch {
 			// keep existing list on failure
@@ -120,6 +131,7 @@ export const pipelineStore = {
 		stages = [];
 		opportunities = [];
 		assignees = [];
+		wonMtd = '0';
 		lastFetchedAt = 0;
 		status = 'idle';
 		if (activeController) {

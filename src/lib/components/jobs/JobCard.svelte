@@ -3,12 +3,15 @@
 	import { formatDateTime } from '$lib/utils/format';
 	import type { JobListItem } from '$lib/types/jobs';
 	import { Calendar, User } from '@lucide/svelte';
+	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 
 	let { job }: { job: JobListItem } = $props();
 </script>
 
 <a
 	href={`/jobs/${job.id}`}
+	use:prefetchOnIntent={() => jobDetailStore.prefetch(job.id)}
 	class="group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10"
 >
 	<div class="flex items-start justify-between gap-3">

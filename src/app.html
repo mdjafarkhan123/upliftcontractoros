@@ -32,6 +32,10 @@
 			type="font/woff2"
 			crossorigin
 		/>
+		<!-- Warm the Supabase connection (TCP + TLS) while the JS bundle downloads,
+		     so the first API/auth call doesn't pay the handshake cost. -->
+		<link rel="preconnect" href="https://wqodecwlynshdujaphaz.supabase.co" crossorigin />
+		<link rel="dns-prefetch" href="https://wqodecwlynshdujaphaz.supabase.co" />
 		%sveltekit.head%
 		<style>
 			/*

@@ -5,14 +5,20 @@
 	import ContactTagsEditor from '$lib/components/contacts/ContactTagsEditor.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { cn } from '$lib/utils/cn';
-	import { UserPlus, Tag, Archive, X, Check } from '@lucide/svelte';
+	import { UserPlus, Tag, Archive, X, Check, RotateCcw, Trash2, Download } from '@lucide/svelte';
 
 	let {
 		ids,
+		mode = 'active',
+		canDelete = true,
 		onDone,
 		onCancel
 	}: {
 		ids: string[];
+		// 'active' → Assign / Tag / Archive. 'archived' → Restore / Delete.
+		mode?: 'active' | 'archived';
+		// Gates the archived-view Delete action (requires can_delete_contacts).
+		canDelete?: boolean;
 		// Called after a successful action so the page can refresh + exit select mode.
 		onDone: (opts: { removedIds?: string[] }) => void;
 		onCancel: () => void;
@@ -111,21 +117,90 @@
 			});
 			const body = (await res.json().catch(() => ({}))) as {
 				archived?: number;
-				skipped?: Array<{ id: string; full_name: string }>;
 				error?: string;
 			};
 			if (res.ok) {
-				const archived = body.archived ?? 0;
-				const skipped = body.skipped?.length ?? 0;
-				const archivedIds = ids.filter((id) => !(body.skipped ?? []).some((s) => s.id === id));
-				if (skipped > 0) {
-					toast.info(`Archived ${archived}, skipped ${skipped} with active records`);
-				} else {
-					toast.success(`Archived ${archived} contact${archived === 1 ? '' : 's'}`);
-				}
-				onDone({ removedIds: archivedIds });
+				const archived = body.archived ?? count;
+				toast.success(`Archived ${archived} contact${archived === 1 ? '' : 's'}`);
+				onDone({ removedIds: ids });
 			} else {
 				toast.error(body.error ?? 'Failed to archive contacts');
+			}
+		} finally {
+			busy = false;
+		}
+	}
+
+	// --- Restore (unarchive) ---
+	async function applyRestore() {
+		if (busy) return;
+		busy = true;
+		try {
+			const res = await fetch('/api/contacts/bulk', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'unarchive', contact_ids: ids })
+			});
+			const body = (await res.json().catch(() => ({}))) as { restored?: number; error?: string };
+			if (res.ok) {
+				const n = body.restored ?? count;
+				toast.success(`Restored ${n} contact${n === 1 ? '' : 's'}`);
+				onDone({ removedIds: ids });
+			} else {
+				toast.error(body.error ?? 'Failed to restore contacts');
+			}
+		} finally {
+			busy = false;
+		}
+	}
+
+	// --- Export selected ---
+	async function exportSelected() {
+		if (busy) return;
+		busy = true;
+		try {
+			const res = await fetch('/api/contacts/export', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ids })
+			});
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new Error(body.error ?? 'Export failed');
+			}
+			const blob = await res.blob();
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(blob);
+			a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+			a.click();
+			URL.revokeObjectURL(a.href);
+			toast.success(`Exported ${count} contact${count === 1 ? '' : 's'}`);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Export failed');
+		} finally {
+			busy = false;
+		}
+	}
+
+	// --- Delete (soft-delete to Recycle Bin) ---
+	let deleteOpen = $state(false);
+
+	async function applyDelete() {
+		if (busy) return;
+		busy = true;
+		try {
+			const res = await fetch('/api/contacts/bulk', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'delete', contact_ids: ids })
+			});
+			const body = (await res.json().catch(() => ({}))) as { deleted?: number; error?: string };
+			if (res.ok) {
+				const n = body.deleted ?? count;
+				toast.success(`Moved ${n} contact${n === 1 ? '' : 's'} to Recycle Bin`);
+				onDone({ removedIds: ids });
+			} else {
+				toast.error(body.error ?? 'Failed to delete contacts');
 			}
 		} finally {
 			busy = false;
@@ -152,27 +227,47 @@
 		</button>
 		<span class="shrink-0 px-1 text-sm font-semibold tabular-nums">{count} selected</span>
 		<div class="flex flex-1 items-center justify-end gap-1">
-			<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={openAssign}>
-				<UserPlus class="h-4 w-4" /> Assign
+			<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={exportSelected}>
+				<Download class="h-4 w-4" /> Export
 			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-11"
-				disabled={busy}
-				onclick={() => (tagOpen = true)}
-			>
-				<Tag class="h-4 w-4" /> Tag
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-11 text-amber-700 dark:text-amber-400"
-				disabled={busy}
-				onclick={() => (archiveOpen = true)}
-			>
-				<Archive class="h-4 w-4" /> Archive
-			</Button>
+			{#if mode === 'archived'}
+				<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={applyRestore}>
+					<RotateCcw class="h-4 w-4" /> Restore
+				</Button>
+				{#if canDelete}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-11 text-destructive hover:text-destructive"
+						disabled={busy}
+						onclick={() => (deleteOpen = true)}
+					>
+						<Trash2 class="h-4 w-4" /> Delete
+					</Button>
+				{/if}
+			{:else}
+				<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={openAssign}>
+					<UserPlus class="h-4 w-4" /> Assign
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-11"
+					disabled={busy}
+					onclick={() => (tagOpen = true)}
+				>
+					<Tag class="h-4 w-4" /> Tag
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-11 text-amber-700 dark:text-amber-400"
+					disabled={busy}
+					onclick={() => (archiveOpen = true)}
+				>
+					<Archive class="h-4 w-4" /> Archive
+				</Button>
+			{/if}
 		</div>
 	</div>
 </div>
@@ -233,8 +328,18 @@
 <ConfirmDialog
 	bind:open={archiveOpen}
 	title="Archive {count} contact{count === 1 ? '' : 's'}?"
-	description="Archived contacts move off your active list but keep all their history — conversations, jobs, quotes, and invoices are all preserved. Contacts with open quotes, jobs, or invoices will be skipped."
+	description="Archived contacts move off your active list but keep all their history — conversations, jobs, quotes, and invoices are all preserved. You can restore them any time."
 	confirmLabel="Archive"
 	loading={busy}
 	onConfirm={applyArchive}
+/>
+
+<ConfirmDialog
+	bind:open={deleteOpen}
+	title="Delete {count} contact{count === 1 ? '' : 's'}?"
+	description="They move to the Recycle Bin and can be restored within 30 days. Any linked jobs, quotes, invoices, and conversations are hidden too — all restorable together."
+	confirmLabel="Move to Recycle Bin"
+	variant="destructive"
+	loading={busy}
+	onConfirm={applyDelete}
 />

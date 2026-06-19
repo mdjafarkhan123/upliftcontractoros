@@ -1,101 +1,261 @@
-Ready for review
-Select text to add comments on the plan
-Plan: Per-Tenant Email Domain Onboarding (Brevo) — Phase 1 Foundation
-Context
-Why this is being built. The app's email stack is currently 100% Resend on a shared-domain model: every contractor sends from one platform-owned domain (acme-roofing@mail.platform.com) and inbound replies come back to opaque aliases on a shared reply domain. The user is moving to Brevo with a fundamentally different model: each contractor sends and receives on their own verified subdomain (e.g. mail.joesplumbing.com). Brevo was chosen over Postmark because it supports many sending domains cheaply and works on the free tier for development.
+# Uplift Contractor CRM — Pipeline & Quote System Plan
 
-Operating model — DFY agency, Platform-Owner-operated. This is not a contractor self-service feature. Contractors never configure DNS. All domain onboarding is performed by the Platform Owner (PO) inside /jafar, as part of (or right after) org provisioning. Contractors may, in a future phase, see a read-only "Email ready / Setup pending" badge — that indicator is not built in Phase 1. There is no contractor-facing settings page and no contractor nav entry for this.
+## Version 3.1 | June 2026 | Build-Ready Specification
 
-What this phase delivers. The reusable foundation to register a contractor's domain with Brevo from /jafar, show the PO the DNS records to paste into the contractor's DNS provider, and verify it. The user onboards their own subdomain as tenant #1 through this exact /jafar flow. The actual swap of send/receive traffic Resend → Brevo is Phase 2.
+---
 
-Decisions locked in with the user:
+## 1. Pipeline Stages & Status Model
 
-Replace Resend fully (Brevo becomes the only provider — but send/receive rewrite is Phase 2).
-No shared-platform-domain fallback. Orgs send via their own verified domain (or later, Gmail).
-PO-operated via /jafar only. No contractor settings UI; contractor read-only status is future.
-Mint the inbound webhook token in Phase 1 (not deferred). Generated at domain creation, stored on the row. Deterministic inbound path: /webhooks/brevo/inbound/{token}/{domain}. Requests without a valid token are rejected. (Brevo's inbound payload has no signature — the path token is the only auth; never rely on IP allowlists or "trust Brevo".)
-Routing rule (canonical): email_domains.domain is the lookup key for inbound routing — receiving domain → organization, never email-address parsing. Threading to the specific conversation within that org (Phase 2) then uses standard In-Reply-To/References headers or the sender's contact.
-Gmail (Google OAuth) sending channel (dropdown on the chat composer's "Email" button) is a separate future phase, not built now.
-Brevo facts verified from their API docs (these drive the schema):
+> **Architecture note (authoritative):** This app uses a **status model**, NOT Won/Lost columns
+> (Pipedrive/GHL pattern, already built). The board renders only **open** deals across the 4
+> stages below. **Won** and **Lost** are values of `opportunities.status` — they are terminal
+> states that REMOVE the card from the board, not columns you drag into. Wherever this document
+> says a deal "moves to Won/Lost", read it as "status is set to won/lost and the card leaves the
+> board." Won/Lost reporting and closed-deal history are surfaced on separate views, not the board.
 
-Create domain: POST https://api.brevo.com/v3/senders/domains body { "name": "mail.joesplumbing.com" } → returns { id, domain_name, message, dns_records: { dkim_record: {type:"TXT", value, host_name:"mail.\_domainkey.", status}, brevo_code: {type:"TXT", value:"brevo-code:...", host_name:"", status} } }.
-Check status: GET /v3/senders/domains/{domainName} → { domain, verified, authenticated, dns_records }.
-Trigger auth check: PUT /v3/senders/domains/{domainName}/authenticate.
-DMARC is recommended but not returned by create — added as a static suggested record in the UI.
-Inbound parse (Phase 2): MX inbound1.sendinblue.com (prio 10) + inbound2.sendinblue.com (prio 20) on the receiving subdomain, then register POST /v3/webhooks { type:"inbound", events:["inboundEmailProcessed"], url:"<our /webhooks/brevo/inbound/{token}/{domain}>", domain }.
-Free tier (300 emails/day) is fine for dev testing.
-Scope of Phase 1
-PO-operated domain onboarding under /jafar: register a domain with Brevo, mint + store the inbound webhook token, display the DNS records (including inbound MX, labelled for the next phase) for the PO to paste into the contractor's DNS, and verify. Outbound sender-domain authentication only. The inbound webhook handler is Phase 2 — but its token and deterministic path are established now.
+### Board stages (4 — `status = 'open'`)
 
-Schema
-New table email_domains (one row per org; org-scoped per tenant-isolation law). New file: src/lib/server/db/schema/13_email_domains.ts (confirm next free numeric prefix during implementation).
+| #   | Stage         | Color  | What It Means                         | Auto-Follow-Up |
+| --- | ------------- | ------ | ------------------------------------- | -------------- |
+| 1   | **New Lead**  | Blue   | Inbound contact, zero human touch     | +1 day         |
+| 2   | **Contacted** | Purple | Meaningful human conversation started | +3 days        |
+| 3   | **Scheduled** | Orange | Confirmed appointment booked          | +1 day         |
+| 4   | **Quoted**    | Yellow | Quote sent, awaiting client decision  | +3 days        |
 
-Columns (follow Drizzle conventions in 01_org_identity.ts):
+### Terminal statuses (NOT columns — `status = 'won' | 'lost'`)
 
-id uuid PK defaultRandom()
-org*id uuid NOT NULL FK → organizations.id
-domain text NOT NULL — sending/receiving subdomain, normalized lowercase. Canonical inbound routing key (domain → org). Uniquely indexed.
-brevo_domain_id text — Brevo's returned id
-inbound_webhook_token text NOT NULL — opaque secret minted at domain creation (e.g. 32-char random). Used in the deterministic inbound path /webhooks/brevo/inbound/{token}/{domain}; Phase 2 handler rejects any request whose token doesn't match the row for that domain. Uniquely indexed.
-status enum emailDomainStatusEnum: pending | verifying | verified | failed, default pending
-brevo_verified boolean NOT NULL default false
-brevo_authenticated boolean NOT NULL default false
-dns_records jsonb — records to display (dkim, brevo_code, suggested dmarc, inbound MX) so the UI is rebuildable without re-calling Brevo
-last_checked_at timestamptz
-verified_at timestamptz
-created_at / updated_at timestamptz default now()
-Unique index on org_id (1 domain per org in Phase 1), on domain, and on inbound_webhook_token.
-Migration lifecycle (critical — memory drizzle-generate-blocked): drizzle-kit generate is blocked. Hand-write the next drizzle/NNNN*\*.sql, add the matching drizzle/meta/\_journal.json entry (and snapshot per existing pattern), then run npx drizzle-kit migrate in the same turn. Do not ask the user to run it. If migrate fails, stop and surface the error — never ship with DB out of sync.
+| Status   | Color | What It Means                | Board Behavior                  |
+| -------- | ----- | ---------------------------- | ------------------------------- |
+| **Won**  | Green | Client accepted              | Leaves board; auto-archive 7d   |
+| **Lost** | Red   | Client declined or ghosted   | Leaves board; auto-archive 30d  |
 
-Brevo client (server-only)
-New src/lib/server/email/brevo/client.ts — lazy singleton over Brevo's REST API using BREVO_API_KEY (header api-key), mirroring the lazy-init style of src/lib/server/email/client.ts (Resend). Functions:
+---
 
-createBrevoDomain(name) → POST create → { id, dns*records }
-getBrevoDomain(name) → GET status → { verified, authenticated, dns_records }
-authenticateBrevoDomain(name) → PUT authenticate
-Token generation helper (crypto random) lives alongside the route or in a small src/lib/server/email/brevo/ util. Add BREVO_API_KEY to .env.example. Leave RESEND*\* in place (removed in Phase 2).
+## 2. Stage Transition Rules
 
-API routes — under /jafar's admin surface (NOT contractor)
-All live under /api/admin/orgs/[id]/..., which hooks.server.ts already auto-protects with the jafar session (returns 401 without it). No checkPermission(), no contractor org_id context — jafar is fully isolated (CLAUDE.md rule 12). The target org is the [id] route param. Follow the fixed response shape (rule 14: { error, field_errors? } / { data } / 204), Zod-validate input.
+| From          | To            | Trigger                                                                        | Who Moves             | Guard                                                      |
+| ------------- | ------------- | ------------------------------------------------------------------------------ | --------------------- | ---------------------------------------------------------- |
+| **New Lead**  | **Contacted** | Meaningful outbound customer communication (call logged, SMS sent, email sent) | **SYSTEM AUTO-MOVES** | Must be human action, not automation or internal activity  |
+| **Contacted** | **Scheduled** | Confirmed appointment booked (date + time + address + status=confirmed)        | **SYSTEM AUTO-MOVES** | Must be confirmed, not tentative                           |
+| **Scheduled** | **Quoted**    | First quote sent to client                                                     | **SYSTEM AUTO-MOVES** | Only first send. Revisions do NOT move                     |
+| **Quoted**    | **Won**       | Client taps "Accept" on quote page                                             | **SYSTEM AUTO-MOVES** | Idempotent. Optional: deposit required first (org setting) |
+| **Quoted**    | **Lost**      | Client taps "Decline" on quote page                                            | **SYSTEM AUTO-MOVES** | Must have decline reason                                   |
+| **Quoted**    | **Lost**      | Admin marks lost manually                                                      | **MANUAL**            | Must have lost reason picked                               |
+| **Any**       | **Any**       | Admin drags card against normal flow                                           | **MANUAL**            | Confirmation for Won/Lost                                  |
 
-POST /api/admin/orgs/[id]/email-domain — Zod-validate { domain } (lowercase, valid hostname, must be a subdomain). Call Brevo createBrevoDomain outside any transaction (external call — rule 8); mint inbound_webhook_token; INSERT the email_domains row with brevo_domain_id, token, and dns_records. Return { data: { domain, status, dns_records, inbound_webhook_path } }. Synchronous settings op — not an automation/business event, so no outbox/worker.
-GET /api/admin/orgs/[id]/email-domain — return the org's current domain row (status + records) for the panel.
-POST /api/admin/orgs/[id]/email-domain/verify — call Brevo authenticateBrevoDomain then getBrevoDomain; update brevo_verified/brevo_authenticated/status/last_checked_at/verified_at; return updated status. Drives the PO's "Verify" button (manual check — no background job in Phase 1).
-DELETE /api/admin/orgs/[id]/email-domain — remove the row so the PO can redo setup. Optional but cheap; include it.
-UI — panel inside the /jafar org-detail page
-Add an "Email Domain" section to src/routes/jafar/orgs/[id]/+page.svelte, following the existing jafar conventions (dark theme, rounded-2xl border border-slate-800 bg-slate-900/50 section containers, red-gradient primary buttons, emerald/red alert blocks, CSR data via the jafarOrgStore pattern + $effect/$derived, refresh-after-mutation). Place it near "Lifecycle actions"/"Integration status". No +page.ts server loader (CSR only). Use contractor-crm-svelte-ui skill for Svelte 5 runes/Tailwind; this screen is dark-jafar, not the contractor design system.
+### What Does NOT Move Stages
 
-Operator-facing copy (agency workflow), e.g.:
+| Action                 | Result                 | Why                             |
+| ---------------------- | ---------------------- | ------------------------------- |
+| Speed-to-Lead auto-SMS | Stays in **New Lead**  | Automation ≠ human contact      |
+| Internal note added    | Stays in current stage | No client interaction           |
+| Task created           | Stays in current stage | No client interaction           |
+| Lead replies inbound   | Stays in current stage | Contractor hasn't responded yet |
+| Tentative booking      | Stays in **Contacted** | Not confirmed yet               |
 
-Empty: "Set up this contractor's sending email. Enter the subdomain you'll use (e.g. mail.theirbusiness.com)." required mark on the field.
-After create: a records table (Type / Host / Value, each with a copy button) under the instruction: "Copy these records to the contractor's DNS provider. Click Verify once done." Include the inbound MX rows labelled "for receiving email (used next phase)". No low-level DNS explainers.
-Status: plain badge — "Email ready" (verified/authenticated) vs "Setup pending — verify after DNS is added". A "Verify" button calls the verify route and toasts the result.
-A small client store (e.g. extend/parallel jafarOrgStore or a dedicated jafarEmailDomain.svelte.ts) fetches/holds the domain row for the panel.
+---
 
-Critical files
-New: src/lib/server/db/schema/13_email_domains.ts; drizzle/NNNN_email_domains.sql (+ journal/snapshot)
-New: src/lib/server/email/brevo/client.ts (+ token util)
-New: src/routes/api/admin/orgs/[id]/email-domain/+server.ts, .../email-domain/verify/+server.ts
-Edit: src/routes/jafar/orgs/[id]/+page.svelte (add Email Domain panel); a jafar client store for the panel
-Edit: .env.example (add BREVO_API_KEY)
-Reference only (unchanged this phase): src/lib/server/email/senderAddresses.ts, inboundCorrelation.ts, emailWorker.ts, 05_communication.ts, src/lib/server/admin/orgProvisioning.ts
-Risks / edge cases
-Migration by hand: generate is blocked — journal/snapshot must be edited correctly or migrate fails. Highest-risk step; verify DB sync before claiming done.
-No contractor leakage: routes are jafar-only by living under /api/admin/\*; never add a contractor /settings entry or checkPermission path for this.
-Token secrecy: inbound_webhook_token is a credential — generate with crypto-strong randomness, store as-is, never expose in contractor-reachable responses (only the jafar panel sees the inbound path).
-DNS propagation: verification can take minutes–48h. "Setup pending — verify after DNS is added" is a normal state, not an error.
-Brevo API failure: call Brevo first, insert the row only on success, surface Brevo's message via { error }. No half-created rows.
-DMARC not returned by create: present as a static suggested record.
-Scope creep: do NOT touch the Resend send/receive path, build the inbound handler, or the Gmail dropdown — later phases.
-Verification (end-to-end)
-Run hand-written migration; confirm email_domains exists with inbound_webhook_token (drizzle studio or quick query).
-npm run check + npm run lint clean.
-Set BREVO_API_KEY in .env; npm run dev; log into /jafar.
-Open an org at /jafar/orgs/[id] → Email Domain panel → submit your real subdomain → confirm a Brevo domain is created, a token is minted, and DNS records render with copy buttons + the "copy these to the contractor's DNS provider" instruction.
-Add the records at your DNS provider (Cloudflare/GoDaddy).
-Click Verify → status flips to "Email ready" once DNS propagates (cross-check in Brevo dashboard).
-Confirm isolation: hitting /api/admin/orgs/[id]/email-domain without a jafar session returns 401; no contractor route exposes this.
-Out of scope (future phases — noted only)
-Phase 2: Swap outbound send (emailWorker → Brevo transactional email API), build the inbound webhook handler at /webhooks/brevo/inbound/{token}/{domain} (reject invalid token — no IP/trust reliance), route inbound by receiving domain → org via email_domains.domain then thread via headers/contact, per-domain from-address logic, register inbound MX + POST /v3/webhooks, retire Resend code + env vars.
-Future: contractor-facing read-only "Email ready / Setup pending" indicator; Gmail (Google OAuth) sending channel via the chat composer's "Email" dropdown; possible Agency App home for this onboarding.
-Add Comment
+## 3. Direct Booking Exception
+
+| Entry Method                   | First Stage                                | Auto-Flow                                                                                          |
+| ------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Form fill / missed call / chat | New Lead                                   | Auto→Contacted on human outbound → Auto→Scheduled on confirmed booking → Auto→Quoted on first send |
+| **Direct booking link**        | **Scheduled** (skips New Lead + Contacted) | Auto→Quoted on first send                                                                          |
+
+---
+
+## 4. Quote Statuses (7 Total)
+
+| Status             | Icon | Color  | Meaning                           |
+| ------------------ | ---- | ------ | --------------------------------- |
+| Draft              | —    | —      | Internal only                     |
+| Sent               | 📤   | Gray   | Delivered, not opened             |
+| Viewed             | 👁️   | Blue   | Client opened quote               |
+| Revision Requested | 🔄   | Orange | Client wants changes              |
+| Accepted           | 🎉   | Green  | Client approved → moves to Won    |
+| Declined           | ❌   | Red    | Client rejected → moves to Lost   |
+| Expired            | ⏰   | Gray   | Validity passed → stays in Quoted |
+
+### Color Rules
+
+| Color  | Means         | When                            |
+| ------ | ------------- | ------------------------------- |
+| Gray   | Waiting       | Sent, Expired                   |
+| Blue   | Engaged       | Viewed (any version, any count) |
+| Orange | Action needed | Revision Requested              |
+| Green  | Success       | Accepted only                   |
+| Red    | Dead          | Declined only                   |
+
+**Viewed is always blue.** Never green. Some customers view 15 times and never buy. Green = success.
+
+---
+
+## 5. Quote Versioning
+
+### First-Class Concept (Internal)
+
+```
+Quote #1023
+├── current_version: 3
+├── versions: [v1, v2, v3]
+└── history:
+    Jun 15, 9:00 AM — 📤 Sent v1
+    Jun 15, 2:00 PM — 👁️ Viewed v1
+    Jun 16, 11:00 AM — 🔄 Revision requested
+    Jun 16, 4:00 PM — 📤 Sent v2
+    Jun 17, 10:00 AM — 👁️ Viewed v2
+    Jun 17, 3:00 PM — 🔄 Revision requested
+    Jun 18, 9:00 AM — 📤 Sent v3
+    Jun 18, 2:00 PM — 👁️ Viewed v3
+    Jun 20, 10:00 AM — 🎉 Accepted v3
+```
+
+**User sees:** "Viewed (v3)" or "Sent (v2)". Version is subtle but tracked.
+
+**Why versions matter:** Disputes. "You said $8,500." "No, v3 was $11,500 and you accepted it."
+
+---
+
+## 6. Quote Lifecycle Example
+
+```
+Day 1: Mike sends quote v1 ($13,500)
+    Card: 📤 "Sent"
+
+Day 1: Sarah views
+    Card: 👁️ "Viewed"
+    Mike gets push: "👁️ Sarah viewed your quote"
+
+Day 2: Sarah requests changes
+    Card: 🔄 "Revision requested"
+
+Day 3: Mike sends v2 ($11,500)
+    Card: 📤 "Sent (v2)" — pulsing
+
+Day 3: Sarah views v2
+    Card: 👁️ "Viewed (v2)" — BLUE (engaged, not success)
+    Mike gets push: "👁️ Sarah viewed revised quote"
+
+Day 4: Sarah requests another change
+    Card: 🔄 "Revision requested"
+
+Day 5: Mike sends v3 ($10,800)
+    Card: 📤 "Sent (v3)" — pulsing
+
+Day 5: Sarah views v3 (3 times throughout day)
+    Card: 👁️ "Viewed (v3)" — still BLUE
+    Detail shows: "Viewed 3 times"
+
+Day 6: Sarah accepts
+    Card: 🎉 "Accepted!" — GREEN (success)
+    Auto-moves to Won
+```
+
+---
+
+## 7. Pipeline Card Design
+
+```
+┌──────────────────────────────────────────────┐
+│ Sarah Johnson            🔥 HOT [🏠 Roof]    │
+│ Roof Repair                                  │
+│                                              │
+│ 💰 $11,500                                   │
+│                                              │
+│ 👁️ Viewed (v3)                              │
+│ 3 views • Last viewed 15m ago                │
+│                                              │
+│ ⏰ Follow up: Today                           │
+│ 🟡 Quote Age: 5d                             │
+│ 👤 Mike                                      │
+└──────────────────────────────────────────────┘
+```
+
+**Age badges:** Green (0-3d) → Yellow (4-7d) → Red (8+d) → Red pulse (overdue follow-up)
+
+**Quote age visible:** "Quoted 5 days" — contractors live and die by this.
+
+---
+
+## 8. Lost & Expired Handling
+
+### Expired ≠ Lost
+
+|                | Expired                              | Lost                                 |
+| -------------- | ------------------------------------ | ------------------------------------ |
+| **Trigger**    | Quote validity passed (7/14/30 days) | Client declined or admin gave up     |
+| **Card stays** | In **Quoted** stage                  | `status='lost'` — card leaves board  |
+| **Badge**      | ⏰ Expired                           | ❌ Declined                          |
+| **Revivable?** | Yes — extend, edit, resend           | Rarely — reopen existing opportunity |
+| **Example**    | Customer calls back 3 months later   | Customer chose competitor            |
+
+### Client Decline Flow
+
+```
+❌ Why are you declining?
+○ Price too high
+○ Going with competitor
+○ Bad timing
+○ Scope changed
+○ Other: [text]
+[Submit]
+```
+
+### Admin Mark Lost
+
+```
+Reason: ○ Price ○ Competitor ○ Timing ○ Ghosted ○ Scope ○ Other
+Note: [textarea]
+[Confirm Lost]
+```
+
+### Auto-Ghost Rule
+
+In organizaton settings proper place we should add flexible rule for ghosting marking:
+Organization Setting
+
+"" Ghost Lead Suggestion:
+○ 7 days
+○ 14 days (default)
+○ 21 days
+○ 30 days
+
+""
+
+### Expired Quote Actions
+
+Status → Expired. Card stays in Quoted. Admin options: [Extend] [Mark Lost] [Call]
+
+---
+
+## 9. Org Setting: Won Trigger
+
+```
+When is a deal "Won"?
+○ On quote acceptance (default)
+◉ On deposit paid
+```
+
+**Default:** Quote acceptance. Larger contractors may require deposit first.
+
+---
+
+## 11. Summary
+
+| Stage                 | Movement                               | Trigger                                      |
+| --------------------- | -------------------------------------- | -------------------------------------------- |
+| New Lead → Contacted  | **Auto**                               | Meaningful human outbound (call, SMS, email) |
+| Contacted → Scheduled | **Auto**                               | Confirmed appointment                        |
+| Scheduled → Quoted    | **Auto**                               | First quote sent                             |
+| Quoted → Won          | **Auto**                               | Client accepts                               |
+| Quoted → Lost         | **Auto** (client) / **Manual** (admin) | Client declines / Admin decides              |
+| Any reverse/skip      | **Manual**                             | Admin override                               |
+
+**Key rules:**
+
+- Human actions move stages. Automation doesn't.
+- Viewed is always blue. Green = Accepted only.
+- Expired ≠ Lost. Expired stays in Quoted.
+- Versions tracked internally for disputes.
+
+**The pipeline is a reflection of work done, not a todo list to maintain.**

@@ -212,7 +212,7 @@
 				<Label for="opp-assignee">Assign to</Label>
 				<Select.Root bind:value={assignedTo}>
 					<Select.Trigger class="h-11 w-full">
-						<Select.Value />
+						{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
 					</Select.Trigger>
 					<Select.Content>
 						<Select.Item value="">Unassigned</Select.Item>
