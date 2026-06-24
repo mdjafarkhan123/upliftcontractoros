@@ -5,9 +5,9 @@
  * Purpose:  Permanently remove contacts that have sat in the recycle bin
  *           (soft-deleted) longer than the retention window, freeing their
  *           reserved phone number for re-use.
- * Retention: 30 days — long enough to undo a mistaken delete, short enough to
- *           honor the deletion intent. Sits between Salesforce (15d) and
- *           HubSpot (90d).
+ * Retention: 90 days — aligned with the app-wide soft-delete purge window
+ *           (soft-delete-purge-sweep) so every entity shares one consistent
+ *           recycle-bin lifetime. Matches HubSpot's 90-day window.
  * Safety:
  *   - Only contacts with NO linked records are hard-deleted. Any contact that
  *     still has opportunities, jobs, quotes, invoices, conversations,
@@ -23,7 +23,7 @@
 import { purgeDeletedContactsOlderThan } from '$lib/server/contacts/contactRepo';
 import type { CronJobResult } from './index';
 
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 90;
 
 export async function runContactPurgeSweep(): Promise<CronJobResult> {
 	const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);

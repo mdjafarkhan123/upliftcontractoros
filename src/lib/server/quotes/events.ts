@@ -10,6 +10,13 @@ export function quoteSentEvent(args: {
 	publicToken: string;
 	totalFormatted: string;
 	quoteNumberDisplay: string;
+	// Channels the contractor chose to deliver on. Null = legacy/default (both
+	// available channels). The worker still hard-blocks SMS on opt-out.
+	channels?: ('email' | 'sms')[] | null;
+	// Optional message overrides (merge tokens, interpolated at delivery). Null = default copy.
+	smsBody?: string | null;
+	emailSubject?: string | null;
+	emailBody?: string | null;
 }): NewOutboxEvent {
 	return {
 		org_id: args.orgId,
@@ -23,7 +30,11 @@ export function quoteSentEvent(args: {
 			has_email: args.hasEmail,
 			public_token: args.publicToken,
 			total_formatted: args.totalFormatted,
-			quote_number_display: args.quoteNumberDisplay
+			quote_number_display: args.quoteNumberDisplay,
+			channels: args.channels ?? null,
+			sms_body: args.smsBody ?? null,
+			email_subject: args.emailSubject ?? null,
+			email_body: args.emailBody ?? null
 		},
 		idempotency_key: `quote.sent:${args.quoteId}:${randomUUID()}`
 	};

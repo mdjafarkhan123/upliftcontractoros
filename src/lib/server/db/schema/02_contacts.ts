@@ -37,7 +37,8 @@ export const leadSourceTypeEnum = pgEnum('lead_source_type', [
 	'door_hanger',
 	'job_sign',
 	'repeat_customer',
-	'other'
+	'other',
+	'inbound_email'
 ]);
 
 export const contacts = pgTable('contacts', {

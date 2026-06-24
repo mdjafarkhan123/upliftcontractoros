@@ -3,7 +3,6 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -17,7 +16,6 @@
 		Crown
 	} from '@lucide/svelte';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
-	import AppointmentForm from '$lib/components/appointments/AppointmentForm.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatDateTimeInOrgTz } from '$lib/utils/formatInOrgTz';
@@ -50,6 +48,33 @@
 	let cancelOpen = $state(false);
 	let noShowOpen = $state(false);
 	let assignees = $state<{ id: string; full_name: string }[]>([]);
+
+	// Edit form + status confirm dialogs are click-gated — lazy-load each so the
+	// detail page parses just the read-only view and paints instantly.
+	let AppointmentForm = $state<
+		typeof import('$lib/components/appointments/AppointmentForm.svelte').default | null
+	>(null);
+	let appointmentFormLoading = $state(false);
+	$effect(() => {
+		if (!editOpen || AppointmentForm || appointmentFormLoading) return;
+		appointmentFormLoading = true;
+		void import('$lib/components/appointments/AppointmentForm.svelte').then((m) => {
+			AppointmentForm = m.default;
+		});
+	});
+
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	let confirmDialogLoading = $state(false);
+	$effect(() => {
+		if (!(completeOpen || cancelOpen || noShowOpen) || ConfirmDialog || confirmDialogLoading)
+			return;
+		confirmDialogLoading = true;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	const isTerminal = $derived.by(() => {
 		const s = appointment?.status;
@@ -322,51 +347,57 @@
 					<Sheet.Title>Edit appointment</Sheet.Title>
 				</Sheet.Header>
 				<div class="mt-4">
-					<AppointmentForm
-						mode="edit"
-						{appointment}
-						{assignees}
-						{canEditAssignee}
-						submitLabel="Save changes"
-						onCancel={() => (editOpen = false)}
-						onSubmit={handleEditSubmit}
-					/>
+					{#if AppointmentForm}
+						<AppointmentForm
+							mode="edit"
+							{appointment}
+							{assignees}
+							{canEditAssignee}
+							submitLabel="Save changes"
+							onCancel={() => (editOpen = false)}
+							onSubmit={handleEditSubmit}
+						/>
+					{:else}
+						<SkeletonLoader lines={5} height="44px" label="Loading form" />
+					{/if}
 				</div>
 			</Sheet.Content>
 		</Sheet.Root>
 
-		<ConfirmDialog
-			bind:open={completeOpen}
-			title="Mark appointment complete?"
-			description="The appointment will be marked completed. Reminders will be cancelled."
-			confirmLabel="Mark complete"
-			loading={actionLoading}
-			onConfirm={async () => {
-				await transition('completed');
-			}}
-		/>
+		{#if ConfirmDialog}
+			<ConfirmDialog
+				bind:open={completeOpen}
+				title="Mark appointment complete?"
+				description="The appointment will be marked completed. Reminders will be cancelled."
+				confirmLabel="Mark complete"
+				loading={actionLoading}
+				onConfirm={async () => {
+					await transition('completed');
+				}}
+			/>
 
-		<ConfirmDialog
-			bind:open={noShowOpen}
-			title="Mark as no-show?"
-			description="Customer didn't show. Reminders will be cancelled."
-			confirmLabel="Mark no-show"
-			loading={actionLoading}
-			onConfirm={async () => {
-				await transition('no_show');
-			}}
-		/>
+			<ConfirmDialog
+				bind:open={noShowOpen}
+				title="Mark as no-show?"
+				description="Customer didn't show. Reminders will be cancelled."
+				confirmLabel="Mark no-show"
+				loading={actionLoading}
+				onConfirm={async () => {
+					await transition('no_show');
+				}}
+			/>
 
-		<ConfirmDialog
-			bind:open={cancelOpen}
-			title="Cancel this appointment?"
-			description="The appointment will be cancelled. Reminders will be cancelled."
-			confirmLabel="Cancel appointment"
-			variant="destructive"
-			loading={actionLoading}
-			onConfirm={async () => {
-				await transition('cancelled');
-			}}
-		/>
+			<ConfirmDialog
+				bind:open={cancelOpen}
+				title="Cancel this appointment?"
+				description="The appointment will be cancelled. Reminders will be cancelled."
+				confirmLabel="Cancel appointment"
+				variant="destructive"
+				loading={actionLoading}
+				onConfirm={async () => {
+					await transition('cancelled');
+				}}
+			/>
+		{/if}
 	{/if}
 </PageWrapper>

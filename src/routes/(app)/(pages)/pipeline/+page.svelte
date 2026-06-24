@@ -3,17 +3,12 @@
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
 	import type { DndEvent } from 'svelte-dnd-action';
-	import { SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import PipelineColumn from '$lib/components/pipeline/PipelineColumn.svelte';
-	import NewOpportunitySheet from '$lib/components/pipeline/NewOpportunitySheet.svelte';
-	import OpportunityDetailSheet from '$lib/components/pipeline/OpportunityDetailSheet.svelte';
 	import { opportunityDetailStore } from '$lib/stores/opportunityDetail.svelte';
-	import LostReasonDialog from '$lib/components/pipeline/LostReasonDialog.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import PipelineFilters, {
 		type PipelineFilterState,
 		type CloseRange,
@@ -42,6 +37,29 @@
 	const fillColumns = $derived(stages.length <= 5);
 	const opportunities = $derived(pipelineStore.opportunities);
 	const assignees = $derived(pipelineStore.assignees);
+
+	// svelte-dnd-action's TRIGGERS/SHADOW marker are only read inside drag handlers,
+	// which can't fire until lazyDndzone has loaded the engine. Load them lazily
+	// (same cached chunk) so they never sit on the board's first-paint critical path.
+	type DndConsts = {
+		TRIGGERS: typeof import('svelte-dnd-action').TRIGGERS;
+		SHADOW: typeof import('svelte-dnd-action').SHADOW_ITEM_MARKER_PROPERTY_NAME;
+	};
+	let dndConsts = $state<DndConsts | null>(null);
+
+	// Heavy pop-ups (deal detail sheet, new-opportunity form, won/lost dialogs) are
+	// only needed after a later click, so they're loaded on demand — clicking the
+	// Pipeline tab parses just the board shell. Mirrors the Inbox thread-view pattern.
+	let NewOpportunitySheet =
+		$state<typeof import('$lib/components/pipeline/NewOpportunitySheet.svelte').default | null>(null);
+	let OpportunityDetailSheet =
+		$state<typeof import('$lib/components/pipeline/OpportunityDetailSheet.svelte').default | null>(
+			null
+		);
+	let LostReasonDialog =
+		$state<typeof import('$lib/components/pipeline/LostReasonDialog.svelte').default | null>(null);
+	let ConfirmDialog =
+		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
 
 	// --- Filters ---
 	const DEFAULT_FILTERS: PipelineFilterState = { q: '', assignee: 'all', close: 'all' };
@@ -138,6 +156,11 @@
 	const errorMsg = $derived(pipelineStore.status === 'error' ? pipelineStore.error : null);
 
 	onMount(() => {
+		// Warm the dnd constants off the first-paint path. Resolves from the same
+		// chunk lazyDndzone fetches, so by the time dragging is possible they're set.
+		void import('svelte-dnd-action').then((m) => {
+			dndConsts = { TRIGGERS: m.TRIGGERS, SHADOW: m.SHADOW_ITEM_MARKER_PROPERTY_NAME };
+		});
 		void pipelineStore.load().then(() => {
 			// Deep-link from a follow-up notification: /pipeline?deal={id} auto-opens
 			// the deal's detail sheet, then the param is stripped so a refresh/back
@@ -202,6 +225,36 @@
 	let pendingLostOpen = $state(false);
 	let pendingStatusId = $state<string | null>(null);
 	let actionLoading = $state(false);
+
+	// Each pop-up's chunk is fetched the first time its trigger flips open.
+	$effect(() => {
+		if (createOpen && !NewOpportunitySheet) {
+			void import('$lib/components/pipeline/NewOpportunitySheet.svelte').then(
+				(m) => (NewOpportunitySheet = m.default)
+			);
+		}
+	});
+	$effect(() => {
+		if (detailOpen && !OpportunityDetailSheet) {
+			void import('$lib/components/pipeline/OpportunityDetailSheet.svelte').then(
+				(m) => (OpportunityDetailSheet = m.default)
+			);
+		}
+	});
+	$effect(() => {
+		if (pendingWonOpen && !ConfirmDialog) {
+			void import('$lib/components/shared/ConfirmDialog.svelte').then(
+				(m) => (ConfirmDialog = m.default)
+			);
+		}
+	});
+	$effect(() => {
+		if (pendingLostOpen && !LostReasonDialog) {
+			void import('$lib/components/pipeline/LostReasonDialog.svelte').then(
+				(m) => (LostReasonDialog = m.default)
+			);
+		}
+	});
 
 	function newRequestId(): string {
 		return crypto.randomUUID();
@@ -341,7 +394,7 @@
 		let rafPending = false;
 		let latestItems: OpportunityRow[] | null = null;
 		return (e: CustomEvent<DndEvent<OpportunityRow>>) => {
-			if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
+			if (dndConsts && e.detail.info.trigger === dndConsts.TRIGGERS.DRAG_STARTED) {
 				draggingId = e.detail.info.id;
 				dragOriginStage = stageId;
 			}
@@ -360,9 +413,13 @@
 
 	function handleFinalize(stageId: string) {
 		return async (e: CustomEvent<DndEvent<OpportunityRow>>) => {
+			// dndConsts is always set by the time a real finalize fires (the drag
+			// engine and the consts resolve from the same chunk).
+			if (!dndConsts) return;
+			const shadowMarker = dndConsts.SHADOW;
 			const cleanItems = e.detail.items.map((it) => {
 				const copy = { ...it } as Record<string, unknown>;
-				delete copy[SHADOW_ITEM_MARKER_PROPERTY_NAME];
+				delete copy[shadowMarker];
 				return copy as OpportunityRow;
 			});
 
@@ -375,7 +432,7 @@
 			// destination side owns the persistence + origin bookkeeping. The source
 			// side just reconciles (above) and leaves the captured origin intact so
 			// the destination event — regardless of firing order — can still use it.
-			if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) return;
+			if (e.detail.info.trigger === dndConsts.TRIGGERS.DROPPED_INTO_ANOTHER) return;
 
 			// Destination side (or a same-column reorder): consume the captured origin.
 			const movedId = draggingId;
@@ -532,7 +589,7 @@
 	{/if}
 </PageWrapper>
 
-{#if canCreate}
+{#if canCreate && NewOpportunitySheet}
 	<NewOpportunitySheet
 		bind:open={createOpen}
 		{assignees}
@@ -542,7 +599,7 @@
 	/>
 {/if}
 
-{#if detail}
+{#if detail && OpportunityDetailSheet}
 	<OpportunityDetailSheet
 		bind:open={detailOpen}
 		opportunity={detail}
@@ -554,19 +611,23 @@
 	/>
 {/if}
 
-<ConfirmDialog
-	bind:open={pendingWonOpen}
-	title="Mark as won?"
-	description="A job will be created automatically and the contact will become a customer."
-	confirmLabel="Mark won"
-	loading={actionLoading}
-	onConfirm={() => commitStatus('won')}
-	onCancel={cancelStatus}
-/>
+{#if ConfirmDialog}
+	<ConfirmDialog
+		bind:open={pendingWonOpen}
+		title="Mark as won?"
+		description="A job will be created automatically and the contact will become a customer."
+		confirmLabel="Mark won"
+		loading={actionLoading}
+		onConfirm={() => commitStatus('won')}
+		onCancel={cancelStatus}
+	/>
+{/if}
 
-<LostReasonDialog
-	bind:open={pendingLostOpen}
-	loading={actionLoading}
-	onCancel={cancelStatus}
-	onConfirm={(reason, note) => commitStatus('lost', reason, note)}
-/>
+{#if LostReasonDialog}
+	<LostReasonDialog
+		bind:open={pendingLostOpen}
+		loading={actionLoading}
+		onCancel={cancelStatus}
+		onConfirm={(reason, note) => commitStatus('lost', reason, note)}
+	/>
+{/if}

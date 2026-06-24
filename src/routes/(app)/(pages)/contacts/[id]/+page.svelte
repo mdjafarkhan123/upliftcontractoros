@@ -5,10 +5,8 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import DeleteContactDialog from '$lib/components/contacts/DeleteContactDialog.svelte';
 	import ContactDetailHeader from '$lib/components/contacts/ContactDetailHeader.svelte';
 	import ContactKpiStrip from '$lib/components/contacts/ContactKpiStrip.svelte';
-	import MergeContactDialog from '$lib/components/contacts/MergeContactDialog.svelte';
 	import ContactQuickActions from '$lib/components/contacts/ContactQuickActions.svelte';
 	import ActiveAutomations from '$lib/components/automation/ActiveAutomations.svelte';
 	import SmsOptOutBanner from '$lib/components/contacts/SmsOptOutBanner.svelte';
@@ -142,6 +140,29 @@
 	const canMerge = $derived(member().can_merge_contacts);
 
 	let mergeOpen = $state(false);
+
+	// Merge + delete dialogs are only needed once invoked from the header menu.
+	// Load each lazily so the contact detail paints without their chunks — they
+	// fetch the first time the user opens them and are cached afterward.
+	let MergeContactDialog =
+		$state<typeof import('$lib/components/contacts/MergeContactDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!mergeOpen || MergeContactDialog) return;
+		void import('$lib/components/contacts/MergeContactDialog.svelte').then((m) => {
+			MergeContactDialog = m.default;
+		});
+	});
+
+	let DeleteContactDialog =
+		$state<typeof import('$lib/components/contacts/DeleteContactDialog.svelte').default | null>(
+			null
+		);
+	$effect(() => {
+		if (!confirmDeleteOpen || DeleteContactDialog) return;
+		void import('$lib/components/contacts/DeleteContactDialog.svelte').then((m) => {
+			DeleteContactDialog = m.default;
+		});
+	});
 
 	async function reloadDetail() {
 		await contactDetailStore.load(id, true);
@@ -542,7 +563,7 @@
 	{/if}
 </PageWrapper>
 
-{#if detail}
+{#if detail && MergeContactDialog}
 	<MergeContactDialog
 		bind:open={mergeOpen}
 		current={{
@@ -554,7 +575,7 @@
 	/>
 {/if}
 
-{#if detail}
+{#if detail && DeleteContactDialog}
 	<DeleteContactDialog
 		bind:open={confirmDeleteOpen}
 		full_name={detail.contact.full_name}

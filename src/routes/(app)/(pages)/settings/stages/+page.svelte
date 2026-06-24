@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import type { DndEvent } from 'svelte-dnd-action';
+	import { lazyDndzone } from '$lib/actions/lazyDndzone';
 	import { flip } from 'svelte/animate';
 	import { GripVertical, Plus, Pencil, Trash2, Star, Columns3, Lock } from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
-	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -426,6 +425,28 @@
 			deleting = false;
 		}
 	}
+
+	// Heavy pop-ups load only when first opened so the stage list paints instantly
+	// on click. One BottomSheet chunk serves the edit / create / move sheets.
+	let BottomSheet = $state<
+		typeof import('$lib/components/shared/BottomSheet.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (BottomSheet || !(editOpen || createOpen || moveSheetOpen)) return;
+		void import('$lib/components/shared/BottomSheet.svelte').then((m) => {
+			BottomSheet = m.default;
+		});
+	});
+
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (ConfirmDialog || !confirmDeleteOpen) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 </script>
 
 <svelte:head><title>Pipeline Stages — Settings</title></svelte:head>
@@ -522,7 +543,7 @@
 
 			<ul
 				class="flex flex-col gap-2"
-				use:dndzone={{
+				use:lazyDndzone={{
 					items: stages,
 					type: 'stage',
 					flipDurationMs: flipDuration,
@@ -630,6 +651,7 @@
 {/snippet}
 
 <!-- Edit sheet -->
+{#if BottomSheet}
 <BottomSheet bind:open={editOpen} title="Edit stage">
 	{#if editTarget}
 		<div class="mt-4 flex flex-col gap-4">
@@ -680,8 +702,10 @@
 		</div>
 	{/if}
 </BottomSheet>
+{/if}
 
 <!-- Create sheet -->
+{#if BottomSheet}
 <BottomSheet bind:open={createOpen} title="Add stage">
 	<div class="mt-4 flex flex-col gap-4">
 		<div class="flex flex-col gap-1.5">
@@ -759,8 +783,10 @@
 		</Button>
 	</div>
 </BottomSheet>
+{/if}
 
 <!-- Delete with move sheet (stage has open deals) -->
+{#if BottomSheet}
 <BottomSheet
 	bind:open={moveSheetOpen}
 	title="Move deals & delete stage"
@@ -798,17 +824,20 @@
 		</Button>
 	</div>
 </BottomSheet>
+{/if}
 
 <!-- Delete confirm (no open deals) -->
-<ConfirmDialog
-	bind:open={confirmDeleteOpen}
-	title="Delete stage"
-	description={deleteTarget ? `Delete "${deleteTarget.name}"? This can't be undone.` : ''}
-	confirmLabel="Delete"
-	variant="destructive"
-	loading={deleting}
-	onConfirm={() => performDelete(null)}
-/>
+{#if ConfirmDialog}
+	<ConfirmDialog
+		bind:open={confirmDeleteOpen}
+		title="Delete stage"
+		description={deleteTarget ? `Delete "${deleteTarget.name}"? This can't be undone.` : ''}
+		confirmLabel="Delete"
+		variant="destructive"
+		loading={deleting}
+		onConfirm={() => performDelete(null)}
+	/>
+{/if}
 
 {#snippet swatches(selected: string, onPick: (c: string) => void)}
 	<div class="flex flex-wrap gap-2">

@@ -12,7 +12,6 @@
 	import ContactListCard from '$lib/components/contacts/ContactListCard.svelte';
 	import ContactListKpiStrip from '$lib/components/contacts/ContactListKpiStrip.svelte';
 	import ContactTable from '$lib/components/contacts/ContactTable.svelte';
-	import DeletedContactsList from '$lib/components/contacts/DeletedContactsList.svelte';
 	import BulkActionBar from '$lib/components/contacts/BulkActionBar.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { contactsStore } from '$lib/stores/contacts.svelte';
@@ -29,8 +28,6 @@
 		X
 	} from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import ContactImportModal from '$lib/components/contacts/ContactImportModal.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	type StatusValue = 'all' | 'leads' | 'customers' | 'archived' | 'deleted';
@@ -94,6 +91,20 @@
 	const showSkeleton = $derived(status === 'loading' && items.length === 0);
 	const showError = $derived(status === 'error' && items.length === 0);
 	const isDeletedView = $derived(statusFilter === 'deleted');
+
+	// The recycle-bin list is only ever seen on the Deleted tab. Load it lazily so
+	// the contacts list paints without its chunk on the critical path — it fetches
+	// the moment the Deleted tab is opened and is cached thereafter.
+	let DeletedContactsList =
+		$state<typeof import('$lib/components/contacts/DeletedContactsList.svelte').default | null>(
+			null
+		);
+	$effect(() => {
+		if (!isDeletedView || DeletedContactsList) return;
+		void import('$lib/components/contacts/DeletedContactsList.svelte').then((m) => {
+			DeletedContactsList = m.default;
+		});
+	});
 
 	// Tab badge counts (Archived, Recycle Bin). Loaded once on mount and refreshed
 	// whenever the bin changes (restore / permanent delete).
@@ -284,6 +295,27 @@
 	// --- Import / Export ---
 	let importOpen = $state(false);
 
+	// The CSV import modal (drag-drop, column mapping, parsing) is heavy and only
+	// needed when the user chooses Import. Load it the first time they open it.
+	let ContactImportModal =
+		$state<typeof import('$lib/components/contacts/ContactImportModal.svelte').default | null>(null);
+	$effect(() => {
+		if (!importOpen || ContactImportModal) return;
+		void import('$lib/components/contacts/ContactImportModal.svelte').then((m) => {
+			ContactImportModal = m.default;
+		});
+	});
+
+	// The delete confirmation dialog only renders once a delete is requested.
+	let ConfirmDialog =
+		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!deleteDialogOpen || ConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
+
 	function triggerExport() {
 		const params = new URLSearchParams();
 		if (q.trim()) params.set('q', q.trim());
@@ -449,7 +481,11 @@
 				onAction={canCreate && !q.trim() ? () => goto('/contacts/new') : undefined}
 			/>
 		{:else if isDeletedView}
-			<DeletedContactsList {items} {canRestore} {canPurge} onChanged={onBinChanged} />
+			{#if DeletedContactsList}
+				<DeletedContactsList {items} {canRestore} {canPurge} onChanged={onBinChanged} />
+			{:else}
+				<SkeletonLoader lines={6} label="Loading recycle bin" />
+			{/if}
 			{#if nextCursor}
 				<div class="flex justify-center pt-2">
 					<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
@@ -537,9 +573,11 @@
 	/>
 {/if}
 
-<ContactImportModal bind:open={importOpen} onDone={onImportDone} />
+{#if ContactImportModal}
+	<ContactImportModal bind:open={importOpen} onDone={onImportDone} />
+{/if}
 
-{#if deleteTarget}
+{#if deleteTarget && ConfirmDialog}
 	<ConfirmDialog
 		bind:open={deleteDialogOpen}
 		title="Delete {deleteTarget.full_name}?"

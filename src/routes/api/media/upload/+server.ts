@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { media, jobs, quotes, invoices, contacts } from '$lib/server/db/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { media, jobs, quotes, invoices, contacts, opportunities } from '$lib/server/db/schema';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
+import { canViewOpportunity } from '$lib/server/pipeline/permissions';
 import { checkUploadRateLimit } from '$lib/server/media/rateLimiter';
 import { validateMagicBytes, isAllowedMimeType } from '$lib/server/media/mimeCheck';
 import { processImage } from '$lib/server/media/imageProcessor';
@@ -31,19 +32,29 @@ const ALLOWED_PURPOSE_TAGS = [
 	'quote_attachment',
 	'invoice_attachment',
 	'contact_attachment',
+	'opportunity_attachment',
 	'org_logo',
-	'contact_avatar'
+	'contact_avatar',
+	'org_signature',
+	'quote_line_item_photo',
+	'catalog_item_photo'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
 
 const JOB_PURPOSE_TAGS: PurposeTag[] = ['job_photo', 'before', 'after', 'marketing_asset'];
 
+// Max photos a single quote line item can carry (matches the client-side cap).
+const LINE_ITEM_PHOTO_CAP = 6;
+
 const uploadSchema = z.object({
 	purpose_tag: z.enum(ALLOWED_PURPOSE_TAGS),
 	contact_id: z.string().uuid().optional(),
+	opportunity_id: z.string().uuid().optional(),
 	job_id: z.string().uuid().optional(),
 	quote_id: z.string().uuid().optional(),
-	invoice_id: z.string().uuid().optional()
+	invoice_id: z.string().uuid().optional(),
+	// Binds a quote_line_item_photo to a specific quote line by its stable line_key.
+	line_key: z.string().uuid().optional()
 });
 
 export const POST: RequestHandler = async (event) => {
@@ -78,25 +89,38 @@ export const POST: RequestHandler = async (event) => {
 	const parsed = uploadSchema.safeParse({
 		purpose_tag: formData.get('purpose_tag'),
 		contact_id: formData.get('contact_id') || undefined,
+		opportunity_id: formData.get('opportunity_id') || undefined,
 		job_id: formData.get('job_id') || undefined,
 		quote_id: formData.get('quote_id') || undefined,
-		invoice_id: formData.get('invoice_id') || undefined
+		invoice_id: formData.get('invoice_id') || undefined,
+		line_key: formData.get('line_key') || undefined
 	});
 	if (!parsed.success) {
 		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
-	const { purpose_tag, contact_id, job_id, quote_id, invoice_id } = parsed.data;
+	const { purpose_tag, contact_id, opportunity_id, job_id, quote_id, invoice_id, line_key } =
+		parsed.data;
+	const isLineItemPhoto = purpose_tag === 'quote_line_item_photo';
 
 	const isOrgLogo = purpose_tag === 'org_logo';
+	const isOrgSignature = purpose_tag === 'org_signature';
+	// Org-scoped brand assets stored on the organizations row (logo_url / signature_image_url):
+	// admin-only, no parent FK, image-only.
+	const isOrgAsset = isOrgLogo || isOrgSignature;
 	const isContactAvatar = purpose_tag === 'contact_avatar';
-	// Both are small, square, image-only brand/profile assets with no parent FK.
-	const isImageAsset = isOrgLogo || isContactAvatar;
+	const isCatalogItemPhoto = purpose_tag === 'catalog_item_photo';
+	// All are small image-only brand/profile assets (5 MB image cap).
+	const isImageAsset = isOrgAsset || isContactAvatar || isCatalogItemPhoto;
 
-	// Permission gates differ by purpose: org logo is admin-only, contact avatar
-	// rides on contact-edit rights, everything else needs the generic upload gate.
-	if (isOrgLogo) {
+	// Permission gates differ by purpose: org logo/signature are admin-only, contact
+	// avatar rides on contact-edit rights, everything else needs the generic upload gate.
+	if (isOrgAsset) {
 		if (auth.member.role !== 'admin') {
-			error(403, 'Forbidden: admin role required to upload org logo');
+			error(403, 'Forbidden: admin role required to upload org branding');
+		}
+	} else if (isCatalogItemPhoto) {
+		if (!auth.member.can_edit_quotes) {
+			error(403, 'Forbidden: quote edit permission required to upload catalog images');
 		}
 	} else if (isContactAvatar) {
 		if (!auth.member.can_edit_contacts) {
@@ -130,13 +154,30 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	// Validate purpose_tag → parent FK requirements
-	if (isOrgLogo) {
-		// Org logo is org-scoped only — its r2_key is stored on organizations.logo_url.
-		// The media row must NOT carry a parent FK (DB CHECK enforces this).
-		if (contact_id || job_id || quote_id || invoice_id) {
-			return json({ error: 'org_logo uploads must not include a parent FK' }, { status: 422 });
+	if (isOrgAsset || isCatalogItemPhoto) {
+		// Org logo/signature and catalog item photos are org-scoped — r2_key stored on the
+		// owning row. The media row must NOT carry a parent FK (DB CHECK enforces).
+		if (contact_id || opportunity_id || job_id || quote_id || invoice_id) {
+			return json(
+				{ error: `${purpose_tag} uploads must not include a parent FK` },
+				{ status: 422 }
+			);
 		}
 	} else {
+		if (purpose_tag === 'opportunity_attachment') {
+			if (!opportunity_id) {
+				return json(
+					{ error: 'opportunity_id is required for opportunity_attachment' },
+					{ status: 422 }
+				);
+			}
+			if (contact_id || job_id || quote_id || invoice_id) {
+				return json(
+					{ error: 'opportunity_attachment must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
 		if (purpose_tag === 'contact_attachment' || isContactAvatar) {
 			// Both attach to a single contact. The avatar's r2_key is mirrored onto
 			// contacts.avatar_url; the media row carries contact_id so it satisfies the
@@ -154,15 +195,33 @@ export const POST: RequestHandler = async (event) => {
 		if (purpose_tag === 'quote_attachment' && !quote_id) {
 			return json({ error: 'quote_id is required for quote_attachment' }, { status: 422 });
 		}
+		if (isLineItemPhoto) {
+			// Photo bound to a specific quote line: parent is the quote, line_key pins the line.
+			if (!quote_id) {
+				return json({ error: 'quote_id is required for quote_line_item_photo' }, { status: 422 });
+			}
+			if (!line_key) {
+				return json({ error: 'line_key is required for quote_line_item_photo' }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || job_id || invoice_id) {
+				return json(
+					{ error: 'quote_line_item_photo must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
 		if (purpose_tag === 'invoice_attachment' && !invoice_id) {
 			return json({ error: 'invoice_id is required for invoice_attachment' }, { status: 422 });
 		}
 		if (JOB_PURPOSE_TAGS.includes(purpose_tag) && !job_id) {
 			return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
 		}
-		if (!contact_id && !job_id && !quote_id && !invoice_id) {
+		if (!contact_id && !opportunity_id && !job_id && !quote_id && !invoice_id) {
 			return json(
-				{ error: 'At least one of contact_id, job_id, quote_id, invoice_id is required' },
+				{
+					error:
+						'At least one of contact_id, opportunity_id, job_id, quote_id, invoice_id is required'
+				},
 				{ status: 422 }
 			);
 		}
@@ -187,6 +246,24 @@ export const POST: RequestHandler = async (event) => {
 			return json({ error: 'Contact not found' }, { status: 404 });
 		}
 	}
+	if (opportunity_id) {
+		const [o] = await db
+			.select({ id: opportunities.id, assigned_to: opportunities.assigned_to })
+			.from(opportunities)
+			.where(
+				and(
+					eq(opportunities.id, opportunity_id),
+					eq(opportunities.org_id, auth.orgId),
+					isNull(opportunities.deleted_at)
+				)
+			)
+			.limit(1);
+		// 404 (not 403) when the member can't see this deal — don't leak existence.
+		if (!o) return json({ error: 'Opportunity not found' }, { status: 404 });
+		if (!canViewOpportunity(auth.member, o)) {
+			return json({ error: 'Opportunity not found' }, { status: 404 });
+		}
+	}
 	if (job_id) {
 		const [j] = await db
 			.select({ id: jobs.id })
@@ -202,6 +279,27 @@ export const POST: RequestHandler = async (event) => {
 			.where(and(eq(quotes.id, quote_id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
 			.limit(1);
 		if (!q) return json({ error: 'Quote not found' }, { status: 404 });
+
+		// Enforce the per-line photo cap before spending an R2 round-trip.
+		if (isLineItemPhoto && line_key) {
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.quote_id, quote_id),
+						eq(media.line_key, line_key),
+						eq(media.purpose_tag, 'quote_line_item_photo'),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= LINE_ITEM_PHOTO_CAP) {
+				return json(
+					{ error: `Up to ${LINE_ITEM_PHOTO_CAP} photos per line item.` },
+					{ status: 422 }
+				);
+			}
+		}
 	}
 	if (invoice_id) {
 		const [inv] = await db
@@ -245,6 +343,11 @@ export const POST: RequestHandler = async (event) => {
 
 	const isPdf = detectedMime === 'application/pdf';
 	const isImage = !isPdf;
+
+	// Line item photos are images only — a PDF makes no sense as an inline line thumbnail.
+	if (isLineItemPhoto && !isImage) {
+		return json({ error: 'Line item photos must be an image (JPEG, PNG, WebP).' }, { status: 422 });
+	}
 
 	// Build R2 keys
 	const fileUuid = randomUUID();
@@ -314,9 +417,11 @@ export const POST: RequestHandler = async (event) => {
 					org_id: auth.orgId,
 					uploaded_by: auth.member.id,
 					contact_id: contact_id ?? null,
+					opportunity_id: opportunity_id ?? null,
 					job_id: job_id ?? null,
 					quote_id: quote_id ?? null,
 					invoice_id: invoice_id ?? null,
+					line_key: line_key ?? null,
 					r2_key: r2Key,
 					thumbnail_key: thumbnailKey,
 					web_key: webKey,

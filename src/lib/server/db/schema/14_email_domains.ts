@@ -88,6 +88,19 @@ export const emailDomains = pgTable(
 		dns_records: jsonb('dns_records').$type<EmailDnsRecord[]>(),
 		last_checked_at: timestamp('last_checked_at', { withTimezone: true }),
 		verified_at: timestamp('verified_at', { withTimezone: true }),
+		// Forwarding round-trip verification (Stage 1.3). The contractor sends a
+		// coded email to the inbox they configured forwarding on; if their forward
+		// rule works it returns through Brevo inbound, the processor matches the
+		// token, and the test flips to 'passed'. None of this creates contacts.
+		//   forward_test_status: null = never run | 'pending' | 'passed'.
+		//   "expired" is derived in the API (pending + sent_at older than 15 min).
+		forward_test_token: text('forward_test_token'),
+		// Inbox the verification email was sent to (display + audit). May differ from
+		// the admin's login email — orgs often forward from info@/support@.
+		forward_test_email: text('forward_test_email'),
+		forward_test_status: text('forward_test_status'),
+		forward_test_sent_at: timestamp('forward_test_sent_at', { withTimezone: true }),
+		forward_test_verified_at: timestamp('forward_test_verified_at', { withTimezone: true }),
 		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},

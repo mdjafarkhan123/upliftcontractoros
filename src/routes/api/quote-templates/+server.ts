@@ -81,7 +81,11 @@ export const POST: RequestHandler = async (event) => {
 					org_id: auth.orgId,
 					template_id: tpl.id,
 					description: li.description,
+					details: li.details?.trim() || null,
 					quantity: String(li.quantity),
+					unit: li.unit?.trim() || null,
+					section_label: li.section_label?.trim() || null,
+					is_optional: li.is_optional ?? false,
 					unit_price: String(li.unit_price),
 					total: computeLineTotal(li.quantity, li.unit_price),
 					position: li.position ?? idx

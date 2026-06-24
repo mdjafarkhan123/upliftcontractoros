@@ -4,7 +4,6 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import OpportunityDetailSheet from '$lib/components/pipeline/OpportunityDetailSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { getMemberContext } from '$lib/context/member';
 	import { ArrowLeft } from '@lucide/svelte';
@@ -50,9 +49,23 @@
 		})();
 	});
 
+	// The detail sheet is the only heavy component here — load it on demand so the
+	// page shell + skeleton paint instantly while the opportunity data fetches.
+	let OpportunityDetailSheet =
+		$state<typeof import('$lib/components/pipeline/OpportunityDetailSheet.svelte').default | null>(
+			null
+		);
+
 	let open = $state(false);
 	$effect(() => {
-		if (detail) open = true;
+		if (detail) {
+			open = true;
+			if (!OpportunityDetailSheet) {
+				void import('$lib/components/pipeline/OpportunityDetailSheet.svelte').then(
+					(m) => (OpportunityDetailSheet = m.default)
+				);
+			}
+		}
 	});
 
 	function close() {
@@ -79,7 +92,7 @@
 	{/if}
 </PageWrapper>
 
-{#if detail}
+{#if detail && OpportunityDetailSheet}
 	<OpportunityDetailSheet
 		bind:open
 		opportunity={detail}

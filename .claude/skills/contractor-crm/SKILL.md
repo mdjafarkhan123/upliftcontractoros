@@ -58,6 +58,7 @@ Before writing code for a specific domain, read the relevant reference file in
 | Any cross-domain query or multi-table join                                                                                                                                              | `references/12-cross-domain-map.md`              |
 | Know the project structure if needs                                                                                                                                                     | `references/project-structure.md`                |
 | Full project stack used                                                                                                                                                                 | `references/stack.md`                            |
+| Contractor list, target contractor                                                                                                                                                      | `references/contractor.md`                       |
 
 If the task spans multiple concerns (e.g. "record a payment" involves business rules
 for invoice status transitions AND automation for notification dispatch), read both.

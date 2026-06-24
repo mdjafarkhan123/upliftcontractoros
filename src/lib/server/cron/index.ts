@@ -24,6 +24,7 @@ import { runOpportunityFollowUpDueSweep } from './opportunityFollowUpDueSweep';
 import { runOpportunityStaleDigest } from './opportunityStaleDigest';
 import { runOpportunityArchiveSweep } from './opportunityArchiveSweep';
 import { runContactPurgeSweep } from './contactPurgeSweep';
+import { runSoftDeletePurgeSweep } from './softDeletePurgeSweep';
 import { runSmsMonthlyGrant } from './smsMonthlyGrant';
 import { runSmsMasterBalanceSync } from './smsMasterBalanceSync';
 
@@ -105,6 +106,7 @@ const JOBS: CronSpec[] = [
 	{ name: 'opportunity-stale-digest', schedule: '0 8 * * *', run: runOpportunityStaleDigest },
 	{ name: 'opportunity-archive-sweep', schedule: '45 3 * * *', run: runOpportunityArchiveSweep },
 	{ name: 'contact-purge-sweep', schedule: '15 3 * * *', run: runContactPurgeSweep },
+	{ name: 'soft-delete-purge-sweep', schedule: '45 3 * * *', run: runSoftDeletePurgeSweep },
 	{ name: 'sms-monthly-grant', schedule: '0 5 1 * *', run: runSmsMonthlyGrant },
 	{ name: 'sms-master-balance-sync', schedule: '*/15 * * * *', run: runSmsMasterBalanceSync }
 ];

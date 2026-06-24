@@ -4,7 +4,6 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -50,6 +49,17 @@
 	}
 
 	onMount(load);
+
+	// Archive confirm dialog — only needed once the user clicks the trash icon.
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (ConfirmDialog || !deleteOpen) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	async function create() {
 		if (!newTitle.trim() || !newBody.trim() || saving) return;
@@ -283,17 +293,19 @@
 		{/if}
 	</div>
 
-	<ConfirmDialog
-		bind:open={deleteOpen}
-		title="Archive quick reply"
-		description={deleteTarget
-			? `Archive "${deleteTarget.title}"? You can restore it later if needed.`
-			: ''}
-		confirmLabel="Archive"
-		variant="destructive"
-		loading={deleting}
-		onConfirm={() => {
-			if (deleteTarget) void remove(deleteTarget.id);
-		}}
-	/>
+	{#if ConfirmDialog}
+		<ConfirmDialog
+			bind:open={deleteOpen}
+			title="Archive quick reply"
+			description={deleteTarget
+				? `Archive "${deleteTarget.title}"? You can restore it later if needed.`
+				: ''}
+			confirmLabel="Archive"
+			variant="destructive"
+			loading={deleting}
+			onConfirm={() => {
+				if (deleteTarget) void remove(deleteTarget.id);
+			}}
+		/>
+	{/if}
 </PageWrapper>

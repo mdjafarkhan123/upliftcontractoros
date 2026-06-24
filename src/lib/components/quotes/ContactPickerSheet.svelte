@@ -2,7 +2,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
-	import { Loader2, User } from '@lucide/svelte';
+	import { AlertTriangle, Loader2, User } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	type ContactItem = { id: string; full_name: string; phone: string; email: string | null };
@@ -80,7 +80,16 @@
 							</div>
 							<div class="min-w-0 flex-1">
 								<p class="truncate text-sm font-medium">{c.full_name}</p>
-								<p class="truncate text-xs text-muted-foreground">{c.phone}</p>
+								<p class="truncate text-xs text-muted-foreground">
+									{c.phone}{c.email ? ` · ${c.email}` : ''}
+								</p>
+								{#if !c.email}
+									<p
+										class="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+									>
+										<AlertTriangle class="h-3 w-3 shrink-0" />No email
+									</p>
+								{/if}
 							</div>
 						</button>
 					{/each}

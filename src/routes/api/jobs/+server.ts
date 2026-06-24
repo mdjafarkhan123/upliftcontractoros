@@ -6,6 +6,7 @@ import {
 	contacts,
 	contactAddresses,
 	jobs,
+	jobLineItems,
 	orgMembers,
 	outboxEvents,
 	reviewRequests
@@ -13,6 +14,7 @@ import {
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewAnyJob } from '$lib/server/jobs/permissions';
 import { createJobSchema } from '$lib/server/jobs/schemas';
+import { computeLineTotal, recalcJobTotals } from '$lib/server/jobs/recalc';
 import { textMatch, textRank } from '$lib/server/search/textSearch';
 
 const PAGE_SIZE = 30;
@@ -254,17 +256,21 @@ export const POST: RequestHandler = async (event) => {
 	const now = new Date();
 	const status = input.status ?? 'scheduled';
 
+	const discountType = input.discount_type ?? 'none';
+
 	const created = await db.transaction(async (tx) => {
 		const [row] = await tx
 			.insert(jobs)
 			.values({
 				org_id: auth.orgId,
-				opportunity_id: null,
+				opportunity_id: input.opportunity_id ?? null,
 				source: 'manual',
 				contact_id: input.contact_id,
 				title: input.title,
 				status,
 				assigned_to: input.assigned_to ?? null,
+				job_type: input.job_type ?? null,
+				tags: input.tags ?? [],
 				scheduled_start: input.scheduled_start ?? null,
 				scheduled_end: input.scheduled_end ?? null,
 				scope_of_work: input.scope_of_work,
@@ -274,9 +280,41 @@ export const POST: RequestHandler = async (event) => {
 				service_address_city: input.service_address_city ?? primaryAddress?.city ?? null,
 				service_address_state: input.service_address_state ?? primaryAddress?.state ?? null,
 				service_address_zip: input.service_address_zip ?? primaryAddress?.zip ?? null,
+				// Pricing — recalcJobTotals computes subtotal/discount_amount/tax_amount/total
+				// from the inserted line items below.
+				tax_rate: input.tax_rate !== undefined ? String(input.tax_rate) : '0',
+				discount_type: discountType,
+				discount_value:
+					discountType !== 'none' && input.discount_value != null
+						? String(input.discount_value)
+						: null,
+				discount_amount: null,
+				discount_label: discountType !== 'none' ? input.discount_label?.trim() || null : null,
 				completed_at: status === 'completed' ? now : null
 			})
 			.returning();
+
+		if (input.line_items && input.line_items.length > 0) {
+			await tx.insert(jobLineItems).values(
+				input.line_items.map((li, idx) => ({
+					org_id: auth.orgId,
+					job_id: row.id,
+					// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
+					line_key: li.line_key ?? undefined,
+					description: li.description,
+					details: li.details?.trim() || null,
+					quantity: String(li.quantity),
+					unit: li.unit?.trim() || null,
+					section_label: li.section_label?.trim() || null,
+					unit_price: String(li.unit_price),
+					unit_cost: li.unit_cost != null ? String(li.unit_cost) : null,
+					source_catalog_item_id: li.source_catalog_item_id ?? null,
+					total: computeLineTotal(li.quantity, li.unit_price),
+					position: li.position ?? idx
+				}))
+			);
+			await recalcJobTotals(tx, row.id);
+		}
 
 		await tx.insert(outboxEvents).values({
 			org_id: auth.orgId,

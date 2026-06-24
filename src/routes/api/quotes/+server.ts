@@ -3,6 +3,7 @@ import { and, desc, eq, gt, inArray, isNull, lt, or, sql, type SQL } from 'drizz
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	contactAddresses,
 	contacts,
 	opportunities,
 	orgCounters,
@@ -167,6 +168,32 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 	if (!contactRow) return json({ error: 'Contact not found' }, { status: 422 });
 
+	// Service address must belong to this contact (and org). contact_addresses are
+	// soft-deleted, so only an active address is acceptable on a new quote.
+	if (input.service_address_id) {
+		const [addrRow] = await db
+			.select({ id: contactAddresses.id })
+			.from(contactAddresses)
+			.where(
+				and(
+					eq(contactAddresses.id, input.service_address_id),
+					eq(contactAddresses.contact_id, input.contact_id),
+					eq(contactAddresses.org_id, auth.orgId),
+					isNull(contactAddresses.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!addrRow) {
+			return json(
+				{
+					error: 'Service address does not belong to this contact',
+					field_errors: { service_address_id: 'Invalid address' }
+				},
+				{ status: 422 }
+			);
+		}
+	}
+
 	if (input.opportunity_id) {
 		const [oppRow] = await db
 			.select({ id: opportunities.id })
@@ -192,6 +219,14 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const created = await db.transaction(async (tx) => {
+		// Self-heal: legacy orgs created before org_counters was seeded at provisioning
+		// may have no counter row. Ensure one exists before locking so quote creation
+		// never hard-fails. next_quote_number/next_invoice_number default to 1, so a
+		// bare insert seeds the sequence correctly.
+		await tx.execute(sql`
+			INSERT INTO org_counters (org_id) VALUES (${auth.orgId})
+			ON CONFLICT (org_id) DO NOTHING
+		`);
 		const [counter] = await tx.execute<{ next_quote_number: number }>(sql`
 			SELECT next_quote_number FROM org_counters WHERE org_id = ${auth.orgId} FOR UPDATE
 		`);
@@ -208,19 +243,39 @@ export const POST: RequestHandler = async (event) => {
 			.values({
 				org_id: auth.orgId,
 				contact_id: input.contact_id,
+				service_address_id: input.service_address_id ?? null,
 				opportunity_id: input.opportunity_id ?? null,
 				issued_by: auth.member.id,
 				quote_number: quoteNumber,
 				title: input.title,
 				status: 'draft',
 				tax_rate: input.tax_rate !== undefined ? String(input.tax_rate) : '0',
-				deposit_required: input.deposit_required ?? false,
-				deposit_amount:
-					input.deposit_amount !== undefined && input.deposit_amount !== null
-						? String(input.deposit_amount)
+				discount_type: input.discount_type ?? 'none',
+				discount_value:
+					(input.discount_type ?? 'none') !== 'none' &&
+					input.discount_value !== undefined &&
+					input.discount_value !== null
+						? String(input.discount_value)
 						: null,
+				// recalcQuoteTotals computes the dollars-off after line items are inserted.
+				discount_amount: null,
+				discount_label:
+					(input.discount_type ?? 'none') !== 'none' ? input.discount_label?.trim() || null : null,
+				deposit_required: input.deposit_required ?? false,
+				deposit_type: input.deposit_type ?? 'fixed',
+				deposit_percent:
+					input.deposit_percent !== undefined && input.deposit_percent !== null
+						? String(input.deposit_percent)
+						: null,
+				deposit_amount:
+					(input.deposit_type ?? 'fixed') === 'percent'
+						? null // recalcQuoteTotals computes this after line items are inserted
+						: input.deposit_amount !== undefined && input.deposit_amount !== null
+							? String(input.deposit_amount)
+							: null,
 				notes: input.notes ?? null,
 				internal_notes: input.internal_notes ?? null,
+				expires_at: input.expires_at ?? null,
 				public_token_hash: randomPlaceholderHash()
 			})
 			.returning();
@@ -230,9 +285,18 @@ export const POST: RequestHandler = async (event) => {
 				input.line_items.map((li, idx) => ({
 					org_id: auth.orgId,
 					quote_id: inserted.id,
+					// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
+					line_key: li.line_key ?? undefined,
 					description: li.description,
+					details: li.details?.trim() || null,
 					quantity: String(li.quantity),
+					unit: li.unit?.trim() || null,
+					section_label: li.section_label?.trim() || null,
+					is_optional: li.is_optional ?? false,
 					unit_price: String(li.unit_price),
+					unit_cost:
+						li.unit_cost !== undefined && li.unit_cost !== null ? String(li.unit_cost) : null,
+					source_catalog_item_id: li.source_catalog_item_id ?? null,
 					total: computeLineTotal(li.quantity, li.unit_price),
 					position: li.position ?? idx
 				}))

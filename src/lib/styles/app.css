@@ -62,7 +62,7 @@
 @layer base {
 	/* ─── Light Mode (default) ────────────────────────────────────────── */
 	:root {
-		--background: 0 0% 100%;
+		--background: 0 0% 98%;
 		--sidebar: 220 14% 96%;
 		--card: 0 0% 100%;
 		--card-raised: 0 0% 98%;
@@ -126,9 +126,9 @@
 
 	/* ─── Dark Mode Override ──────────────────────────────────────────── */
 	.dark {
-		--background: 220 28% 5%;
+		--background: 200 15% 16%;
 		--sidebar: 220 22% 8%;
-		--card: 220 22% 11%;
+		--card: 200 22% 11%;
 		--card-raised: 220 18% 15%;
 		--popover: 220 22% 11%;
 		--muted: 220 16% 15%;
@@ -182,6 +182,12 @@
 		font-family: 'Geist', 'Inter', system-ui, sans-serif;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+		/* Always reserve the scrollbar's space at the viewport level. Without this, any
+		   overlay that locks page scroll (Popover, Select, Dialog, Sheet) removes the
+		   scrollbar and the whole page shifts sideways — the "screen jump". Reserving the
+		   gutter permanently keeps layout stable whether the scrollbar is shown or not.
+		   Root-level fix: applies to every overlay across the app, not one component. */
+		scrollbar-gutter: stable;
 	}
 
 	body {

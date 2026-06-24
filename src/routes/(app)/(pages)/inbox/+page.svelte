@@ -9,7 +9,6 @@
 	import InboxCommandBar from '$lib/components/inbox/InboxCommandBar.svelte';
 	import InboxInlineSummary from '$lib/components/inbox/InboxInlineSummary.svelte';
 	import InboxActiveFilters from '$lib/components/inbox/InboxActiveFilters.svelte';
-	import InboxThreadView from '$lib/components/inbox/InboxThreadView.svelte';
 	import ThreadEmptyState from '$lib/components/inbox/ThreadEmptyState.svelte';
 	import ConversationRow from '$lib/components/inbox/ConversationRow.svelte';
 	import { getMemberContext } from '$lib/context/member';
@@ -19,7 +18,7 @@
 		type AssigneeFilter,
 		type ThreadMessage
 	} from '$lib/stores/inbox.svelte';
-	import { createRealtimeManager } from '$lib/stores/realtimeReconnect';
+	import type { RealtimeManager } from '$lib/stores/realtimeReconnect';
 
 	let { data } = $props<{
 		data: {
@@ -98,6 +97,22 @@
 		}, 50);
 	});
 
+	// The thread view (Composer, MessageBubble, shadcn Sheet, supabase realtime) is
+	// the heavy half of the page but is only needed once a conversation is opened.
+	// Load it lazily so clicking the Inbox tab parses just the list UI and paints
+	// instantly — the thread chunk fetches on first open and is cached thereafter.
+	let ThreadView = $state<
+		typeof import('$lib/components/inbox/InboxThreadView.svelte').default | null
+	>(null);
+	let threadViewLoading = $state(false);
+	$effect(() => {
+		if (!selectedId || ThreadView || threadViewLoading) return;
+		threadViewLoading = true;
+		void import('$lib/components/inbox/InboxThreadView.svelte').then((m) => {
+			ThreadView = m.default;
+		});
+	});
+
 	const items = $derived(inboxStore.items);
 	const nextCursor = $derived(inboxStore.nextCursor);
 	const listStatus = $derived(inboxStore.listStatus);
@@ -164,39 +179,51 @@
 	onMount(() => {
 		if (!canView) return;
 		const orgId = member().org_id;
-		const manager = createRealtimeManager({
-			build: (supabase) =>
-				supabase
-					.channel(`inbox:org:${orgId}`)
-					.on(
-						'postgres_changes',
-						{
-							event: 'INSERT',
-							schema: 'public',
-							table: 'messages',
-							filter: `org_id=eq.${orgId}`
-						},
-						(payload: { new: ThreadMessage }) => {
-							inboxStore.applyRealtimeMessageInsert(payload.new);
-						}
-					)
-					.on(
-						'postgres_changes',
-						{
-							event: 'UPDATE',
-							schema: 'public',
-							table: 'messages',
-							filter: `org_id=eq.${orgId}`
-						},
-						(payload: { new: ThreadMessage }) => {
-							inboxStore.applyRealtimeMessageUpdate(payload.new);
-						}
-					),
-			onStatusChange: (c) => (isRealtimeConnected = c),
-			onPermanentFailure: () => (realtimeFailed = true),
-			onReconnect: () => inboxStore.revalidateList()
-		});
-		return () => manager.destroy();
+		let manager: RealtimeManager | null = null;
+		let destroyed = false;
+		// createRealtimeManager pulls in supabase-js (~205 KB). Import it lazily so the
+		// Inbox list paints without it on the critical path — it connects a beat later,
+		// invisible to the user (mirrors the app shell layout's pattern).
+		void (async () => {
+			const { createRealtimeManager } = await import('$lib/stores/realtimeReconnect');
+			if (destroyed) return;
+			manager = createRealtimeManager({
+				build: (supabase) =>
+					supabase
+						.channel(`inbox:org:${orgId}`)
+						.on(
+							'postgres_changes',
+							{
+								event: 'INSERT',
+								schema: 'public',
+								table: 'messages',
+								filter: `org_id=eq.${orgId}`
+							},
+							(payload: { new: ThreadMessage }) => {
+								inboxStore.applyRealtimeMessageInsert(payload.new);
+							}
+						)
+						.on(
+							'postgres_changes',
+							{
+								event: 'UPDATE',
+								schema: 'public',
+								table: 'messages',
+								filter: `org_id=eq.${orgId}`
+							},
+							(payload: { new: ThreadMessage }) => {
+								inboxStore.applyRealtimeMessageUpdate(payload.new);
+							}
+						),
+				onStatusChange: (c) => (isRealtimeConnected = c),
+				onPermanentFailure: () => (realtimeFailed = true),
+				onReconnect: () => inboxStore.revalidateList()
+			});
+		})();
+		return () => {
+			destroyed = true;
+			manager?.destroy();
+		};
 	});
 
 	const emptyTitle = $derived.by(() => {
@@ -375,7 +402,13 @@
 
 				<div class="hidden min-h-0 min-w-0 flex-1 lg:flex">
 					{#if selectedId}
-						<InboxThreadView conversationId={selectedId} showBackButton={false} fill />
+						{#if ThreadView}
+							<ThreadView conversationId={selectedId} showBackButton={false} fill />
+						{:else}
+							<div class="flex-1 p-4">
+								<SkeletonLoader lines={6} height="48px" label="Loading conversation" />
+							</div>
+						{/if}
 					{:else}
 						<ThreadEmptyState />
 					{/if}

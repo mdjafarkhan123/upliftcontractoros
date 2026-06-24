@@ -5,7 +5,6 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import ContactPickerSheet from '$lib/components/quotes/ContactPickerSheet.svelte';
 	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
 	import InvoiceTotalsCard from '$lib/components/invoices/InvoiceTotalsCard.svelte';
 	import { Calendar } from '$lib/components/ui/calendar';
@@ -52,6 +51,17 @@
 	});
 	const taxAmount = $derived(Math.round(subtotal * taxRateNum * 100) / 100);
 	const total = $derived(Math.round((subtotal + subtotal * taxRateNum) * 100) / 100);
+
+	// The contact picker sheet is click-gated — load it lazily so the form shell
+	// paints instantly; the chunk fetches the first time the picker opens.
+	let ContactPickerSheet =
+		$state<typeof import('$lib/components/quotes/ContactPickerSheet.svelte').default | null>(null);
+	$effect(() => {
+		if (!pickerOpen || ContactPickerSheet) return;
+		void import('$lib/components/quotes/ContactPickerSheet.svelte').then((m) => {
+			ContactPickerSheet = m.default;
+		});
+	});
 
 	async function save() {
 		fieldErrors = {};
@@ -215,11 +225,13 @@
 		</div>
 	</div>
 
-	<ContactPickerSheet
-		bind:open={pickerOpen}
-		onPick={(c) => {
-			selectedContact = c;
-			linkedJobId = null;
-		}}
-	/>
+	{#if ContactPickerSheet}
+		<ContactPickerSheet
+			bind:open={pickerOpen}
+			onPick={(c) => {
+				selectedContact = c;
+				linkedJobId = null;
+			}}
+		/>
+	{/if}
 </PageWrapper>

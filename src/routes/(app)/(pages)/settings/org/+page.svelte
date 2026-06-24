@@ -24,7 +24,13 @@
 		state: string | null;
 		zip: string | null;
 		primary_color: string | null;
+		tagline: string | null;
 		logo_url: string | null;
+		signature_block_enabled: boolean;
+		signature_name: string | null;
+		signature_title: string | null;
+		signature_statement: string | null;
+		signature_image_url: string | null;
 		google_review_link: string | null;
 		calendar_day_start_hour: number;
 		calendar_day_end_hour: number;
@@ -42,6 +48,11 @@
 		state: string;
 		zip: string;
 		primary_color: string;
+		tagline: string;
+		signature_block_enabled: boolean;
+		signature_name: string;
+		signature_title: string;
+		signature_statement: string;
 		google_review_link: string;
 		calendar_day_start_hour: number;
 		calendar_day_end_hour: number;
@@ -60,6 +71,11 @@
 			state: d.state ?? '',
 			zip: d.zip ?? '',
 			primary_color: d.primary_color ?? '',
+			tagline: d.tagline ?? '',
+			signature_block_enabled: d.signature_block_enabled,
+			signature_name: d.signature_name ?? '',
+			signature_title: d.signature_title ?? '',
+			signature_statement: d.signature_statement ?? '',
 			google_review_link: d.google_review_link ?? '',
 			calendar_day_start_hour: d.calendar_day_start_hour,
 			calendar_day_end_hour: d.calendar_day_end_hour,
@@ -112,6 +128,7 @@
 	let original = $state<OrgForm | null>(null);
 	let form = $state<OrgForm | null>(null);
 	let logoUrl = $state<string | null>(null);
+	let signatureImageUrl = $state<string | null>(null);
 	let loading = $state(true);
 	let saving = $state(false);
 	let fieldErrors = $state<Record<string, string>>({});
@@ -141,6 +158,7 @@
 			original = formed;
 			form = { ...formed };
 			logoUrl = body.data.logo_url;
+			signatureImageUrl = body.data.signature_image_url;
 		} finally {
 			loading = false;
 		}
@@ -158,6 +176,10 @@
 				'state',
 				'zip',
 				'primary_color',
+				'tagline',
+				'signature_name',
+				'signature_title',
+				'signature_statement',
 				'google_review_link'
 			]);
 			const payload: Record<string, unknown> = {};
@@ -193,6 +215,7 @@
 				original = formed;
 				form = { ...formed };
 				logoUrl = body.data.logo_url;
+				signatureImageUrl = body.data.signature_image_url;
 				sessionStore.invalidate();
 				void sessionStore.load(true);
 				toast.success('Organization settings saved');
@@ -487,6 +510,135 @@
 					<Label>Logo</Label>
 					<OrgLogoUploader currentLogoUrl={logoUrl} onChange={(next) => (logoUrl = next)} />
 				</div>
+
+				<div class="flex flex-col gap-1.5 md:col-span-2">
+					<Label for="tagline">Tagline</Label>
+					<Input
+						id="tagline"
+						bind:value={form.tagline}
+						placeholder="e.g. Licensed & Insured · Family-Owned Since 2009"
+						maxlength={120}
+					/>
+					{#if fieldErrors.tagline}
+						<p class="text-xs text-destructive">{fieldErrors.tagline}</p>
+					{:else}
+						<p class="text-xs text-muted-foreground">
+							A short line shown under your name on quotes and PDFs. Great for trust cues like
+							licensing, warranties, or years in business.
+						</p>
+					{/if}
+				</div>
+			</section>
+
+			<section class="flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-4">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<h3 class="text-sm font-semibold text-foreground">Quote signature</h3>
+						<p class="text-xs text-muted-foreground">
+							An "Authorized by" block stamped on the bottom of every quote your customer sees and
+							on the PDF. Set it once — it applies to all quotes. This is separate from the
+							customer's signature when they accept.
+						</p>
+					</div>
+					<label class="flex shrink-0 items-center gap-2 text-sm">
+						<input
+							type="checkbox"
+							class="h-4 w-4 rounded border-input accent-primary"
+							bind:checked={form.signature_block_enabled}
+						/>
+						<span class="text-muted-foreground">Show on quotes</span>
+					</label>
+				</div>
+
+				<div class={cn('grid gap-4 md:grid-cols-2', !form.signature_block_enabled && 'opacity-60')}>
+					<div class="flex flex-col gap-1.5">
+						<Label for="signature_name">
+							Authorizer name
+							{#if form.signature_block_enabled}<span class="text-destructive">*</span>{/if}
+						</Label>
+						<Input
+							id="signature_name"
+							bind:value={form.signature_name}
+							placeholder="e.g. John Smith"
+							maxlength={120}
+						/>
+						{#if fieldErrors.signature_name}
+							<p class="text-xs text-destructive">{fieldErrors.signature_name}</p>
+						{/if}
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<Label for="signature_title">Title</Label>
+						<Input
+							id="signature_title"
+							bind:value={form.signature_title}
+							placeholder="e.g. Owner"
+							maxlength={120}
+						/>
+						{#if fieldErrors.signature_title}
+							<p class="text-xs text-destructive">{fieldErrors.signature_title}</p>
+						{/if}
+					</div>
+
+					<div class="flex flex-col gap-1.5 md:col-span-2">
+						<Label for="signature_statement">Authorization line</Label>
+						<textarea
+							id="signature_statement"
+							bind:value={form.signature_statement}
+							maxlength={300}
+							rows={2}
+							placeholder="e.g. Prepared and authorized on behalf of Acme Fencing LLC."
+							class="resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+						></textarea>
+						{#if fieldErrors.signature_statement}
+							<p class="text-xs text-destructive">{fieldErrors.signature_statement}</p>
+						{:else}
+							<p class="text-xs text-muted-foreground">
+								Optional. A short line that appears under the name — great for an authorization or
+								warranty statement.
+							</p>
+						{/if}
+					</div>
+
+					<div class="flex flex-col gap-1.5 md:col-span-2">
+						<Label>Signature image (optional)</Label>
+						<OrgLogoUploader
+							currentLogoUrl={signatureImageUrl}
+							onChange={(next) => (signatureImageUrl = next)}
+							purposeTag="org_signature"
+							fieldKey="signature_image_url"
+							noun="signature"
+							helpText="Upload a scan or drawn signature. PNG with a transparent background looks best. Up to 5 MB."
+						/>
+					</div>
+				</div>
+
+				{#if form.signature_block_enabled && form.signature_name.trim()}
+					<div class="rounded-lg border border-dashed border-border bg-muted/30 p-4">
+						<p class="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+							Preview
+						</p>
+						<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+							Authorized by
+						</p>
+						{#if signatureImageUrl}
+							<img
+								src={signatureImageUrl}
+								alt="Signature"
+								class="mt-1.5 max-h-14 max-w-[220px] object-contain"
+							/>
+						{/if}
+						<p class="mt-1.5 text-sm font-semibold text-foreground">
+							{form.signature_name.trim()}{#if form.signature_title.trim()}<span
+									class="font-normal text-muted-foreground"
+								>
+									· {form.signature_title.trim()}</span
+								>{/if}
+						</p>
+						{#if form.signature_statement.trim()}
+							<p class="mt-1 text-xs text-muted-foreground">{form.signature_statement.trim()}</p>
+						{/if}
+					</div>
+				{/if}
 			</section>
 
 			<footer class="flex items-center justify-end gap-2 border-t border-border pt-4">

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import type { DndEvent } from 'svelte-dnd-action';
+	import { lazyDndzone } from '$lib/actions/lazyDndzone';
 	import { flip } from 'svelte/animate';
 	import { Plus } from '@lucide/svelte';
 	import OpportunityCard from './OpportunityCard.svelte';
@@ -106,7 +107,7 @@
 	<div class="relative flex-1 overflow-y-auto" style="touch-action: pan-y;">
 		<div
 			class="flex min-h-full flex-col gap-2 p-2"
-			use:dndzone={{
+			use:lazyDndzone={{
 				items,
 				type: 'opportunity',
 				dropTargetStyle: {},

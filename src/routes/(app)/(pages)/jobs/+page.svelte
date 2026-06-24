@@ -8,7 +8,6 @@
 	import JobCard from '$lib/components/jobs/JobCard.svelte';
 	import JobFilterTabs from '$lib/components/jobs/JobFilterTabs.svelte';
 	import JobStatsCards, { type JobStatsKey } from '$lib/components/jobs/JobStatsCards.svelte';
-	import NewJobSheet from '$lib/components/jobs/NewJobSheet.svelte';
 	import ListSearchBar from '$lib/components/shared/ListSearchBar.svelte';
 	import { jobsStore } from '$lib/stores/jobs.svelte';
 	import type { JobsFilterScope, JobsFilterStatus, JobsStats } from '$lib/types/jobs';
@@ -23,8 +22,6 @@
 	let scopeFilter = $state<JobsFilterScope | null>(null);
 	let searchValue = $state('');
 	let search = $state('');
-	let newOpen = $state(false);
-	let assignees = $state<{ id: string; full_name: string }[]>([]);
 	let stats = $state<JobsStats | null>(null);
 	let statsLoading = $state(true);
 
@@ -41,16 +38,8 @@
 		}
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		void loadStats();
-		// Deep link from the dashboard "Schedule job" quick action.
-		if (page.url.searchParams.get('new') === '1' && canCreate) newOpen = true;
-		if (!canCreate) return;
-		const res = await fetch('/api/contacts/assignees');
-		if (res.ok) {
-			const a = (await res.json()) as { assignees: { id: string; full_name: string }[] };
-			assignees = a.assignees;
-		}
 	});
 
 	const activeStatsKey = $derived<JobStatsKey | null>(
@@ -78,7 +67,7 @@
 	}
 
 	function openNewJob() {
-		newOpen = true;
+		goto('/jobs/new');
 	}
 
 	const contactId = $derived(page.url.searchParams.get('contact_id'));
@@ -215,11 +204,4 @@
 			{/if}
 		{/if}
 	</div>
-
-	<NewJobSheet
-		bind:open={newOpen}
-		{assignees}
-		canEditAssignee={canCreate}
-		onClose={() => (newOpen = false)}
-	/>
 </PageWrapper>

@@ -23,7 +23,7 @@
 			},
 			{
 				label: 'Schedule job',
-				href: '/jobs?new=1',
+				href: '/jobs/new',
 				icon: CalendarPlus,
 				show: member().can_view_full_pipeline
 			}

@@ -4,12 +4,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import LineItemEditor from './LineItemEditor.svelte';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quoteTemplatesStore } from '$lib/stores/quoteTemplates.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import { ArrowDown, ArrowUp, Plus, Trash2 } from '@lucide/svelte';
-	import type { QuoteTemplateDetail, QuoteTemplateLineDraft } from '$lib/types/quotes';
+	import type { QuoteTemplateDetail, QuoteLineDraft } from '$lib/types/quotes';
 
 	let {
 		open = $bindable(false),
@@ -25,16 +25,14 @@
 
 	let name = $state('');
 	let description = $state('');
-	let lineItems = $state<QuoteTemplateLineDraft[]>([]);
-	let draftDescription = $state('');
-	let draftQuantity = $state('1');
-	let draftUnitPrice = $state('');
+	let lineItems = $state<QuoteLineDraft[]>([]);
 	let loadingDetail = $state(false);
 	let saving = $state(false);
 	let fieldErrors = $state<Record<string, string>>({});
 
 	const subtotal = $derived(
 		lineItems.reduce((s, li) => {
+			if (li.is_optional) return s;
 			const q = Number(li.quantity);
 			const p = Number(li.unit_price);
 			if (!Number.isFinite(q) || !Number.isFinite(p)) return s;
@@ -46,9 +44,6 @@
 		name = '';
 		description = '';
 		lineItems = [];
-		draftDescription = '';
-		draftQuantity = '1';
-		draftUnitPrice = '';
 		fieldErrors = {};
 	}
 
@@ -78,58 +73,19 @@
 			lineItems = tpl.line_items.map((li) => ({
 				client_id: crypto.randomUUID(),
 				description: li.description,
+				details: li.details ?? null,
 				quantity: li.quantity,
+				unit: li.unit ?? '',
+				section_label: li.section_label ?? null,
+				is_optional: li.is_optional ?? false,
 				unit_price: li.unit_price
 			}));
-			draftDescription = '';
-			draftQuantity = '1';
-			draftUnitPrice = '';
 		} catch {
 			toast.error('Network error');
 			open = false;
 		} finally {
 			loadingDetail = false;
 		}
-	}
-
-	function addLineItem() {
-		const d = draftDescription.trim();
-		const q = Number(draftQuantity);
-		const p = Number(draftUnitPrice);
-		if (!d) return;
-		if (!Number.isFinite(q) || q <= 0) return;
-		if (!Number.isFinite(p) || p < 0) return;
-		lineItems = [
-			...lineItems,
-			{
-				client_id: crypto.randomUUID(),
-				description: d,
-				quantity: String(q),
-				unit_price: p.toFixed(2)
-			}
-		];
-		draftDescription = '';
-		draftQuantity = '1';
-		draftUnitPrice = '';
-	}
-
-	function removeItem(id: string) {
-		lineItems = lineItems.filter((li) => li.client_id !== id);
-	}
-
-	function updateField(id: string, patch: Partial<QuoteTemplateLineDraft>) {
-		lineItems = lineItems.map((li) => (li.client_id === id ? { ...li, ...patch } : li));
-	}
-
-	function moveItem(id: string, dir: -1 | 1) {
-		const idx = lineItems.findIndex((li) => li.client_id === id);
-		if (idx < 0) return;
-		const next = idx + dir;
-		if (next < 0 || next >= lineItems.length) return;
-		const copy = [...lineItems];
-		const [item] = copy.splice(idx, 1);
-		copy.splice(next, 0, item);
-		lineItems = copy;
 	}
 
 	async function save() {
@@ -142,7 +98,7 @@
 			const q = Number(li.quantity);
 			const p = Number(li.unit_price);
 			if (!li.description.trim()) {
-				toast.error('Every line item needs a description');
+				toast.error('Every line item needs a title');
 				return;
 			}
 			if (!Number.isFinite(q) || q <= 0) {
@@ -162,7 +118,11 @@
 				description: description.trim() || null,
 				line_items: lineItems.map((li, idx) => ({
 					description: li.description.trim(),
+					details: li.details?.trim() || null,
 					quantity: Number(li.quantity),
+					unit: li.unit?.trim() || null,
+					section_label: li.section_label?.trim() || null,
+					is_optional: li.is_optional ?? false,
 					unit_price: Number(li.unit_price),
 					position: idx
 				}))
@@ -228,121 +188,7 @@
 								{lineItems.length} item{lineItems.length === 1 ? '' : 's'}
 							</span>
 						</div>
-
-						{#each lineItems as li, idx (li.client_id)}
-							{@const lt =
-								Number.isFinite(Number(li.quantity)) && Number.isFinite(Number(li.unit_price))
-									? Math.round(Number(li.quantity) * Number(li.unit_price) * 100) / 100
-									: 0}
-							<div class="rounded-xl border border-border bg-card p-3">
-								<div class="space-y-2">
-									<Input
-										value={li.description}
-										placeholder="Description"
-										oninput={(e: Event) =>
-											updateField(li.client_id, {
-												description: (e.currentTarget as HTMLInputElement).value
-											})}
-									/>
-									<div class="grid grid-cols-12 items-center gap-2">
-										<div class="col-span-3">
-											<Input
-												type="number"
-												inputmode="decimal"
-												min="0"
-												step="0.01"
-												value={li.quantity}
-												oninput={(e: Event) =>
-													updateField(li.client_id, {
-														quantity: (e.currentTarget as HTMLInputElement).value
-													})}
-											/>
-										</div>
-										<div class="col-span-4">
-											<Input
-												type="number"
-												inputmode="decimal"
-												min="0"
-												step="0.01"
-												value={li.unit_price}
-												oninput={(e: Event) =>
-													updateField(li.client_id, {
-														unit_price: (e.currentTarget as HTMLInputElement).value
-													})}
-											/>
-										</div>
-										<div class="col-span-3 text-right text-sm font-medium tabular-nums">
-											{formatCurrency(lt)}
-										</div>
-										<div class="col-span-2 flex items-center justify-end gap-1">
-											<button
-												type="button"
-												class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40"
-												aria-label="Move up"
-												disabled={idx === 0}
-												onclick={() => moveItem(li.client_id, -1)}
-											>
-												<ArrowUp class="h-4 w-4" />
-											</button>
-											<button
-												type="button"
-												class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40"
-												aria-label="Move down"
-												disabled={idx === lineItems.length - 1}
-												onclick={() => moveItem(li.client_id, 1)}
-											>
-												<ArrowDown class="h-4 w-4" />
-											</button>
-											<button
-												type="button"
-												class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
-												aria-label="Remove line item"
-												onclick={() => removeItem(li.client_id)}
-											>
-												<Trash2 class="h-4 w-4" />
-											</button>
-										</div>
-									</div>
-								</div>
-							</div>
-						{/each}
-
-						<div class="rounded-xl border border-dashed border-border bg-card p-3">
-							<div class="space-y-2">
-								<Input bind:value={draftDescription} placeholder="Add a line item description" />
-								<div class="grid grid-cols-12 gap-2">
-									<div class="col-span-3">
-										<Input
-											type="number"
-											inputmode="decimal"
-											min="0"
-											step="0.01"
-											bind:value={draftQuantity}
-											placeholder="Qty"
-										/>
-									</div>
-									<div class="col-span-5">
-										<Input
-											type="number"
-											inputmode="decimal"
-											min="0"
-											step="0.01"
-											bind:value={draftUnitPrice}
-											placeholder="Unit price"
-										/>
-									</div>
-									<div class="col-span-4">
-										<Button
-											class="w-full"
-											disabled={!draftDescription.trim()}
-											onclick={addLineItem}
-										>
-											<Plus class="mr-1 h-4 w-4" />Add
-										</Button>
-									</div>
-								</div>
-							</div>
-						</div>
+						<LineItemEditor bind:lineItems enableOptional />
 					</div>
 				</div>
 			{/if}

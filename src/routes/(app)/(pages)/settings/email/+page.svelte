@@ -11,7 +11,9 @@
 		Pencil,
 		Trash2,
 		X,
-		Check
+		Check,
+		Inbox,
+		ArrowRight
 	} from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
@@ -326,6 +328,27 @@
 		{@const status = data.domain?.status}
 		{@const meta = status ? STATUS_META[status] : null}
 		<div class="flex flex-col gap-6">
+			<!-- Receive emails (forwarding) — links to the dedicated setup screen -->
+			<a
+				href="/settings/email/forwarding"
+				class="group flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-border hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+			>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+				>
+					<Inbox class="h-5 w-5" />
+				</div>
+				<div class="min-w-0 flex-1">
+					<h3 class="text-sm font-semibold text-foreground">Receive emails</h3>
+					<p class="text-xs text-muted-foreground">
+						Forward your inbox into the CRM so customer replies land in one place.
+					</p>
+				</div>
+				<ArrowRight
+					class="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5"
+				/>
+			</a>
+
 			<!-- Sending domain status -->
 			<section
 				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"

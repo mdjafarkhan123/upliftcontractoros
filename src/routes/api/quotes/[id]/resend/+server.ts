@@ -9,6 +9,7 @@ import { generateToken, hashToken } from '$lib/server/quotes/token';
 import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteSentEvent } from '$lib/server/quotes/events';
 import { snapshotQuoteVersion } from '$lib/server/quotes/versions';
+import { sendQuoteSchema } from '$lib/server/quotes/schemas';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -16,6 +17,55 @@ export const POST: RequestHandler = async (event) => {
 	if (!canSendQuote(auth.member)) error(403, 'Forbidden');
 
 	const id = event.params.id!;
+
+	// Optional channel/copy override (see /send). Bodyless = legacy default behaviour.
+	let send: import('$lib/server/quotes/schemas').SendQuoteInput | null = null;
+	try {
+		const raw = await event.request.json();
+		const parsed = sendQuoteSchema.safeParse(raw);
+		if (!parsed.success) {
+			const fieldErrors: Record<string, string> = {};
+			for (const issue of parsed.error.issues) {
+				const key = issue.path[0];
+				if (typeof key === 'string' && !fieldErrors[key]) fieldErrors[key] = issue.message;
+			}
+			return json(
+				{ error: 'Please fix the highlighted fields', field_errors: fieldErrors },
+				{ status: 422 }
+			);
+		}
+		send = parsed.data;
+	} catch {
+		send = null;
+	}
+
+	if (send) {
+		const [reach] = await db.execute<{ email: string | null; sms_opt_out: boolean }>(sql`
+			SELECT c.email, c.sms_opt_out
+			FROM quotes q JOIN contacts c ON c.id = q.contact_id
+			WHERE q.id = ${id} AND q.org_id = ${auth.orgId} AND q.deleted_at IS NULL
+		`);
+		if (reach) {
+			if (send.channels.includes('email') && !reach.email) {
+				return json(
+					{
+						error: 'This customer has no email address — choose Text instead.',
+						field_errors: { channels: 'No email on file for this customer' }
+					},
+					{ status: 422 }
+				);
+			}
+			if (send.channels.includes('sms') && reach.sms_opt_out) {
+				return json(
+					{
+						error: 'This customer opted out of texts — choose Email instead.',
+						field_errors: { channels: 'This customer opted out of texts' }
+					},
+					{ status: 422 }
+				);
+			}
+		}
+	}
 
 	const rawToken = generateToken();
 	const tokenHash = hashToken(rawToken);
@@ -46,7 +96,9 @@ export const POST: RequestHandler = async (event) => {
 		const wasChangesRequested = existing.status === 'changes_requested';
 		// A re-send out of changes_requested is a real revision → new version.
 		// A plain re-delivery of unchanged sent/viewed content keeps the same version.
-		const newVersion = wasChangesRequested ? existing.current_version + 1 : existing.current_version;
+		const newVersion = wasChangesRequested
+			? existing.current_version + 1
+			: existing.current_version;
 
 		await tx
 			.update(quotes)
@@ -98,7 +150,11 @@ export const POST: RequestHandler = async (event) => {
 				hasEmail: Boolean(contactRow?.email),
 				publicToken: rawToken,
 				totalFormatted: formatCurrencyUsd(existing.total),
-				quoteNumberDisplay: formatQuoteNumber(existing.quote_number)
+				quoteNumberDisplay: formatQuoteNumber(existing.quote_number),
+				channels: send?.channels ?? null,
+				smsBody: send?.sms_body ?? null,
+				emailSubject: send?.email_subject ?? null,
+				emailBody: send?.email_body ?? null
 			})
 		);
 

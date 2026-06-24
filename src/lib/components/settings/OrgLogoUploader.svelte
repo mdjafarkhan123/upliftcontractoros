@@ -6,11 +6,24 @@
 
 	let {
 		currentLogoUrl,
-		onChange
+		onChange,
+		purposeTag = 'org_logo',
+		fieldKey = 'logo_url',
+		noun = 'logo',
+		helpText = 'JPEG, PNG, or WebP. Up to 5 MB. Square images render best.'
 	}: {
 		currentLogoUrl: string | null;
 		onChange: (nextLogoUrl: string | null) => void;
+		/** Media purpose tag — drives the upload route's org-asset handling. */
+		purposeTag?: 'org_logo' | 'org_signature';
+		/** The organizations column this image is saved to via /api/settings/org. */
+		fieldKey?: 'logo_url' | 'signature_image_url';
+		/** Lowercase noun used in buttons/toasts (e.g. "logo", "signature"). */
+		noun?: string;
+		helpText?: string;
 	} = $props();
+
+	let nounTitle = $derived(noun.charAt(0).toUpperCase() + noun.slice(1));
 
 	const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 	const MAX_BYTES = 5 * 1024 * 1024;
@@ -41,7 +54,7 @@
 		return new Promise((resolve, reject) => {
 			const fd = new FormData();
 			fd.append('file', file);
-			fd.append('purpose_tag', 'org_logo');
+			fd.append('purpose_tag', purposeTag);
 
 			const xhr = new XMLHttpRequest();
 			xhr.open('POST', '/api/media/upload');
@@ -74,11 +87,11 @@
 
 	async function upload(file: File) {
 		if (!ALLOWED_MIME.includes(file.type)) {
-			toast.error('Logo must be a JPEG, PNG, or WebP image.');
+			toast.error(`${nounTitle} must be a JPEG, PNG, or WebP image.`);
 			return;
 		}
 		if (file.size > MAX_BYTES) {
-			toast.error('Logo exceeds 5 MB maximum.');
+			toast.error(`${nounTitle} exceeds 5 MB maximum.`);
 			return;
 		}
 
@@ -92,21 +105,22 @@
 			const res = await fetch('/api/settings/org', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ logo_url: mediaRow.id })
+				body: JSON.stringify({ [fieldKey]: mediaRow.id })
 			});
 			const body = (await res.json()) as {
-				data?: { logo_url: string | null };
+				data?: Record<string, string | null>;
 				error?: string;
 				field_errors?: Record<string, string>;
 			};
 			if (!res.ok || !body.data) {
-				toast.error(body.error ?? body.field_errors?.logo_url ?? 'Failed to save logo');
+				toast.error(body.error ?? body.field_errors?.[fieldKey] ?? `Failed to save ${noun}`);
 				previewUrl = null;
 				return;
 			}
-			onChange(body.data.logo_url);
-			void sessionStore.load(true);
-			toast.success('Logo updated');
+			onChange(body.data[fieldKey] ?? null);
+			// The logo also appears in the app shell (sidebar/header) via the session.
+			if (purposeTag === 'org_logo') void sessionStore.load(true);
+			toast.success(`${nounTitle} updated`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Upload failed');
 			previewUrl = null;
@@ -125,21 +139,21 @@
 			const res = await fetch('/api/settings/org', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ logo_url: null })
+				body: JSON.stringify({ [fieldKey]: null })
 			});
 			const body = (await res.json()) as {
-				data?: { logo_url: string | null };
+				data?: Record<string, string | null>;
 				error?: string;
 			};
 			if (!res.ok || !body.data) {
-				toast.error(body.error ?? 'Failed to remove logo');
+				toast.error(body.error ?? `Failed to remove ${noun}`);
 				return;
 			}
 			onChange(null);
-			void sessionStore.load(true);
-			toast.success('Logo removed');
+			if (purposeTag === 'org_logo') void sessionStore.load(true);
+			toast.success(`${nounTitle} removed`);
 		} catch {
-			toast.error('Failed to remove logo');
+			toast.error(`Failed to remove ${noun}`);
 		} finally {
 			removing = false;
 		}
@@ -152,14 +166,16 @@
 			class="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40"
 		>
 			{#if displayUrl}
-				<img src={displayUrl} alt="Organization logo" class="h-full w-full object-contain p-1.5" />
+				<img
+					src={displayUrl}
+					alt="Organization {noun}"
+					class="h-full w-full object-contain p-1.5"
+				/>
 			{:else}
-				<span class="text-[10px] uppercase tracking-wide text-muted-foreground">No logo</span>
+				<span class="text-[10px] uppercase tracking-wide text-muted-foreground">No {noun}</span>
 			{/if}
 			{#if uploading}
-				<div
-					class="absolute inset-0 flex items-center justify-center bg-background/70"
-				>
+				<div class="absolute inset-0 flex items-center justify-center bg-background/70">
 					<Loader2 class="h-5 w-5 animate-spin text-primary" />
 				</div>
 			{/if}
@@ -176,7 +192,7 @@
 					class="min-h-[44px]"
 				>
 					<Upload class="mr-1.5 h-4 w-4" />
-					{currentLogoUrl ? 'Replace logo' : 'Upload logo'}
+					{currentLogoUrl ? `Replace ${noun}` : `Upload ${noun}`}
 				</Button>
 				{#if currentLogoUrl && !uploading}
 					<Button
@@ -192,9 +208,7 @@
 					</Button>
 				{/if}
 			</div>
-			<p class="text-xs text-muted-foreground">
-				JPEG, PNG, or WebP. Up to 5 MB. Square images render best.
-			</p>
+			<p class="text-xs text-muted-foreground">{helpText}</p>
 			{#if uploading}
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 					<div

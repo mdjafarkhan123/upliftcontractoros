@@ -9,13 +9,22 @@
 	import ActiveAutomations from '$lib/components/automation/ActiveAutomations.svelte';
 	import LostReasonDialog from './LostReasonDialog.svelte';
 	import OpportunityQuotesSection from './OpportunityQuotesSection.svelte';
+	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import OpportunityActivitySection from './OpportunityActivitySection.svelte';
 	import OpportunityFollowUpPopover from './OpportunityFollowUpPopover.svelte';
 	import OpportunityFollowUpHistory from './OpportunityFollowUpHistory.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatCurrency, formatDate } from '$lib/utils/format';
 	import { SvelteMap } from 'svelte/reactivity';
-	import type { OpportunityDetail, OpportunityFollowUp, PipelineStageRow } from '$lib/types/pipeline';
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { cn } from '$lib/utils/cn';
+	import { Phone, MessageSquare, Mail } from '@lucide/svelte';
+	import type {
+		OpportunityDetail,
+		OpportunityFollowUp,
+		PipelineStageRow
+	} from '$lib/types/pipeline';
 	import { LOST_REASON_LABELS } from '$lib/types/pipeline';
 
 	type Assignee = { id: string; full_name: string };
@@ -43,6 +52,8 @@
 	const member = getMemberContext();
 	const canViewRevenue = $derived(member().can_view_revenue);
 	const canCreateQuotes = $derived(member().can_create_quotes);
+	const canViewFiles = $derived(member().can_view_all_files);
+	const canUploadFiles = $derived(member().can_upload_files);
 	const newQuoteHref = $derived(
 		`/quotes/new?opportunity_id=${opportunity.id}&contact_id=${opportunity.contact_id}`
 	);
@@ -52,6 +63,19 @@
 	let assignedTo = $derived(opportunity.assigned_to ?? '');
 	let stageId = $derived(opportunity.stage_id);
 	let expectedCloseDate = $derived(opportunity.expected_close_date ?? '');
+
+	let isDesktop = $state(false);
+
+	$effect(() => {
+		if (!browser) return;
+		const mq = window.matchMedia('(min-width: 1024px)');
+		isDesktop = mq.matches;
+		const handler = (e: MediaQueryListEvent) => {
+			isDesktop = e.matches;
+		};
+		mq.addEventListener('change', handler);
+		return () => mq.removeEventListener('change', handler);
+	});
 
 	let saving = $state(false);
 	let stageSaving = $state(false);
@@ -96,7 +120,7 @@
 	const isStale = $derived(staleAfter !== null && daysInStage >= staleAfter);
 
 	function openFollowUp() {
-		window.location.href = `/inbox?contact=${opportunity.contact_id}`;
+		goto(`/inbox?contact=${opportunity.contact_id}`);
 	}
 
 	async function saveFields() {
@@ -158,7 +182,12 @@
 		const res = await fetch(`/api/pipeline/opportunities/${opportunity.id}/status`, {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ status, request_id: crypto.randomUUID(), lost_reason, lost_reason_note })
+			body: JSON.stringify({
+				status,
+				request_id: crypto.randomUUID(),
+				lost_reason,
+				lost_reason_note
+			})
 		});
 		const body = await res.json().catch(() => ({}));
 		if (!res.ok) {
@@ -194,20 +223,54 @@
 </script>
 
 <Sheet.Root bind:open onOpenChange={(o) => !o && onClose()}>
-	<Sheet.Content side="bottom" class="max-h-[92vh] overflow-y-auto">
+	<Sheet.Content
+		side={isDesktop ? 'right' : 'bottom'}
+		class={cn('overflow-y-auto', isDesktop ? 'w-[520px] sm:max-w-[520px]' : 'max-h-[92vh]')}
+	>
 		<Sheet.Header>
-			<Sheet.Title>Opportunity</Sheet.Title>
+			<Sheet.Title>{opportunity.contact_name}</Sheet.Title>
+			<p class="text-sm text-muted-foreground">{opportunity.title}</p>
 		</Sheet.Header>
-
 
 		<div class="mt-4 space-y-5">
 			<div class="rounded-xl border border-border bg-muted/40 p-3">
 				<div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Contact</div>
-				<div class="mt-1 text-base font-semibold">{opportunity.contact_name}</div>
+				<a
+					href="/contacts/{opportunity.contact_id}"
+					class="mt-1 block text-base font-semibold text-foreground hover:text-primary hover:underline"
+				>
+					{opportunity.contact_name}
+				</a>
 				<div class="text-sm text-muted-foreground">{opportunity.contact_phone}</div>
 				{#if opportunity.contact_email}
 					<div class="text-sm text-muted-foreground">{opportunity.contact_email}</div>
 				{/if}
+				<div class="mt-3 flex flex-wrap gap-2">
+					<a
+						href="tel:{opportunity.contact_phone}"
+						class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						<Phone class="h-3.5 w-3.5 text-muted-foreground" />
+						Call
+					</a>
+					<button
+						type="button"
+						onclick={() => goto(`/inbox?contact=${opportunity.contact_id}`)}
+						class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						<MessageSquare class="h-3.5 w-3.5 text-muted-foreground" />
+						Text
+					</button>
+					{#if opportunity.contact_email}
+						<a
+							href="mailto:{opportunity.contact_email}"
+							class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+						>
+							<Mail class="h-3.5 w-3.5 text-muted-foreground" />
+							Email
+						</a>
+					{/if}
+				</div>
 			</div>
 
 			<div class="space-y-1.5">
@@ -307,7 +370,9 @@
 			{#if opportunity.status === 'lost' && opportunity.lost_reason}
 				<div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
 					<div class="text-xs font-medium uppercase tracking-wide text-rose-600">Lost reason</div>
-					<p class="mt-1 text-sm font-medium text-foreground">{LOST_REASON_LABELS[opportunity.lost_reason]}</p>
+					<p class="mt-1 text-sm font-medium text-foreground">
+						{LOST_REASON_LABELS[opportunity.lost_reason]}
+					</p>
 					{#if opportunity.lost_reason_note}
 						<p class="mt-1 text-sm text-muted-foreground">{opportunity.lost_reason_note}</p>
 					{/if}
@@ -327,6 +392,17 @@
 					contactId={opportunity.contact_id}
 					opportunityId={opportunity.id}
 					canCreate={canCreateQuotes}
+				/>
+			{/if}
+
+			{#if canViewFiles}
+				<AttachmentList
+					parentFk={{ opportunity_id: opportunity.id }}
+					purposeTag="opportunity_attachment"
+					title="Photos & Files"
+					uploadLabel="Add photos"
+					canUpload={canUploadFiles}
+					canDelete={canUploadFiles}
 				/>
 			{/if}
 

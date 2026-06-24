@@ -6,7 +6,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
-	import PermissionEditor from '$lib/components/team/PermissionEditor.svelte';
+	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { getMemberContext } from '$lib/context/member';
 	import { teamStore } from '$lib/stores/team.svelte';
@@ -41,6 +41,19 @@
 
 	$effect(() => {
 		permissions = getTemplate(role);
+	});
+
+	// The 40-toggle PermissionEditor is the heaviest chunk on this page. Load it
+	// after first render so the form shell paints instantly; it fetches a beat
+	// later behind a skeleton.
+	let PermissionEditor = $state<
+		typeof import('$lib/components/team/PermissionEditor.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (PermissionEditor) return;
+		void import('$lib/components/team/PermissionEditor.svelte').then((m) => {
+			PermissionEditor = m.default;
+		});
 	});
 
 	async function save(e: Event) {
@@ -248,7 +261,11 @@
 					</p>
 				</div>
 				<div class="px-5 py-5">
-					<PermissionEditor bind:permissions />
+					{#if PermissionEditor}
+						<PermissionEditor bind:permissions />
+					{:else}
+						<SkeletonLoader lines={6} label="Loading permissions" />
+					{/if}
 				</div>
 			</div>
 

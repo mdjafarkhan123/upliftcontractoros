@@ -55,7 +55,7 @@
 	const hasTitleRow = $derived(Boolean(title || actions || back));
 </script>
 
-<div class={cn('mx-auto w-full max-w-screen-xl px-4 py-4 md:px-6 md:py-6', className)}>
+<div class={cn('w-full px-4 py-4 md:px-6 md:py-6', className)}>
 	{#if hasTitleRow || showControls}
 		<header
 			class={cn(

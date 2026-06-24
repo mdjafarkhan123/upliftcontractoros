@@ -2,13 +2,11 @@
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
-	import PermissionEditor from '$lib/components/team/PermissionEditor.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { getMemberContext } from '$lib/context/member';
 	import { teamStore } from '$lib/stores/team.svelte';
@@ -75,6 +73,32 @@
 	let deactivateOpen = $state(false);
 	let deactivating = $state(false);
 	let deactivateCounts = $state<DeactivateCounts | null>(null);
+
+	// The 40-toggle PermissionEditor is the heaviest chunk on this page. Load it
+	// once the member record arrives so the shell + skeleton paint instantly on
+	// click; the editor fetches a beat later behind its own skeleton.
+	let PermissionEditor = $state<
+		typeof import('$lib/components/team/PermissionEditor.svelte').default | null
+	>(null);
+	let permissionEditorLoading = $state(false);
+	$effect(() => {
+		if (!target || PermissionEditor || permissionEditorLoading) return;
+		permissionEditorLoading = true;
+		void import('$lib/components/team/PermissionEditor.svelte').then((m) => {
+			PermissionEditor = m.default;
+		});
+	});
+
+	// Deactivate confirm dialog — only needed when the user clicks "Deactivate".
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (!deactivateOpen || ConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	const isSelf = $derived(target?.id === member().id);
 	const isTargetAdmin = $derived(target?.role === 'admin');
@@ -381,7 +405,11 @@
 					</p>
 				</div>
 				<div class="px-5 py-5">
-					<PermissionEditor bind:permissions readonly={!canEdit} />
+					{#if PermissionEditor}
+						<PermissionEditor bind:permissions readonly={!canEdit} />
+					{:else}
+						<SkeletonLoader lines={6} label="Loading permissions" />
+					{/if}
 				</div>
 			</div>
 
@@ -425,12 +453,14 @@
 	{/if}
 </PageWrapper>
 
-<ConfirmDialog
-	bind:open={deactivateOpen}
-	title="Deactivate {target?.full_name ?? 'team member'}?"
-	description="They will lose access immediately. Existing assignments are preserved and can be reassigned manually."
-	confirmLabel="Deactivate"
-	variant="destructive"
-	loading={deactivating}
-	onConfirm={confirmDeactivate}
-/>
+{#if ConfirmDialog}
+	<ConfirmDialog
+		bind:open={deactivateOpen}
+		title="Deactivate {target?.full_name ?? 'team member'}?"
+		description="They will lose access immediately. Existing assignments are preserved and can be reassigned manually."
+		confirmLabel="Deactivate"
+		variant="destructive"
+		loading={deactivating}
+		onConfirm={confirmDeactivate}
+	/>
+{/if}

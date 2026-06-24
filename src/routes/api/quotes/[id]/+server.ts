@@ -1,9 +1,12 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	contactAddresses,
 	contacts,
+	media,
+	outboxEvents,
 	quoteChangeRequests,
 	quoteLineItems,
 	quoteViews,
@@ -14,6 +17,7 @@ import { canDeleteQuote, canEditQuote, canViewAnyQuote } from '$lib/server/quote
 import { updateQuoteSchema } from '$lib/server/quotes/schemas';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { computeLineTotal, recalcQuoteTotals } from '$lib/server/quotes/recalc';
+import { assertAndIncrementUsage, BYTES_PER_GB } from '$lib/server/usage/assertAndIncrementUsage';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -29,13 +33,22 @@ export const GET: RequestHandler = async (event) => {
 			status: quotes.status,
 			current_version: quotes.current_version,
 			subtotal: quotes.subtotal,
+			discount_type: quotes.discount_type,
+			discount_value: quotes.discount_value,
+			discount_amount: quotes.discount_amount,
+			discount_label: quotes.discount_label,
 			tax_rate: quotes.tax_rate,
 			tax_amount: quotes.tax_amount,
 			total: quotes.total,
 			deposit_required: quotes.deposit_required,
+			deposit_type: quotes.deposit_type,
+			deposit_percent: quotes.deposit_percent,
 			deposit_amount: quotes.deposit_amount,
 			deposit_paid_amount: quotes.deposit_paid_amount,
 			deposit_paid_at: quotes.deposit_paid_at,
+			accepted_subtotal: quotes.accepted_subtotal,
+			accepted_tax_amount: quotes.accepted_tax_amount,
+			accepted_total: quotes.accepted_total,
 			notes: quotes.notes,
 			internal_notes: quotes.internal_notes,
 			expires_at: quotes.expires_at,
@@ -43,16 +56,27 @@ export const GET: RequestHandler = async (event) => {
 			viewed_at: quotes.viewed_at,
 			accepted_at: quotes.accepted_at,
 			declined_at: quotes.declined_at,
+			acceptance_signature_name: quotes.acceptance_signature_name,
+			acceptance_signed_at: quotes.acceptance_signed_at,
 			created_at: quotes.created_at,
 			updated_at: quotes.updated_at,
 			contact_id: quotes.contact_id,
 			contact_name: contacts.full_name,
 			contact_phone: contacts.phone,
 			contact_email: contacts.email,
-			opportunity_id: quotes.opportunity_id
+			contact_sms_opt_out: contacts.sms_opt_out,
+			opportunity_id: quotes.opportunity_id,
+			service_address_id: quotes.service_address_id,
+			addr_label: contactAddresses.label,
+			addr_line_1: contactAddresses.address_line_1,
+			addr_line_2: contactAddresses.address_line_2,
+			addr_city: contactAddresses.city,
+			addr_state: contactAddresses.state,
+			addr_zip: contactAddresses.zip
 		})
 		.from(quotes)
 		.innerJoin(contacts, eq(contacts.id, quotes.contact_id))
+		.leftJoin(contactAddresses, eq(contactAddresses.id, quotes.service_address_id))
 		.where(and(eq(quotes.id, id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
 		.limit(1);
 
@@ -61,9 +85,17 @@ export const GET: RequestHandler = async (event) => {
 	const lineItems = await db
 		.select({
 			id: quoteLineItems.id,
+			line_key: quoteLineItems.line_key,
 			description: quoteLineItems.description,
+			details: quoteLineItems.details,
 			quantity: quoteLineItems.quantity,
+			unit: quoteLineItems.unit,
+			section_label: quoteLineItems.section_label,
+			is_optional: quoteLineItems.is_optional,
+			accepted_selected: quoteLineItems.accepted_selected,
 			unit_price: quoteLineItems.unit_price,
+			unit_cost: quoteLineItems.unit_cost,
+			source_catalog_item_id: quoteLineItems.source_catalog_item_id,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
 		})
@@ -98,9 +130,25 @@ export const GET: RequestHandler = async (event) => {
 		)
 		.limit(1);
 
+	const { addr_label, addr_line_1, addr_line_2, addr_city, addr_state, addr_zip, ...quoteRow } =
+		row;
+	const service_address =
+		row.service_address_id && addr_line_1
+			? {
+					id: row.service_address_id,
+					label: addr_label!,
+					address_line_1: addr_line_1,
+					address_line_2: addr_line_2,
+					city: addr_city!,
+					state: addr_state!,
+					zip: addr_zip!
+				}
+			: null;
+
 	return json({
 		data: {
-			...row,
+			...quoteRow,
+			service_address,
 			quote_number_display: formatQuoteNumber(row.quote_number),
 			created_at: row.created_at.toISOString(),
 			updated_at: row.updated_at.toISOString(),
@@ -108,6 +156,8 @@ export const GET: RequestHandler = async (event) => {
 			viewed_at: row.viewed_at?.toISOString() ?? null,
 			accepted_at: row.accepted_at?.toISOString() ?? null,
 			declined_at: row.declined_at?.toISOString() ?? null,
+			acceptance_signature_name: row.acceptance_signature_name ?? null,
+			acceptance_signed_at: row.acceptance_signed_at?.toISOString() ?? null,
 			expires_at: row.expires_at?.toISOString() ?? null,
 			deposit_paid_at: row.deposit_paid_at?.toISOString() ?? null,
 			view_count: viewCount,
@@ -154,12 +204,14 @@ export const PATCH: RequestHandler = async (event) => {
 	const updated = await db.transaction(async (tx) => {
 		const [existing] = await tx.execute<{
 			id: string;
+			contact_id: string;
 			status: string;
 			tax_rate: string;
 			total: string;
 			deposit_paid_amount: number;
+			deposit_type: string;
 		}>(sql`
-			SELECT id, status, tax_rate, total, deposit_paid_amount FROM quotes
+			SELECT id, contact_id, status, tax_rate, total, deposit_paid_amount, deposit_type FROM quotes
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
@@ -173,26 +225,78 @@ export const PATCH: RequestHandler = async (event) => {
 		if (existing.deposit_paid_amount > 0) {
 			const financialChange =
 				input.tax_rate !== undefined ||
+				input.discount_type !== undefined ||
+				input.discount_value !== undefined ||
 				input.deposit_required !== undefined ||
+				input.deposit_type !== undefined ||
 				input.deposit_amount !== undefined ||
+				input.deposit_percent !== undefined ||
 				input.line_items !== undefined;
 			if (financialChange) {
 				throw error(422, 'Financial fields are locked after deposit collection');
 			}
 		}
 
-		// deposit_amount must be strictly less than the quote total.
-		if (input.deposit_required === true && input.deposit_amount != null) {
+		// For fixed-type deposits, pre-validate deposit_amount < total before recalc.
+		// Percent-type deposits are validated after recalcQuoteTotals computes deposit_amount.
+		const effectiveDepositType = input.deposit_type ?? existing.deposit_type ?? 'fixed';
+		if (
+			input.deposit_required === true &&
+			effectiveDepositType === 'fixed' &&
+			input.deposit_amount != null
+		) {
 			const total = Number(existing.total);
 			if (Number(input.deposit_amount) >= total) {
 				throw error(422, 'Deposit amount must be less than the quote total');
 			}
 		}
 
+		// Service address change: null clears it; a value must belong to this quote's contact.
+		if (input.service_address_id !== undefined) {
+			if (input.service_address_id === null) {
+				// cleared below
+			} else {
+				const [addrRow] = await tx
+					.select({ id: contactAddresses.id })
+					.from(contactAddresses)
+					.where(
+						and(
+							eq(contactAddresses.id, input.service_address_id),
+							eq(contactAddresses.contact_id, existing.contact_id),
+							eq(contactAddresses.org_id, auth.orgId),
+							isNull(contactAddresses.deleted_at)
+						)
+					)
+					.limit(1);
+				if (!addrRow) {
+					throw error(422, 'Service address does not belong to this contact');
+				}
+			}
+		}
+
 		const updates: Record<string, unknown> = { updated_at: new Date() };
 		if (input.title !== undefined) updates.title = input.title;
+		if (input.service_address_id !== undefined)
+			updates.service_address_id = input.service_address_id ?? null;
 		if (input.tax_rate !== undefined) updates.tax_rate = String(input.tax_rate);
+		if (input.discount_type !== undefined) {
+			updates.discount_type = input.discount_type;
+			// Clearing to 'none' wipes value/label; recalc then nulls discount_amount.
+			if (input.discount_type === 'none') {
+				updates.discount_value = null;
+				updates.discount_label = null;
+			}
+		}
+		if (input.discount_value !== undefined)
+			updates.discount_value = input.discount_value === null ? null : String(input.discount_value);
+		if (input.discount_label !== undefined)
+			updates.discount_label = input.discount_label?.trim() || null;
+		if (input.expires_at !== undefined) updates.expires_at = input.expires_at ?? null;
 		if (input.deposit_required !== undefined) updates.deposit_required = input.deposit_required;
+		if (input.deposit_type !== undefined) updates.deposit_type = input.deposit_type;
+		if (input.deposit_percent !== undefined)
+			updates.deposit_percent =
+				input.deposit_percent === null ? null : String(input.deposit_percent);
 		if (input.deposit_amount !== undefined)
 			updates.deposit_amount = input.deposit_amount === null ? null : String(input.deposit_amount);
 		if (input.notes !== undefined) updates.notes = input.notes;
@@ -210,16 +314,94 @@ export const PATCH: RequestHandler = async (event) => {
 					input.line_items.map((li, idx) => ({
 						org_id: auth.orgId,
 						quote_id: id,
+						// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
+						line_key: li.line_key ?? undefined,
 						description: li.description,
+						details: li.details?.trim() || null,
 						quantity: String(li.quantity),
+						unit: li.unit?.trim() || null,
+						section_label: li.section_label?.trim() || null,
+						is_optional: li.is_optional ?? false,
 						unit_price: String(li.unit_price),
+						unit_cost:
+							li.unit_cost !== undefined && li.unit_cost !== null ? String(li.unit_cost) : null,
+						source_catalog_item_id: li.source_catalog_item_id ?? null,
 						total: computeLineTotal(li.quantity, li.unit_price),
 						position: li.position ?? idx
 					}))
 				);
 			}
 			await recalcQuoteTotals(tx, id);
-		} else if (input.tax_rate !== undefined) {
+
+			// Reconcile per-line photos to the surviving lines. Any quote_line_item_photo
+			// whose line_key is no longer present (its line was removed) is orphaned — soft
+			// delete it, release its storage quota, and emit media.deleted so the worker
+			// removes the R2 objects (R2 deletion stays OUTSIDE this transaction, per the
+			// outbox pattern). When no lines remain, every line photo is orphaned.
+			const survivingKeys = input.line_items
+				.map((li) => li.line_key)
+				.filter((k): k is string => typeof k === 'string');
+			const orphans = await tx
+				.select({
+					id: media.id,
+					file_size_bytes: media.file_size_bytes,
+					r2_key: media.r2_key,
+					thumbnail_key: media.thumbnail_key,
+					web_key: media.web_key
+				})
+				.from(media)
+				.where(
+					and(
+						eq(media.quote_id, id),
+						eq(media.org_id, auth.orgId),
+						eq(media.purpose_tag, 'quote_line_item_photo'),
+						isNull(media.deleted_at),
+						survivingKeys.length > 0 ? notInArray(media.line_key, survivingKeys) : undefined
+					)
+				);
+
+			if (orphans.length > 0) {
+				const orphanIds = orphans.map((o) => o.id);
+				await tx
+					.update(media)
+					.set({ deleted_at: new Date(), updated_at: new Date() })
+					.where(inArray(media.id, orphanIds));
+
+				const freedBytes = orphans.reduce((sum, o) => sum + o.file_size_bytes, 0);
+				await assertAndIncrementUsage(tx, {
+					orgId: auth.orgId,
+					metric: 'storage_bytes',
+					limit: auth.limits.max_storage_gb * BYTES_PER_GB,
+					increment: -freedBytes
+				});
+
+				await tx
+					.insert(outboxEvents)
+					.values(
+						orphans.map((o) => ({
+							org_id: auth.orgId,
+							event_type: 'media.deleted',
+							resource_type: 'media',
+							resource_id: o.id,
+							payload: {
+								media_id: o.id,
+								org_id: auth.orgId,
+								r2_key: o.r2_key,
+								thumbnail_key: o.thumbnail_key,
+								web_key: o.web_key
+							},
+							idempotency_key: `media.deleted:${o.id}`
+						}))
+					)
+					.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+			}
+		} else if (
+			input.tax_rate !== undefined ||
+			input.discount_type !== undefined ||
+			input.discount_value !== undefined
+		) {
+			// Discount/tax changed without touching line items — still recompute the
+			// authoritative discount_amount/tax/total (and percent deposit).
 			await recalcQuoteTotals(tx, id);
 		}
 
@@ -244,12 +426,34 @@ export const DELETE: RequestHandler = async (event) => {
 	if (!canDeleteQuote(auth.member)) error(403, 'Forbidden');
 
 	const id = event.params.id!;
+
+	// Accepted quotes are signed agreements (often with a collected deposit or a converted
+	// invoice) — they are financial records and must not be deletable, even via direct API
+	// calls. The status check and soft-delete run in one statement so the guard is atomic.
 	const result = await db
 		.update(quotes)
 		.set({ deleted_at: new Date(), updated_at: new Date() })
-		.where(and(eq(quotes.id, id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
+		.where(
+			and(
+				eq(quotes.id, id),
+				eq(quotes.org_id, auth.orgId),
+				isNull(quotes.deleted_at),
+				sql`${quotes.status} <> 'accepted'`
+			)
+		)
 		.returning({ id: quotes.id });
 
-	if (result.length === 0) error(404, 'Quote not found');
+	if (result.length === 0) {
+		// Distinguish "blocked because accepted" from "genuinely not found" for a clear message.
+		const [existing] = await db
+			.select({ status: quotes.status })
+			.from(quotes)
+			.where(and(eq(quotes.id, id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
+			.limit(1);
+		if (existing?.status === 'accepted') {
+			return json({ error: 'Accepted quotes cannot be deleted' }, { status: 422 });
+		}
+		error(404, 'Quote not found');
+	}
 	return new Response(null, { status: 204 });
 };

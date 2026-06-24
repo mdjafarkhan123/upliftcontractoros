@@ -10,10 +10,6 @@
 	import InvoiceStatusBadge from '$lib/components/invoices/InvoiceStatusBadge.svelte';
 	import InvoiceTotalsCard from '$lib/components/invoices/InvoiceTotalsCard.svelte';
 	import PaymentHistory from '$lib/components/invoices/PaymentHistory.svelte';
-	import RecordPaymentDialog from '$lib/components/invoices/RecordPaymentDialog.svelte';
-	import PaymentLinkDialog from '$lib/components/invoices/PaymentLinkDialog.svelte';
-	import SendInvoiceDialog from '$lib/components/invoices/SendInvoiceDialog.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
@@ -223,6 +219,44 @@
 		}
 	}
 
+	// All four dialogs are click-gated — load them lazily so the invoice detail
+	// shell paints instantly; each chunk fetches the first time it opens.
+	let SendInvoiceDialog =
+		$state<typeof import('$lib/components/invoices/SendInvoiceDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!sendOpen || SendInvoiceDialog) return;
+		void import('$lib/components/invoices/SendInvoiceDialog.svelte').then((m) => {
+			SendInvoiceDialog = m.default;
+		});
+	});
+
+	let RecordPaymentDialog =
+		$state<typeof import('$lib/components/invoices/RecordPaymentDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!paymentOpen || RecordPaymentDialog) return;
+		void import('$lib/components/invoices/RecordPaymentDialog.svelte').then((m) => {
+			RecordPaymentDialog = m.default;
+		});
+	});
+
+	let PaymentLinkDialog =
+		$state<typeof import('$lib/components/invoices/PaymentLinkDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!linkOpen || PaymentLinkDialog) return;
+		void import('$lib/components/invoices/PaymentLinkDialog.svelte').then((m) => {
+			PaymentLinkDialog = m.default;
+		});
+	});
+
+	let ConfirmDialog =
+		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!cancelOpen || ConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
+
 	async function cancelInvoice() {
 		if (!invoice) return;
 		cancelling = true;
@@ -414,45 +448,53 @@
 			/>
 		</div>
 
-		<SendInvoiceDialog
-			bind:open={sendOpen}
-			invoiceId={inv.id}
-			invoiceNumberDisplay={inv.invoice_number_display}
-			total={inv.total}
-			amountDue={inv.amount_due}
-			contactName={inv.contact_name}
-			contactEmail={inv.contact_email}
-			contactPhone={inv.contact_phone}
-			dueDate={inv.due_date}
-			onSent={() => {
-				void refresh();
-			}}
-		/>
+		{#if SendInvoiceDialog}
+			<SendInvoiceDialog
+				bind:open={sendOpen}
+				invoiceId={inv.id}
+				invoiceNumberDisplay={inv.invoice_number_display}
+				total={inv.total}
+				amountDue={inv.amount_due}
+				contactName={inv.contact_name}
+				contactEmail={inv.contact_email}
+				contactPhone={inv.contact_phone}
+				dueDate={inv.due_date}
+				onSent={() => {
+					void refresh();
+				}}
+			/>
+		{/if}
 
-		<RecordPaymentDialog
-			bind:open={paymentOpen}
-			invoiceId={inv.id}
-			amountDue={inv.amount_due}
-			onRecorded={() => {
-				void refresh();
-			}}
-		/>
+		{#if RecordPaymentDialog}
+			<RecordPaymentDialog
+				bind:open={paymentOpen}
+				invoiceId={inv.id}
+				amountDue={inv.amount_due}
+				onRecorded={() => {
+					void refresh();
+				}}
+			/>
+		{/if}
 
-		<PaymentLinkDialog
-			bind:open={linkOpen}
-			invoiceId={inv.id}
-			existingUrl={inv.stripe_payment_link_url}
-		/>
+		{#if PaymentLinkDialog}
+			<PaymentLinkDialog
+				bind:open={linkOpen}
+				invoiceId={inv.id}
+				existingUrl={inv.stripe_payment_link_url}
+			/>
+		{/if}
 
-		<ConfirmDialog
-			bind:open={cancelOpen}
-			title="Cancel invoice?"
-			description="The customer will no longer be able to pay this invoice. This cannot be undone."
-			confirmLabel="Cancel invoice"
-			cancelLabel="Keep open"
-			variant="destructive"
-			loading={cancelling}
-			onConfirm={cancelInvoice}
-		/>
+		{#if ConfirmDialog}
+			<ConfirmDialog
+				bind:open={cancelOpen}
+				title="Cancel invoice?"
+				description="The customer will no longer be able to pay this invoice. This cannot be undone."
+				confirmLabel="Cancel invoice"
+				cancelLabel="Keep open"
+				variant="destructive"
+				loading={cancelling}
+				onConfirm={cancelInvoice}
+			/>
+		{/if}
 	</PageWrapper>
 {/if}

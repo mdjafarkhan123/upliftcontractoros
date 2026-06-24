@@ -2,10 +2,8 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import QuoteTemplateListItem from '$lib/components/quotes/QuoteTemplateListItem.svelte';
-	import TemplateEditorSheet from '$lib/components/quotes/TemplateEditorSheet.svelte';
 	import { quoteTemplatesStore } from '$lib/stores/quoteTemplates.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
@@ -71,6 +69,26 @@
 		toDelete = template;
 		confirmOpen = true;
 	}
+
+	// The editor sheet and delete-confirm dialog are click-gated — load them lazily
+	// so the templates list paints instantly; chunks fetch on first open.
+	let TemplateEditorSheet =
+		$state<typeof import('$lib/components/quotes/TemplateEditorSheet.svelte').default | null>(null);
+	$effect(() => {
+		if (!editorOpen || TemplateEditorSheet) return;
+		void import('$lib/components/quotes/TemplateEditorSheet.svelte').then((m) => {
+			TemplateEditorSheet = m.default;
+		});
+	});
+
+	let ConfirmDialog =
+		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	$effect(() => {
+		if (!confirmOpen || ConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	async function confirmDelete() {
 		if (!toDelete) return;
@@ -140,15 +158,19 @@
 		{/if}
 	</div>
 
-	<TemplateEditorSheet bind:open={editorOpen} templateId={editingId} />
+	{#if TemplateEditorSheet}
+		<TemplateEditorSheet bind:open={editorOpen} templateId={editingId} />
+	{/if}
 
-	<ConfirmDialog
-		bind:open={confirmOpen}
-		title="Delete this template?"
-		description="Existing quotes using this template will not be affected."
-		confirmLabel="Delete"
-		variant="destructive"
-		loading={deleting}
-		onConfirm={confirmDelete}
-	/>
+	{#if ConfirmDialog}
+		<ConfirmDialog
+			bind:open={confirmOpen}
+			title="Delete this template?"
+			description="Existing quotes using this template will not be affected."
+			confirmLabel="Delete"
+			variant="destructive"
+			loading={deleting}
+			onConfirm={confirmDelete}
+		/>
+	{/if}
 </PageWrapper>

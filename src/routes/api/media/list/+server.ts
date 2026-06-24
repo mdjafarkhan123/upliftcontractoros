@@ -2,8 +2,9 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { media, jobs, quotes, invoices, contacts } from '$lib/server/db/schema';
+import { media, jobs, quotes, invoices, contacts, opportunities } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
+import { canViewOpportunity } from '$lib/server/pipeline/permissions';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -15,13 +16,17 @@ export const GET: RequestHandler = async (event) => {
 
 	const { searchParams } = event.url;
 	const contactId = searchParams.get('contact_id');
+	const opportunityId = searchParams.get('opportunity_id');
 	const jobId = searchParams.get('job_id');
 	const quoteId = searchParams.get('quote_id');
 	const invoiceId = searchParams.get('invoice_id');
 
-	if (!contactId && !jobId && !quoteId && !invoiceId) {
+	if (!contactId && !opportunityId && !jobId && !quoteId && !invoiceId) {
 		return json(
-			{ error: 'At least one of contact_id, job_id, quote_id, invoice_id is required' },
+			{
+				error:
+					'At least one of contact_id, opportunity_id, job_id, quote_id, invoice_id is required'
+			},
 			{ status: 400 }
 		);
 	}
@@ -43,6 +48,24 @@ export const GET: RequestHandler = async (event) => {
 		// Don't leak existence to members without access to this contact.
 		if (!auth.member.can_view_all_contacts && c.assigned_to !== auth.member.id) {
 			return json({ error: 'Contact not found' }, { status: 404 });
+		}
+	}
+	if (opportunityId) {
+		const [o] = await db
+			.select({ id: opportunities.id, assigned_to: opportunities.assigned_to })
+			.from(opportunities)
+			.where(
+				and(
+					eq(opportunities.id, opportunityId),
+					eq(opportunities.org_id, auth.orgId),
+					isNull(opportunities.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!o) return json({ error: 'Opportunity not found' }, { status: 404 });
+		// Don't leak existence to members without access to this deal.
+		if (!canViewOpportunity(auth.member, o)) {
+			return json({ error: 'Opportunity not found' }, { status: 404 });
 		}
 	}
 	if (jobId) {
@@ -86,9 +109,12 @@ export const GET: RequestHandler = async (event) => {
 		isNull(media.deleted_at),
 		// Contact profile photos live in media but are surfaced via the avatar, not
 		// as an attachment in the Files tab.
-		ne(media.purpose_tag, 'contact_avatar')
+		ne(media.purpose_tag, 'contact_avatar'),
+		// Per-line quote photos are managed inline on each line item, not in the Files list.
+		ne(media.purpose_tag, 'quote_line_item_photo')
 	];
 	if (contactId) conditions.push(eq(media.contact_id, contactId));
+	if (opportunityId) conditions.push(eq(media.opportunity_id, opportunityId));
 	if (jobId) conditions.push(eq(media.job_id, jobId));
 	if (quoteId) conditions.push(eq(media.quote_id, quoteId));
 	if (invoiceId) conditions.push(eq(media.invoice_id, invoiceId));

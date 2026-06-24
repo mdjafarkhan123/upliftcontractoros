@@ -1,7 +1,7 @@
 export type AppointmentType = 'estimate' | 'job_start' | 'follow_up' | 'inspection' | 'other';
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 export type AppointmentView = 'list' | 'calendar';
-export type CalendarRange = 'day' | 'week';
+export type CalendarRange = 'day' | 'week' | 'month';
 
 export type BookingSource = 'internal' | 'booking_link';
 

@@ -9,6 +9,7 @@ import { generateToken, hashToken } from '$lib/server/quotes/token';
 import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteSentEvent } from '$lib/server/quotes/events';
 import { snapshotQuoteVersion } from '$lib/server/quotes/versions';
+import { sendQuoteSchema } from '$lib/server/quotes/schemas';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
@@ -18,6 +19,59 @@ export const POST: RequestHandler = async (event) => {
 	if (!canSendQuote(auth.member)) error(403, 'Forbidden');
 
 	const id = event.params.id!;
+
+	// Parse the optional channel/copy override. A bodyless POST (legacy) keeps the
+	// old behaviour: deliver on every available channel with the default copy.
+	let send: import('$lib/server/quotes/schemas').SendQuoteInput | null = null;
+	try {
+		const raw = await event.request.json();
+		const parsed = sendQuoteSchema.safeParse(raw);
+		if (!parsed.success) {
+			const fieldErrors: Record<string, string> = {};
+			for (const issue of parsed.error.issues) {
+				const key = issue.path[0];
+				if (typeof key === 'string' && !fieldErrors[key]) fieldErrors[key] = issue.message;
+			}
+			return json(
+				{ error: 'Please fix the highlighted fields', field_errors: fieldErrors },
+				{ status: 422 }
+			);
+		}
+		send = parsed.data;
+	} catch {
+		send = null;
+	}
+
+	// Pre-validate that the chosen channels are actually deliverable for this contact
+	// (clean field-error response). The authoritative send happens in the tx below;
+	// the worker also hard-blocks SMS on opt-out as a final safety net.
+	if (send) {
+		const [reach] = await db.execute<{ email: string | null; sms_opt_out: boolean }>(sql`
+			SELECT c.email, c.sms_opt_out
+			FROM quotes q JOIN contacts c ON c.id = q.contact_id
+			WHERE q.id = ${id} AND q.org_id = ${auth.orgId} AND q.deleted_at IS NULL
+		`);
+		if (reach) {
+			if (send.channels.includes('email') && !reach.email) {
+				return json(
+					{
+						error: 'This customer has no email address — choose Text instead.',
+						field_errors: { channels: 'No email on file for this customer' }
+					},
+					{ status: 422 }
+				);
+			}
+			if (send.channels.includes('sms') && reach.sms_opt_out) {
+				return json(
+					{
+						error: 'This customer opted out of texts — choose Email instead.',
+						field_errors: { channels: 'This customer opted out of texts' }
+					},
+					{ status: 422 }
+				);
+			}
+		}
+	}
 
 	const rawToken = generateToken();
 	const tokenHash = hashToken(rawToken);
@@ -84,7 +138,11 @@ export const POST: RequestHandler = async (event) => {
 				hasEmail: Boolean(contactRow?.email),
 				publicToken: rawToken,
 				totalFormatted: formatCurrencyUsd(existing.total),
-				quoteNumberDisplay: formatQuoteNumber(existing.quote_number)
+				quoteNumberDisplay: formatQuoteNumber(existing.quote_number),
+				channels: send?.channels ?? null,
+				smsBody: send?.sms_body ?? null,
+				emailSubject: send?.email_subject ?? null,
+				emailBody: send?.email_body ?? null
 			})
 		);
 

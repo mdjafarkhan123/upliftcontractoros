@@ -63,7 +63,7 @@ export const load = async ({ fetch }) => {
 };
 ```
 
-### +page.svelte — Renders instantly. Fetches data after mount.
+### +page.svelte — Renders instantly with skeleton loader. Make all import, Fetches data after mount.
 
 Page shell and skeleton render **before** any data arrives.
 Navigation completes immediately. Data fills in behind it.

@@ -15,12 +15,12 @@ description: >
 
 # Design Reference — Contractor Growth OS
 
-> Target aesthetic: **Clean, Modern, Premium SaaS — like Linear, Craft, Notion, Vercel (light)**
-> Clean white surfaces · Soft neutral grays · Barely-there borders · Breathing room whitespace
-> Stack: Svelte 5 · SvelteKit · shadcn-svelte · Tailwind CSS and custom CSS where needed
-> Mode: **Light-first with full dark parity**. The default experience is light mode.
-> Dark mode is a fully supported, equally polished alternative — not an afterthought.
-> Never use raw hex values — always use the semantic CSS variable tokens defined in `app.css`.
+> Target aesthetic: **Clean, Modern, Premium SaaS — like Linear, Vercel, Supabase, Craft, Notion**  
+> Clean surfaces · Soft neutral grays · Generous whitespace · Purposeful motion  
+> Stack: Svelte 5 · SvelteKit · shadcn-svelte · Tailwind CSS  
+> Primary font: **Anthropic Sans** (self-hosted) with Geist as fallback  
+> Mode: **Dark-first**, but both light and dark must always look correct  
+> Never use raw hex values — always use the semantic CSS variable tokens defined in `app.css`.  
 > If a new one-off color is truly needed, define it as a CSS variable in `app.css` first.
 
 ---
@@ -29,11 +29,12 @@ description: >
 
 | Task                                                         | Read first                            |
 | ------------------------------------------------------------ | ------------------------------------- |
-| Setting up `app.css`, color tokens, CSS variables            | `references/color-system.md`          |
-| Typography — Geist font, scale, hierarchy                    | `references/typography-and-motion.md` |
+| Setting up `app.css`, color tokens, CSS variables, shadows   | `references/color-system.md`          |
+| Typography — fonts, scale, hierarchy, number display         | `references/typography-and-motion.md` |
 | Motion, transitions, skeleton shimmer, animations            | `references/typography-and-motion.md` |
 | Card depth, surface layers, dialog blur, badge styles        | `references/component-aesthetics.md`  |
-| Desktop sidebar, sticky headers, command palette, page grids | `references/layout-patterns.md`       |
+| Shared components — PageWrapper, Badge, EmptyState, etc.     | `references/component-aesthetics.md`  |
+| Desktop sidebar, two-column layouts, sticky headers, grids   | `references/layout-patterns.md`       |
 
 When in doubt, read `references/color-system.md` first — every other file depends on it.
 
@@ -51,64 +52,55 @@ When in doubt, read `references/color-system.md` first — every other file depe
 ### What "Premium" Looks Like in Practice
 
 ```
-❌ Generic / wrong                     ✅ This project's standard
-─────────────────────────────────────────────────────────────────
-Dark zinc-900 card as default          White card, gray-50 sidebar, white content area
-Heavy visible borders everywhere       border-border/60 — barely visible, 1px, soft gray
-Default shadcn blue focus ring         Green focus ring (--ring token), 2px, ring-offset-background
-Flat colored status text               Badge with colored bg-/10 + text- + border-/20 trifecta
-No hover state on list rows            hover:bg-muted/60 with 150ms ease transition
-Instant state changes                  150ms ease-out on ALL interactive elements
-Sidebar same color as content          Sidebar bg-sidebar (gray-50), content bg-background (white)
-No section labels in sidebar           UPPERCASE · tracking-wider · text-xs section groups
-Plain nav items, no count badges       Nav item + ml-auto count pill in muted bg
-Full width content wall-to-wall        max-w content with px-6 breathing room
-Generic rectangles for KPI cards       Icon badge (rounded-lg, colored bg) + number + trend chip
-No table pattern                       Full data table: sortable headers + badges + progress bars
-No two-panel layout                    List-panel + detail-panel split for inbox/detail pages
-Generic skeleton                       Shimmer skeleton matching surface bg
-No empty state                         Designed EmptyState with icon + title + CTA button
+Page background:    bg-background (white / deep navy)
+Card surface:       bg-card + border border-border/60 + shadow-card
+Hover lift:         hover:shadow-dropdown hover:-translate-y-0.5
+Text hierarchy:     text-foreground (primary) > text-muted-foreground (secondary) — 2 levels max per card
+Radius:             rounded-xl on cards/panels, rounded-lg on inputs/buttons
+Primary action:     bg-primary (brand green) — one per view
+Borders:            border-border/60 at rest, border-border on focus/active
+Status color:       always via semantic Badge or status-dot — never raw colored text
+Empty state:        always EmptyState component — never blank whitespace
+Loading state:      always SkeletonLoader — never spinner-only for page content
+Desktop layout:     two-column on detail views (main content left, sidebar right)
+                    single-column list pages are fine — but never narrow on wide screens
 ```
 
 ---
 
-## Quick Token Reference (memorise these)
+## Quick Token Reference
 
 These are the most-used tokens. Full palette in `references/color-system.md`.
 
 ```
-Backgrounds:   bg-background · bg-card · bg-muted · bg-accent/50
-Text:          text-foreground · text-muted-foreground · text-primary
-Borders:       border-border · border-border/50 · border-white/5
-Primary:       bg-primary · text-primary · ring-primary/20
-Danger:        bg-destructive/10 · text-destructive · border-destructive/30
-Radius:        rounded-lg (cards) · rounded-md (inputs/buttons) · rounded-full (badges/avatars)
-Shadow:        shadow-card (default) · shadow-dropdown (hover lift) · shadow-modal (dialogs/modals)
+Backgrounds:  bg-background · bg-card · bg-card-raised · bg-muted · bg-accent/50 · bg-sidebar
+Text:         text-foreground · text-muted-foreground · text-primary · text-destructive
+Borders:      border-border · border-border/60 · border-border/40
+Primary:      bg-primary · text-primary · ring-primary/20
+Danger:       bg-destructive/10 · text-destructive · border-destructive/30
+Radius:       rounded-xl (cards/panels) · rounded-lg (inputs/buttons) · rounded-full (badges/avatars)
+Shadows:      shadow-card (default) · shadow-dropdown (hover lift) · shadow-modal (dialogs)
+Transitions:  transition-all duration-150 ease-out  (baseline for ALL interactive elements)
+Touch:        min-h-touch min-w-touch  (44px — Tailwind custom utility)
 ```
 
 ---
 
 ## Non-Negotiable Design Rules
 
-- **Light-first** — default experience is light mode. Dark mode is equally polished but secondary.
-  Never design dark-only. Always verify both modes render correctly.
-- **Sidebar ≠ content background** — sidebar always uses `bg-sidebar` (gray-50 in light),
-  content area uses `bg-background` (white). This split creates structural depth without shadows.
-- **Touch targets ≥ 44px** — `min-h-[44px]` on every interactive element.
+- Never design dark-only. Always verify both modes render correctly.
+- **Sidebar ≠ content background** — sidebar always uses `bg-sidebar` (gray-50 in light), content area uses `bg-background` (white). This split creates structural depth.
+- **Touch targets ≥ 44px** — use `min-h-touch` (custom Tailwind utility = 44px) on every interactive element.
 - **Transitions on all interactive elements** — `transition-all duration-150 ease-out` minimum.
 - **Hover + focus always paired** — never hover-only; always include `focus-visible:ring-2 focus-visible:ring-ring`.
-- **Never `alert()` or native dialogs** — use `ConfirmDialog` from shared components.
-- **Color conveys meaning** — green = brand/primary/success/active, red = danger/error, yellow/amber = warning,
-  sky/blue = informational. Never decorative color without semantic meaning.
+- **Never `alert()` or native `confirm()`** — use `ConfirmDialog` from shared components.
+- **Color conveys meaning** — green = brand/primary/success/active, red = danger/error, amber = warning, sky/blue = informational. Never decorative color without semantic meaning.
 - **Status always has a Badge** — never render raw status strings naked in the UI.
 - **Empty states are designed** — every list/table must have an `EmptyState` component.
 - **Loading states are designed** — every async operation shows `SkeletonLoader`.
-- **Destructive actions are confirmed** — `ConfirmDialog` with `variant="danger"`.
-- **Section labels in sidebar** — nav groups always have a label: uppercase, tracking-wider,
-  text-xs, text-muted-foreground. Never unlabelled groups.
-- **KPI cards use icon badges** — every stat card has a colored icon container
-  (rounded-lg, bg-primary/10 or colored variant) in the top-right corner.
-- **Tables have sortable header style** — `text-xs font-medium text-muted-foreground
-uppercase tracking-wider` for all table `<th>` elements.
-- **Borders are suggestions, not walls** — use `border-border/60` as the default.
-  Only use `border-border` (full opacity) for active/focus states and important dividers.
+- **Destructive actions are confirmed** — `ConfirmDialog` with `variant="destructive"`.
+- **Section labels in sidebar** — nav groups always have a label: uppercase, tracking-wider, text-xs, text-muted-foreground. Never unlabelled groups.
+- **KPI cards use icon badges** — every stat card has a colored icon container (rounded-lg, bg-primary/10 or colored variant).
+- **Tables have sortable header style** — `text-xs font-medium text-muted-foreground uppercase tracking-wider` for all `<th>` elements (or use `.data-table` CSS class from app.css).
+- **Borders are suggestions, not walls** — use `border-border/60` as the default. Only use `border-border` (full opacity) for active/focus states and important dividers.
+- **Detail pages are two-column on desktop** — contact, quote, invoice, job, appointment detail pages must use a two-column grid at `lg:` breakpoint. See `references/layout-patterns.md` for the exact pattern.

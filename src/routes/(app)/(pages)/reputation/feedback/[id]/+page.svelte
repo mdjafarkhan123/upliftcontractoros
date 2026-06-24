@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import StarRating from '$lib/components/reputation/StarRating.svelte';
@@ -31,6 +30,19 @@
 
 	let confirmOpen = $state(false);
 	let resolving = $state(false);
+
+	// Confirm dialog only opens on "Mark resolved" — lazy-load it.
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	let confirmDialogLoading = $state(false);
+	$effect(() => {
+		if (!confirmOpen || ConfirmDialog || confirmDialogLoading) return;
+		confirmDialogLoading = true;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	async function resolve() {
 		resolving = true;
@@ -128,13 +140,15 @@
 			{/if}
 		</article>
 
-		<ConfirmDialog
-			bind:open={confirmOpen}
-			title="Mark feedback resolved?"
-			description="This indicates you've followed up with the customer."
-			confirmLabel="Mark resolved"
-			loading={resolving}
-			onConfirm={resolve}
-		/>
+		{#if ConfirmDialog}
+			<ConfirmDialog
+				bind:open={confirmOpen}
+				title="Mark feedback resolved?"
+				description="This indicates you've followed up with the customer."
+				confirmLabel="Mark resolved"
+				loading={resolving}
+				onConfirm={resolve}
+			/>
+		{/if}
 	{/if}
 </PageWrapper>

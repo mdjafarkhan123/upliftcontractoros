@@ -77,5 +77,6 @@
 		featureAutomation={flags.feature_automation_engine}
 		featureOnlineBooking={flags.feature_online_booking}
 		canManagePipeline={m.can_manage_pipeline}
+		canViewCatalog={m.can_create_quotes || m.can_edit_quotes}
 	/>
 </PageWrapper>

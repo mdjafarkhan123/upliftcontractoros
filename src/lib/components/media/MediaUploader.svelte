@@ -13,7 +13,13 @@
 		disabled = false
 	}: {
 		purposeTag: string;
-		parentFk: { contact_id?: string; job_id?: string; quote_id?: string; invoice_id?: string };
+		parentFk: {
+			contact_id?: string;
+			opportunity_id?: string;
+			job_id?: string;
+			quote_id?: string;
+			invoice_id?: string;
+		};
 		label?: string;
 		onUploaded: (item: LocalMediaItem) => void;
 		onOptimisticAdd: (item: LocalMediaItem) => void;
@@ -60,6 +66,7 @@
 				formData.append('file', file);
 				formData.append('purpose_tag', purposeTag);
 				if (parentFk.contact_id) formData.append('contact_id', parentFk.contact_id);
+				if (parentFk.opportunity_id) formData.append('opportunity_id', parentFk.opportunity_id);
 				if (parentFk.job_id) formData.append('job_id', parentFk.job_id);
 				if (parentFk.quote_id) formData.append('quote_id', parentFk.quote_id);
 				if (parentFk.invoice_id) formData.append('invoice_id', parentFk.invoice_id);

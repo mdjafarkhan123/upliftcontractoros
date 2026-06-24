@@ -34,7 +34,11 @@ export const POST: RequestHandler = async (event) => {
 		const lineItems = await tx
 			.select({
 				description: quoteTemplateLineItems.description,
+				details: quoteTemplateLineItems.details,
 				quantity: quoteTemplateLineItems.quantity,
+				unit: quoteTemplateLineItems.unit,
+				section_label: quoteTemplateLineItems.section_label,
+				is_optional: quoteTemplateLineItems.is_optional,
 				unit_price: quoteTemplateLineItems.unit_price,
 				total: quoteTemplateLineItems.total,
 				position: quoteTemplateLineItems.position
@@ -65,7 +69,11 @@ export const POST: RequestHandler = async (event) => {
 					org_id: auth.orgId,
 					template_id: tpl.id,
 					description: li.description,
+					details: li.details,
 					quantity: li.quantity,
+					unit: li.unit,
+					section_label: li.section_label,
+					is_optional: li.is_optional,
 					unit_price: li.unit_price,
 					total: li.total,
 					position: idx

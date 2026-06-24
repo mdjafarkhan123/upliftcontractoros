@@ -212,6 +212,13 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const created = await db.transaction(async (tx) => {
+		// Self-heal: legacy orgs created before org_counters was seeded at provisioning
+		// may have no counter row. Ensure one exists before locking so invoice creation
+		// never hard-fails. Counters default to 1, so a bare insert seeds correctly.
+		await tx.execute(sql`
+			INSERT INTO org_counters (org_id) VALUES (${auth.orgId})
+			ON CONFLICT (org_id) DO NOTHING
+		`);
 		const [counter] = await tx.execute<{ next_invoice_number: number }>(sql`
 			SELECT next_invoice_number FROM org_counters WHERE org_id = ${auth.orgId} FOR UPDATE
 		`);
@@ -273,7 +280,12 @@ export const POST: RequestHandler = async (event) => {
 					and(
 						eq(quoteLineItems.quote_id, input.quote_id),
 						eq(quoteLineItems.org_id, auth.orgId),
-						isNull(quoteLineItems.deleted_at)
+						isNull(quoteLineItems.deleted_at),
+						// Required lines plus only the optional add-ons the customer accepted.
+						or(
+							eq(quoteLineItems.is_optional, false),
+							eq(quoteLineItems.accepted_selected, true)
+						)
 					)
 				)
 				.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));

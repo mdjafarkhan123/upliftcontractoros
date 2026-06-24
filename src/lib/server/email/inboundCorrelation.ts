@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { contacts, conversations, messages, type Conversation } from '$lib/server/db/schema';
 
@@ -6,10 +6,17 @@ const ALIAS_RE = /^r_[a-z0-9]{12}$/;
 
 export type CorrelationMatch = {
 	orgId: string;
-	conversation: Conversation;
-	contactId: string;
-	matchedBy: 'alias' | 'header' | 'contact_fallback';
+	conversation: Conversation | null;
+	contactId: string | null;
+	matchedBy: 'alias' | 'header' | 'contact_fallback' | 'new_contact';
 	createdConversation: boolean;
+	/**
+	 * Set only when matchedBy === 'new_contact': the sender is unknown, so the
+	 * processor must create this lead (in its own tx) before threading. Replaces
+	 * the old "drop unmatched" behavior so a brand-new lead emailing in is never
+	 * silently lost (forwarding path). contactId/conversation are null until then.
+	 */
+	newContact?: { fullName: string; email: string };
 };
 
 export type ParsedAddress = { name: string | null; address: string };
@@ -52,6 +59,14 @@ function messageIdVariants(id: string): string[] {
 	return [id, `<${id}>`];
 }
 
+/** Best display name for a new lead: header display name, else the email local part. */
+function deriveContactName(from: ParsedAddress): string {
+	if (from.name && from.name.trim()) return from.name.trim();
+	const at = from.address.indexOf('@');
+	const local = at > 0 ? from.address.slice(0, at) : '';
+	return local || from.address;
+}
+
 function extractAliasCandidates(toAndCc: ParsedAddress[]): string[] {
 	// Org is already known from the receiving domain, and the alias is scoped to
 	// that org by a unique index — so we accept any local part matching the alias
@@ -76,6 +91,8 @@ function extractAliasCandidates(toAndCc: ParsedAddress[]): string[] {
  *   1. reply_alias in any To/Cc local part (org-scoped)
  *   2. In-Reply-To / References → messages.email_provider_message_id (org-scoped)
  *   3. From address matches contacts.email; reuse open conversation or open a new one.
+ *   4. From address is unknown → signal the processor to create a new lead
+ *      (never drop). Returns matchedBy: 'new_contact' with newContact details.
  */
 export async function correlateInbound(input: {
 	orgId: string;
@@ -159,14 +176,34 @@ export async function correlateInbound(input: {
 	if (!input.from) return null;
 	const fromEmail = input.from.address;
 
+	// Case-insensitive match — fromEmail is already lowercased, so compare against
+	// lower(stored). A contact saved as "John@x.com" still threads a reply from
+	// "john@x.com" instead of spawning a duplicate lead.
 	const [contact] = await db
 		.select({ id: contacts.id })
 		.from(contacts)
 		.where(
-			and(eq(contacts.org_id, orgId), eq(contacts.email, fromEmail), isNull(contacts.deleted_at))
+			and(
+				eq(contacts.org_id, orgId),
+				eq(sql`lower(${contacts.email})`, fromEmail),
+				isNull(contacts.deleted_at)
+			)
 		)
 		.limit(1);
-	if (!contact) return null;
+
+	// 4. Unknown sender → create a new lead rather than dropping the email. The
+	// processor performs the insert in its own tx (atomic with conversation +
+	// message). Auto-responders / bulk mail are already filtered upstream.
+	if (!contact) {
+		return {
+			orgId,
+			conversation: null,
+			contactId: null,
+			matchedBy: 'new_contact',
+			createdConversation: true,
+			newContact: { fullName: deriveContactName(input.from), email: fromEmail }
+		};
+	}
 
 	// Reuse open conversation if any. Conversation creation is left to the
 	// processor's tx so the message insert is atomic with conversation creation;
@@ -197,7 +234,7 @@ export async function correlateInbound(input: {
 	// Signal to processor: org + contact known, but no open conversation yet.
 	return {
 		orgId,
-		conversation: null as unknown as Conversation,
+		conversation: null,
 		contactId: contact.id,
 		matchedBy: 'contact_fallback',
 		createdConversation: true

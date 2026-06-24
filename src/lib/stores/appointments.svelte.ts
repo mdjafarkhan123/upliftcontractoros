@@ -129,6 +129,32 @@ export const appointmentsStore = {
 	},
 
 	/**
+	 * Patch an appointment's schedule in-place across every cached filter slot so
+	 * a drag-to-move / drag-to-resize reflects instantly before the server confirms.
+	 * Returns the prior {scheduled_start, scheduled_end} so the caller can revert on
+	 * a failed PATCH (pass it straight back into optimisticUpdate). Null if not found.
+	 */
+	optimisticUpdate(
+		id: string,
+		patch: { scheduled_start: string; scheduled_end: string | null }
+	): { scheduled_start: string; scheduled_end: string | null } | null {
+		let prev: { scheduled_start: string; scheduled_end: string | null } | null = null;
+		for (const [key, entry] of cache) {
+			let changed = false;
+			const items = entry.items.map((it) => {
+				if (it.id !== id) return it;
+				if (!prev) {
+					prev = { scheduled_start: it.scheduled_start, scheduled_end: it.scheduled_end };
+				}
+				changed = true;
+				return { ...it, scheduled_start: patch.scheduled_start, scheduled_end: patch.scheduled_end };
+			});
+			if (changed) cache.set(key, { items, fetchedAt: entry.fetchedAt });
+		}
+		return prev;
+	},
+
+	/**
 	 * Warm the detail cache on hover / touch-start. Unlike loadDetail it never
 	 * aborts/restarts an in-flight request, so rapid hovers don't churn.
 	 */

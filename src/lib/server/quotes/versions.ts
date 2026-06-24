@@ -32,7 +32,11 @@ export async function snapshotQuoteVersion(
 	const items = await tx
 		.select({
 			description: quoteLineItems.description,
+			details: quoteLineItems.details,
 			quantity: quoteLineItems.quantity,
+			unit: quoteLineItems.unit,
+			section_label: quoteLineItems.section_label,
+			is_optional: quoteLineItems.is_optional,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
@@ -43,7 +47,11 @@ export async function snapshotQuoteVersion(
 
 	const lineItems: QuoteVersionLineItem[] = items.map((li) => ({
 		description: li.description,
+		details: li.details,
 		quantity: li.quantity,
+		unit: li.unit,
+		section_label: li.section_label,
+		is_optional: li.is_optional,
 		unit_price: li.unit_price,
 		total: li.total,
 		position: li.position

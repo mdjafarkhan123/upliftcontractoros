@@ -1,0 +1,2 @@
+ALTER TABLE "quotes" ADD COLUMN "offline_marked_by" uuid;--> statement-breakpoint
+ALTER TABLE "quotes" ADD CONSTRAINT "quotes_offline_marked_by_org_members_id_fk" FOREIGN KEY ("offline_marked_by") REFERENCES "public"."org_members"("id") ON DELETE no action ON UPDATE no action;

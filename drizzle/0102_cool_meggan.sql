@@ -1,0 +1,1 @@
+DROP INDEX "idx_contacts_org_email_lower";

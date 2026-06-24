@@ -12,6 +12,7 @@
 		MessageSquare,
 		Mail,
 		Columns3,
+		BookOpen,
 		Lock
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
@@ -21,12 +22,14 @@
 		role,
 		featureAutomation,
 		featureOnlineBooking,
-		canManagePipeline
+		canManagePipeline,
+		canViewCatalog
 	}: {
 		role: 'admin' | 'manager' | 'member';
 		featureAutomation: boolean;
 		featureOnlineBooking: boolean;
 		canManagePipeline: boolean;
+		canViewCatalog: boolean;
 	} = $props();
 
 	function isActive(href: string): boolean {
@@ -136,6 +139,16 @@
 			locked: false,
 			iconBg: 'bg-yellow-50 dark:bg-yellow-500/10',
 			iconColor: 'text-yellow-600 dark:text-yellow-400'
+		},
+		{
+			href: '/settings/catalog',
+			label: 'Price Book',
+			description: 'Reusable products, services, and pricing',
+			icon: BookOpen,
+			locked: !canViewCatalog,
+			lockedReason: !canViewCatalog ? 'No access' : undefined,
+			iconBg: 'bg-teal-50 dark:bg-teal-500/10',
+			iconColor: 'text-teal-600 dark:text-teal-400'
 		}
 	]);
 

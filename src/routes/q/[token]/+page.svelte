@@ -1,19 +1,40 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import QuoteDocumentView from '$lib/components/quotes/QuoteDocumentView.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import { Check, CreditCard, MessageSquare, X } from '@lucide/svelte';
+	import { Check, CreditCard, MessageSquare, PenLine, X } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import type { PublicQuoteView } from '$lib/types/quotes';
+	import { resolveBrandTheme } from '$lib/utils/brandColor';
 
 	let { data }: { data: { quote: PublicQuoteView | null } } = $props();
 
+	// Per-contractor branding: brand color (with readable-contrast fallback to app green)
+	// is exposed as CSS variables on the page wrapper so the CTA + accents pick it up.
+	const brand = $derived(resolveBrandTheme(data.quote?.org_primary_color ?? null));
+	const orgInitials = $derived(
+		(data.quote?.org_name ?? '?')
+			.split(/\s+/)
+			.filter(Boolean)
+			.map((w) => w[0])
+			.slice(0, 2)
+			.join('')
+			.toUpperCase()
+	);
+
 	const token = $derived(page.params.token);
+	// Once a quote is accepted, always render the read-only accepted view — regardless of
+	// whether the deposit has been paid. The accepted view's `owesDeposit` block handles the
+	// "deposit still owed" case, so the client returning to the link sees their accepted quote
+	// (and a pay-deposit prompt if applicable), never the Accept/Decline actions again.
 	const initialAction = $derived<'accepted' | 'declined' | 'changes_requested' | null>(
-		data.quote?.status === 'accepted' && data.quote.deposit_paid_amount > 0 ? 'accepted' : null
+		data.quote?.status === 'accepted' ? 'accepted' : null
 	);
 	let action = $state<'accepted' | 'declined' | 'changes_requested' | null>(null);
 	$effect(() => {
@@ -30,6 +51,19 @@
 	let changesError = $state<string | null>(null);
 	let depositError = $state<string | null>(null);
 	let isDesktop = $state(false);
+
+	// Signature step state
+	let signingStep = $state(false);
+	let signerName = $state('');
+	let signerNameError = $state<string | null>(null);
+	let confirmedSignerName = $state('');
+
+	// Optional add-on selections live here (the parent owns them) so the accept call can send the
+	// chosen ids; QuoteDocumentView renders the checkboxes and writes back through the binding.
+	let selectedOptional = $state<Record<string, boolean>>({});
+	const selectedOptionalIds = $derived(
+		Object.keys(selectedOptional).filter((k) => selectedOptional[k])
+	);
 
 	const owesDeposit = $derived(
 		data.quote != null &&
@@ -53,8 +87,6 @@
 	const alreadyChangesRequested = $derived(data.quote?.status === 'changes_requested');
 	const canTakeAction = $derived(data.quote && !alreadyChangesRequested && action === null);
 
-	const taxPct = $derived(data.quote ? (Number(data.quote.tax_rate) * 100).toFixed(2) + '%' : '0%');
-
 	const declineReasons = [
 		{ value: 'price', label: 'Price is too high' },
 		{ value: 'competitor', label: 'Going with someone else' },
@@ -63,15 +95,39 @@
 		{ value: 'other', label: 'Other' }
 	] as const;
 
-	async function acceptQuote() {
+	function startAccept() {
+		signerName = '';
+		signerNameError = null;
+		signingStep = true;
+	}
+
+	function cancelSign() {
+		signingStep = false;
+		signerName = '';
+		signerNameError = null;
+	}
+
+	async function submitAccept() {
+		const name = signerName.trim();
+		if (!name || name.length < 2) {
+			signerNameError = 'Please enter your full name to sign.';
+			return;
+		}
+		signerNameError = null;
 		busy = 'accept';
 		try {
-			const res = await fetch(`/q/${token}/accept`, { method: 'POST' });
+			const res = await fetch(`/q/${token}/accept`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ signer_name: name, selected_optional_ids: selectedOptionalIds })
+			});
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				action = null;
+				signerNameError = body.error ?? 'Could not submit. Please try again.';
 				return;
 			}
+			confirmedSignerName = name;
+			signingStep = false;
 			action = (body.data?.status as 'accepted') ?? null;
 		} finally {
 			busy = null;
@@ -168,7 +224,37 @@
 	>
 </svelte:head>
 
-<div class="min-h-screen bg-background px-4 py-8 md:py-16">
+{#snippet brandHeader(quote: PublicQuoteView)}
+	<div class="flex items-center gap-3">
+		{#if quote.org_logo_url}
+			<img
+				src={quote.org_logo_url}
+				alt={quote.org_name}
+				class="h-12 w-auto max-w-[150px] shrink-0 object-contain"
+			/>
+		{:else}
+			<div
+				class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold"
+				style="background-color: var(--brand); color: var(--brand-fg);"
+			>
+				{orgInitials}
+			</div>
+		{/if}
+		<div class="min-w-0">
+			<p class="truncate text-base font-semibold leading-tight text-foreground">
+				{quote.org_name}
+			</p>
+			{#if quote.org_tagline}
+				<p class="truncate text-xs text-muted-foreground">{quote.org_tagline}</p>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+<div
+	class="min-h-screen bg-background px-4 py-8 md:py-16"
+	style="--brand: {brand.accent}; --brand-fg: {brand.accentFg};"
+>
 	<div class="mx-auto max-w-xl">
 		{#if !data.quote}
 			<div class="rounded-2xl border border-border bg-card p-8 text-center">
@@ -179,16 +265,28 @@
 			</div>
 		{:else if action === 'accepted'}
 			<div class="space-y-4">
-				<div class="rounded-2xl border border-border bg-card p-8 text-center">
+				{@render brandHeader(data.quote)}
+				<!-- Accepted confirmation card -->
+				<div class="rounded-2xl border border-emerald-500/30 bg-card p-8 text-center">
 					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
+						class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15"
 					>
-						<Check class="h-6 w-6" />
+						<Check class="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
 					</div>
-					<h1 class="mt-4 text-lg font-semibold">Quote accepted</h1>
+					<h1 class="mt-4 text-xl font-bold tracking-tight">Quote accepted!</h1>
 					<p class="mt-2 text-sm text-muted-foreground">
-						Thanks! {data.quote.org_name} has been notified and will be in touch shortly.
+						{data.quote.org_name} has been notified and will be in touch shortly.
 					</p>
+					{#if confirmedSignerName}
+						<div
+							class="mt-5 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3"
+						>
+							<PenLine class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+							<p class="text-sm text-emerald-800 dark:text-emerald-300">
+								Signed by <span class="font-semibold">{confirmedSignerName}</span>
+							</p>
+						</div>
+					{/if}
 				</div>
 
 				{#if owesDeposit && data.quote.deposit_amount}
@@ -198,10 +296,11 @@
 							<p class="text-sm font-semibold">Deposit owed</p>
 						</div>
 						<p class="mt-2 text-sm text-amber-800/90 dark:text-amber-200/80">
-							A deposit of <span class="font-semibold"
-								>{formatCurrency(data.quote.deposit_amount)}</span
-							>
-							is requested to start. You can pay it now or later.
+							{data.quote.deposit_type === 'percent' && data.quote.deposit_percent
+								? `A ${Number(data.quote.deposit_percent).toFixed(0)}% deposit of`
+								: 'A deposit of'}
+							<span class="font-semibold">{formatCurrency(data.quote.deposit_amount)}</span> is requested
+							to start. You can pay it now or later.
 						</p>
 						{#if data.quote.deposit_payment_available}
 							<JetEngineButton
@@ -238,194 +337,202 @@
 				{/if}
 			</div>
 		{:else if action === 'declined'}
-			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<div
-					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
-				>
-					<X class="h-6 w-6" />
+			<div class="space-y-4">
+				{@render brandHeader(data.quote)}
+				<div class="rounded-2xl border border-border bg-card p-8 text-center">
+					<div
+						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
+					>
+						<X class="h-6 w-6" />
+					</div>
+					<h1 class="mt-4 text-lg font-semibold">Quote declined</h1>
+					<p class="mt-2 text-sm text-muted-foreground">
+						Thanks for letting us know. {data.quote.org_name} has been notified.
+					</p>
 				</div>
-				<h1 class="mt-4 text-lg font-semibold">Quote declined</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Thanks for letting us know. {data.quote.org_name} has been notified.
-				</p>
 			</div>
 		{:else if action === 'changes_requested'}
-			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<div
-					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
-				>
-					<MessageSquare class="h-6 w-6" />
+			<div class="space-y-4">
+				{@render brandHeader(data.quote)}
+				<div class="rounded-2xl border border-border bg-card p-8 text-center">
+					<div
+						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
+					>
+						<MessageSquare class="h-6 w-6" />
+					</div>
+					<h1 class="mt-4 text-lg font-semibold">Request received</h1>
+					<p class="mt-2 text-sm text-muted-foreground">
+						Thanks! {data.quote.org_name} will review your request and send an updated quote shortly.
+					</p>
 				</div>
-				<h1 class="mt-4 text-lg font-semibold">Request received</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Thanks! {data.quote.org_name} will review your request and send an updated quote shortly.
-				</p>
 			</div>
 		{:else}
-			<div class="space-y-6">
-				<header>
-					<p class="text-sm text-muted-foreground">{data.quote.org_name}</p>
-					<h1 class="mt-1 text-2xl font-semibold">Quote {data.quote.quote_number_display}</h1>
-					<p class="mt-1 text-sm text-muted-foreground">{data.quote.title}</p>
-				</header>
-
-				{#if alreadyChangesRequested}
-					<div
-						class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"
-					>
-						<p class="font-medium">Your change request was received</p>
-						<p class="mt-1 text-amber-700/90 dark:text-amber-300/80">
-							{data.quote.org_name} will review your request and send an updated quote shortly.
-						</p>
-					</div>
-				{/if}
-
-				<div class="rounded-2xl border border-border bg-card">
-					<div
-						class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground"
-					>
-						<div class="grid grid-cols-12">
-							<div class="col-span-7">Item</div>
-							<div class="col-span-2 text-right">Qty</div>
-							<div class="col-span-3 text-right">Amount</div>
-						</div>
-					</div>
-					<ul class="divide-y divide-border">
-						{#each data.quote.line_items as li (li.id)}
-							<li class="grid grid-cols-12 px-4 py-3 text-sm">
-								<div class="col-span-7">{li.description}</div>
-								<div class="col-span-2 text-right tabular-nums">{Number(li.quantity)}</div>
-								<div class="col-span-3 text-right tabular-nums">{formatCurrency(li.total)}</div>
-							</li>
-						{/each}
-					</ul>
-				</div>
-
-				<dl class="space-y-2 rounded-2xl border border-border bg-card p-4 text-sm">
-					<div class="flex justify-between">
-						<dt class="text-muted-foreground">Subtotal</dt>
-						<dd class="tabular-nums">{formatCurrency(data.quote.subtotal)}</dd>
-					</div>
-					<div class="flex justify-between">
-						<dt class="text-muted-foreground">Tax ({taxPct})</dt>
-						<dd class="tabular-nums">{formatCurrency(data.quote.tax_amount)}</dd>
-					</div>
-					<div class="flex justify-between border-t border-border pt-2 text-base font-semibold">
-						<dt>Total</dt>
-						<dd class="tabular-nums">{formatCurrency(data.quote.total)}</dd>
-					</div>
-					{#if data.quote.deposit_required && data.quote.deposit_amount}
-						<div
-							class="mt-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
-						>
-							A deposit of {formatCurrency(data.quote.deposit_amount)} is required to start.
-						</div>
-					{/if}
-				</dl>
-
-				{#if data.quote.notes}
-					<div class="rounded-2xl border border-border bg-card p-4 text-sm whitespace-pre-wrap">
-						{data.quote.notes}
-					</div>
-				{/if}
-
-				{#if canTakeAction}
-					<div class="space-y-2">
-						<JetEngineButton
-							class="min-h-[52px] w-full text-base"
-							label="Accept quote"
-							loadingLabel="Accepting…"
-							successLabel="Accepted"
-							state={busy === 'accept' ? 'loading' : 'idle'}
-							disabled={busy !== null && busy !== 'accept'}
-							onclick={acceptQuote}
-						>
-							{#snippet icon()}<Check class="h-5 w-5" />{/snippet}
-						</JetEngineButton>
-						<Button
-							variant="outline"
-							class="min-h-[44px] w-full"
-							onclick={openChanges}
-							disabled={busy !== null}
-						>
-							<MessageSquare class="mr-2 h-4 w-4" />Request changes
-						</Button>
-						{#if !confirmingDecline}
-							<Button
-								variant="ghost"
-								class="min-h-[44px] w-full text-muted-foreground"
-								onclick={() => (confirmingDecline = true)}
-								disabled={busy !== null}
-							>
-								Decline
-							</Button>
-						{:else}
-							<div class="rounded-xl border border-border bg-card p-4 text-sm">
-								<p class="font-medium">Why are you declining?</p>
-								<div class="mt-3 space-y-2">
-									{#each declineReasons as r (r.value)}
-										<label
-											class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+			<QuoteDocumentView quote={data.quote} bind:selectedOptional>
+				{#snippet actions()}
+					{#if canTakeAction}
+						<div class="space-y-2">
+							{#if signingStep}
+								<!-- E-signature card -->
+								<div class="rounded-2xl border border-primary/25 bg-card p-5 shadow-sm">
+									<!-- Header -->
+									<div class="mb-4 flex items-center gap-3">
+										<div
+											class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10"
 										>
-											<input
-												type="radio"
-												name="decline-reason"
-												value={r.value}
-												bind:group={declineReason}
-												disabled={busy !== null}
-												class="h-4 w-4 accent-primary"
+											<PenLine class="h-4.5 w-4.5 text-primary" />
+										</div>
+										<div>
+											<p class="text-sm font-semibold text-foreground">Sign to accept this quote</p>
+											<p class="text-xs text-muted-foreground">Your signature is legally binding</p>
+										</div>
+									</div>
+
+									<div class="space-y-4">
+										<div class="space-y-1.5">
+											<Label for="signer-name" class="text-sm font-medium">
+												Full name <span class="text-destructive">*</span>
+											</Label>
+											<Input
+												id="signer-name"
+												bind:value={signerName}
+												placeholder="e.g. Jane Smith"
+												autocomplete="name"
+												disabled={busy === 'accept'}
+												class="h-11 text-base"
+												oninput={() => (signerNameError = null)}
 											/>
-											<span>{r.label}</span>
-										</label>
-									{/each}
+											{#if signerNameError}
+												<p class="text-xs text-destructive">{signerNameError}</p>
+											{/if}
+										</div>
+
+										<p
+											class="rounded-lg bg-muted/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
+										>
+											By entering your name above and clicking <strong
+												class="font-medium text-foreground">"Sign & Accept"</strong
+											>, you confirm that you have read and agree to the terms and pricing in this
+											quote from
+											<span class="font-medium text-foreground">{data.quote?.org_name}</span>.
+										</p>
+
+										<div class="grid grid-cols-2 gap-2">
+											<Button
+												variant="outline"
+												class="min-h-[44px]"
+												onclick={cancelSign}
+												disabled={busy === 'accept'}
+											>
+												Cancel
+											</Button>
+											<JetEngineButton
+												class="bg-[color:var(--brand)] text-[color:var(--brand-fg)] hover:bg-[color:var(--brand)] hover:brightness-95"
+												label="Sign & Accept"
+												loadingLabel="Signing…"
+												successLabel="Signed!"
+												state={busy === 'accept' ? 'loading' : 'idle'}
+												disabled={busy !== null && busy !== 'accept'}
+												onclick={submitAccept}
+											>
+												{#snippet icon()}<PenLine class="h-4 w-4" />{/snippet}
+											</JetEngineButton>
+										</div>
+									</div>
 								</div>
-								{#if declineReason === 'other'}
-									<Textarea
-										rows={3}
-										maxlength={2000}
-										placeholder="Tell us a bit more (optional)"
-										bind:value={declineNote}
-										disabled={busy !== null}
-										class="mt-3"
-									/>
-								{/if}
-								{#if declineError}
-									<p class="mt-2 text-xs text-destructive">{declineError}</p>
-								{/if}
-								<div class="mt-3 grid grid-cols-2 gap-2">
+							{:else}
+								<JetEngineButton
+									class="min-h-[52px] w-full bg-[color:var(--brand)] text-base text-[color:var(--brand-fg)] shadow-card transition-all hover:bg-[color:var(--brand)] hover:brightness-95"
+									label="Accept quote"
+									loadingLabel="Accepting…"
+									successLabel="Accepted"
+									state="idle"
+									disabled={busy !== null}
+									onclick={startAccept}
+								>
+									{#snippet icon()}<Check class="h-5 w-5" />{/snippet}
+								</JetEngineButton>
+							{/if}
+
+							{#if !signingStep}
+								<Button
+									variant="outline"
+									class="min-h-[44px] w-full"
+									onclick={openChanges}
+									disabled={busy !== null}
+								>
+									<MessageSquare class="mr-2 h-4 w-4" />Request changes
+								</Button>
+								{#if !confirmingDecline}
 									<Button
-										variant="outline"
-										class="min-h-[44px]"
-										onclick={() => {
-											confirmingDecline = false;
-											declineError = null;
-										}}
+										variant="ghost"
+										class="min-h-[44px] w-full text-muted-foreground"
+										onclick={() => (confirmingDecline = true)}
 										disabled={busy !== null}
 									>
-										Cancel
+										Decline
 									</Button>
-									<JetEngineButton
-										variant="destructive"
-										label="Confirm decline"
-										loadingLabel="Declining…"
-										successLabel="Declined"
-										state={busy === 'decline' ? 'loading' : 'idle'}
-										disabled={(busy !== null && busy !== 'decline') || !declineReason}
-										onclick={submitDecline}
-									/>
-								</div>
-							</div>
-						{/if}
-					</div>
-				{/if}
-
-				<p class="text-center text-xs text-muted-foreground">
-					This quote was sent to you by {data.quote.org_name}.
-					{#if data.quote.expires_at}
-						It expires {new Date(data.quote.expires_at).toLocaleDateString('en-US')}.
+								{:else}
+									<div class="rounded-xl border border-border bg-card p-4 text-sm">
+										<p class="font-medium">Why are you declining?</p>
+										<div class="mt-3 space-y-2">
+											{#each declineReasons as r (r.value)}
+												<label
+													class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+												>
+													<input
+														type="radio"
+														name="decline-reason"
+														value={r.value}
+														bind:group={declineReason}
+														disabled={busy !== null}
+														class="h-4 w-4 accent-primary"
+													/>
+													<span>{r.label}</span>
+												</label>
+											{/each}
+										</div>
+										{#if declineReason === 'other'}
+											<Textarea
+												rows={3}
+												maxlength={2000}
+												placeholder="Tell us a bit more (optional)"
+												bind:value={declineNote}
+												disabled={busy !== null}
+												class="mt-3"
+											/>
+										{/if}
+										{#if declineError}
+											<p class="mt-2 text-xs text-destructive">{declineError}</p>
+										{/if}
+										<div class="mt-3 grid grid-cols-2 gap-2">
+											<Button
+												variant="outline"
+												class="min-h-[44px]"
+												onclick={() => {
+													confirmingDecline = false;
+													declineError = null;
+												}}
+												disabled={busy !== null}
+											>
+												Cancel
+											</Button>
+											<JetEngineButton
+												variant="destructive"
+												label="Confirm decline"
+												loadingLabel="Declining…"
+												successLabel="Declined"
+												state={busy === 'decline' ? 'loading' : 'idle'}
+												disabled={(busy !== null && busy !== 'decline') || !declineReason}
+												onclick={submitDecline}
+											/>
+										</div>
+									</div>
+								{/if}
+							{/if}
+						</div>
 					{/if}
-				</p>
-			</div>
+				{/snippet}
+			</QuoteDocumentView>
 		{/if}
 	</div>
 </div>

@@ -9,7 +9,6 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { getOrgContext } from '$lib/context/org';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -59,6 +58,17 @@
 	}
 
 	onMount(load);
+
+	// Delete confirm dialog — only needed when the user opens the danger zone.
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (ConfirmDialog || !deleteOpen) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	async function copyUrl() {
 		try {
@@ -270,13 +280,15 @@
 		</div>
 	</section>
 
-	<ConfirmDialog
-		bind:open={deleteOpen}
-		title="Delete this booking link?"
-		description="The public URL will stop working. Existing appointments are preserved."
-		confirmLabel="Delete"
-		variant="destructive"
-		loading={deleting}
-		onConfirm={doDelete}
-	/>
+	{#if ConfirmDialog}
+		<ConfirmDialog
+			bind:open={deleteOpen}
+			title="Delete this booking link?"
+			description="The public URL will stop working. Existing appointments are preserved."
+			confirmLabel="Delete"
+			variant="destructive"
+			loading={deleting}
+			onConfirm={doDelete}
+		/>
+	{/if}
 {/if}

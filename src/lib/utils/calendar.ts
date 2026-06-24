@@ -26,6 +26,22 @@ export function addDays(d: Date, n: number): Date {
 	return x;
 }
 
+export function startOfMonth(d: Date): Date {
+	const x = startOfDay(d);
+	x.setDate(1);
+	return x;
+}
+
+export function addMonths(d: Date, n: number): Date {
+	const x = startOfDay(d);
+	const day = x.getDate();
+	x.setDate(1);
+	x.setMonth(x.getMonth() + n);
+	const daysInMonth = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+	x.setDate(Math.min(day, daysInMonth));
+	return x;
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
 	return (
 		a.getFullYear() === b.getFullYear() &&

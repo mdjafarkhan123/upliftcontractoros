@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "idx_contacts_org_email_lower" ON "contacts" USING btree ("org_id",lower("email")) WHERE "contacts"."email" IS NOT NULL AND "contacts"."deleted_at" IS NULL;

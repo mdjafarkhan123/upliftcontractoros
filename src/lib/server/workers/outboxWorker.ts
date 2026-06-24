@@ -20,6 +20,7 @@ import {
 } from '$lib/server/queue/bullmq';
 import { r2DeleteObjects } from '$lib/server/media/r2';
 import { sendSystemEmail } from '$lib/server/email/sendSystemEmail';
+import { buildForwardVerificationEmail } from '$lib/server/email/forwardingVerification';
 import { renderMemberEmail } from '$lib/server/notifications/memberDelivery';
 import { featureForWorkerEvent } from '$lib/permissions/featureMap';
 import type { FeatureFlagKey } from '$lib/types';
@@ -461,6 +462,30 @@ async function handleMemberNotificationEmail(event: OutboxEvent): Promise<void> 
 	await sendSystemEmail({ to: p.to_email, subject, text, html });
 }
 
+// Forwarding round-trip verification (Stage 1.3). Sends a coded email to the
+// contractor's OWN inbox — if their forward rule works it returns through Brevo
+// inbound and the processor flips the test to 'passed'. A system email, never sent
+// to a customer; handled inline like the other system emails (no BullMQ queue).
+async function handleForwardTestRequested(event: OutboxEvent): Promise<void> {
+	const p = event.payload as {
+		org_name?: string;
+		target_email?: string;
+		token?: string;
+	};
+	if (!p.target_email || !p.token) {
+		console.warn(
+			`[outbox] email_domain.forward_test_requested ${event.id}: missing target_email/token — skipping`
+		);
+		return;
+	}
+	const { subject, text, html } = buildForwardVerificationEmail({
+		orgName: p.org_name ?? 'Your business',
+		token: p.token
+	});
+	await sendSystemEmail({ to: p.target_email, subject, text, html });
+	console.log(`[outbox] email_domain.forward_test_requested: sent for org ${event.org_id}`);
+}
+
 type DispatchResult = { status: 'routed' } | { status: 'unrouted'; reason: string };
 
 async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
@@ -478,6 +503,10 @@ async function dispatch(event: OutboxEvent): Promise<DispatchResult> {
 	}
 	if (event.event_type === 'member_notification.email.requested') {
 		await handleMemberNotificationEmail(event);
+		return { status: 'routed' };
+	}
+	if (event.event_type === 'email_domain.forward_test_requested') {
+		await handleForwardTestRequested(event);
 		return { status: 'routed' };
 	}
 	if (event.org_id) {

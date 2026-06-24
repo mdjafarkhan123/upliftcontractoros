@@ -2,6 +2,7 @@ import { pgTable, pgEnum, uuid, text, integer, timestamp, index, check } from 'd
 import { sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
+import { opportunities } from './03_pipeline';
 import { jobs } from './04_jobs';
 import { quotes, invoices } from './06_revenue';
 import { messages } from './05_communication';
@@ -12,13 +13,17 @@ export const mediaPurposeTagEnum = pgEnum('media_purpose_tag', [
 	'job_photo',
 	'before',
 	'after',
+	'catalog_item_photo',
 	'marketing_asset',
 	'quote_attachment',
 	'invoice_attachment',
 	'org_logo',
 	'message_attachment',
 	'contact_attachment',
-	'contact_avatar'
+	'contact_avatar',
+	'org_signature',
+	'opportunity_attachment',
+	'quote_line_item_photo'
 ]);
 
 export const media = pgTable(
@@ -30,10 +35,15 @@ export const media = pgTable(
 			.references(() => organizations.id),
 		uploaded_by: uuid('uploaded_by').references(() => orgMembers.id),
 		contact_id: uuid('contact_id').references(() => contacts.id),
+		opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
 		job_id: uuid('job_id').references(() => jobs.id),
 		quote_id: uuid('quote_id').references(() => quotes.id),
 		invoice_id: uuid('invoice_id').references(() => invoices.id),
 		message_id: uuid('message_id').references(() => messages.id),
+		// Discriminator for `quote_line_item_photo` media: binds the photo to a specific quote
+		// line by its stable `quote_line_items.line_key` (the parent FK stays `quote_id`, so the
+		// exactly-one-parent CHECK is satisfied). Null for every other purpose tag.
+		line_key: uuid('line_key'),
 		r2_key: text('r2_key').notNull(),
 		thumbnail_key: text('thumbnail_key'),
 		web_key: text('web_key'),
@@ -54,21 +64,26 @@ export const media = pgTable(
 		contactIdx: index('idx_media_contact')
 			.on(table.contact_id)
 			.where(sql`${table.contact_id} IS NOT NULL`),
+		opportunityIdx: index('idx_media_opportunity')
+			.on(table.opportunity_id)
+			.where(sql`${table.opportunity_id} IS NOT NULL`),
 		exactlyOneParent: check(
 			'media_exactly_one_parent',
 			sql`(
 			(
-				${table.purpose_tag} = 'org_logo'
+				${table.purpose_tag}::text IN ('org_logo', 'org_signature', 'catalog_item_photo')
 				AND ${table.contact_id} IS NULL
+				AND ${table.opportunity_id} IS NULL
 				AND ${table.job_id} IS NULL
 				AND ${table.quote_id} IS NULL
 				AND ${table.invoice_id} IS NULL
 				AND ${table.message_id} IS NULL
 			)
 			OR (
-				${table.purpose_tag} <> 'org_logo'
+				${table.purpose_tag}::text NOT IN ('org_logo', 'org_signature', 'catalog_item_photo')
 				AND (
 					(${table.contact_id} IS NOT NULL)::int +
+					(${table.opportunity_id} IS NOT NULL)::int +
 					(${table.job_id} IS NOT NULL)::int +
 					(${table.quote_id} IS NOT NULL)::int +
 					(${table.invoice_id} IS NOT NULL)::int +

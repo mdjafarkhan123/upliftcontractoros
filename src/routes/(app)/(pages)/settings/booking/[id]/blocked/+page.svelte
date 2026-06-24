@@ -3,10 +3,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Calendar } from '$lib/components/ui/calendar';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { CalendarOff, Plus, Trash2 } from '@lucide/svelte';
@@ -56,6 +54,27 @@
 	}
 
 	onMount(load);
+
+	// Heavy pop-ups load only when the relevant action starts: the Calendar
+	// (bits-ui) when the user opens the block-a-date form, the ConfirmDialog when
+	// they click delete. Keeps the initial list parse light.
+	let Calendar = $state<typeof import('$lib/components/ui/calendar').Calendar | null>(null);
+	$effect(() => {
+		if (Calendar || !showForm) return;
+		void import('$lib/components/ui/calendar').then((m) => {
+			Calendar = m.Calendar;
+		});
+	});
+
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (ConfirmDialog || !confirmOpen) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
+	});
 
 	function resetForm() {
 		formDate = '';
@@ -156,7 +175,9 @@
 		<form class="space-y-4 rounded-xl border border-border bg-card p-4" onsubmit={submit}>
 			<div class="space-y-1.5">
 				<Label for="ov-date">Date <span class="text-destructive">*</span></Label>
-				<Calendar bind:value={formDate} placeholder="Pick a date" min={today} />
+				{#if Calendar}
+					<Calendar bind:value={formDate} placeholder="Pick a date" min={today} />
+				{/if}
 				{#if fieldErrors.override_date}
 					<p class="text-xs text-destructive">{fieldErrors.override_date}</p>
 				{/if}
@@ -297,12 +318,14 @@
 	{/if}
 </div>
 
-<ConfirmDialog
-	bind:open={confirmOpen}
-	title="Remove this override?"
-	description="The date will return to the standard weekly availability."
-	confirmLabel="Remove"
-	variant="destructive"
-	loading={deleting}
-	onConfirm={doDelete}
-/>
+{#if ConfirmDialog}
+	<ConfirmDialog
+		bind:open={confirmOpen}
+		title="Remove this override?"
+		description="The date will return to the standard weekly availability."
+		confirmLabel="Remove"
+		variant="destructive"
+		loading={deleting}
+		onConfirm={doDelete}
+	/>
+{/if}

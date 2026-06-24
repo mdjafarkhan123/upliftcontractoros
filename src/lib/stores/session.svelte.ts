@@ -86,6 +86,7 @@ async function run(): Promise<AppSessionData | null> {
 		lastFetchedAt = Date.now();
 		status = 'ready';
 		error = null;
+		writeCache(data);
 		return data;
 	} catch (e) {
 		status = data ? 'ready' : 'error';

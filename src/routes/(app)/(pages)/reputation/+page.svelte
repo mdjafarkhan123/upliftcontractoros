@@ -9,7 +9,6 @@
 	import ReviewCard from '$lib/components/reputation/ReviewCard.svelte';
 	import PrivateFeedbackCard from '$lib/components/reputation/PrivateFeedbackCard.svelte';
 	import ReviewRequestRow from '$lib/components/reputation/ReviewRequestRow.svelte';
-	import SendRequestSheet from '$lib/components/reputation/SendRequestSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
@@ -31,6 +30,20 @@
 	type Tab = 'reviews' | 'negative' | 'requests';
 	let tab = $state<Tab>('reviews');
 	let sendSheetOpen = $state(false);
+
+	// The send-request sheet (form + contact picker) is only needed once the user
+	// clicks "Send request". Lazy-load it so the page paints just the list UI.
+	let SendRequestSheet = $state<
+		typeof import('$lib/components/reputation/SendRequestSheet.svelte').default | null
+	>(null);
+	let sendSheetLoading = $state(false);
+	$effect(() => {
+		if (!sendSheetOpen || SendRequestSheet || sendSheetLoading) return;
+		sendSheetLoading = true;
+		void import('$lib/components/reputation/SendRequestSheet.svelte').then((m) => {
+			SendRequestSheet = m.default;
+		});
+	});
 
 	$effect(() => {
 		if (!canViewReviews) return;
@@ -404,7 +417,7 @@
 			</Tabs.Root>
 		</div>
 
-		{#if canSendRequests}
+		{#if canSendRequests && SendRequestSheet}
 			<SendRequestSheet bind:open={sendSheetOpen} />
 		{/if}
 	{/if}

@@ -16,8 +16,18 @@
 		canUpload = false,
 		canDelete = false
 	}: {
-		parentFk: { contact_id?: string; job_id?: string; quote_id?: string; invoice_id?: string };
-		purposeTag: 'quote_attachment' | 'invoice_attachment' | 'contact_attachment';
+		parentFk: {
+			contact_id?: string;
+			opportunity_id?: string;
+			job_id?: string;
+			quote_id?: string;
+			invoice_id?: string;
+		};
+		purposeTag:
+			| 'quote_attachment'
+			| 'invoice_attachment'
+			| 'contact_attachment'
+			| 'opportunity_attachment';
 		title?: string;
 		uploadLabel?: string;
 		canUpload?: boolean;
@@ -34,13 +44,15 @@
 	const queryParam = $derived(
 		parentFk.contact_id
 			? `contact_id=${parentFk.contact_id}`
-			: parentFk.quote_id
-				? `quote_id=${parentFk.quote_id}`
-				: parentFk.invoice_id
-					? `invoice_id=${parentFk.invoice_id}`
-					: parentFk.job_id
-						? `job_id=${parentFk.job_id}`
-						: ''
+			: parentFk.opportunity_id
+				? `opportunity_id=${parentFk.opportunity_id}`
+				: parentFk.quote_id
+					? `quote_id=${parentFk.quote_id}`
+					: parentFk.invoice_id
+						? `invoice_id=${parentFk.invoice_id}`
+						: parentFk.job_id
+							? `job_id=${parentFk.job_id}`
+							: ''
 	);
 
 	async function load() {

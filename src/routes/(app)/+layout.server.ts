@@ -26,6 +26,8 @@ const ORG_SAFE_FIELDS = [
 	'zip',
 	'is_setup_complete',
 	'ghost_lead_days',
+	'calendar_day_start_hour',
+	'calendar_day_end_hour',
 	'feature_overrides_updated_at',
 	'created_at'
 ] as const;

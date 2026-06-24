@@ -6,6 +6,7 @@
 export const LEAD_SOURCES = [
 	'website_form',
 	'live_chat',
+	'inbound_email',
 	'missed_call',
 	'manual',
 	'referral',
@@ -25,6 +26,7 @@ export type LeadSource = (typeof LEAD_SOURCES)[number];
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
 	website_form: 'Website form',
 	live_chat: 'Live chat',
+	inbound_email: 'Inbound email',
 	missed_call: 'Missed call',
 	manual: 'Manual',
 	referral: 'Referral',

@@ -3,6 +3,7 @@ import {
 	pgEnum,
 	uuid,
 	text,
+	varchar,
 	boolean,
 	integer,
 	bigint,
@@ -97,6 +98,23 @@ export const organizations = pgTable('organizations', {
 	stripe_last_verified_at: timestamp('stripe_last_verified_at', { withTimezone: true }),
 	logo_url: text('logo_url'),
 	primary_color: text('primary_color'),
+	// Short brand tagline shown under the company name on the public quote + PDF
+	// (e.g. "Licensed & Insured Roofing"). Nullable — falls back to nothing.
+	tagline: varchar('tagline', { length: 120 }),
+
+	// --- Business signature block (Quotes Session F) ---
+	// Reusable "Authorized by" credential set ONCE here, auto-stamped on the public
+	// quote footer + PDF (Jobber/ServiceTitan pattern — NOT a per-quote hand-sign; the
+	// client's acceptance e-signature is separate). All default-off so existing orgs/
+	// quotes are unaffected. signature_image_url stores an R2 key like logo_url (resolved
+	// to a signed URL via resolveLogoUrl); the typed name/title/statement render with the
+	// optional image above them.
+	signature_block_enabled: boolean('signature_block_enabled').notNull().default(false),
+	signature_name: varchar('signature_name', { length: 120 }),
+	signature_title: varchar('signature_title', { length: 120 }),
+	signature_statement: varchar('signature_statement', { length: 300 }),
+	signature_image_url: text('signature_image_url'),
+
 	timezone: text('timezone').notNull().default('America/Chicago'),
 	address: text('address'),
 	city: text('city'),

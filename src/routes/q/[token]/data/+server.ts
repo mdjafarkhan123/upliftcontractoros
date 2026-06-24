@@ -3,6 +3,7 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	media,
 	organizations,
 	outboxEvents,
 	quoteLineItems,
@@ -10,6 +11,8 @@ import {
 	quotes
 } from '$lib/server/db/schema';
 import { clientIpFrom, lookupValidQuoteByToken, sha256Hex } from '$lib/server/quotes/publicAccess';
+import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
+import { r2Presign } from '$lib/server/media/r2';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { quoteViewedEvent } from '$lib/server/quotes/events';
@@ -87,11 +90,16 @@ export const GET: RequestHandler = async (event) => {
 		console.error('[quote-view] tracking failed:', err);
 	}
 
-	const lineItems = await db
+	const lineRows = await db
 		.select({
 			id: quoteLineItems.id,
+			line_key: quoteLineItems.line_key,
 			description: quoteLineItems.description,
+			details: quoteLineItems.details,
 			quantity: quoteLineItems.quantity,
+			unit: quoteLineItems.unit,
+			section_label: quoteLineItems.section_label,
+			is_optional: quoteLineItems.is_optional,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
@@ -100,11 +108,57 @@ export const GET: RequestHandler = async (event) => {
 		.where(and(eq(quoteLineItems.quote_id, quote.id), sql`${quoteLineItems.deleted_at} IS NULL`))
 		.orderBy(quoteLineItems.position);
 
+	// Per-line photos, grouped by line_key, each with a signed thumbnail + full-res URL so the
+	// customer sees a thumbnail inline and the high-res image in the lightbox.
+	const photoRows = await db
+		.select({
+			id: media.id,
+			line_key: media.line_key,
+			r2_key: media.r2_key,
+			thumbnail_key: media.thumbnail_key,
+			web_key: media.web_key
+		})
+		.from(media)
+		.where(
+			and(
+				eq(media.quote_id, quote.id),
+				eq(media.purpose_tag, 'quote_line_item_photo'),
+				sql`${media.deleted_at} IS NULL`
+			)
+		)
+		.orderBy(media.created_at);
+
+	const photosByLineKey = new Map<string, { id: string; thumb_url: string; full_url: string }[]>();
+	await Promise.all(
+		photoRows.map(async (p) => {
+			if (!p.line_key) return;
+			const entry = {
+				id: p.id,
+				thumb_url: await r2Presign(p.thumbnail_key ?? p.r2_key, 3600),
+				full_url: await r2Presign(p.web_key ?? p.r2_key, 3600)
+			};
+			const list = photosByLineKey.get(p.line_key);
+			if (list) list.push(entry);
+			else photosByLineKey.set(p.line_key, [entry]);
+		})
+	);
+
+	const lineItems = lineRows.map((li) => ({
+		...li,
+		photos: photosByLineKey.get(li.line_key) ?? []
+	}));
+
 	const [orgRow] = await db
 		.select({ stripe_secret_key: organizations.stripe_restricted_key })
 		.from(organizations)
 		.where(eq(organizations.id, quote.org_id))
 		.limit(1);
+
+	const orgLogoUrl = await resolveLogoUrl(quote.org_logo_url);
+	// Only resolve/expose the signature when the org has the block enabled.
+	const signatureImageUrl = quote.org_signature_block_enabled
+		? await resolveLogoUrl(quote.org_signature_image_url)
+		: null;
 
 	return json({
 		data: {
@@ -112,10 +166,16 @@ export const GET: RequestHandler = async (event) => {
 			title: quote.title,
 			status: quote.status,
 			subtotal: quote.subtotal,
+			discount_type: quote.discount_type,
+			discount_value: quote.discount_value,
+			discount_amount: quote.discount_amount,
+			discount_label: quote.discount_label,
 			tax_rate: quote.tax_rate,
 			tax_amount: quote.tax_amount,
 			total: quote.total,
 			deposit_required: quote.deposit_required,
+			deposit_type: quote.deposit_type,
+			deposit_percent: quote.deposit_percent,
 			deposit_amount: quote.deposit_amount,
 			deposit_paid_amount: quote.deposit_paid_amount,
 			deposit_paid_at: quote.deposit_paid_at?.toISOString() ?? null,
@@ -123,7 +183,17 @@ export const GET: RequestHandler = async (event) => {
 			notes: quote.notes,
 			expires_at: quote.expires_at?.toISOString() ?? null,
 			org_name: quote.org_name,
+			org_logo_url: orgLogoUrl,
+			org_primary_color: quote.org_primary_color,
+			org_tagline: quote.org_tagline,
+			signature_block_enabled: quote.org_signature_block_enabled,
+			signature_name: quote.org_signature_block_enabled ? quote.org_signature_name : null,
+			signature_title: quote.org_signature_block_enabled ? quote.org_signature_title : null,
+			signature_statement: quote.org_signature_block_enabled ? quote.org_signature_statement : null,
+			signature_image_url: signatureImageUrl,
 			contact_name: quote.contact_name,
+			issued_by_name: quote.issued_by_name,
+			service_address: quote.service_address,
 			line_items: lineItems
 		}
 	});

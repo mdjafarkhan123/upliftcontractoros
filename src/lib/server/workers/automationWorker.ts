@@ -490,16 +490,37 @@ async function dispatchInitialQuote(data: EventJobData) {
 	const quoteNumberDisplay = (data.payload.quote_number_display as string | undefined) ?? '';
 	const isResend = Boolean(data.payload.is_resend);
 	const hasEmail = Boolean(data.payload.has_email);
+	// Contractor-chosen channels + custom copy (Session D). Null channels = legacy
+	// default (deliver on every available channel). Null body = default copy.
+	const channels = (data.payload.channels as ('email' | 'sms')[] | null | undefined) ?? null;
+	const customSms = (data.payload.sms_body as string | null | undefined) ?? null;
+	const customEmailSubject = (data.payload.email_subject as string | null | undefined) ?? null;
+	const customEmailBody = (data.payload.email_body as string | null | undefined) ?? null;
 	if (!contactId || !rawToken) return;
 
 	const contact = await loadContact(orgId, contactId);
 	if (!contact) return;
 
 	const url = publicQuoteUrl(rawToken);
+	const wantSms = channels ? channels.includes('sms') : true;
+	const wantEmail = channels ? channels.includes('email') : true;
 
-	if (!contact.sms_opt_out) {
+	// Merge values for any custom copy the contractor wrote.
+	const vars = {
+		contact_name: contact.full_name,
+		org_name: org.name,
+		quote_number: quoteNumberDisplay,
+		quote_amount: totalFormatted,
+		amount: totalFormatted,
+		quote_link: url
+	};
+	// The public link must always survive, even if a custom message drops the token.
+	const ensureLink = (text: string) => (text.includes(url) ? text : `${text}\n\n${url}`);
+
+	if (wantSms && !contact.sms_opt_out) {
 		const verb = isResend ? 'updated your quote' : 'sent you a quote';
-		const body = `Hi ${contact.full_name}, ${org.name} ${verb} (${quoteNumberDisplay}, ${totalFormatted}). View it here: ${url}`;
+		const defaultBody = `Hi ${contact.full_name}, ${org.name} ${verb} (${quoteNumberDisplay}, ${totalFormatted}). View it here: ${url}`;
+		const body = ensureLink(customSms ? interpolate(customSms, vars) : defaultBody);
 		try {
 			await queueAutomationSms(db, {
 				orgId,
@@ -512,18 +533,21 @@ async function dispatchInitialQuote(data: EventJobData) {
 		}
 	}
 
-	if (hasEmail && contact.email) {
+	if (wantEmail && hasEmail && contact.email) {
 		try {
 			const verb = isResend ? 'updated your quote' : 'sent you a quote';
-			const subject = isResend
-				? `Updated quote ${quoteNumberDisplay} from ${org.name}`
-				: `Your quote ${quoteNumberDisplay} from ${org.name}`;
-			const body = `Hi ${contact.full_name},
+			const subject = customEmailSubject
+				? interpolate(customEmailSubject, vars)
+				: isResend
+					? `Updated quote ${quoteNumberDisplay} from ${org.name}`
+					: `Your quote ${quoteNumberDisplay} from ${org.name}`;
+			const defaultBody = `Hi ${contact.full_name},
 
 ${org.name} has ${verb} (${quoteNumberDisplay}, ${totalFormatted}).
 
 View your quote:
 ${url}`;
+			const body = ensureLink(customEmailBody ? interpolate(customEmailBody, vars) : defaultBody);
 			await queueAutomationEmail(db, {
 				orgId,
 				contactId: contact.id,
@@ -1022,7 +1046,10 @@ async function handleReviewExpire(job: Job, data: EventJobData) {
 // (handleAppointmentCancelReminders). The `feature_appointment_reminders` gate is
 // applied at the worker dispatcher; the sequence's own `enabled` flag (seeded
 // from appointment_reminder_enabled) is the on/off switch.
-async function enrollAppointmentReminder(orgId: string, appt: { id: string; contact_id: string; scheduled_start: Date }) {
+async function enrollAppointmentReminder(
+	orgId: string,
+	appt: { id: string; contact_id: string; scheduled_start: Date }
+) {
 	await enroll({
 		orgId,
 		sequenceKey: 'appointment_reminder',

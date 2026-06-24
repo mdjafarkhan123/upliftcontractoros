@@ -33,7 +33,11 @@
 			const drafts: QuoteLineDraft[] = tpl.line_items.map((li) => ({
 				client_id: crypto.randomUUID(),
 				description: li.description,
+				details: li.details ?? null,
 				quantity: li.quantity,
+				unit: li.unit ?? '',
+				section_label: li.section_label ?? null,
+				is_optional: li.is_optional ?? false,
 				unit_price: li.unit_price
 			}));
 			onApply(drafts);

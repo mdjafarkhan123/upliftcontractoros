@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, preloadCode } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { setMemberContext } from '$lib/context/member';
 	import { setOrgContext } from '$lib/context/org';
@@ -173,6 +173,21 @@
 				}
 			});
 		})();
+
+		// Pre-warm each main tab's route code while the browser is idle. A page only
+		// freezes on click when its JS chunk still has to download + parse at that
+		// moment; warming it ahead of time means a *direct* click (or a touch tap,
+		// which has no hover) paints the shell + skeleton instantly. The hover-preload
+		// in app.html only covers hover — this is the floor for sudden clicks. Code
+		// only: per-page data still loads on navigation behind its own skeleton.
+		const warmRoutes = () => {
+			const hrefs = [...visibleNav.map((i) => i.href), '/settings'];
+			for (const href of hrefs) void preloadCode(href).catch(() => {});
+		};
+		const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
+			.requestIdleCallback;
+		if (ric) ric(warmRoutes, { timeout: 3000 });
+		else setTimeout(warmRoutes, 1500);
 	});
 	onDestroy(() => {
 		destroyed = true;

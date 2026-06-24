@@ -1,7 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import {
+	contacts,
 	conversations,
+	emailDomains,
 	inboundCommunicationEvents,
 	media,
 	messages,
@@ -11,6 +13,8 @@ import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 import { createLogger } from '$lib/server/log';
 import { correlateInbound, type ParsedAddress } from '../inboundCorrelation';
+import { detectForwardedSender } from '../forwardedParser';
+import { extractForwardTestToken } from '../forwardingVerification';
 import {
 	prepareInboundAttachments,
 	type PreparedAttachment,
@@ -123,6 +127,28 @@ function itemKey(item: BrevoInboundItem): string | null {
 	return null;
 }
 
+// Forwarding round-trip verification (Stage 1.3). Marks the org's pending test as
+// passed when its token returns. Scoped to org + the stored pending token so a
+// stale/old marker can never re-flip a later test. Returns false on no match.
+async function completeForwardTest(orgId: string, token: string): Promise<boolean> {
+	const updated = await db
+		.update(emailDomains)
+		.set({
+			forward_test_status: 'passed',
+			forward_test_verified_at: new Date(),
+			updated_at: new Date()
+		})
+		.where(
+			and(
+				eq(emailDomains.org_id, orgId),
+				eq(emailDomains.forward_test_token, token),
+				eq(emailDomains.forward_test_status, 'pending')
+			)
+		)
+		.returning({ id: emailDomains.id });
+	return updated.length > 0;
+}
+
 async function alreadyProcessed(orgId: string, eventId: string): Promise<boolean> {
 	const [row] = await db
 		.select({ id: inboundCommunicationEvents.id })
@@ -166,6 +192,29 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 	}
 	if (await alreadyProcessed(orgId, eventId)) return;
 
+	// Forwarding verification round-trip (Stage 1.3): if this email carries our
+	// verification marker, complete the test and STOP — never correlate, never
+	// create a contact/lead/conversation/message. Checked before the autoresponder
+	// guard so a forwarder that stamps Precedence can't drop it. The marker rides
+	// the subject (survives Fwd:/FW: prefixes) with the raw body as a fallback.
+	const verifyToken =
+		extractForwardTestToken(item.Subject) ?? extractForwardTestToken(item.RawTextBody);
+	if (verifyToken) {
+		const passed = await completeForwardTest(orgId, verifyToken);
+		log.info({
+			phase: passed ? 'forward_test_verified' : 'forward_test_token_mismatch',
+			org_id: orgId,
+			event_id: eventId
+		});
+		await recordAudit({
+			orgId,
+			eventId,
+			payload: item,
+			error: passed ? undefined : 'forward_test_token_mismatch'
+		});
+		return;
+	}
+
 	const headers = item.Headers ?? null;
 
 	// Auto-responder / loop protection.
@@ -175,10 +224,22 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 		return;
 	}
 
-	const from = mailbox(item.From);
+	const envelopeFrom = mailbox(item.From);
 	const toAndCc = [...mailboxList(item.To), ...mailboxList(item.Cc)];
 	const inReplyTo = item.InReplyTo ?? headerValue(headers, 'In-Reply-To');
 	const references = referencesValue(headers);
+
+	const body = buildPlainBody(item.RawTextBody, item.RawHtmlBody);
+	const rawAttachments = toRawAttachments(item.Attachments);
+
+	// Method B (manual forward): if the body carries a forwarded header block,
+	// recover the ORIGINAL sender and correlate under them instead of the
+	// contractor who forwarded it. Only override when the recovered sender
+	// actually differs from the envelope From (an ordinary reply with a quoted
+	// "From:" line, or a self-forward, falls through to the envelope sender).
+	const forwardedFrom = detectForwardedSender(body);
+	const isForwarded = !!forwardedFrom && forwardedFrom.address !== envelopeFrom?.address;
+	const from = isForwarded ? forwardedFrom : envelopeFrom;
 
 	const match = await correlateInbound({ orgId, from, toAndCc, inReplyTo, references });
 
@@ -194,9 +255,6 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 		return;
 	}
 
-	const body = buildPlainBody(item.RawTextBody, item.RawHtmlBody);
-	const rawAttachments = toRawAttachments(item.Attachments);
-
 	// Drop pure-empty inbound (no body, no attachments).
 	if (!body && rawAttachments.length === 0) {
 		log.info({ phase: 'empty_dropped', org_id: orgId, event_id: eventId });
@@ -204,15 +262,106 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 		return;
 	}
 
-	// Resolve the conversation id. When the match is "create new conversation",
-	// open it first (its own tx) so attachment R2 keys can be tied to it.
+	// Resolve the contact + conversation ids. Three shapes:
+	//  - new_contact: unknown sender → create the lead, emit contact.created +
+	//    lead.created, then open its conversation (one tx, so attachment R2 keys
+	//    can bind to a real conversation id). Mirrors the missed-call/Messenger
+	//    inbound-lead pattern.
+	//  - createdConversation: known contact, no open thread → open one (own tx).
+	//  - otherwise: known contact with an existing thread.
+	let contactId: string;
 	let conversationId: string;
 	let createdConversation = false;
-	if (match.createdConversation) {
+	let createdContact = false;
+
+	if (match.newContact) {
+		const nc = match.newContact;
+		const result = await db.transaction(async (tx) => {
+			// Soft dedup (no DB unique constraint on email — emails are legitimately
+			// shared by spouses, company info@, etc.). Re-check inside the tx for an
+			// existing contact by case-insensitive email; correlateInbound already
+			// matched case-insensitively outside the tx, so this is the race guard for
+			// a concurrent second email from the same brand-new sender. nc.email is
+			// already lowercased upstream, so lower(stored) === nc.email.
+			const [existing] = await tx
+				.select()
+				.from(contacts)
+				.where(
+					and(
+						eq(contacts.org_id, orgId),
+						eq(sql`lower(${contacts.email})`, nc.email),
+						isNull(contacts.deleted_at)
+					)
+				)
+				.limit(1);
+
+			let contact = existing;
+			let isNew = false;
+			if (!contact) {
+				const [created] = await tx
+					.insert(contacts)
+					.values({
+						org_id: orgId,
+						full_name: nc.fullName,
+						email: nc.email,
+						lead_source: 'inbound_email',
+						status: 'lead'
+					})
+					.returning();
+				contact = created;
+				isNew = true;
+			}
+
+			if (isNew) {
+				await tx.insert(outboxEvents).values({
+					org_id: orgId,
+					event_type: 'contact.created',
+					resource_type: 'contact',
+					resource_id: contact.id,
+					payload: {
+						contact_id: contact.id,
+						org_id: orgId,
+						full_name: contact.full_name,
+						phone: null,
+						email: contact.email,
+						lead_source: contact.lead_source,
+						origin: 'email_inbound'
+					},
+					idempotency_key: `contact.created:${contact.id}`
+				});
+				await tx.insert(outboxEvents).values({
+					org_id: orgId,
+					event_type: 'lead.created',
+					resource_type: 'contact',
+					resource_id: contact.id,
+					payload: {
+						contact_id: contact.id,
+						org_id: orgId,
+						lead_source: contact.lead_source,
+						origin: 'email_inbound'
+					},
+					idempotency_key: `lead.created:${contact.id}`
+				});
+			}
+
+			const { conversation, created } = await findOrCreateOpenConversation(tx, {
+				orgId,
+				contactId: contact.id,
+				createdChannel: 'email',
+				reactivate: true
+			});
+			return { contactId: contact.id, conversationId: conversation.id, created, isNew };
+		});
+		contactId = result.contactId;
+		conversationId = result.conversationId;
+		createdConversation = result.created;
+		createdContact = result.isNew;
+	} else if (match.createdConversation) {
+		contactId = match.contactId!;
 		const result = await db.transaction(async (tx) => {
 			const { conversation, created } = await findOrCreateOpenConversation(tx, {
 				orgId,
-				contactId: match.contactId,
+				contactId: contactId,
 				createdChannel: 'email',
 				reactivate: true
 			});
@@ -221,7 +370,8 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 		conversationId = result.id;
 		createdConversation = result.created;
 	} else {
-		conversationId = match.conversation.id;
+		contactId = match.contactId!;
+		conversationId = match.conversation!.id;
 	}
 
 	// Upload attachments (outside any tx) — fetched from Brevo via DownloadToken.
@@ -321,7 +471,7 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 				payload: {
 					message_id: inserted.id,
 					conversation_id: conversationId,
-					contact_id: match.contactId,
+					contact_id: contactId,
 					org_id: orgId,
 					channel: 'email',
 					body,
@@ -330,6 +480,7 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 					email_provider_message_id: providerMessageId,
 					matched_by: match.matchedBy,
 					is_new_conversation: createdConversation,
+					is_new_contact: createdContact,
 					attachment_count: prepared.length,
 					skipped_attachment_count: skipped.length
 				},
@@ -337,7 +488,7 @@ async function processItem(orgId: string, item: BrevoInboundItem): Promise<void>
 			});
 		});
 
-		void touchContactLastContacted(orgId, match.contactId);
+		void touchContactLastContacted(orgId, contactId);
 
 		await recordAudit({ orgId, eventId, payload: item });
 

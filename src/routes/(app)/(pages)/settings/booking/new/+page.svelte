@@ -6,7 +6,6 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Calendar } from '$lib/components/ui/calendar';
 	import { Switch } from '$lib/components/ui/switch';
 	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { getMemberContext } from '$lib/context/member';
@@ -442,6 +441,16 @@
 	}
 
 	const STEP_LABELS = ['Booking Details', 'Availability', 'Blocked Dates'];
+
+	// The date-picker Calendar (bits-ui) only appears deep in step 3 when blocking
+	// a date — load it lazily so the wizard shell parses and paints instantly.
+	let Calendar = $state<typeof import('$lib/components/ui/calendar').Calendar | null>(null);
+	$effect(() => {
+		if (Calendar || !showOverrideForm) return;
+		void import('$lib/components/ui/calendar').then((m) => {
+			Calendar = m.Calendar;
+		});
+	});
 </script>
 
 <svelte:head><title>New booking link</title></svelte:head>
@@ -787,7 +796,9 @@
 					>
 						<div class="space-y-1.5">
 							<Label for="ov-date">Date <span class="text-destructive">*</span></Label>
-							<Calendar bind:value={ovDate} placeholder="Pick a date" min={today} />
+							{#if Calendar}
+								<Calendar bind:value={ovDate} placeholder="Pick a date" min={today} />
+							{/if}
 							{#if ovErrors.override_date}
 								<p class="text-xs text-destructive">{ovErrors.override_date}</p>
 							{/if}

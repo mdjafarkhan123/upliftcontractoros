@@ -263,7 +263,12 @@
       "PowerShell(npx vite build --config vite.config.widget.ts)",
       "WebFetch(domain:help.gohighlevel.com)",
       "Bash(grep -rn 'from '\\\\''$lib' src/lib/server/workers/notificationWorker.ts)",
-      "Bash(grep -n \"import.*sql.*from 'drizzle-orm'\\\\|{ sql\\\\|, sql\" src/lib/server/workers/notificationWorker.ts)"
+      "Bash(grep -n \"import.*sql.*from 'drizzle-orm'\\\\|{ sql\\\\|, sql\" src/lib/server/workers/notificationWorker.ts)",
+      "PowerShell(npx prettier --write \"src/routes/\\(app\\)/\\(pages\\)/quotes/[id]/+page.svelte\" 2>&1 | Select-Object -Last 3)",
+      "PowerShell(npx prettier --write \"src/routes/\\(app\\)/\\(pages\\)/quotes/[id]/+page.svelte\" 2>&1 | Select-Object -Last 1; \\(Get-Content node_modules/bits-ui/package.json | ConvertFrom-Json\\).version)",
+      "PowerShell(npx prettier --write \"src/routes/\\(app\\)/\\(pages\\)/quotes/[id]/+page.svelte\" \"src/routes/q/[token]/+page.svelte\" \"src/lib/components/quotes/QuoteDocumentView.svelte\" \"src/routes/api/quotes/[id]/preview/+server.ts\" \"src/routes/\\(fullscreen\\)/quote-preview/[id]/+page.svelte\" \"src/routes/\\(fullscreen\\)/quote-preview/[id]/+page.ts\" 2>&1 | Select-Object -Last 8)",
+      "PowerShell(cd \"D:\\\\Projects\\\\ContractorOs\" && npm run check 2>&1 | Where-Object { $_ -match \"ERROR\" } | Where-Object { $_ -notmatch \"supabase\\\\.ts|telnyx|invoices|booking\" } | Select-Object -First 20)",
+      "PowerShell(cd \"D:\\\\Projects\\\\ContractorOs\" && npm run check 2>&1 | Tee-Object -Variable checkOutput; $checkOutput | Where-Object { \\($_ -match \"ERROR\"\\) -and \\($_ -match \"jobs.new|jobs.\\\\[id\\\\]|JobClient\"\\) })"
     ]
   },
   "enableAllProjectMcpServers": true,

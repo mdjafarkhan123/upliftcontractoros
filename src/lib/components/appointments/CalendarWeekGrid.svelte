@@ -3,27 +3,32 @@
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { cn } from '$lib/utils/cn';
-	import type { AppointmentListItem } from '$lib/types/appointments';
+	import type { AppointmentDetail, AppointmentListItem } from '$lib/types/appointments';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import QuickCreatePopover from './QuickCreatePopover.svelte';
 
 	let {
 		anchor,
 		items,
 		dayStartHour,
 		dayEndHour,
-		canCreate
+		canCreate,
+		canReschedule = false
 	}: {
 		anchor: Date;
 		items: AppointmentListItem[];
 		dayStartHour: number;
 		dayEndHour: number;
 		canCreate: boolean;
+		canReschedule?: boolean;
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
 
 	const HOUR_HEIGHT = 56; // px
+	const TOP_GUTTER = 10; // px — breathing room so the first hour label clears the sticky day-header
 	const DEFAULT_DURATION_MIN = 60;
 	const SNAP_MINUTES = 15;
 	const weekdayFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
@@ -181,7 +186,7 @@
 	});
 
 	function pxFromMin(min: number): number {
-		return ((min - range.startMin) / 60) * HOUR_HEIGHT;
+		return ((min - range.startMin) / 60) * HOUR_HEIGHT + TOP_GUTTER;
 	}
 
 	// Live "now" line — ticks every minute.
@@ -195,30 +200,281 @@
 	const nowMin = $derived(nowParts.hour * 60 + nowParts.minute);
 	const nowVisible = $derived(nowMin >= range.startMin && nowMin <= range.endMin);
 
-	function handleColumnClick(e: MouseEvent, date: Date) {
-		if (!canCreate) return;
-		// Ignore clicks that landed on an event link (let the link handle it).
-		const target = e.target as HTMLElement;
-		if (target.closest('a')) return;
-		const column = e.currentTarget as HTMLElement;
-		const rect = column.getBoundingClientRect();
-		const y = e.clientY - rect.top;
-		const minutesFromStart = Math.max(0, (y / HOUR_HEIGHT) * 60);
-		const rawMin = range.startMin + minutesFromStart;
-		const snapped = Math.round(rawMin / SNAP_MINUTES) * SNAP_MINUTES;
-		const hour = Math.floor(snapped / 60);
-		const minute = snapped % 60;
-		// Build a Date in the local browser tz that matches the visual slot.
-		// We're picking wall-clock time on the clicked day; the form will
-		// reinterpret it via its DateTimePicker.
-		const start = new Date(date);
-		start.setHours(hour, minute, 0, 0);
-		const end = new Date(start.getTime() + DEFAULT_DURATION_MIN * 60_000);
-		const params = new URLSearchParams({
-			start: start.toISOString(),
-			end: end.toISOString()
+	// ── Coordinate / time helpers ───────────────────────────────────────────
+	const DRAG_THRESHOLD = 4; // px before a pointerdown becomes a drag
+
+	let gridBodyEl = $state<HTMLDivElement | null>(null);
+
+	function clampDayMin(min: number): number {
+		return Math.max(0, Math.min(24 * 60, min));
+	}
+
+	function snapMin(min: number): number {
+		return Math.round(min / SNAP_MINUTES) * SNAP_MINUTES;
+	}
+
+	// Convert a viewport Y into a minute-of-day on the visible grid (inverts
+	// pxFromMin, accounting for TOP_GUTTER and the scroll position via getBoundingClientRect).
+	function minFromClientY(clientY: number): number {
+		if (!gridBodyEl) return range.startMin;
+		const rect = gridBodyEl.getBoundingClientRect();
+		const y = clientY - rect.top - TOP_GUTTER;
+		return range.startMin + (y / HOUR_HEIGHT) * 60;
+	}
+
+	// Which day column is under the pointer (cross-column move). -1 if none.
+	function colFromPoint(clientX: number, clientY: number): number {
+		const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+		const col = el?.closest('[data-col-index]') as HTMLElement | null;
+		if (!col) return -1;
+		return Number(col.getAttribute('data-col-index'));
+	}
+
+	function labelForMin(min: number): string {
+		const h = Math.floor(min / 60) % 24;
+		const m = ((min % 60) + 60) % 60;
+		const ampm = h < 12 ? 'AM' : 'PM';
+		const h12 = h % 12 === 0 ? 12 : h % 12;
+		return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+	}
+
+	// Offset (ms) of an IANA tz at a given UTC instant.
+	function tzOffsetMs(utcMs: number, tz: string): number {
+		const dtf = new Intl.DateTimeFormat('en-US', {
+			timeZone: tz,
+			hour12: false,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
 		});
-		window.location.href = `/appointments/new?${params.toString()}`;
+		const m: Record<string, number> = {};
+		for (const p of dtf.formatToParts(new Date(utcMs))) {
+			if (p.type !== 'literal') m[p.type] = Number(p.value);
+		}
+		const h = m.hour === 24 ? 0 : m.hour;
+		const asUtc = Date.UTC(m.year, m.month - 1, m.day, h, m.minute, m.second);
+		return asUtc - utcMs;
+	}
+
+	// Build the absolute instant for a wall-clock time on the org-tz calendar day
+	// that `day`'s column represents. Used by reschedule so a block dropped on
+	// "9 AM Tue" saves as 9 AM org-time (DST-correct), matching how the grid buckets.
+	function wallClockToUtc(day: Date, totalMin: number, tz: string | undefined): Date {
+		const hour = Math.floor(totalMin / 60);
+		const minute = totalMin % 60;
+		let y: number;
+		let mo: number;
+		let d: number;
+		if (tz) {
+			const [yy, mm, dd] = tzDateKey(day, tz).split('-').map(Number);
+			y = yy;
+			mo = mm - 1;
+			d = dd;
+		} else {
+			y = day.getFullYear();
+			mo = day.getMonth();
+			d = day.getDate();
+		}
+		const guess = Date.UTC(y, mo, d, hour, minute, 0, 0);
+		const off1 = tzOffsetMs(guess, tz ?? 'UTC');
+		if (!tz) return new Date(y, mo, d, hour, minute, 0, 0);
+		let result = guess - off1;
+		const off2 = tzOffsetMs(result, tz);
+		if (off2 !== off1) result = guess - off2;
+		return new Date(result);
+	}
+
+	// ── Drag state machine ──────────────────────────────────────────────────
+	type DragState = {
+		mode: 'create' | 'move' | 'resize';
+		pointerId: number;
+		startClientX: number;
+		startClientY: number;
+		moved: boolean;
+		colIndex: number;
+		ghostStartMin: number;
+		ghostEndMin: number;
+		anchorMin?: number; // create: where the drag began
+		item?: AppointmentListItem; // move / resize
+		durationMin?: number; // move
+		grabOffsetMin?: number; // move: where in the block the user grabbed
+		origStartMin?: number; // resize: fixed start
+	};
+
+	let drag = $state<DragState | null>(null);
+	let justDragged = false; // suppress the click that follows a moved event drag
+
+	let popover = $state<{ x: number; y: number; start: Date; end: Date } | null>(null);
+
+	function addDragListeners() {
+		window.addEventListener('pointermove', onPointerMove);
+		window.addEventListener('pointerup', onPointerUp);
+	}
+	function removeDragListeners() {
+		window.removeEventListener('pointermove', onPointerMove);
+		window.removeEventListener('pointerup', onPointerUp);
+	}
+
+	$effect(() => () => removeDragListeners());
+
+	function onColumnPointerDown(e: PointerEvent, colIndex: number) {
+		if (!canCreate || e.button !== 0) return;
+		const target = e.target as HTMLElement;
+		if (target.closest('a') || target.closest('[data-resize]')) return;
+		e.preventDefault();
+		const startMin = snapMin(clampDayMin(minFromClientY(e.clientY)));
+		drag = {
+			mode: 'create',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			anchorMin: startMin,
+			ghostStartMin: startMin,
+			ghostEndMin: startMin + DEFAULT_DURATION_MIN
+		};
+		addDragListeners();
+	}
+
+	function onEventPointerDown(e: PointerEvent, ev: LaidOut, colIndex: number) {
+		if (!canReschedule || e.button !== 0) return;
+		// Don't start a move from the resize handle.
+		if ((e.target as HTMLElement).closest('[data-resize]')) return;
+		e.stopPropagation();
+		drag = {
+			mode: 'move',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			item: ev.item,
+			durationMin: ev.endMin - ev.startMin,
+			grabOffsetMin: minFromClientY(e.clientY) - ev.startMin,
+			ghostStartMin: ev.startMin,
+			ghostEndMin: ev.endMin
+		};
+		addDragListeners();
+	}
+
+	function onResizePointerDown(e: PointerEvent, ev: LaidOut, colIndex: number) {
+		if (!canReschedule || e.button !== 0) return;
+		e.preventDefault();
+		e.stopPropagation();
+		drag = {
+			mode: 'resize',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			item: ev.item,
+			origStartMin: ev.startMin,
+			ghostStartMin: ev.startMin,
+			ghostEndMin: ev.endMin
+		};
+		addDragListeners();
+	}
+
+	function onPointerMove(e: PointerEvent) {
+		const d = drag;
+		if (!d) return;
+		if (!d.moved) {
+			if (Math.hypot(e.clientX - d.startClientX, e.clientY - d.startClientY) < DRAG_THRESHOLD)
+				return;
+			d.moved = true;
+		}
+
+		if (d.mode === 'create') {
+			const cur = snapMin(clampDayMin(minFromClientY(e.clientY)));
+			const anchor = d.anchorMin ?? cur;
+			d.ghostStartMin = Math.min(anchor, cur);
+			d.ghostEndMin = Math.max(anchor, cur);
+			if (d.ghostEndMin - d.ghostStartMin < SNAP_MINUTES) d.ghostEndMin = d.ghostStartMin + SNAP_MINUTES;
+		} else if (d.mode === 'move') {
+			const col = colFromPoint(e.clientX, e.clientY);
+			if (col >= 0) d.colIndex = col;
+			const dur = d.durationMin ?? DEFAULT_DURATION_MIN;
+			let start = snapMin(minFromClientY(e.clientY) - (d.grabOffsetMin ?? 0));
+			start = Math.max(0, Math.min(24 * 60 - dur, start));
+			d.ghostStartMin = start;
+			d.ghostEndMin = start + dur;
+		} else {
+			const origStart = d.origStartMin ?? 0;
+			let end = snapMin(clampDayMin(minFromClientY(e.clientY)));
+			if (end < origStart + SNAP_MINUTES) end = origStart + SNAP_MINUTES;
+			d.ghostEndMin = end;
+		}
+	}
+
+	function onPointerUp(e: PointerEvent) {
+		const d = drag;
+		drag = null;
+		removeDragListeners();
+		if (!d) return;
+
+		if (d.mode === 'create') {
+			const date = days[d.colIndex]?.date;
+			if (!date) return;
+			const startMin = d.ghostStartMin;
+			const endMin = d.moved ? d.ghostEndMin : startMin + DEFAULT_DURATION_MIN;
+			// Browser-local wall-clock — the /new form reinterprets it via its picker
+			// (matches the previous click-to-create behaviour exactly).
+			const start = new Date(date);
+			start.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+			const end = new Date(date);
+			end.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
+			popover = { x: e.clientX, y: e.clientY, start, end };
+			return;
+		}
+
+		// move / resize — only commit if the pointer actually moved.
+		if (!d.moved || !d.item) return;
+		justDragged = true;
+		setTimeout(() => (justDragged = false), 0);
+		void commitReschedule(d);
+	}
+
+	async function commitReschedule(d: DragState) {
+		const item = d.item;
+		if (!item) return;
+		const date = days[d.colIndex]?.date;
+		if (!date) return;
+
+		const startIso = wallClockToUtc(date, d.ghostStartMin, orgTz).toISOString();
+		const endIso = wallClockToUtc(date, d.ghostEndMin, orgTz).toISOString();
+		if (startIso === item.scheduled_start && endIso === (item.scheduled_end ?? '')) return;
+
+		const prev = appointmentsStore.optimisticUpdate(item.id, {
+			scheduled_start: startIso,
+			scheduled_end: endIso
+		});
+
+		try {
+			const res = await fetch(`/api/appointments/${item.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ scheduled_start: startIso, scheduled_end: endIso })
+			});
+			if (!res.ok) {
+				if (prev) appointmentsStore.optimisticUpdate(item.id, prev);
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				toast.error(
+					res.status === 409 ? 'Time conflict with another appointment.' : body.error ?? 'Could not reschedule.'
+				);
+				return;
+			}
+			const body = (await res.json()) as { data: AppointmentDetail };
+			appointmentsStore.setDetail(body.data);
+			toast.success('Appointment rescheduled.');
+		} catch {
+			if (prev) appointmentsStore.optimisticUpdate(item.id, prev);
+			toast.error('Could not reschedule.');
+		}
 	}
 
 	function statusClasses(s: AppointmentListItem['status']): string {
@@ -230,9 +486,12 @@
 	}
 </script>
 
-<div class="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-	<!-- Day headers (sticky-ish; consumer page already scrolls). -->
-	<div class="grid border-b border-border" style="grid-template-columns: 64px repeat(7, 1fr);">
+<div class="relative flex h-full flex-col overflow-y-auto bg-card">
+	<!-- Day headers — sticky so they stay visible while the grid body scrolls -->
+	<div
+		class="sticky top-0 z-10 grid shrink-0 border-b border-border bg-background/95 backdrop-blur"
+		style="grid-template-columns: 64px repeat(7, 1fr);"
+	>
 		<div class="border-r border-border bg-muted/30"></div>
 		{#each days as day (day.key)}
 			{@const today_ = isSameDay(day.date, today)}
@@ -261,8 +520,10 @@
 
 	<!-- Body: time rail + 7 day columns -->
 	<div
-		class="relative grid"
-		style="grid-template-columns: 64px repeat(7, 1fr); height: {range.hours * HOUR_HEIGHT}px;"
+		bind:this={gridBodyEl}
+		class="relative grid flex-1"
+		style="grid-template-columns: 64px repeat(7, 1fr); min-height: {range.hours * HOUR_HEIGHT +
+			TOP_GUTTER}px;"
 	>
 		<!-- Time rail -->
 		<div class="relative border-r border-border bg-muted/20">
@@ -280,14 +541,15 @@
 		</div>
 
 		<!-- Day columns -->
-		{#each days as day (day.key)}
+		{#each days as day, i (day.key)}
 			{@const today_ = isSameDay(day.date, today)}
 			<button
 				type="button"
-				onclick={(e) => handleColumnClick(e, day.date)}
+				data-col-index={i}
+				onpointerdown={(e) => onColumnPointerDown(e, i)}
 				class={cn(
-					'relative border-r border-border text-left last:border-r-0 focus:outline-none',
-					canCreate ? 'cursor-copy' : 'cursor-default',
+					'relative touch-none border-r border-border text-left last:border-r-0 focus:outline-none',
+					drag ? 'cursor-grabbing' : canCreate ? 'cursor-copy' : 'cursor-default',
 					today_ ? 'bg-primary/[0.03]' : ''
 				)}
 				aria-label={canCreate ? `New appointment on ${day.date.toDateString()}` : undefined}
@@ -325,12 +587,19 @@
 					{@const height = Math.max(20, pxFromMin(ev.endMin) - top)}
 					{@const widthPct = 100 / ev.cols}
 					{@const leftPct = ev.col * widthPct}
+					{@const dragging = drag?.mode === 'move' && drag.item?.id === ev.item.id}
 					<a
 						href={`/appointments/${ev.item.id}`}
 						use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.item.id)}
-						onclick={(e) => e.stopPropagation()}
+						onpointerdown={(e) => onEventPointerDown(e, ev, i)}
+						onclick={(e) => {
+							e.stopPropagation();
+							if (justDragged) e.preventDefault();
+						}}
 						class={cn(
-							'absolute z-10 overflow-hidden rounded-md border px-1.5 py-1 text-[11px] leading-tight shadow-sm transition-all hover:z-30 hover:shadow-md',
+							'group absolute z-10 select-none overflow-hidden rounded-md border px-1.5 py-1 text-[11px] leading-tight shadow-sm transition-shadow hover:z-30 hover:shadow-md',
+							canReschedule ? 'cursor-grab touch-none' : '',
+							dragging ? 'opacity-40' : '',
 							statusClasses(ev.item.status)
 						)}
 						style="top: {top}px; height: {height}px; left: calc({leftPct}% + 2px); width: calc({widthPct}% - 4px);"
@@ -342,9 +611,45 @@
 						{#if height >= 48}
 							<p class="truncate opacity-80">{ev.item.contact_name}</p>
 						{/if}
+						{#if canReschedule}
+							<!-- Resize handle (bottom edge) -->
+							<span
+								data-resize
+								role="slider"
+								tabindex="-1"
+								aria-label="Resize appointment end time"
+								aria-valuenow={ev.endMin}
+								onpointerdown={(e) => onResizePointerDown(e, ev, i)}
+								class="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
+							></span>
+						{/if}
 					</a>
 				{/each}
+
+				<!-- Drag ghost -->
+				{#if drag && drag.colIndex === i && (drag.moved || drag.mode === 'resize')}
+					{@const gTop = pxFromMin(drag.ghostStartMin)}
+					{@const gHeight = Math.max(20, pxFromMin(drag.ghostEndMin) - gTop)}
+					<div
+						class="pointer-events-none absolute inset-x-0.5 z-40 flex flex-col rounded-md border-2 border-dashed border-primary bg-primary/20 px-1.5 py-1"
+						style="top: {gTop}px; height: {gHeight}px;"
+					>
+						<span class="truncate text-[11px] font-semibold tabular-nums text-primary">
+							{labelForMin(drag.ghostStartMin)} – {labelForMin(drag.ghostEndMin)}
+						</span>
+					</div>
+				{/if}
 			</button>
 		{/each}
 	</div>
 </div>
+
+{#if popover}
+	<QuickCreatePopover
+		x={popover.x}
+		y={popover.y}
+		start={popover.start}
+		end={popover.end}
+		onClose={() => (popover = null)}
+	/>
+{/if}
