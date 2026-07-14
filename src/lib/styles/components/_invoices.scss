@@ -1,0 +1,745 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// INVOICES — S7.0 LIST  (grows each S7.x session)
+// Global BEM blocks for the invoices feature. Page-specific layout stays scoped.
+// =============================================================================
+
+// INVOICE FILTER TABS moved to the shared <ListTabs> (InvoicesFilterTabs is now a
+// thin adapter over it) — the old .invoice-filter group+chips block is gone.
+
+// -----------------------------------------------------------------------------
+// INVOICE CARD — list row: number + status, client · title, due date, amounts
+// -----------------------------------------------------------------------------
+.invoice-card {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: rgba(34, 125, 83, 0.3);
+		background: var(--color-bg-surface-raised);
+		box-shadow: var(--shadow-md);
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&:active {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__top {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__number {
+		font-family: 'Geist Mono', monospace;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__overdue {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		line-height: $lh-caption;
+		background: rgba(244, 63, 94, 0.12);
+		color: #be123c;
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__sub {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__due {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		&--overdue {
+			color: #be123c;
+		}
+	}
+
+	&__right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+		flex-shrink: 0;
+		text-align: right;
+	}
+
+	&__amount {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__remaining {
+		font-size: $fs-caption;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		transition: transform $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+		}
+	}
+
+	&:hover &__chevron {
+		transform: translateX(2px);
+		color: var(--color-text-secondary);
+	}
+}
+
+:root[data-theme='dark'] .invoice-card {
+	border-color: rgba(255, 255, 255, 0.1);
+
+	&__overdue,
+	&__due--overdue {
+		color: #fda4af;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// INVOICE STATUS BADGE — pill used inline in cards and detail header
+// -----------------------------------------------------------------------------
+.invoice-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px $space-2;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-medium;
+	line-height: $lh-caption;
+	white-space: nowrap;
+
+	&--draft {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+	}
+
+	&--sent {
+		background: rgba(59, 130, 246, 0.12);
+		color: #1d4ed8;
+	}
+
+	&--partially_paid {
+		background: rgba(245, 158, 11, 0.15);
+		color: #b45309;
+	}
+
+	&--paid {
+		background: rgba(16, 185, 129, 0.12);
+		color: #047857;
+	}
+
+	&--overdue {
+		background: rgba(244, 63, 94, 0.12);
+		color: #be123c;
+	}
+
+	&--cancelled {
+		background: rgba(113, 113, 122, 0.12);
+		color: #52525b;
+	}
+}
+
+:root[data-theme='dark'] {
+	.invoice-badge {
+		&--sent {
+			color: #93c5fd;
+			background: rgba(59, 130, 246, 0.12);
+		}
+		&--partially_paid {
+			color: #fcd34d;
+			background: rgba(245, 158, 11, 0.12);
+		}
+		&--paid {
+			color: #6ee7b7;
+			background: rgba(16, 185, 129, 0.12);
+		}
+		&--overdue {
+			color: #fda4af;
+			background: rgba(244, 63, 94, 0.12);
+		}
+		&--cancelled {
+			color: #a1a1aa;
+			background: rgba(161, 161, 170, 0.1);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// INVOICES PAGE — load-more button area
+// -----------------------------------------------------------------------------
+.invoices-load-more {
+	display: flex;
+	justify-content: center;
+	padding-top: $space-3;
+}
+
+// =============================================================================
+// INVOICE DETAIL (S7.1)
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// PAYMENT HISTORY — collapsible list of recorded payments
+// (component: PaymentHistory — reused on detail page)
+// -----------------------------------------------------------------------------
+.payment-history {
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		width: 100%;
+		padding: $space-4;
+		border: none;
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-width: 0;
+	}
+
+	&__icon {
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__meta {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+
+	&__body {
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__empty {
+		padding: $space-4;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__item {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-4;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__amount {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__tip {
+		margin-left: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--success-text);
+	}
+
+	&__detail,
+	&__note {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__note {
+		margin-top: $space-1;
+	}
+}
+
+// =============================================================================
+// INVOICE NEW (S7.2)
+// Single long-form create page: customer + details card, line-items card,
+// totals card (`.invoice-totals`), action row. Reuses LineItemEditor (S6).
+// =============================================================================
+.invoice-new {
+	width: 100%;
+	max-width: 640px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__progress-card {
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__card {
+		padding: $space-5;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__card-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__card-sub {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__fields {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__req {
+		color: var(--danger-text);
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: $space-4;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	&__section-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__contact-btn {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-raised);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.7rem;
+		}
+	}
+
+	&__contact-info {
+		min-width: 0;
+		flex: 1;
+	}
+	&__contact-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__contact-sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+	&__contact-change {
+		flex-shrink: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__linked {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		span {
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__error {
+		font-size: $fs-caption;
+		color: var(--danger-text);
+	}
+
+	// Progressive-disclosure trigger — reveals tax / due date / notes on the lean
+	// create screen (essentials-first, Model-1). Mirrors .contact-form__more.
+	&__more {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		width: fit-content;
+		padding: $space-2 0;
+		border: none;
+		background: none;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		cursor: pointer;
+
+		i {
+			font-size: 1.5rem;
+		}
+
+		&:hover {
+			text-decoration: underline;
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+			border-radius: $radius-md;
+		}
+	}
+
+	&__reminders {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+	}
+	&__reminders-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+	&__reminders-text {
+		min-width: 0;
+	}
+	&__reminders-title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__reminders-hint {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		a {
+			color: var(--color-brand);
+			font-weight: $weight-medium;
+		}
+	}
+	&__reminders-link {
+		width: fit-content;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	&__actions {
+		display: flex;
+		flex-direction: column-reverse;
+		gap: $space-2;
+		padding-top: $space-1;
+
+		@media (min-width: $bp-mobile) {
+			flex-direction: row;
+			justify-content: flex-end;
+		}
+	}
+}
+
+// =============================================================================
+// INVOICE DIALOGS (S7.3)
+// RecordPaymentDialog / PaymentLinkDialog. (Sending now uses the shared
+// SendDocumentDialog — styles live in `_send-document.scss`.) Each reuses the
+// base `.dialog-content` chrome (header / title / description / close / footer
+// from `_dialog.scss`); these blocks own only the body content.
+// =============================================================================
+
+// Header title+description column — keeps the close button aligned top-right
+// of the flex `.dialog-content__header` while the text stacks on the left.
+.dialog-content__header-main {
+	min-width: 0;
+}
+
+// -----------------------------------------------------------------------------
+// RECORD PAYMENT — amount + method picker + notes
+// -----------------------------------------------------------------------------
+.record-payment {
+	&__balance {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__req {
+		color: var(--danger-text);
+	}
+
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__methods {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	&__method {
+		display: inline-flex;
+		min-height: 44px;
+		align-items: center;
+		justify-content: center;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active,
+		&--active:hover {
+			background: var(--color-text-primary);
+			border-color: var(--color-text-primary);
+			color: var(--color-bg-app);
+			font-weight: $weight-medium;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// PAYMENT LINK — generated checkout URL row + copy + open
+// -----------------------------------------------------------------------------
+.payment-link {
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__url {
+		flex: 1;
+		min-width: 0;
+		font-size: $fs-caption;
+	}
+
+	&__copy {
+		display: inline-flex;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__open {
+		display: inline-flex;
+		width: fit-content;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-brand);
+		text-decoration: none;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	&__empty {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}

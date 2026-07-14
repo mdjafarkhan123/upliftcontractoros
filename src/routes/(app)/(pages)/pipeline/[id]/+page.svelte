@@ -6,7 +6,6 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { getMemberContext } from '$lib/context/member';
-	import { ArrowLeft } from '@lucide/svelte';
 	import { opportunityDetailStore } from '$lib/stores/opportunityDetail.svelte';
 	import type { OpportunityDetail, PipelineStageRow } from '$lib/types/pipeline';
 
@@ -82,7 +81,7 @@
 
 <PageWrapper>
 	<Button variant="ghost" href="/pipeline" class="mb-4">
-		<ArrowLeft class="h-4 w-4" /> Back to pipeline
+		<i class="ri-arrow-left-line" aria-hidden="true"></i> Back to pipeline
 	</Button>
 
 	{#if loadingCold}

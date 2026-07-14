@@ -41,9 +41,24 @@ const optionalTrimmedString = (max: number) =>
 		.optional()
 		.transform((v) => (v && v.length > 0 ? v : undefined));
 
+export const addressSchema = z.object({
+	label: z.enum(ADDRESS_LABELS).default('service'),
+	address_line_1: trimmedString(200),
+	address_line_2: optionalTrimmedString(200),
+	city: trimmedString(120),
+	state: trimmedString(80),
+	zip: trimmedString(20),
+	is_primary: z.boolean().optional()
+});
+
+export type AddressInput = z.infer<typeof addressSchema>;
+
 export const createContactSchema = z.object({
 	full_name: trimmedString(200),
 	company_name: optionalTrimmedString(200),
+	// Contact type at creation. Only lead/customer are selectable — archiving is a
+	// post-creation action. Choosing 'customer' stamps converted_at in the route.
+	status: z.enum(['lead', 'customer']).optional(),
 	lead_temperature: z.enum(LEAD_TEMPERATURES).optional(),
 	// Optional since the Messenger channel — a contact may be identified by a PSID
 	// (or email) with no phone. Empty/whitespace normalizes to undefined; when
@@ -75,7 +90,10 @@ export const createContactSchema = z.object({
 	assigned_to: z.string().uuid().nullish(),
 	referred_by_contact_id: z.string().uuid().nullish(),
 	notes: optionalTrimmedString(2000),
-	tags: z.array(z.string().max(50)).max(20).optional()
+	tags: z.array(z.string().max(50)).max(20).optional(),
+	// Optional service/property address captured at creation. When present it is
+	// inserted in the same transaction as the contact (atomic) and marked primary.
+	address: addressSchema.optional()
 });
 
 export type CreateContactInput = z.infer<typeof createContactSchema>;
@@ -155,18 +173,6 @@ export const updateContactSchema = z
 	.strict();
 
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
-
-export const addressSchema = z.object({
-	label: z.enum(ADDRESS_LABELS).default('service'),
-	address_line_1: trimmedString(200),
-	address_line_2: optionalTrimmedString(200),
-	city: trimmedString(120),
-	state: trimmedString(80),
-	zip: trimmedString(20),
-	is_primary: z.boolean().optional()
-});
-
-export type AddressInput = z.infer<typeof addressSchema>;
 
 export const addressUpdateSchema = addressSchema.partial().extend({
 	// Optimistic concurrency token — the updated_at the client last read. When

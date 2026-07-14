@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { untrack } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import ListPageShell from '$lib/components/shared/ListPageShell.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import ContactSearchBar from '$lib/components/contacts/ContactSearchBar.svelte';
 	import ContactStatusFilter from '$lib/components/contacts/ContactStatusFilter.svelte';
 	import ContactFilterControl from '$lib/components/contacts/ContactFilterControl.svelte';
@@ -16,17 +17,6 @@
 	import { getMemberContext } from '$lib/context/member';
 	import { contactsStore } from '$lib/stores/contacts.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import {
-		Users,
-		Trash2,
-		Plus,
-		CheckSquare,
-		MoreHorizontal,
-		Download,
-		Upload,
-		CalendarClock,
-		X
-	} from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -88,8 +78,6 @@
 	const nextCursor = $derived(contactsStore.nextCursor);
 	const status = $derived(contactsStore.status);
 	const errorMsg = $derived(contactsStore.error);
-	const showSkeleton = $derived(status === 'loading' && items.length === 0);
-	const showError = $derived(status === 'error' && items.length === 0);
 	const isDeletedView = $derived(statusFilter === 'deleted');
 
 	// The recycle-bin list is only ever seen on the Deleted tab. Load it lazily so
@@ -122,6 +110,7 @@
 	});
 
 	const canRestore = $derived(member().can_create_contacts);
+	// Bulk-delete permission for the active/archived selection bar.
 	const canPurge = $derived(member().can_delete_contacts);
 
 	function onBinChanged(id: string) {
@@ -342,225 +331,199 @@
 <PageWrapper title="Contacts" subtitle="Your people pipeline">
 	{#snippet actions()}
 		{#if selectionMode}
-			<Button variant="outline" onclick={exitSelect}>Done</Button>
+			<Button type="button" variant="secondary" onclick={exitSelect}>Done</Button>
 		{:else if !isDeletedView}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger
-					class="inline-flex min-h-[44px] w-10 items-center justify-center rounded-lg border border-input bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					class="btn btn--secondary btn--icon"
 					aria-label="More actions"
 				>
-					<MoreHorizontal class="h-4 w-4" />
+					<i class="ri-more-2-fill" aria-hidden="true"></i>
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
 					<DropdownMenu.Item onclick={triggerExport}>
-						<Download class="h-4 w-4" /> Export CSV
+						<i class="ri-download-line" aria-hidden="true"></i> Export CSV
 					</DropdownMenu.Item>
 					{#if canCreate}
 						<DropdownMenu.Item onclick={() => (importOpen = true)}>
-							<Upload class="h-4 w-4" /> Import CSV
+							<i class="ri-upload-line" aria-hidden="true"></i> Import CSV
 						</DropdownMenu.Item>
 					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 			{#if canBulk}
-				<Button variant="outline" onclick={enterSelect}>
-					<CheckSquare class="h-4 w-4" /> Select
+				<Button type="button" variant="secondary" onclick={enterSelect}>
+					<i class="ri-checkbox-line" aria-hidden="true"></i> Select
 				</Button>
 			{/if}
 			{#if canCreate}
-				<Button href="/contacts/new"><Plus class="h-4 w-4" /> New contact</Button>
+				<a class="btn btn--primary" href="/contacts/new">
+					<i class="ri-add-line" aria-hidden="true"></i> New contact
+				</a>
 			{/if}
 		{/if}
 	{/snippet}
 
-	<div class="space-y-3">
-		{#if !isDeletedView}
-			<ContactListKpiStrip
-				total={counts.leads + counts.customers}
-				leads={counts.leads}
-				customers={counts.customers}
-				needsFollowUp={counts.needs_follow_up}
-				activeFollowUp={followUp}
-				onSelectStatus={(s) => {
-					followUp = false;
-					statusFilter = s;
-				}}
-				onToggleFollowUp={() => {
-					if (followUp) {
+	<ListPageShell
+		{status}
+		itemCount={items.length}
+		{errorMsg}
+		nextCursor={isDeletedView && !DeletedContactsList ? null : nextCursor}
+		{loadingMore}
+		onLoadMore={loadMore}
+		skeletonLines={6}
+		skeletonLabel="Loading contacts"
+	>
+		{#snippet kpi()}
+			{#if !isDeletedView}
+				<ContactListKpiStrip
+					total={counts.leads + counts.customers}
+					leads={counts.leads}
+					customers={counts.customers}
+					needsFollowUp={counts.needs_follow_up}
+					activeFollowUp={followUp}
+					onSelectStatus={(s) => {
 						followUp = false;
-					} else {
-						statusFilter = 'all';
-						followUp = true;
-					}
-				}}
+						statusFilter = s;
+					}}
+					onToggleFollowUp={() => {
+						if (followUp) {
+							followUp = false;
+						} else {
+							statusFilter = 'all';
+							followUp = true;
+						}
+					}}
+				/>
+			{/if}
+		{/snippet}
+
+		{#snippet tabs()}
+			<ContactStatusFilter
+				bind:value={statusFilter}
+				archivedCount={counts.archived}
+				deletedCount={counts.deleted}
 			/>
-		{/if}
+		{/snippet}
 
-		{#if followUp}
-			<div class="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-500/20 dark:bg-orange-500/10">
-				<span class="flex items-center gap-2 text-sm font-medium text-orange-800 dark:text-orange-300">
-					<CalendarClock class="h-4 w-4" />
-					Showing contacts with overdue follow-ups
-				</span>
-				<button
-					type="button"
-					onclick={() => (followUp = false)}
-					class="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-orange-500/20"
-				>
-					<X class="h-3.5 w-3.5" /> Clear
-				</button>
-			</div>
-		{/if}
+		{#snippet search()}
+			<ContactSearchBar bind:value={searchInput} onInput={(v) => (q = v)} />
+		{/snippet}
 
-		<!-- ── Filter bar ─────────────────────────────────────────────────
-		     Desktop: one row — [tabs flex-1] [search w-64] [filter button]
-		     Mobile:  [tabs flex-1] [filter button] → search full-width below
-		─────────────────────────────────────────────────────────────────── -->
-		<div class="border-b border-border/60">
-			<div class="flex items-end gap-2">
-				<!-- Status tabs: flex-1, scrollable on mobile -->
-				<div class="min-w-0 flex-1 overflow-x-hidden">
-					<ContactStatusFilter
-						bind:value={statusFilter}
-						archivedCount={counts.archived}
-						deletedCount={counts.deleted}
+		{#snippet filter()}
+			<ContactFilterControl bind:scope bind:tag bind:temperature showScope={canViewAll} />
+		{/snippet}
+
+		{#snippet banner()}
+			{#if followUp}
+				<div class="followup-banner">
+					<span class="followup-banner__text">
+						<i class="ri-calendar-schedule-line" aria-hidden="true"></i>
+						Showing contacts with overdue follow-ups
+					</span>
+					<button type="button" onclick={() => (followUp = false)} class="followup-banner__clear">
+						<i class="ri-close-line" aria-hidden="true"></i> Clear
+					</button>
+				</div>
+			{/if}
+		{/snippet}
+
+		{#snippet empty()}
+			{#if isDeletedView}
+				<EmptyState
+					iconClass="ri-delete-bin-line"
+					title={q.trim() ? 'No matches' : 'Recycle bin is empty'}
+					description={q.trim()
+						? 'Try a different name, phone, or email.'
+						: 'Deleted contacts appear here for 30 days, then are permanently removed. Restore one any time before then.'}
+				/>
+			{:else if followUp}
+				<EmptyState
+					iconClass="ri-calendar-schedule-line"
+					title="You're all caught up"
+					description="No contacts have an overdue follow-up right now."
+					actionLabel="Clear filter"
+					onAction={() => (followUp = false)}
+				/>
+			{:else}
+				<EmptyState
+					iconClass="ri-group-line"
+					title={q.trim() ? 'No matches' : 'No contacts yet'}
+					description={q.trim()
+						? 'Try a different name, phone, or email.'
+						: canCreate
+							? 'Add your first contact to start tracking conversations and jobs.'
+							: 'New contacts will show up here as your team adds them.'}
+					actionLabel={canCreate && !q.trim() ? 'Add contact' : undefined}
+					onAction={canCreate && !q.trim() ? () => goto('/contacts/new') : undefined}
+				/>
+			{/if}
+		{/snippet}
+
+		{#snippet content()}
+			{#if isDeletedView}
+				{#if DeletedContactsList}
+					<DeletedContactsList {items} {canRestore} onChanged={onBinChanged} />
+				{:else}
+					<SkeletonLoader lines={6} label="Loading recycle bin" />
+				{/if}
+			{:else}
+				<!-- Desktop: data table -->
+				<div class="contacts-page__table">
+					<ContactTable
+						{items}
+						selectable={selectionMode}
+						{selected}
+						onToggleSelect={toggleSelect}
+						onToggleAll={toggleSelectAll}
+						allSelected={allLoadedSelected}
+						onArchiveRequest={handleArchiveRequest}
+						onRestoreRequest={handleRestoreRequest}
+						onDeleteRequest={handleDeleteRequest}
 					/>
 				</div>
 
-				<!-- Desktop: search + filter -->
-				<div class="hidden shrink-0 items-center gap-2 pb-2 lg:flex">
-					<div class="w-64">
-						<ContactSearchBar bind:value={searchInput} onInput={(v) => (q = v)} />
-					</div>
-					<ContactFilterControl bind:scope bind:tag bind:temperature showScope={canViewAll} />
-				</div>
-
-				<!-- Mobile: filter button only -->
-				<div class="flex shrink-0 items-center pb-2 lg:hidden">
-					<ContactFilterControl bind:scope bind:tag bind:temperature showScope={canViewAll} />
-				</div>
-			</div>
-		</div>
-
-		<!-- Mobile: search below the tab bar -->
-		<div class="lg:hidden">
-			<ContactSearchBar bind:value={searchInput} onInput={(v) => (q = v)} />
-		</div>
-
-		<!-- ── Content area ──────────────────────────────────────────────── -->
-		{#if showSkeleton}
-			<SkeletonLoader lines={6} label="Loading contacts" />
-		{:else if showError}
-			<p class="text-sm text-destructive">{errorMsg}</p>
-		{:else if items.length === 0 && isDeletedView}
-			<EmptyState
-				icon={Trash2}
-				title={q.trim() ? 'No matches' : 'Recycle bin is empty'}
-				description={q.trim()
-					? 'Try a different name, phone, or email.'
-					: 'Deleted contacts appear here for 30 days, then are permanently removed. Restore one any time before then.'}
-			/>
-		{:else if items.length === 0 && followUp}
-			<EmptyState
-				icon={CalendarClock}
-				title="You're all caught up"
-				description="No contacts have an overdue follow-up right now."
-				actionLabel="Clear filter"
-				onAction={() => (followUp = false)}
-			/>
-		{:else if items.length === 0}
-			<EmptyState
-				icon={Users}
-				title={q.trim() ? 'No matches' : 'No contacts yet'}
-				description={q.trim()
-					? 'Try a different name, phone, or email.'
-					: canCreate
-						? 'Add your first contact to start tracking conversations and jobs.'
-						: 'New contacts will show up here as your team adds them.'}
-				actionLabel={canCreate && !q.trim() ? 'Add contact' : undefined}
-				onAction={canCreate && !q.trim() ? () => goto('/contacts/new') : undefined}
-			/>
-		{:else if isDeletedView}
-			{#if DeletedContactsList}
-				<DeletedContactsList {items} {canRestore} {canPurge} onChanged={onBinChanged} />
-			{:else}
-				<SkeletonLoader lines={6} label="Loading recycle bin" />
-			{/if}
-			{#if nextCursor}
-				<div class="flex justify-center pt-2">
-					<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
-						{loadingMore ? 'Loading…' : 'Load more'}
-					</Button>
+				<!-- Mobile: card list -->
+				<div class="contacts-page__cards">
+					{#if selectionMode}
+						<div class="contacts-page__select-head">
+							<button type="button" class="contacts-page__select-all" onclick={toggleSelectAll}>
+								{allLoadedSelected ? 'Clear all' : 'Select all'}
+							</button>
+							<span class="contacts-page__select-count">{selected.size} selected</span>
+						</div>
+					{/if}
+					<ul class="contacts-page__card-list" class:contacts-page__card-list--pad={selectionMode && selected.size > 0}>
+						{#each items as c (c.id)}
+							<li>
+								<ContactListCard
+									id={c.id}
+									full_name={c.full_name}
+									company_name={c.company_name}
+									avatar_url={c.avatar_url}
+									phone={c.phone}
+									email={c.email}
+									status={c.status}
+									assignee_name={c.assignee_name}
+									lead_source={c.lead_source}
+									lead_temperature={c.lead_temperature}
+									sms_opt_out={c.sms_opt_out}
+									tags={c.tags}
+									last_contacted_at={c.last_contacted_at}
+									selectable={selectionMode}
+									selected={selected.has(c.id)}
+									onToggleSelect={toggleSelect}
+									onArchiveRequest={handleArchiveRequest}
+									onRestoreRequest={handleRestoreRequest}
+									onDeleteRequest={handleDeleteRequest}
+								/>
+							</li>
+						{/each}
+					</ul>
 				</div>
 			{/if}
-		{:else}
-			<!-- Desktop: data table -->
-			<div class="hidden lg:block">
-				<ContactTable
-					{items}
-					selectable={selectionMode}
-					{selected}
-					onToggleSelect={toggleSelect}
-					onToggleAll={toggleSelectAll}
-					allSelected={allLoadedSelected}
-					onArchiveRequest={handleArchiveRequest}
-					onRestoreRequest={handleRestoreRequest}
-					onDeleteRequest={handleDeleteRequest}
-				/>
-			</div>
-
-			<!-- Mobile: card list -->
-			<div class="lg:hidden">
-				{#if selectionMode}
-					<div class="mb-3 flex items-center justify-between px-1">
-						<button
-							type="button"
-							class="text-sm font-medium text-primary"
-							onclick={toggleSelectAll}
-						>
-							{allLoadedSelected ? 'Clear all' : 'Select all'}
-						</button>
-						<span class="text-xs text-muted-foreground">{selected.size} selected</span>
-					</div>
-				{/if}
-				<ul class="grid gap-3" class:pb-24={selectionMode && selected.size > 0}>
-					{#each items as c (c.id)}
-						<li>
-							<ContactListCard
-								id={c.id}
-								full_name={c.full_name}
-								company_name={c.company_name}
-								avatar_url={c.avatar_url}
-								phone={c.phone}
-								email={c.email}
-								status={c.status}
-								assignee_name={c.assignee_name}
-								lead_source={c.lead_source}
-								lead_temperature={c.lead_temperature}
-								sms_opt_out={c.sms_opt_out}
-								tags={c.tags}
-								last_contacted_at={c.last_contacted_at}
-								selectable={selectionMode}
-								selected={selected.has(c.id)}
-								onToggleSelect={toggleSelect}
-								onArchiveRequest={handleArchiveRequest}
-								onRestoreRequest={handleRestoreRequest}
-								onDeleteRequest={handleDeleteRequest}
-							/>
-						</li>
-					{/each}
-				</ul>
-			</div>
-
-			{#if nextCursor}
-				<div class="flex justify-center pt-2">
-					<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
-						{loadingMore ? 'Loading…' : 'Load more'}
-					</Button>
-				</div>
-			{/if}
-		{/if}
-	</div>
+		{/snippet}
+	</ListPageShell>
 </PageWrapper>
 
 {#if selectionMode && selectedIds.length > 0}
@@ -588,3 +551,43 @@
 		onConfirm={handleDeleteConfirm}
 	/>
 {/if}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	// Toolbar / search / load-more / skeleton now live in <ListPageShell>. Only the
+	// contacts-specific table + mobile card + selection styles remain here.
+	.contacts-page {
+		&__table {
+			display: none;
+			@media (min-width: $bp-tablet) { display: block; }
+		}
+		&__cards {
+			@media (min-width: $bp-tablet) { display: none; }
+		}
+
+		&__select-head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: $space-3;
+			padding: 0 $space-1;
+		}
+		&__select-all {
+			border: none;
+			background: transparent;
+			color: var(--color-brand);
+			font: inherit;
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			cursor: pointer;
+		}
+		&__select-count { font-size: $fs-caption; color: var(--color-text-secondary); }
+
+		&__card-list {
+			display: grid;
+			gap: $space-3;
+			&--pad { padding-bottom: 6rem; }
+		}
+	}
+</style>

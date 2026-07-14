@@ -2,20 +2,30 @@
 	let { scope_of_work, notes }: { scope_of_work: string | null; notes: string | null } = $props();
 </script>
 
-<section class="rounded-xl border border-border bg-card p-4">
-	<h2 class="text-sm font-semibold text-foreground">Scope of work</h2>
+<section class="job-section">
+	<div class="job-section__head">
+		<div class="job-section__head-main">
+			<i class="ri-file-list-2-line job-section__icon" aria-hidden="true"></i>
+			<h2 class="job-section__title">Scope of work</h2>
+		</div>
+	</div>
 	{#if scope_of_work}
-		<p class="mt-2 whitespace-pre-wrap text-sm text-foreground">{scope_of_work}</p>
+		<p class="job-section__text">{scope_of_work}</p>
 	{:else}
-		<p class="mt-2 text-sm italic text-muted-foreground">No scope set.</p>
+		<p class="job-section__empty">No scope set.</p>
 	{/if}
 </section>
 
-<section class="rounded-xl border border-border bg-card p-4">
-	<h2 class="text-sm font-semibold text-foreground">Notes</h2>
+<section class="job-section">
+	<div class="job-section__head">
+		<div class="job-section__head-main">
+			<i class="ri-sticky-note-line job-section__icon" aria-hidden="true"></i>
+			<h2 class="job-section__title">Notes</h2>
+		</div>
+	</div>
 	{#if notes}
-		<p class="mt-2 whitespace-pre-wrap text-sm text-foreground">{notes}</p>
+		<p class="job-section__text">{notes}</p>
 	{:else}
-		<p class="mt-2 text-sm italic text-muted-foreground">No notes.</p>
+		<p class="job-section__empty">No notes.</p>
 	{/if}
 </section>

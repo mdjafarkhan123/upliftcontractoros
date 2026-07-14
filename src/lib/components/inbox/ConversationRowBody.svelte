@@ -1,15 +1,12 @@
 <script lang="ts">
-	import { Clock, AlertCircle, AlertTriangle, Lock } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
-	import type { ConversationListItem } from '$lib/stores/inbox.svelte';
-	import type { Component } from 'svelte';
+	import type { ConversationListItem, MessageChannel } from '$lib/stores/inbox.svelte';
 
 	let {
 		c,
 		dense,
 		initials,
-		ChannelIcon,
-		channelTint,
+		channelKey,
+		channelIcon,
 		timeLabel,
 		hasUnread,
 		isSnoozed,
@@ -19,13 +16,13 @@
 		previewText,
 		meta,
 		showMeta,
-		metaColor
+		metaState
 	}: {
 		c: ConversationListItem;
 		dense: boolean;
 		initials: string;
-		ChannelIcon: Component;
-		channelTint: string;
+		channelKey: MessageChannel | null;
+		channelIcon: string;
 		timeLabel: string;
 		hasUnread: boolean;
 		isSnoozed: boolean;
@@ -35,74 +32,43 @@
 		previewText: string;
 		meta: string[];
 		showMeta: boolean;
-		metaColor: string;
+		metaState: 'waiting' | 'failed' | 'default';
 	} = $props();
 
-	function metaIcon(text: string): Component {
-		if (text === 'Delivery failed') return AlertCircle;
-		if (text.startsWith('Waiting')) return AlertTriangle;
-		if (text.startsWith('Until') || text.startsWith('Snoozed')) return Clock;
-		if (text === 'Closed') return Lock;
-		return Clock;
+	function metaIcon(text: string): string {
+		if (text === 'Delivery failed') return 'ri-error-warning-line';
+		if (text.startsWith('Waiting')) return 'ri-alert-line';
+		if (text.startsWith('Until') || text.startsWith('Snoozed')) return 'ri-time-line';
+		if (text === 'Closed') return 'ri-lock-line';
+		return 'ri-time-line';
 	}
 </script>
 
-<div class="relative shrink-0">
-	<div
-		class={cn(
-			'flex shrink-0 items-center justify-center rounded-full font-semibold ring-1 ring-inset transition-colors duration-150',
-			dense ? 'h-8 w-8 text-xs' : 'h-9 w-9 text-[13px]',
-			hasUnread && !isClosed
-				? 'bg-primary text-primary-foreground ring-primary/20'
-				: 'bg-primary/10 text-primary ring-primary/20'
-		)}
-	>
+<div class="convo-row__avatar-wrap">
+	<div class="convo-row__avatar" class:convo-row__avatar--unread={hasUnread && !isClosed}>
 		{initials}
 	</div>
-	<div
-		class={cn(
-			'absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border-2 border-card bg-background shadow-sm',
-			dense ? 'h-4 w-4' : 'h-4 w-4',
-			channelTint
-		)}
-	>
-		<ChannelIcon class="h-3 w-3" />
+	<div class="convo-row__channel convo-row__channel--{channelKey ?? 'sms'}">
+		<i class={channelIcon} aria-hidden="true"></i>
 	</div>
 </div>
 
-<div class="min-w-0 flex-1">
-	<div class="flex items-baseline justify-between gap-2">
-		<p
-			class={cn(
-				'truncate text-sm tracking-tight text-foreground',
-				hasUnread && !isClosed ? 'font-semibold' : 'font-medium'
-			)}
-		>
+<div class="convo-row__body">
+	<div class="convo-row__top">
+		<p class="convo-row__name" class:convo-row__name--unread={hasUnread && !isClosed}>
 			{c.contact_name}
 		</p>
-		<span
-			class={cn(
-				'shrink-0 text-xs font-medium tabular-nums',
-				hasUnread && !isClosed ? 'text-primary' : 'text-muted-foreground'
-			)}
-		>
+		<span class="convo-row__time" class:convo-row__time--unread={hasUnread && !isClosed}>
 			{timeLabel}
 		</span>
 	</div>
 
-	<div class="mt-px flex items-center gap-2">
-		<p
-			class={cn(
-				'min-w-0 flex-1 truncate text-sm leading-5 text-muted-foreground',
-				hasUnread && !isClosed && 'font-medium text-foreground/90'
-			)}
-		>
+	<div class="convo-row__preview-row">
+		<p class="convo-row__preview" class:convo-row__preview--unread={hasUnread && !isClosed}>
 			{previewText}
 		</p>
 		{#if hasUnread && !isClosed}
-			<span
-				class="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold leading-none text-primary-foreground shadow-sm"
-			>
+			<span class="convo-row__badge">
 				{c.unread_count > 99 ? '99+' : c.unread_count}
 			</span>
 		{/if}
@@ -110,19 +76,17 @@
 
 	{#if showMeta}
 		<div
-			class={cn(
-				'mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] font-medium leading-4',
-				metaColor
-			)}
+			class="convo-row__meta"
+			class:convo-row__meta--waiting={metaState === 'waiting'}
+			class:convo-row__meta--failed={metaState === 'failed'}
 		>
 			{#each meta as part, i (i)}
-				{@const Icon = metaIcon(part)}
-				<span class="inline-flex shrink-0 items-center gap-1">
-					<Icon class="h-3 w-3 shrink-0" />
+				<span class="convo-row__meta-item">
+					<i class={metaIcon(part)} aria-hidden="true"></i>
 					{part}
 				</span>
 				{#if i < meta.length - 1}
-					<span class="shrink-0 text-muted-foreground/40">·</span>
+					<span class="convo-row__meta-dot">·</span>
 				{/if}
 			{/each}
 		</div>

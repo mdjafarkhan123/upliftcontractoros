@@ -9,8 +9,11 @@ import { transitionStatusSchema } from '$lib/server/jobs/schemas';
 import type { JobStatus } from '$lib/types/jobs';
 
 const ALLOWED: Record<JobStatus, JobStatus[]> = {
-	scheduled: ['in_progress', 'completed', 'cancelled'],
-	in_progress: ['completed', 'cancelled'],
+	// On hold = a temporary pause; resuming returns the job to 'scheduled' (it re-enters the
+	// normal queue as Pending/Scheduled, and Start becomes available again).
+	scheduled: ['in_progress', 'on_hold', 'completed', 'cancelled'],
+	in_progress: ['on_hold', 'completed', 'cancelled'],
+	on_hold: ['scheduled', 'cancelled'],
 	completed: [],
 	cancelled: []
 };

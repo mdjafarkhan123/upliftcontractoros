@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, gt, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -7,7 +7,9 @@ import {
 	contacts,
 	opportunities,
 	orgCounters,
+	organizations,
 	quoteLineItems,
+	quotePackages,
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -32,8 +34,17 @@ export const GET: RequestHandler = async (event) => {
 	const statusParam = url.searchParams.get('status') ?? 'all';
 	const searchRaw = (url.searchParams.get('q') ?? '').trim();
 	const cursor = url.searchParams.get('cursor');
+	const issuedByParam = (url.searchParams.get('issued_by') ?? '').trim();
+	const dateFromParam = (url.searchParams.get('date_from') ?? '').trim();
+	const dateToParam = (url.searchParams.get('date_to') ?? '').trim();
+	// Recycle-bin view: show soft-deleted quotes instead of active ones. The status
+	// tabs don't apply in the bin (the store sends no status alongside deleted=1).
+	const deletedParam = url.searchParams.get('deleted') === '1';
 
-	const conditions: SQL[] = [eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)];
+	const conditions: SQL[] = [
+		eq(quotes.org_id, auth.orgId),
+		deletedParam ? isNotNull(quotes.deleted_at) : isNull(quotes.deleted_at)
+	];
 
 	if (statusParam === 'active') {
 		conditions.push(inArray(quotes.status, [...ACTIVE_STATUSES]));
@@ -41,6 +52,20 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(inArray(quotes.status, [...CLOSED_STATUSES]));
 	} else if ((ALL_STATUSES as readonly string[]).includes(statusParam)) {
 		conditions.push(eq(quotes.status, statusParam as 'draft'));
+	}
+
+	// Advanced filter (QuoteFilterControl): salesperson + created-date range. All
+	// additive and org-scoped — a UUID owner match plus inclusive day bounds.
+	const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+	if (issuedByParam) {
+		conditions.push(eq(quotes.issued_by, issuedByParam));
+	}
+	if (ISO_DATE.test(dateFromParam)) {
+		conditions.push(sql`${quotes.created_at} >= ${dateFromParam}::date`);
+	}
+	if (ISO_DATE.test(dateToParam)) {
+		// Inclusive upper bound: everything strictly before the next day.
+		conditions.push(sql`${quotes.created_at} < (${dateToParam}::date + interval '1 day')`);
 	}
 
 	// Fuzzy search across quote title + linked contact name/company, plus an
@@ -98,6 +123,7 @@ export const GET: RequestHandler = async (event) => {
 			declined_at: quotes.declined_at,
 			expires_at: quotes.expires_at,
 			created_at: quotes.created_at,
+			deleted_at: quotes.deleted_at,
 			rank: relevance ?? sql<number>`0`
 		})
 		.from(quotes)
@@ -116,7 +142,8 @@ export const GET: RequestHandler = async (event) => {
 		viewed_at: r.viewed_at?.toISOString() ?? null,
 		accepted_at: r.accepted_at?.toISOString() ?? null,
 		declined_at: r.declined_at?.toISOString() ?? null,
-		expires_at: r.expires_at?.toISOString() ?? null
+		expires_at: r.expires_at?.toISOString() ?? null,
+		deleted_at: r.deleted_at?.toISOString() ?? null
 	}));
 	const last = sliced[sliced.length - 1];
 	const nextCursor =
@@ -238,6 +265,15 @@ export const POST: RequestHandler = async (event) => {
 			.set({ next_quote_number: quoteNumber + 1, updated_at: new Date() })
 			.where(eq(orgCounters.org_id, auth.orgId));
 
+		// Snapshot the org's default Terms & Conditions onto the quote at create time so the
+		// customer's agreed terms stay frozen even if the org default changes later. An explicit
+		// terms value in the request overrides the default.
+		const [orgRow] = await tx
+			.select({ default_quote_terms: organizations.default_quote_terms })
+			.from(organizations)
+			.where(eq(organizations.id, auth.orgId))
+			.limit(1);
+
 		const [inserted] = await tx
 			.insert(quotes)
 			.values({
@@ -275,10 +311,33 @@ export const POST: RequestHandler = async (event) => {
 							: null,
 				notes: input.notes ?? null,
 				internal_notes: input.internal_notes ?? null,
+				terms:
+					input.terms !== undefined ? input.terms : (orgRow?.default_quote_terms ?? null),
 				expires_at: input.expires_at ?? null,
 				public_token_hash: randomPlaceholderHash()
 			})
 			.returning();
+
+		// Good-Better-Best: insert the tiers first (if any) so each line can resolve its
+		// package_id from the client-sent package_key. Empty/absent packages = simple quote.
+		const packageKeyToId = new Map<string, string>();
+		if (input.packages && input.packages.length > 0) {
+			const insertedPkgs = await tx
+				.insert(quotePackages)
+				.values(
+					input.packages.map((p, idx) => ({
+						org_id: auth.orgId,
+						quote_id: inserted.id,
+						// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
+						package_key: p.package_key ?? undefined,
+						name: p.name.trim(),
+						is_recommended: p.is_recommended ?? false,
+						position: p.position ?? idx
+					}))
+				)
+				.returning({ id: quotePackages.id, package_key: quotePackages.package_key });
+			for (const pk of insertedPkgs) packageKeyToId.set(pk.package_key, pk.id);
+		}
 
 		if (input.line_items && input.line_items.length > 0) {
 			await tx.insert(quoteLineItems).values(
@@ -287,12 +346,14 @@ export const POST: RequestHandler = async (event) => {
 					quote_id: inserted.id,
 					// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
 					line_key: li.line_key ?? undefined,
+					package_id: li.package_key ? (packageKeyToId.get(li.package_key) ?? null) : null,
 					description: li.description,
 					details: li.details?.trim() || null,
 					quantity: String(li.quantity),
 					unit: li.unit?.trim() || null,
 					section_label: li.section_label?.trim() || null,
 					is_optional: li.is_optional ?? false,
+					taxable: li.taxable ?? true,
 					unit_price: String(li.unit_price),
 					unit_cost:
 						li.unit_cost !== undefined && li.unit_cost !== null ? String(li.unit_cost) : null,

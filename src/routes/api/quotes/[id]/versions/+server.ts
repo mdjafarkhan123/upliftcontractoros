@@ -63,6 +63,7 @@ export const GET: RequestHandler = async (event) => {
 				unit: li.unit,
 				section_label: li.section_label ?? null,
 				is_optional: li.is_optional ?? false,
+				package_name: li.package_name ?? null,
 				unit_price: li.unit_price,
 				total: li.total,
 				position: li.position

@@ -1,9 +1,6 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import { Input } from '$lib/components/ui/input';
-	import { Button } from '$lib/components/ui/button';
 	import { SUGGESTED_CONTACT_TAGS, formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
-	import { X, Plus } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let {
 		value = $bindable<string[]>([])
@@ -68,8 +65,9 @@
 	}
 </script>
 
-<div class="space-y-3">
-	<div class="flex flex-wrap gap-1.5" role="group" aria-label="Suggested tags">
+<div class="contact-tag-editor">
+	<!-- Suggested tags -->
+	<div class="contact-tag-editor__group" role="group" aria-label="Suggested tags">
 		{#each SUGGESTED_CONTACT_TAGS as tag (tag)}
 			{@const active = selectedSet.has(tag)}
 			{@const destructive = isDestructiveTag(tag)}
@@ -77,60 +75,58 @@
 				type="button"
 				onclick={() => toggle(tag)}
 				aria-pressed={active}
-				class={cn(
-					'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors',
-					active
-						? destructive
-							? 'border-destructive bg-destructive text-destructive-foreground'
-							: 'border-primary bg-primary text-primary-foreground'
-						: destructive
-							? 'border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10'
-							: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-				)}
+				class="contact-tag-editor__chip
+					{active ? 'contact-tag-editor__chip--active' : ''}
+					{destructive ? 'contact-tag-editor__chip--danger' : ''}"
 			>
 				{formatTagLabel(tag)}
 			</button>
 		{/each}
 	</div>
 
+	<!-- Custom tags -->
 	{#if customTags.length > 0}
-		<div class="flex flex-wrap gap-1.5" aria-label="Custom tags">
+		<div class="contact-tag-editor__group" aria-label="Custom tags">
 			{#each customTags as tag (tag)}
-				<span
-					class="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-muted/40 pl-3 pr-1 text-xs font-medium text-foreground"
-				>
+				<span class="contact-tag-editor__custom-chip">
 					{formatTagLabel(tag)}
 					<button
 						type="button"
-						class="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+						class="contact-tag-editor__custom-remove"
 						aria-label={`Remove ${tag}`}
 						onclick={() => toggle(tag)}
 					>
-						<X class="h-3 w-3" />
+						<i class="ri-close-line" aria-hidden="true"></i>
 					</button>
 				</span>
 			{/each}
 		</div>
 	{/if}
 
-	<div class="flex items-start gap-2">
-		<div class="flex-1">
-			<Input
-				placeholder="Add custom tag (e.g. roof-2026)"
-				bind:value={customDraft}
-				onkeydown={onCustomKeydown}
-				maxlength={MAX_TAG_LEN}
-				aria-invalid={customError ? 'true' : undefined}
-			/>
-			{#if customError}
-				<p class="mt-1 text-xs text-destructive">{customError}</p>
-			{/if}
+	<!-- Add custom tag -->
+	<div class="contact-tag-editor__custom-row">
+		<div class="contact-tag-editor__custom-wrap">
+			<div class="field">
+				<input
+					type="text"
+					class="field__input"
+					placeholder="Add custom tag (e.g. roof-2026)"
+					bind:value={customDraft}
+					onkeydown={onCustomKeydown}
+					maxlength={MAX_TAG_LEN}
+					aria-invalid={customError ? 'true' : undefined}
+				/>
+				{#if customError}
+					<p class="field__error">{customError}</p>
+				{/if}
+			</div>
 		</div>
-		<Button type="button" variant="outline" class="h-11" onclick={addCustom}>
-			<Plus class="h-4 w-4" /> Add
+		<Button type="button" variant="secondary" onclick={addCustom}>
+			<i class="ri-add-line" aria-hidden="true"></i> Add
 		</Button>
 	</div>
-	<p class="text-xs text-muted-foreground">
+
+	<p class="contact-tag-editor__hint">
 		Tags are descriptors. Lifecycle (Lead / Customer / Archived) lives in status above.
 	</p>
 </div>

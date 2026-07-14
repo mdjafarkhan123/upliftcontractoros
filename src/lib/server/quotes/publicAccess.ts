@@ -49,8 +49,16 @@ export type ValidQuoteRow = {
 	deposit_paid_amount: number;
 	deposit_paid_at: Date | null;
 	notes: string | null;
+	terms: string | null;
 	viewed_at: Date | null;
 	expires_at: Date | null;
+	// Good-Better-Best: which tier the customer accepted (null until accepted / on simple
+	// quotes) plus the frozen accepted figures, so the read-only accepted view can name the
+	// chosen package and show its final total.
+	accepted_package_id: string | null;
+	accepted_subtotal: string | null;
+	accepted_tax_amount: string | null;
+	accepted_total: string | null;
 };
 
 export type LookupResult = { ok: true; quote: ValidQuoteRow } | { ok: false };
@@ -101,8 +109,13 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			deposit_paid_amount: quotes.deposit_paid_amount,
 			deposit_paid_at: quotes.deposit_paid_at,
 			notes: quotes.notes,
+			terms: quotes.terms,
 			viewed_at: quotes.viewed_at,
 			expires_at: quotes.expires_at,
+			accepted_package_id: quotes.accepted_package_id,
+			accepted_subtotal: quotes.accepted_subtotal,
+			accepted_tax_amount: quotes.accepted_tax_amount,
+			accepted_total: quotes.accepted_total,
 			stored_hash: quotes.public_token_hash,
 			deleted_at: quotes.deleted_at
 		})
@@ -176,8 +189,13 @@ export async function lookupValidQuoteByToken(rawToken: string): Promise<LookupR
 			deposit_paid_amount: row.deposit_paid_amount,
 			deposit_paid_at: row.deposit_paid_at,
 			notes: row.notes,
+			terms: row.terms,
 			viewed_at: row.viewed_at,
-			expires_at: row.expires_at
+			expires_at: row.expires_at,
+			accepted_package_id: row.accepted_package_id ?? null,
+			accepted_subtotal: row.accepted_subtotal ?? null,
+			accepted_tax_amount: row.accepted_tax_amount ?? null,
+			accepted_total: row.accepted_total ?? null
 		}
 	};
 }

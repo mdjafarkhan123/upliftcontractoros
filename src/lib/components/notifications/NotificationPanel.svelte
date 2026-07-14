@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { Bell, ChevronRight } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import NotificationItem from './NotificationItem.svelte';
@@ -108,56 +106,43 @@
 	}
 </script>
 
-<div class="flex h-full flex-col">
-	<header class="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-		<div class="flex items-center gap-2">
-			<h2 class="text-sm font-semibold text-foreground">Notifications</h2>
+<div class="noti-panel">
+	<header class="noti-panel__head">
+		<div class="noti-panel__head-main">
+			<h2 class="noti-panel__title">Notifications</h2>
 			{#if unreadCount > 0}
-				<span
-					class="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground"
-				>
-					{unreadCount > 99 ? '99+' : unreadCount}
-				</span>
+				<span class="noti-panel__count">{unreadCount > 99 ? '99+' : unreadCount}</span>
 			{/if}
 		</div>
 		{#if unreadCount > 0}
-			<Button
-				variant="ghost"
-				size="sm"
+			<button
+				type="button"
+				class="btn btn--ghost btn--sm"
 				onclick={() => notificationStore.markAllRead()}
-				class="min-h-[44px]"
 			>
 				Mark all read
-			</Button>
+			</button>
 		{/if}
 	</header>
 
-	<div
-		class={variant === 'panel'
-			? 'max-h-[60vh] flex-1 overflow-y-auto p-2'
-			: 'flex-1 overflow-y-auto p-2'}
-	>
+	<div class="noti-panel__body" class:noti-panel__body--panel={variant === 'panel'}>
 		{#if showSkeleton}
-			<div class="p-2">
+			<div class="noti-panel__loading">
 				<SkeletonLoader lines={5} label="Loading notifications" />
 			</div>
 		{:else if showEmpty}
-			<div class="p-2">
+			<div class="noti-panel__empty">
 				<EmptyState
-					icon={Bell}
+					iconClass="ri-notification-3-line"
 					title="You're all caught up"
 					description="New activity will show up here."
 				/>
 			</div>
 		{:else}
 			{#each groupedItems as group (group.key)}
-				<div class="mb-1">
-					<p
-						class="sticky top-0 z-10 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-					>
-						{group.label}
-					</p>
-					<ul class="flex flex-col gap-0.5">
+				<div class="noti-panel__group">
+					<p class="noti-panel__group-label">{group.label}</p>
+					<ul class="noti-panel__list">
 						{#each group.items as n (n.id)}
 							<li>
 								<NotificationItem notification={n} {onNavigate} index={getGlobalIndex(n.id)} />
@@ -170,14 +155,10 @@
 	</div>
 
 	{#if variant === 'panel' && !showSkeleton && !showEmpty}
-		<footer class="border-t border-border px-3 py-2">
-			<button
-				type="button"
-				onclick={handleViewAll}
-				class="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground min-h-[44px]"
-			>
+		<footer class="noti-panel__foot">
+			<button type="button" class="noti-panel__view-all" onclick={handleViewAll}>
 				View all notifications
-				<ChevronRight class="h-4 w-4" />
+				<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 			</button>
 		</footer>
 	{/if}

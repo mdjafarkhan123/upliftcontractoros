@@ -1,28 +1,9 @@
 <script lang="ts">
-	import {
-		PhoneMissed,
-		PhoneOutgoing,
-		PhoneOff,
-		Voicemail,
-		CalendarPlus,
-		Check,
-		CheckCheck,
-		AlertCircle,
-		Ban,
-		Loader2,
-		Clock,
-		StickyNote,
-		MessageSquare,
-		Globe,
-		RotateCcw,
-		Sparkles
-	} from '@lucide/svelte';
 	import type { ThreadMessage } from '$lib/stores/inbox.svelte';
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import EmailMessageCard from './EmailMessageCard.svelte';
 	import MessageMedia from './MessageMedia.svelte';
-	import { cn } from '$lib/utils/cn';
 
 	let {
 		message: m,
@@ -48,17 +29,17 @@
 	const callMeta = $derived.by(() => {
 		switch (m.call_outcome) {
 			case 'spoke':
-				return { label: 'Spoke', icon: PhoneOutgoing };
+				return { label: 'Spoke', icon: 'ri-phone-line' };
 			case 'voicemail':
-				return { label: 'Left voicemail', icon: Voicemail };
+				return { label: 'Left voicemail', icon: 'ri-voicemail-line' };
 			case 'no_answer':
-				return { label: 'No answer', icon: PhoneOff };
+				return { label: 'No answer', icon: 'ri-phone-off-line' };
 			case 'follow_up_scheduled':
-				return { label: 'Follow-up scheduled', icon: CalendarPlus };
+				return { label: 'Follow-up scheduled', icon: 'ri-calendar-event-line' };
 			case 'wrong_number':
-				return { label: 'Wrong number', icon: Ban };
+				return { label: 'Wrong number', icon: 'ri-forbid-line' };
 			default:
-				return { label: 'Logged call', icon: PhoneOutgoing };
+				return { label: 'Logged call', icon: 'ri-phone-line' };
 		}
 	});
 
@@ -163,216 +144,166 @@
 {#if isEmail}
 	<EmailMessageCard message={m} {canRetry} {inboundInitials} {outboundInitials} {grouped} />
 {:else if isMissedCall}
-	<div class="flex justify-center py-0.5">
-		<div
-			class="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/8 px-3 py-1 text-[11px] font-medium text-amber-700 shadow-sm dark:text-amber-400"
-		>
-			<PhoneMissed class="h-3.5 w-3.5" />
+	<div class="msg-event">
+		<div class="msg-event__chip">
+			<i class="ri-phone-off-line" aria-hidden="true"></i>
 			<span>Missed call · {timestamp}</span>
 		</div>
 	</div>
 {:else if isCall}
-	<div class="flex justify-center px-2 py-1">
-		<div
-			class="w-full max-w-[85%] rounded-xl border border-border/60 bg-card px-3.5 py-2.5 text-sm shadow-sm"
-		>
-			<div class="flex items-center gap-2 text-foreground">
-				<callMeta.icon class="h-4 w-4 shrink-0 text-primary" />
-				<span class="font-medium">{callMeta.label}</span>
+	<div class="msg-call">
+		<div class="msg-call__card">
+			<div class="msg-call__head">
+				<i class="{callMeta.icon} msg-call__icon" aria-hidden="true"></i>
+				<span class="msg-call__label">{callMeta.label}</span>
 				{#if callDuration}
-					<span class="text-muted-foreground">· {callDuration}</span>
+					<span class="msg-call__dur">· {callDuration}</span>
 				{/if}
-				<span class="ml-auto text-[11px] text-muted-foreground">{timestamp}</span>
+				<span class="msg-call__time">{timestamp}</span>
 			</div>
 			{#if hasBody}
-				<p class="mt-1.5 whitespace-pre-wrap break-words leading-relaxed text-muted-foreground">
-					{m.body}
-				</p>
+				<p class="msg-call__body">{m.body}</p>
 			{/if}
 			{#if m.call_outcome === 'follow_up_scheduled'}
-				<a
-					href={followUpHref}
-					class="mt-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-				>
-					<CalendarPlus class="h-3.5 w-3.5" />
+				<a href={followUpHref} class="msg-call__cta">
+					<i class="ri-calendar-event-line" aria-hidden="true"></i>
 					Schedule appointment
 				</a>
 			{/if}
 		</div>
 	</div>
 {:else if isInternal}
-	<div class="flex justify-center px-2 py-0.5">
-		<div
-			class="max-w-[85%] rounded-xl border border-amber-500/15 bg-amber-500/6 px-3.5 py-2.5 text-sm text-foreground shadow-sm"
-		>
-			<div
-				class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
-			>
-				<StickyNote class="h-3 w-3" />
+	<div class="msg-note">
+		<div class="msg-note__card">
+			<div class="msg-note__head">
+				<i class="ri-sticky-note-line" aria-hidden="true"></i>
 				Internal note
 			</div>
-			<p class="whitespace-pre-wrap break-words leading-relaxed">{m.body}</p>
-			<div class="mt-1 text-right text-[10px] text-muted-foreground">{timestamp}</div>
+			<p class="msg-note__body">{m.body}</p>
+			<div class="msg-note__time">{timestamp}</div>
 		</div>
 	</div>
 {:else}
-	<div
-		class={cn(
-			'flex items-end gap-2',
-			isInbound ? 'justify-start' : 'justify-end',
-			grouped ? 'mt-0.5' : 'mt-4'
-		)}
-	>
+	<div class="msg msg--{isInbound ? 'in' : 'out'}" class:msg--grouped={grouped}>
 		{#if isInbound}
 			{#if !grouped}
-				<div
-					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-foreground ring-1 ring-border/60"
-					aria-hidden="true"
-				>
+				<div class="msg__avatar msg__avatar--in" aria-hidden="true">
 					{#if inboundInitials}
 						{inboundInitials}
 					{:else if m.channel === 'webchat'}
-						<Globe class="h-3.5 w-3.5" />
+						<i class="ri-global-line" aria-hidden="true"></i>
 					{:else}
-						<MessageSquare class="h-3.5 w-3.5" />
+						<i class="ri-chat-1-line" aria-hidden="true"></i>
 					{/if}
 				</div>
 			{:else}
-				<div class="w-8 shrink-0"></div>
+				<div class="msg__spacer"></div>
 			{/if}
 		{/if}
 
-		<div
-			class={cn(
-				'flex max-w-[78%] flex-col md:max-w-[70%]',
-				isInbound ? 'items-start' : 'items-end'
-			)}
-		>
+		<div class="msg__col msg__col--{isInbound ? 'in' : 'out'}">
 			<div
-				class={cn(
-					'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm transition-colors',
-					isInbound
-						? 'bg-secondary text-foreground'
-						: cn(
-								'bg-primary/90 text-primary-foreground',
-								isDestructive && 'ring-1 ring-inset ring-destructive/40',
-								isTerminalFailure &&
-									'bg-destructive/10 text-foreground ring-2 ring-inset ring-destructive/50'
-							),
-					isPending && !isTerminalFailure && 'opacity-75'
-				)}
+				class="msg__bubble msg__bubble--{isInbound ? 'in' : 'out'}"
+				class:msg__bubble--pending={isPending && !isTerminalFailure}
+				class:msg__bubble--failed={!isInbound && isDestructive && !isTerminalFailure}
+				class:msg__bubble--terminal={!isInbound && isTerminalFailure}
 			>
 				{#if hasMedia}
-					<MessageMedia media={mediaItems} align={isInbound ? 'start' : 'end'} />
+					<div class="msg__media">
+						<MessageMedia media={mediaItems} align={isInbound ? 'start' : 'end'} />
+					</div>
 				{/if}
 				{#if hasBody}
-					<p class="whitespace-pre-wrap break-words">{m.body}</p>
+					<p class="msg__text">{m.body}</p>
 				{/if}
 
-				<div
-					class={cn('mt-1 flex items-center justify-end gap-1', hasMedia && !hasBody && '-mt-1')}
-				>
+				<div class="msg__foot" class:msg__foot--tight={hasMedia && !hasBody}>
 					{#if !isInternal && !isMissedCall}
-						<span class="inline-flex items-center gap-1 text-[10px]">
+						<span class="msg__chan">
 							{#if m.channel === 'webchat'}
-								<Globe class="h-3.5 w-3.5 text-violet-500" />
-								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}
-									>Chat</span
-								>
+								<i class="ri-global-line" aria-hidden="true"></i>
+								<span class="msg__chan-label">Chat</span>
 							{:else}
-								<MessageSquare class="h-3.5 w-3.5 text-sky-500" />
-								<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}
-									>SMS</span
-								>
+								<i class="ri-chat-1-line" aria-hidden="true"></i>
+								<span class="msg__chan-label">SMS</span>
 							{/if}
 						</span>
 					{/if}
 					{#if isAutomated}
-						<Sparkles class="h-3 w-3 shrink-0 opacity-60" aria-label="Automated" />
+						<i class="ri-sparkling-line msg__auto" aria-label="Automated"></i>
 					{/if}
-					<span
-						class={cn(
-							'text-[11px]',
-							isInbound ? 'text-muted-foreground' : 'text-primary-foreground/60'
-						)}
-					>
-						{timestamp}
-					</span>
+					<span class="msg__time">{timestamp}</span>
 					{#if isOutbound}
 						{#if isSending && !isStalled}
-							<Loader2 class="h-3 w-3 animate-spin opacity-60" aria-label="Sending" />
+							<i
+								class="ri-loader-4-line animate-spin msg__status msg__status--pending"
+								aria-label="Sending"
+							></i>
 						{:else if isStalled}
-							<Clock class="h-3 w-3 text-amber-400" aria-label="Delayed" />
+							<i class="ri-time-line msg__status msg__status--delayed" aria-label="Delayed"></i>
 						{:else if isDestructive}
 							{#if isTerminalFailure}
-								<Ban class="h-3 w-3 text-destructive/70" aria-label={statusDisplay?.label ?? ''} />
+								<i
+									class="ri-forbid-line msg__status msg__status--failed"
+									aria-label={statusDisplay?.label ?? ''}
+								></i>
 							{:else}
-								<AlertCircle class="h-3 w-3 text-destructive/70" aria-label="Failed" />
+								<i class="ri-error-warning-line msg__status msg__status--failed" aria-label="Failed"
+								></i>
 							{/if}
 						{:else if isRead && isDelivered}
-							<CheckCheck class="h-3.5 w-3.5 text-sky-500" aria-label="Read" />
+							<i class="ri-check-double-line msg__status msg__status--read" aria-label="Read"></i>
 						{:else if isDelivered}
-							<CheckCheck class="h-3.5 w-3.5 text-primary-foreground/80" aria-label="Delivered" />
+							<i
+								class="ri-check-double-line msg__status msg__status--delivered"
+								aria-label="Delivered"
+							></i>
 						{:else if isSent}
-							<Check class="h-3.5 w-3.5 text-primary-foreground/50" aria-label="Sent" />
+							<i class="ri-check-line msg__status msg__status--sent" aria-label="Sent"></i>
 						{/if}
 					{/if}
 				</div>
 			</div>
 
 			{#if isOutbound && isDestructive}
-				<div class="mt-1 flex flex-wrap items-center gap-2">
+				<div class="msg__fail">
 					{#if statusDisplay}
 						<span
-							class={cn(
-								'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset',
-								statusDisplay.tone === 'destructive'
-									? 'bg-red-50 text-red-700 ring-red-200/70 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20'
-									: 'bg-muted text-muted-foreground ring-border/60'
-							)}
+							class="msg__fail-badge"
+							class:msg__fail-badge--muted={statusDisplay.tone !== 'destructive'}
 						>
 							{statusDisplay.label}
 						</span>
 					{/if}
 					{#if isRetryable}
-						<button
-							type="button"
-							onclick={onRetry}
-							disabled={retrying}
-							class="inline-flex min-h-[28px] items-center gap-1 rounded-md border border-destructive/40 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
-						>
+						<button type="button" onclick={onRetry} disabled={retrying} class="msg__retry">
 							{#if retrying}
-								<Loader2 class="h-3 w-3 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 								<span>Retrying…</span>
 							{:else}
-								<RotateCcw class="h-3 w-3" />
+								<i class="ri-refresh-line" aria-hidden="true"></i>
 								<span>Retry</span>
 							{/if}
 						</button>
 					{/if}
 				</div>
 				{#if m.failure_reason || isTerminalFailure}
-					<p class="mt-0.5 max-w-[260px] truncate text-[10px] text-destructive/80">
-						{m.failure_reason ?? 'No retry available'}
-					</p>
+					<p class="msg__fail-reason">{m.failure_reason ?? 'No retry available'}</p>
 				{/if}
 			{/if}
 		</div>
 
 		{#if !isInbound}
 			{#if !grouped}
-				<div
-					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary ring-1 ring-primary/20"
-					aria-hidden="true"
-				>
+				<div class="msg__avatar msg__avatar--out" aria-hidden="true">
 					{#if outboundInitials}
 						{outboundInitials}
 					{:else}
-						<MessageSquare class="h-3.5 w-3.5" />
+						<i class="ri-chat-1-line" aria-hidden="true"></i>
 					{/if}
 				</div>
 			{:else}
-				<div class="w-8 shrink-0"></div>
+				<div class="msg__spacer"></div>
 			{/if}
 		{/if}
 	</div>

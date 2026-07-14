@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-
 	let {
 		name,
 		logoUrl,
@@ -36,26 +34,17 @@
 			.toUpperCase() || 'C'
 	);
 
-	const sizeClass = $derived(
-		size === 'sm' ? 'h-6 w-6 text-[10px]' : size === 'lg' ? 'h-12 w-12 text-sm' : 'h-8 w-8 text-xs'
-	);
-
 	const showImage = $derived(Boolean(logoUrl) && !failed);
 	const isLoading = $derived(showImage && !loaded);
 </script>
 
 <div
-	class={cn('relative shrink-0 overflow-hidden rounded-md', sizeClass, className)}
+	class={['org-avatar', `org-avatar--${size}`, className].filter(Boolean).join(' ')}
 	aria-hidden="true"
 >
-	<div
-		class={cn(
-			'absolute inset-0 flex items-center justify-center font-semibold',
-			showImage ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
-		)}
-	>
+	<div class="org-avatar__fallback{showImage ? ' org-avatar__fallback--image' : ''}">
 		{#if isLoading}
-			<span class="block h-full w-full animate-pulse bg-muted"></span>
+			<span class="org-avatar__loading skeleton-shimmer"></span>
 		{:else if !showImage}
 			<span>{initials}</span>
 		{/if}
@@ -65,10 +54,7 @@
 		<img
 			src={logoUrl}
 			alt=""
-			class={cn(
-				'absolute inset-0 h-full w-full object-cover transition-opacity duration-150',
-				loaded ? 'opacity-100' : 'opacity-0'
-			)}
+			class="org-avatar__img{loaded ? ' org-avatar__img--loaded' : ''}"
 			onload={() => (loaded = true)}
 			onerror={() => {
 				failed = true;
@@ -77,3 +63,67 @@
 		/>
 	{/if}
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.org-avatar {
+		position: relative;
+		flex-shrink: 0;
+		overflow: hidden;
+		border-radius: $radius-sm;
+
+		&--sm {
+			width: 24px;
+			height: 24px;
+			font-size: 10px;
+		}
+		&--md {
+			width: 32px;
+			height: 32px;
+			font-size: 12px;
+		}
+		&--lg {
+			width: 48px;
+			height: 48px;
+			font-size: 14px;
+		}
+
+		&__fallback {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-weight: $weight-semibold;
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+
+			// When a logo image is present, the fallback sits behind it as a neutral backdrop.
+			&--image {
+				background: var(--color-bg-surface-sunk);
+				color: var(--color-text-muted);
+			}
+		}
+
+		&__loading {
+			display: block;
+			width: 100%;
+			height: 100%;
+		}
+
+		&__img {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			opacity: 0;
+			transition: opacity $duration-fast $ease-standard;
+
+			&--loaded {
+				opacity: 1;
+			}
+		}
+	}
+</style>

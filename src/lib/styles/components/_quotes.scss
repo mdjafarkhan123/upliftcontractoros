@@ -1,0 +1,4998 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// QUOTES — S6.0 LIST  |  S6.1 DETAIL  |  S6.2 EDIT/NEW  (grows each session)
+// Global BEM blocks for the quotes feature. Page-specific layout stays scoped.
+// =============================================================================
+
+// Quote status tabs now render via the shared <ListTabs> component
+// ($lib/components/shared/ListTabs.svelte). The old group/chip pill styles are
+// gone — Quotes uses the same underline tab bar as every other list page.
+
+// -----------------------------------------------------------------------------
+// QUOTE TABLE — desktop table with hover row actions
+// -----------------------------------------------------------------------------
+// QuoteTable now renders through the shared ListTable shell (`.list-table`),
+// which owns all chrome. Only quote-specific cell CONTENT classes live here.
+.quote-tbl {
+	&__number {
+		font-family: 'Geist Mono', monospace;
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+		display: block;
+	}
+
+	&__title {
+		display: block;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 240px;
+		text-decoration: none;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover,
+		&:focus-visible {
+			color: var(--color-brand);
+			outline: none;
+		}
+	}
+
+	&__client-inline {
+		display: block;
+		font-size: 1.1rem;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		@media (min-width: 1024px) {
+			display: none;
+		}
+	}
+
+	&__client-link {
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		display: block;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover,
+		&:focus-visible {
+			color: var(--color-brand);
+			outline: none;
+		}
+	}
+
+	&__amount {
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__date {
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+
+		&--expired {
+			color: var(--danger-solid);
+		}
+		&--empty {
+			font-style: italic;
+			color: var(--color-text-muted);
+			opacity: 0.5;
+		}
+	}
+
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE CARD — compact mobile/list card (QuoteListItem)
+// -----------------------------------------------------------------------------
+.quote-card {
+	display: block;
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: rgba(34, 125, 83, 0.3);
+		background: var(--color-bg-surface-raised);
+		box-shadow: var(--shadow-md);
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&:active {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__inner {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+
+	&__icon-wrap {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2rem;
+		}
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__number {
+		display: block;
+		font-family: 'Geist Mono', monospace;
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+	}
+
+	&__name {
+		display: block;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__title {
+		display: block;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__amount {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__menu-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-1 $space-2;
+		margin-top: $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__sep {
+		color: var(--color-border-strong);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE STATUS BADGE — pill used inline in table rows, cards, and detail header
+// -----------------------------------------------------------------------------
+.quote-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px $space-2;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-medium;
+	line-height: $lh-caption;
+	white-space: nowrap;
+
+	&--draft {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+	}
+
+	&--sent {
+		background: rgba(113, 113, 122, 0.12);
+		color: #52525b;
+	}
+
+	&--viewed {
+		background: rgba(59, 130, 246, 0.12);
+		color: #1d4ed8;
+		box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+	}
+
+	&--accepted {
+		background: rgba(16, 185, 129, 0.12);
+		color: #047857;
+	}
+
+	&--declined {
+		background: rgba(244, 63, 94, 0.12);
+		color: #be123c;
+	}
+
+	&--expired {
+		background: rgba(113, 113, 122, 0.12);
+		color: #52525b;
+	}
+
+	&--changes {
+		background: rgba(245, 158, 11, 0.15);
+		color: #b45309;
+		box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-badge {
+		&--sent {
+			color: #a1a1aa;
+			background: rgba(161, 161, 170, 0.1);
+		}
+		&--viewed {
+			color: #93c5fd;
+			background: rgba(59, 130, 246, 0.12);
+			box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+		}
+		&--accepted {
+			color: #6ee7b7;
+			background: rgba(16, 185, 129, 0.12);
+		}
+		&--declined {
+			color: #fda4af;
+			background: rgba(244, 63, 94, 0.12);
+		}
+		&--expired {
+			color: #a1a1aa;
+			background: rgba(161, 161, 170, 0.1);
+		}
+		&--changes {
+			color: #fcd34d;
+			background: rgba(245, 158, 11, 0.12);
+			box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTES PAGE HEADER — load-more button area
+// -----------------------------------------------------------------------------
+.quotes-load-more {
+	display: flex;
+	justify-content: center;
+	padding-top: $space-3;
+}
+
+// =============================================================================
+// S6.1 — QUOTE DETAIL DISPLAY COMPONENTS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// PROGRESS STRIP — 3-step wizard indicator (Customer → Build → Send)
+// -----------------------------------------------------------------------------
+.quote-progress-strip {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+
+	&__step {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__circle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+			line-height: 1;
+		}
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		transition: color $duration-fast $ease-standard;
+	}
+
+	&__connector {
+		flex: 1 0 24px;
+		height: 1px;
+		background: var(--color-border);
+		margin: 0 $space-3;
+		transition: background-color $duration-fast $ease-standard;
+
+		&--done {
+			background: var(--color-brand);
+		}
+	}
+
+	// Done step
+	&__step--done &__circle {
+		background: var(--color-brand);
+		color: #fff;
+	}
+
+	// Active step
+	&__step--active &__circle {
+		background: var(--color-brand);
+		color: #fff;
+		box-shadow: 0 0 0 4px rgba(34, 125, 83, 0.15);
+	}
+	&__step--active &__label {
+		color: var(--color-text-primary);
+		font-weight: $weight-semibold;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE ALERT — inline status banners (changes requested / expired)
+// -----------------------------------------------------------------------------
+.quote-alert {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-xl;
+	border: 1px solid;
+	box-shadow: var(--shadow-sm);
+
+	&--warning {
+		border-color: rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.08);
+	}
+
+	&--muted {
+		border-color: rgba(113, 113, 122, 0.25);
+		background: rgba(113, 113, 122, 0.08);
+	}
+
+	&__icon-wrap {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		margin-top: 2px;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		.quote-alert--warning & {
+			background: rgba(245, 158, 11, 0.18);
+			color: #b45309;
+		}
+		.quote-alert--muted & {
+			background: rgba(113, 113, 122, 0.18);
+			color: #52525b;
+		}
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-bottom: $space-1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+
+		.quote-alert--warning & {
+			color: #92400e;
+		}
+		.quote-alert--muted & {
+			color: #3f3f46;
+		}
+	}
+
+	&__time {
+		flex-shrink: 0;
+		font-size: $fs-caption;
+
+		.quote-alert--warning & {
+			color: rgba(180, 83, 9, 0.8);
+		}
+		.quote-alert--muted & {
+			color: rgba(82, 82, 91, 0.8);
+		}
+	}
+
+	&__message {
+		font-size: $fs-body;
+		white-space: pre-wrap;
+
+		.quote-alert--warning & {
+			color: rgba(120, 53, 15, 0.9);
+		}
+		.quote-alert--muted & {
+			color: rgba(63, 63, 70, 0.9);
+		}
+	}
+
+	&__hint {
+		margin-top: $space-2;
+		font-size: $fs-caption;
+
+		.quote-alert--warning & {
+			color: rgba(180, 83, 9, 0.8);
+		}
+		.quote-alert--muted & {
+			color: rgba(82, 82, 91, 0.8);
+		}
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-3;
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-alert--warning {
+		background: rgba(245, 158, 11, 0.06);
+	}
+	.quote-alert--warning .quote-alert__icon-wrap {
+		color: #fcd34d;
+	}
+	.quote-alert--warning .quote-alert__title {
+		color: #fde68a;
+	}
+	.quote-alert--warning .quote-alert__time {
+		color: rgba(252, 211, 77, 0.75);
+	}
+	.quote-alert--warning .quote-alert__message {
+		color: rgba(254, 243, 199, 0.9);
+	}
+	.quote-alert--warning .quote-alert__hint {
+		color: rgba(252, 211, 77, 0.75);
+	}
+
+	.quote-alert--muted {
+		background: rgba(113, 113, 122, 0.06);
+	}
+	.quote-alert--muted .quote-alert__icon-wrap {
+		color: #a1a1aa;
+	}
+	.quote-alert--muted .quote-alert__title {
+		color: #e4e4e7;
+	}
+	.quote-alert--muted .quote-alert__time {
+		color: rgba(161, 161, 170, 0.8);
+	}
+	.quote-alert--muted .quote-alert__message {
+		color: rgba(228, 228, 231, 0.9);
+	}
+	.quote-alert--muted .quote-alert__hint {
+		color: rgba(161, 161, 170, 0.8);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE TIMELINE — sidebar history panel (QuoteHistoryTimeline)
+// -----------------------------------------------------------------------------
+.quote-timeline {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__header {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-3;
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__heading {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__item {
+		position: relative;
+		display: flex;
+		gap: $space-3;
+		padding-bottom: $space-4;
+
+		&:last-child {
+			padding-bottom: 0;
+		}
+	}
+
+	&__connector {
+		position: absolute;
+		left: 13px;
+		top: 28px;
+		width: 1px;
+		height: calc(100% - 20px);
+		background: var(--color-border);
+	}
+
+	&__dot {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--sent {
+			background: rgba(113, 113, 122, 0.15);
+			color: #52525b;
+		}
+		&--viewed {
+			background: rgba(59, 130, 246, 0.15);
+			color: #1d4ed8;
+		}
+		&--revision {
+			background: rgba(245, 158, 11, 0.15);
+			color: #b45309;
+		}
+		&--accepted {
+			background: rgba(16, 185, 129, 0.15);
+			color: #047857;
+		}
+		&--declined {
+			background: rgba(244, 63, 94, 0.15);
+			color: #be123c;
+		}
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+		padding-top: $space-1;
+	}
+
+	&__expand-btn {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-1;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		text-align: left;
+
+		&:hover .quote-timeline__expand-icon {
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+		}
+	}
+
+	&__expand-text {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__meta {
+		font-size: $fs-body;
+		font-weight: 400;
+		color: var(--color-text-secondary);
+	}
+
+	&__time {
+		display: block;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__expand-icon {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition:
+			transform $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&--open {
+			transform: rotate(180deg);
+		}
+	}
+
+	&__detail {
+		margin-top: $space-2;
+		padding: $space-3;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__change-summary {
+		margin-bottom: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+
+		span {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__line-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border-top: 1px solid var(--color-border-subtle);
+	}
+
+	&__line-item {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-1 0;
+		border-bottom: 1px solid var(--color-border-subtle);
+
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__line-desc {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__line-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__line-qty {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__line-total {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__totals {
+		margin-top: $space-2;
+		padding-top: $space-2;
+		border-top: 1px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__total-row {
+		display: flex;
+		justify-content: space-between;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		span:last-child {
+			font-variant-numeric: tabular-nums;
+		}
+
+		&--discount {
+			color: var(--success-text);
+		}
+
+		&--grand {
+			padding-top: 2px;
+			font-size: $fs-body;
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+:root[data-theme='dark'] .quote-timeline__dot {
+	&--sent {
+		color: #a1a1aa;
+	}
+	&--viewed {
+		color: #93c5fd;
+	}
+	&--revision {
+		color: #fcd34d;
+	}
+	&--accepted {
+		color: #6ee7b7;
+	}
+	&--declined {
+		color: #fda4af;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE OPTIONAL ADDONS — accepted add-on selections card (view mode sidebar)
+// -----------------------------------------------------------------------------
+.quote-optional-addons {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__heading {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+		margin-bottom: $space-2;
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		font-size: $fs-body;
+	}
+
+	&__desc {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-text-primary);
+
+		&--deselected {
+			color: var(--color-text-muted);
+			text-decoration: line-through;
+		}
+
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+			color: var(--success-text);
+		}
+
+		span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	&__amount {
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--deselected {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__hint {
+		margin-top: $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE DEPOSIT CARD — received / pending status cards
+// -----------------------------------------------------------------------------
+.quote-deposit-card {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-xl;
+	border: 1px solid;
+
+	&--received {
+		border-color: rgba(16, 185, 129, 0.3);
+		background: rgba(16, 185, 129, 0.08);
+	}
+
+	&--pending {
+		border-color: rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.08);
+	}
+
+	&__icon-wrap {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		margin-top: 2px;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		.quote-deposit-card--received & {
+			background: rgba(16, 185, 129, 0.18);
+			color: #047857;
+		}
+		.quote-deposit-card--pending & {
+			background: rgba(245, 158, 11, 0.18);
+			color: #b45309;
+		}
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+
+		.quote-deposit-card--received & {
+			color: #065f46;
+		}
+		.quote-deposit-card--pending & {
+			color: #92400e;
+		}
+	}
+
+	&__desc {
+		margin-top: $space-1;
+		font-size: $fs-body;
+
+		.quote-deposit-card--received & {
+			color: rgba(6, 78, 59, 0.9);
+		}
+		.quote-deposit-card--pending & {
+			color: rgba(120, 53, 15, 0.9);
+		}
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-deposit-card--received .quote-deposit-card__icon-wrap {
+		color: #34d399;
+	}
+	.quote-deposit-card--received .quote-deposit-card__title {
+		color: #6ee7b7;
+	}
+	.quote-deposit-card--received .quote-deposit-card__desc {
+		color: rgba(209, 250, 229, 0.9);
+	}
+
+	.quote-deposit-card--pending .quote-deposit-card__icon-wrap {
+		color: #fbbf24;
+	}
+	.quote-deposit-card--pending .quote-deposit-card__title {
+		color: #fde68a;
+	}
+	.quote-deposit-card--pending .quote-deposit-card__desc {
+		color: rgba(254, 243, 199, 0.9);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE INTERNAL-NOTES BADGE — discount editor moved to shared DocumentDiscountEditor (.doc-discount)
+// -----------------------------------------------------------------------------
+.quote-form-card {
+	&__internal-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE DOCUMENT VIEW — public/preview document renderer (QuoteDocumentView)
+// -----------------------------------------------------------------------------
+.quote-doc {
+	display: flex;
+	flex-direction: column;
+	gap: $space-6;
+
+	// Brand header card
+	&__header-card {
+		overflow: hidden;
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-md);
+	}
+
+	&__brand-bar {
+		height: 6px;
+		width: 100%;
+	}
+
+	&__header-body {
+		padding: $space-5;
+
+		@media (min-width: $bp-tablet) {
+			padding: $space-6;
+		}
+	}
+
+	&__header-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-4;
+	}
+
+	&__brand-wrap {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__brand-logo {
+		height: 48px;
+		width: auto;
+		max-width: 150px;
+		flex-shrink: 0;
+		object-fit: contain;
+	}
+
+	&__brand-initials {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		flex-shrink: 0;
+		border-radius: $radius-xl;
+		font-size: $fs-body;
+		font-weight: $weight-bold;
+	}
+
+	&__brand-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		line-height: 1.3;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__brand-tagline {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__quote-ref {
+		flex-shrink: 0;
+		text-align: right;
+	}
+
+	&__quote-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--color-text-muted);
+	}
+
+	&__quote-num {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__title {
+		margin-top: $space-5;
+		font-size: $fs-h2;
+		font-weight: $weight-bold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+		line-height: 1.2;
+	}
+
+	&__meta-section {
+		margin-top: $space-5;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__meta-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+	}
+
+	&__meta-item {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__meta-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&--neutral {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+		&--brand {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+	}
+
+	&__meta-row-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-muted);
+	}
+
+	&__meta-row-value {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__validity {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-4;
+		padding: $space-2 $space-3;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+		}
+	}
+
+	// Changes requested banner
+	&__changes-banner {
+		padding: $space-4;
+		border-radius: $radius-2xl;
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.08);
+	}
+
+	&__changes-title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: #92400e;
+	}
+
+	&__changes-body {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: rgba(120, 53, 15, 0.9);
+	}
+
+	// Line items table
+	&__lines-card {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		overflow: hidden;
+	}
+
+	&__lines-header {
+		display: grid;
+		grid-template-columns: 7fr 2fr 3fr;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+		font-size: $fs-caption;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__lines-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__section-label {
+		padding: $space-2 $space-4;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+
+	&__line-row {
+		display: grid;
+		grid-template-columns: 7fr 2fr 3fr;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border-subtle);
+		font-size: $fs-body;
+
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__line-desc {
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__line-details {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		white-space: pre-wrap;
+	}
+
+	// Subtle "Tax exempt" hint under a non-taxable line (e.g. labor in states that don't tax it).
+	&__line-taxexempt {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-top: 6px;
+		padding: 2px $space-2;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+
+		i {
+			font-size: 1.2rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__line-photos {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__line-photo-btn {
+		width: 56px;
+		height: 56px;
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border-subtle);
+		background: none;
+		padding: 0;
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.05);
+		}
+
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+	}
+
+	&__line-qty {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__line-unit {
+		color: var(--color-text-muted);
+	}
+
+	&__line-amount {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__section-subtotal-row {
+		display: grid;
+		grid-template-columns: 9fr 3fr;
+		padding: $space-2 $space-4;
+		font-size: $fs-body;
+		border-bottom: 1px solid var(--color-border-subtle);
+
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__section-subtotal-label {
+		text-align: right;
+		color: var(--color-text-muted);
+	}
+
+	&__section-subtotal-value {
+		text-align: right;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+	}
+
+	// Good-Better-Best package selection
+	&__pkgs-card {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-5;
+
+		@media (min-width: $bp-tablet) {
+			padding: $space-6;
+		}
+	}
+
+	&__pkgs-head {
+		margin-bottom: $space-4;
+	}
+
+	&__pkgs-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__pkgs-sub {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__pkgs-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: $space-3;
+
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+			align-items: stretch;
+			gap: $space-4;
+		}
+	}
+
+	&__pkg {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		text-align: left;
+		cursor: pointer;
+		border-radius: $radius-xl;
+		border: 2px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-4;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		&:hover {
+			box-shadow: var(--shadow-md);
+		}
+
+		&--selected {
+			box-shadow: var(--shadow-md);
+		}
+
+		&--recommended {
+			padding-top: $space-5;
+		}
+	}
+
+	&__pkg-badge {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		padding: 2px $space-3;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		white-space: nowrap;
+	}
+
+	&__pkg-top {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__pkg-radio {
+		display: inline-flex;
+		font-size: $fs-lg;
+		color: var(--color-text-muted);
+	}
+
+	&__pkg-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__pkg-price {
+		margin-top: $space-2;
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+	}
+
+	&__pkg-lines {
+		list-style: none;
+		margin: $space-3 0 0;
+		padding: $space-3 0 0;
+		border-top: 1px solid var(--color-border-subtle);
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__pkg-sec {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+		margin-top: $space-1;
+	}
+
+	&__pkg-line {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		align-items: baseline;
+		gap: $space-2;
+		font-size: $fs-body;
+
+		i {
+			font-size: $fs-body;
+		}
+	}
+
+	&__pkg-line-desc {
+		color: var(--color-text-primary);
+		min-width: 0;
+	}
+
+	&__pkg-line-qty {
+		color: var(--color-text-muted);
+	}
+
+	&__pkg-line-amt {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+	}
+
+	// Optional add-ons
+	&__optional-card {
+		overflow: hidden;
+		border-radius: $radius-2xl;
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: var(--color-bg-surface);
+	}
+
+	&__optional-scope {
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+	}
+
+	&__optional-header {
+		padding: $space-3 $space-4;
+		background: rgba(245, 158, 11, 0.05);
+		border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+	}
+
+	&__optional-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__optional-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__optional-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__optional-item {
+		border-bottom: 1px solid var(--color-border-subtle);
+
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__optional-label {
+		display: flex;
+		cursor: pointer;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__optional-check {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		margin-top: 2px;
+		accent-color: var(--color-brand);
+	}
+
+	&__optional-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__optional-item-title {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__optional-item-details {
+		display: block;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		white-space: pre-wrap;
+	}
+
+	&__optional-item-qty {
+		display: block;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__optional-price {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	// Totals summary
+	&__totals-card {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		font-size: $fs-body;
+	}
+
+	&__totals-pkg {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding-bottom: $space-2;
+		margin-bottom: $space-1;
+		border-bottom: 1px solid var(--color-border-subtle);
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+		}
+	}
+
+	&__totals-row {
+		display: flex;
+		justify-content: space-between;
+	}
+
+	&__totals-term {
+		color: var(--color-text-secondary);
+		&--discount {
+			color: var(--success-text);
+		}
+	}
+
+	&__totals-value {
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+		&--discount {
+			color: var(--success-text);
+		}
+	}
+
+	&__totals-grand {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-radius: $radius-lg;
+		padding: $space-2 $space-3;
+		margin-top: $space-1;
+		font-size: $fs-lg;
+		font-weight: $weight-bold;
+	}
+
+	&__totals-deposit-note {
+		margin-top: $space-2;
+		border-radius: $radius-lg;
+		padding: $space-3;
+		background: rgba(245, 158, 11, 0.1);
+		font-size: $fs-caption;
+		color: #b45309;
+	}
+
+	// Notes block
+	&__notes {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-4;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		white-space: pre-wrap;
+	}
+
+	// Terms & Conditions block (per-quote fine print)
+	&__terms {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-5;
+	}
+
+	&__terms-header {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-text-muted);
+		margin-bottom: $space-3;
+
+		i {
+			font-size: 1.5rem;
+		}
+	}
+
+	&__terms-heading {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+	}
+
+	&__terms-body {
+		font-size: $fs-caption;
+		line-height: 1.6;
+		color: var(--color-text-secondary);
+		white-space: pre-wrap;
+	}
+
+	// Signature block
+	&__signature {
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-5;
+	}
+
+	&__signature-header {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-text-muted);
+		margin-bottom: $space-3;
+
+		i {
+			font-size: 1.5rem;
+		}
+	}
+
+	&__signature-heading {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+	}
+
+	&__signature-image {
+		max-height: 64px;
+		max-width: 240px;
+		object-fit: contain;
+		margin-bottom: $space-2;
+	}
+
+	&__signature-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__signature-title {
+		font-weight: 400;
+		color: var(--color-text-secondary);
+	}
+
+	&__signature-statement {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		line-height: $lh-body;
+	}
+
+	// Footer attribution
+	&__footer {
+		text-align: center;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-doc__changes-title {
+		color: #fde68a;
+	}
+	.quote-doc__changes-body {
+		color: rgba(254, 243, 199, 0.85);
+	}
+	.quote-doc__totals-deposit-note {
+		color: #fcd34d;
+	}
+}
+
+// Lightbox dialog override (transparent background)
+.quote-doc-lightbox {
+	max-width: 768px;
+	border: none;
+	background: transparent;
+	padding: 0;
+	box-shadow: none;
+}
+
+.quote-doc-lightbox__inner {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	img {
+		max-height: 80vh;
+		width: auto;
+		border-radius: $radius-xl;
+		object-fit: contain;
+	}
+}
+
+.quote-doc-lightbox__nav {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: $radius-full;
+	border: none;
+	background: rgba(0, 0, 0, 0.5);
+	color: #fff;
+	cursor: pointer;
+	transition: background-color $duration-fast $ease-standard;
+
+	i {
+		font-size: 2rem;
+	}
+
+	&:hover {
+		background: rgba(0, 0, 0, 0.75);
+	}
+
+	&--prev {
+		left: $space-2;
+	}
+	&--next {
+		right: $space-2;
+	}
+}
+
+// =============================================================================
+// S6.2 — QUOTE EDIT / NEW FORM
+// LineItemEditor · LineItemPhotos · UnitCombobox · ServiceAddressPicker · new page
+// =============================================================================
+
+@keyframes ql-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LINE ITEM EDITOR — sectioned, draggable line-item table (quotes + invoices)
+// -----------------------------------------------------------------------------
+.quote-lines {
+	// grip · item · qty · unit · price · total · actions
+	// Actions track holds a single "more" (⋯) menu button (30px).
+	--ql-grid: 20px minmax(0, 1fr) 64px 88px 112px 96px 36px;
+
+	// Revenue-only cost mode adds an internal Cost column before Unit price:
+	// grip · item · qty · unit · cost · price · total · actions
+	&--cost {
+		--ql-grid: 20px minmax(0, 1fr) 58px 74px 92px 100px 90px 36px;
+	}
+
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__catalog-bar {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	&__section {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__section-head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__section-move {
+		display: flex;
+		flex-shrink: 0;
+	}
+
+	&__section-input {
+		flex: 1;
+		height: 36px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__section-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-primary);
+	}
+
+	// Small ghost icon button — section move/remove, line trash, optional, bookmark
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			opacity $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.7rem;
+		}
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.3;
+			cursor: not-allowed;
+		}
+
+		&--danger:hover:not(:disabled) {
+			color: var(--danger-text);
+		}
+		&--optional-on {
+			color: #d97706;
+		}
+		&--optional-on:hover:not(:disabled) {
+			color: #d97706;
+		}
+		&--saved {
+			color: var(--success-text);
+			cursor: default;
+			&:hover {
+				background: transparent;
+			}
+		}
+		&--save:hover:not(:disabled) {
+			color: var(--color-brand);
+		}
+		// Tax-exempt line — the toggle lights up so the exception stands out.
+		&--tax-off,
+		&--tax-off:hover:not(:disabled) {
+			color: #b45309;
+		}
+	}
+
+	// Column header row — desktop only
+	&__headers {
+		display: none;
+
+		@media (min-width: $bp-tablet) {
+			display: grid;
+			grid-template-columns: var(--ql-grid);
+			gap: $space-3;
+			padding: 0 $space-1 2px;
+		}
+	}
+
+	&__col {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+
+		&--center {
+			text-align: center;
+		}
+		&--right {
+			text-align: right;
+			padding-right: $space-1;
+		}
+	}
+
+	&__dropzone {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		min-height: 44px;
+		border-radius: $radius-lg;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+
+		&--active {
+			box-shadow: 0 0 0 2px rgba(34, 125, 83, 0.4);
+			background: rgba(34, 125, 83, 0.05);
+		}
+	}
+
+	&__row {
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard,
+			opacity $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-border-strong);
+		}
+
+		&--optional {
+			border-style: dashed;
+			border-color: rgba(245, 158, 11, 0.55);
+			background: rgba(245, 158, 11, 0.06);
+		}
+
+		// Applied by transformDraggedElement while dragging
+		&--dragging {
+			box-shadow: var(--shadow-xl);
+			opacity: 0.95;
+		}
+	}
+
+	&__desktop {
+		display: none;
+		@media (min-width: $bp-tablet) {
+			display: block;
+		}
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: var(--ql-grid);
+		gap: $space-3;
+		align-items: start;
+	}
+
+	&__grip {
+		display: flex;
+		height: 36px;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-text-muted);
+		cursor: grab;
+
+		i {
+			font-size: 1.7rem;
+		}
+		&:active {
+			cursor: grabbing;
+		}
+	}
+
+	&__input {
+		width: 100%;
+		height: 36px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+			cursor: not-allowed;
+		}
+
+		&--center {
+			text-align: center;
+		}
+		&--strong {
+			font-weight: $weight-medium;
+		}
+	}
+
+	&__total {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		justify-content: center;
+		height: 36px;
+		line-height: 1.15;
+	}
+
+	&__total-value {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--optional {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__optional-tag {
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: #b45309;
+	}
+
+	// "Tax exempt" chip shown next to a non-taxable line's total.
+	&__tax-tag {
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: #b45309;
+	}
+
+	&__row-actions {
+		display: flex;
+		height: 36px;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 2px;
+	}
+
+	&__details {
+		display: block;
+		width: calc(100% - 32px);
+		min-height: 34px;
+		margin-top: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		line-height: $lh-body;
+		color: var(--color-text-primary);
+		resize: none;
+		overflow: hidden;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--indent {
+			margin-left: 32px;
+		}
+	}
+
+	&__details-text {
+		margin-top: $space-1;
+		white-space: pre-wrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		&--indent {
+			margin-left: 32px;
+		}
+	}
+
+	&__mobile {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+
+		@media (min-width: $bp-tablet) {
+			display: none;
+		}
+	}
+
+	&__mobile-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__mobile-actions {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__mobile-fields {
+		display: grid;
+		grid-template-columns: 3fr 4fr 5fr;
+		gap: $space-2;
+
+		// Cost mode inserts an internal Cost input between Unit and Unit price.
+		&--cost {
+			grid-template-columns: 2fr 3fr 3fr 4fr;
+		}
+	}
+
+	&__photos {
+		@media (min-width: $bp-tablet) {
+			padding-left: 32px;
+		}
+	}
+
+	&__add {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		padding: $space-2;
+		border: 1px dashed var(--color-border-strong);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__subtotal {
+		display: flex;
+		justify-content: flex-end;
+		align-items: baseline;
+		gap: $space-3;
+		padding: 0 $space-1;
+		font-size: $fs-body;
+	}
+
+	&__subtotal-label {
+		color: var(--color-text-secondary);
+	}
+	&__subtotal-value {
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	// ── Internal cost + margin (revenue-only) ──────────────────────────────────
+	// Inline Cost input (in the row, next to Unit price) — tinted so it reads as
+	// private/internal, distinct from the customer-facing price field.
+	&__input--cost {
+		background: var(--color-bg-surface-sunk);
+		border-style: dashed;
+	}
+
+	// Per-line margin readout under the item.
+	&__margin {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+
+		&--indent {
+			margin-left: 32px;
+		}
+
+		// Traffic-light tone — green healthy, amber thin, red underpriced.
+		&--good {
+			color: var(--success-text);
+			font-weight: $weight-semibold;
+		}
+		&--warn {
+			color: var(--warning-text);
+			font-weight: $weight-semibold;
+		}
+		&--bad {
+			color: var(--danger-text);
+			font-weight: $weight-semibold;
+		}
+	}
+
+	&__margin-panel {
+		margin-top: $space-1;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface-sunk);
+
+		// Keep the profitability readout in view while pricing a long quote (desktop).
+		@media (min-width: $bp-tablet) {
+			position: sticky;
+			bottom: $space-4;
+			z-index: 2;
+			box-shadow: var(--shadow-md);
+		}
+	}
+
+	// Margin ⇄ Markup segmented toggle in the panel head.
+	&__cost-view {
+		display: inline-flex;
+		margin-left: auto;
+		gap: 2px;
+		padding: 2px;
+		background: var(--color-bg-surface);
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+	}
+
+	&__cost-view-btn {
+		padding: 2px $space-3;
+		border: none;
+		background: transparent;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&--active {
+			background: var(--color-brand);
+			color: #fff;
+		}
+	}
+
+	&__margin-panel-alert {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-3;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--danger-text);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	&__margin-panel-head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-3;
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__margin-panel-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__margin-panel-note {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__margin-panel-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: $space-3;
+	}
+
+	&__margin-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__margin-stat-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__margin-stat-value {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--good {
+			color: var(--success-text);
+		}
+		&--warn {
+			color: var(--warning-text);
+		}
+		&--bad {
+			color: var(--danger-text);
+		}
+	}
+
+	&__footer {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		padding-top: $space-1;
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-lines__optional-tag,
+	.quote-lines__tax-tag {
+		color: #fcd34d;
+	}
+	.quote-lines__icon-btn--optional-on,
+	.quote-lines__icon-btn--optional-on:hover:not(:disabled),
+	.quote-lines__icon-btn--tax-off,
+	.quote-lines__icon-btn--tax-off:hover:not(:disabled) {
+		color: #fbbf24;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LINE ITEM PHOTOS — per-line thumbnail strip + uploader (lightbox reuses
+// .quote-doc-lightbox)
+// -----------------------------------------------------------------------------
+.line-photos {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: $space-2;
+	margin-top: $space-2;
+
+	&__item {
+		position: relative;
+		width: 56px;
+		height: 56px;
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+	}
+
+	&__thumb-btn {
+		display: block;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+	}
+
+	&__uploading {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.4);
+		color: #fff;
+
+		i {
+			font-size: 1.8rem;
+			animation: ql-spin 0.7s linear infinite;
+		}
+	}
+
+	&__remove {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		border-radius: $radius-full;
+		background: rgba(0, 0, 0, 0.55);
+		color: #fff;
+		cursor: pointer;
+		opacity: 0;
+		transition:
+			opacity $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			color: #fda4af;
+		}
+	}
+
+	&__item:hover &__remove,
+	&__remove:focus-visible {
+		opacity: 1;
+	}
+
+	&__add {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		width: 56px;
+		height: 56px;
+		border: 1px dashed var(--color-border-strong);
+		border-radius: $radius-lg;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		font: inherit;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.7rem;
+		}
+		span {
+			font-size: 1rem;
+			font-weight: $weight-medium;
+		}
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__file {
+		display: none;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// UNIT COMBOBOX — free-text unit picker (popover panel)
+// -----------------------------------------------------------------------------
+.unit-combo {
+	&__trigger {
+		display: flex;
+		width: 100%;
+		height: 36px;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-1;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.5rem;
+			flex-shrink: 0;
+			opacity: 0.5;
+		}
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		&--placeholder {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__panel {
+		width: 208px;
+		padding: 0;
+	}
+
+	&__search {
+		padding: $space-2;
+		border-bottom: 1px solid var(--color-border);
+
+		input {
+			width: 100%;
+			height: 32px;
+			padding: 0 $space-2;
+			border: 1px solid var(--color-border-strong);
+			border-radius: $radius-md;
+			background: var(--color-bg-surface);
+			font-size: $fs-body;
+			font-family: $font-body;
+			color: var(--color-text-primary);
+
+			&:focus {
+				outline: none;
+				border-color: var(--color-brand);
+				box-shadow: var(--shadow-focus);
+			}
+		}
+	}
+
+	&__list {
+		max-height: 224px;
+		overflow-y: auto;
+		padding: $space-1;
+	}
+
+	&__option {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		padding: $space-1 $space-2;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		font: inherit;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		text-align: left;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-brand);
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--custom {
+			gap: $space-1;
+			color: var(--color-brand);
+		}
+
+		&--clear {
+			margin-top: $space-1;
+			gap: $space-1;
+			border-top: 1px solid var(--color-border);
+			border-radius: 0;
+			color: var(--color-text-muted);
+
+			i {
+				color: inherit;
+			}
+			&:hover {
+				color: var(--danger-text);
+				background: var(--color-bg-surface-sunk);
+			}
+		}
+	}
+
+	&__empty {
+		padding: $space-1 $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SERVICE ADDRESS PICKER — select existing address + add-new sheet
+// -----------------------------------------------------------------------------
+.service-address {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	&__row {
+		display: flex;
+		align-items: stretch;
+		gap: $space-2;
+	}
+
+	&__select {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__value {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		gap: $space-2;
+
+		i {
+			font-size: 1.5rem;
+			flex-shrink: 0;
+			color: var(--color-text-muted);
+		}
+		span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	&__placeholder {
+		color: var(--color-text-muted);
+	}
+
+	&__opt {
+		display: flex;
+		flex-direction: column;
+	}
+	&__opt-main {
+		font-size: $fs-body;
+	}
+	&__opt-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__add {
+		flex-shrink: 0;
+	}
+
+	&__warn {
+		display: inline-flex;
+		width: fit-content;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-md;
+		background: rgba(245, 158, 11, 0.12);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: #b45309;
+
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+		}
+
+		button {
+			padding: 0;
+			border: none;
+			background: none;
+			font: inherit;
+			color: inherit;
+			text-decoration: underline;
+			text-underline-offset: 2px;
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				text-decoration: none;
+			}
+			&:disabled {
+				opacity: 0.6;
+				text-decoration: none;
+				cursor: not-allowed;
+			}
+		}
+	}
+
+	&__sheet-body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		margin-top: $space-4;
+	}
+
+	&__sheet-error {
+		font-size: $fs-caption;
+		color: var(--danger-text);
+	}
+
+	&__sheet-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+}
+
+:root[data-theme='dark'] .service-address__warn {
+	color: #fcd34d;
+}
+
+// -----------------------------------------------------------------------------
+// NEW QUOTE — start screen (customer + address + opportunity + details)
+// -----------------------------------------------------------------------------
+.quote-start {
+	width: 100%;
+	max-width: 640px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__progress-card {
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__card {
+		padding: $space-5;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__card-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__card-sub {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__fields {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__label {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__label-opt {
+		font-size: $fs-caption;
+		font-weight: 400;
+		color: var(--color-text-muted);
+	}
+	&__req {
+		color: var(--danger-text);
+	}
+
+	&__contact-btn {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-raised);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.7rem;
+		}
+
+		&--brand {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+	}
+
+	&__contact-info {
+		min-width: 0;
+		flex: 1;
+	}
+	&__contact-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__contact-sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+	&__contact-change {
+		flex-shrink: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__warn {
+		display: inline-flex;
+		width: fit-content;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-md;
+		background: rgba(245, 158, 11, 0.12);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: #b45309;
+
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+		}
+	}
+
+	&__opp-list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__opp {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-raised);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.05);
+		}
+		&--locked {
+			cursor: default;
+		}
+	}
+
+	&__opp-info {
+		min-width: 0;
+		flex: 1;
+	}
+	&__opp-title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__opp-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__note {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__note--warn {
+		padding: $space-3;
+		border: 1px dashed rgba(245, 158, 11, 0.4);
+		border-radius: $radius-lg;
+		background: rgba(245, 158, 11, 0.06);
+		color: #b45309;
+	}
+
+	&__error {
+		font-size: $fs-caption;
+		color: var(--danger-text);
+	}
+
+	&__actions {
+		display: flex;
+		flex-direction: column-reverse;
+		gap: $space-2;
+
+		@media (min-width: $bp-mobile) {
+			flex-direction: row;
+			justify-content: flex-end;
+		}
+	}
+}
+
+:root[data-theme='dark'] {
+	.quote-start__warn,
+	.quote-start__note--warn {
+		color: #fcd34d;
+	}
+}
+
+// =============================================================================
+// S6.3 — DIALOGS & SHEETS
+// QuoteOfflineResultDialog · ContactPickerSheet  (sending now uses the shared
+// SendDocumentDialog — styles in `_send-document.scss`)
+// CatalogPickerSheet · CatalogItemSheet · SaveToCatalogSheet
+// Compound `.dialog-content.x` / `.dialog-sheet.x` selectors override the base
+// surface padding/gap so each panel controls its own header/body/footer chrome.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// QUOTE OFFLINE RESULT DIALOG — mark accepted / declined (selectable rows)
+// -----------------------------------------------------------------------------
+.quote-offline {
+	&__section {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__prompt {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__req {
+		color: var(--danger-text);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__option {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--between {
+			justify-content: space-between;
+		}
+	}
+
+	&__check {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		accent-color: var(--color-brand);
+		cursor: pointer;
+	}
+
+	&__option-main {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__option-desc {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-text-primary);
+	}
+
+	// Spacing between the tier picker and the add-ons picker when a quote is tiered.
+	&__section + &__section {
+		margin-top: $space-4;
+	}
+
+	&__pkg-rec {
+		color: var(--color-brand);
+		font-weight: $weight-semibold;
+	}
+
+	&__option-amount {
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__note {
+		width: 100%;
+		min-height: 60px;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-family: $font-body;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-primary);
+		resize: vertical;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__error {
+		font-size: $fs-body;
+		color: var(--danger-text);
+	}
+
+	&__loading {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CONTACT PICKER SHEET — bottom-sheet searchable contact list
+// -----------------------------------------------------------------------------
+.contact-picker {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin-top: $space-3;
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		max-height: 55vh;
+		overflow-y: auto;
+	}
+
+	&__item {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.7rem;
+		}
+	}
+
+	&__info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__warn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-top: 2px;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		color: #b45309;
+
+		i {
+			font-size: 1.3rem;
+			flex-shrink: 0;
+		}
+	}
+
+	&__state {
+		padding: $space-6 0;
+		text-align: center;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2rem;
+		}
+	}
+}
+
+:root[data-theme='dark'] .contact-picker__warn {
+	color: #fcd34d;
+}
+
+// -----------------------------------------------------------------------------
+// CATALOG PICKER SHEET — right-side price book browser
+// -----------------------------------------------------------------------------
+.dialog-sheet.catalog-picker {
+	padding: 0;
+	gap: 0;
+}
+
+.catalog-picker {
+	display: flex;
+	flex-direction: column;
+
+	&__header {
+		flex-shrink: 0;
+		padding: $space-3 $space-4;
+		padding-right: 56px; // room for the floating close button
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__title {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-brand);
+		}
+	}
+
+	&__tools {
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+	}
+
+	&__cats {
+		display: flex;
+		gap: $space-1;
+		margin: 0 (-$space-1);
+		padding: 0 $space-1 2px;
+		overflow-x: auto;
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	&__cat {
+		flex-shrink: 0;
+		padding: $space-1 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		font: inherit;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(&--active) {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			border-color: rgba(34, 125, 83, 0.4);
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+	}
+
+	&__results {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding: $space-3;
+	}
+
+	&__empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-8 $space-4;
+		text-align: center;
+	}
+
+	&__empty-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2.4rem;
+		}
+	}
+
+	&__empty-title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__empty-text {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__loading {
+		padding: $space-6 $space-1;
+		text-align: center;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: $space-2;
+	}
+
+	&__item {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.3);
+			background: var(--color-bg-surface-raised);
+			box-shadow: var(--shadow-sm);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__item-body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__item-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__item-meta {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__item-price {
+		flex-shrink: 0;
+		font-family: 'Geist Mono', monospace;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__item-add {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.1);
+		color: var(--color-brand);
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__item:hover &__item-add {
+		background: var(--color-brand);
+		color: #fff;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SHEET FORM — shared chrome for right-side form sheets (catalog item / save)
+// -----------------------------------------------------------------------------
+.dialog-sheet.sheet-form {
+	padding: 0;
+	gap: 0;
+}
+
+.sheet-form {
+	display: flex;
+	flex-direction: column;
+
+	&__header {
+		flex-shrink: 0;
+		padding: $space-3 $space-4;
+		padding-right: 56px; // room for the floating close button
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__title {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-brand);
+		}
+	}
+
+	&__body {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+	}
+
+	&__intro {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__hint {
+		margin-top: -$space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		line-height: $lh-body;
+	}
+
+	&__footer {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CATALOG ITEM SHEET — photo uploader (extends .sheet-form)
+// -----------------------------------------------------------------------------
+.catalog-item {
+	&__photo-row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+
+	&__tax-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-4;
+		padding-top: $space-2;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__tax-text {
+		min-width: 0;
+		flex: 1;
+
+		.field__hint {
+			margin-top: $space-1;
+		}
+	}
+
+	&__photo {
+		position: relative;
+		flex-shrink: 0;
+		width: 80px;
+		height: 80px;
+		border-radius: $radius-lg;
+		overflow: hidden;
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-xs);
+
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+	}
+
+	&__photo-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.4);
+		color: #fff;
+
+		i {
+			font-size: 2rem;
+			animation: ql-spin 0.7s linear infinite;
+		}
+	}
+
+	&__photo-remove {
+		position: absolute;
+		top: -8px;
+		right: -8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		border-radius: $radius-full;
+		background: var(--danger-solid);
+		color: #fff;
+		cursor: pointer;
+		box-shadow: var(--shadow-sm);
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__photo-add {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		flex-shrink: 0;
+		width: 80px;
+		height: 80px;
+		border: 2px dashed var(--color-border-strong);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 2rem;
+		}
+		span {
+			font-size: 1rem;
+			font-weight: $weight-medium;
+		}
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.05);
+			color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__photo-change {
+		margin-top: $space-1;
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		font-size: $fs-caption;
+		color: var(--color-brand);
+		cursor: pointer;
+		text-underline-offset: 2px;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	&__file {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SAVE TO CATALOG SHEET — duplicate warning (extends .sheet-form)
+// -----------------------------------------------------------------------------
+.save-catalog {
+	&__dup {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-4;
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		border-radius: $radius-xl;
+		background: rgba(245, 158, 11, 0.1);
+	}
+
+	&__dup-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		margin-top: 2px;
+		border-radius: $radius-full;
+		background: rgba(245, 158, 11, 0.2);
+		color: #b45309;
+
+		i {
+			font-size: 1.7rem;
+		}
+	}
+
+	&__dup-body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__dup-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: #92400e;
+	}
+
+	&__dup-text {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: rgba(120, 53, 15, 0.9);
+	}
+}
+
+:root[data-theme='dark'] {
+	.save-catalog__dup-icon {
+		color: #fbbf24;
+	}
+	.save-catalog__dup-title {
+		color: #fde68a;
+	}
+	.save-catalog__dup-text {
+		color: rgba(254, 243, 199, 0.9);
+	}
+}
+
+// =============================================================================
+// S6.4 — QUOTE TEMPLATES (list + card + editor + apply) and PUBLIC QUOTE PAGE
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Templates list page
+// -----------------------------------------------------------------------------
+.quote-tpls {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: $space-3;
+	}
+
+	&__error {
+		font-size: $fs-body;
+		color: var(--danger-text);
+	}
+}
+
+// Template card
+.quote-tpl {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-4;
+	background: var(--color-bg-surface);
+	border-radius: $radius-xl;
+	box-shadow: var(--shadow-sm);
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		transform $duration-fast $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+	}
+
+	&__main {
+		flex: 1;
+		min-width: 0;
+		text-align: left;
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	&__meta {
+		margin-top: $space-2;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__meta-item {
+		font-variant-numeric: tabular-nums;
+
+		&--strong {
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+		&--truncate {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			max-width: 160px;
+		}
+	}
+
+	&__dot {
+		color: var(--color-border-strong);
+	}
+
+	&__menu {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.7rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Template editor sheet (extends .sheet-form)
+// -----------------------------------------------------------------------------
+.tpl-editor {
+	&__lines {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__lines-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	&__lines-title {
+		margin: 0;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__lines-count {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__footer {
+		justify-content: space-between;
+	}
+
+	&__subtotal {
+		display: flex;
+		align-items: baseline;
+		gap: $space-2;
+		font-size: $fs-body;
+	}
+
+	&__subtotal-label {
+		color: var(--color-text-muted);
+	}
+
+	&__subtotal-value {
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Apply template dialog
+// -----------------------------------------------------------------------------
+.apply-tpl {
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__empty {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: $space-2;
+	}
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		width: 100%;
+		padding: $space-3;
+		text-align: left;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			border-color: var(--color-border-strong);
+		}
+		&:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&--busy i {
+			animation: ql-spin 0.7s linear infinite;
+		}
+	}
+
+	&__info {
+		min-width: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__count {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// =============================================================================
+// PUBLIC QUOTE PAGE — /q/[token] (standalone, no app shell; per-org branding)
+// =============================================================================
+.pub-quote {
+	min-height: 100vh;
+	background: var(--color-bg-app);
+	padding: $space-8 $space-4;
+
+	@media (min-width: $bp-tablet) {
+		padding-block: 64px;
+	}
+
+	&__shell {
+		width: 100%;
+		max-width: 1366px;
+		margin: 0 auto;
+	}
+
+	&__stack {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	// --- Branding header ---
+	&__brand {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__logo {
+		height: 48px;
+		width: auto;
+		max-width: 150px;
+		flex-shrink: 0;
+		object-fit: contain;
+	}
+
+	&__brand-mark {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		flex-shrink: 0;
+		border-radius: $radius-lg;
+		font-size: $fs-body;
+		font-weight: $weight-bold;
+		background: var(--brand);
+		color: var(--brand-fg);
+	}
+
+	&__brand-text {
+		min-width: 0;
+	}
+
+	&__brand-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		line-height: $lh-h3;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__brand-tagline {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	// --- Generic card (invalid / status confirmations) ---
+	&__card {
+		background: var(--color-bg-surface);
+		border-radius: $radius-2xl;
+		box-shadow: var(--shadow-md);
+		padding: $space-8;
+
+		&--center {
+			text-align: center;
+		}
+		&--accepted {
+			border: 1px solid var(--success-solid);
+		}
+	}
+
+	&__title {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+
+		&--lg {
+			font-size: $fs-h2;
+			font-weight: $weight-bold;
+			letter-spacing: -0.01em;
+		}
+	}
+
+	&__muted {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		line-height: $lh-body;
+	}
+
+	&__strong {
+		font-weight: $weight-semibold;
+	}
+
+	// --- Status icon circles ---
+	&__status-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto;
+		width: 56px;
+		height: 56px;
+		border-radius: $radius-full;
+
+		i {
+			font-size: 2.8rem;
+		}
+
+		&--success {
+			background: var(--success-bg);
+			color: var(--success-solid);
+		}
+		&--muted {
+			width: 48px;
+			height: 48px;
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+			i {
+				font-size: 2.4rem;
+			}
+		}
+		&--amber {
+			width: 48px;
+			height: 48px;
+			background: var(--warning-bg);
+			color: var(--warning-solid);
+			i {
+				font-size: 2.4rem;
+			}
+		}
+	}
+
+	// --- "Signed by" chip on accepted card ---
+	&__signed {
+		margin-top: $space-5;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--success-solid);
+		border-radius: $radius-lg;
+		background: var(--success-bg);
+		font-size: $fs-body;
+		color: var(--success-text);
+
+		i {
+			font-size: 1.7rem;
+			flex-shrink: 0;
+		}
+	}
+
+	&__signed-name {
+		font-weight: $weight-semibold;
+	}
+
+	&__accepted-pkg {
+		margin-top: $space-4;
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-4;
+		border-radius: $radius-full;
+		background: color-mix(in srgb, var(--brand) 10%, transparent);
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			color: var(--brand);
+		}
+
+		strong {
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+		}
+	}
+
+	// --- Deposit notices ---
+	&__notice {
+		border-radius: $radius-2xl;
+		padding: $space-5;
+
+		&--warning {
+			border: 1px solid var(--warning-solid);
+			background: var(--warning-bg);
+		}
+		&--success {
+			border: 1px solid var(--success-solid);
+			background: var(--success-bg);
+		}
+	}
+
+	&__notice-head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+
+		i {
+			font-size: 2rem;
+		}
+
+		.pub-quote__notice--warning & {
+			color: var(--warning-text);
+		}
+		.pub-quote__notice--success & {
+			color: var(--success-text);
+		}
+	}
+
+	&__notice-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+	}
+
+	&__notice-text {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		line-height: $lh-body;
+
+		.pub-quote__notice--warning & {
+			color: var(--warning-text);
+		}
+		.pub-quote__notice--success & {
+			color: var(--success-text);
+		}
+	}
+
+	&__notice-hint {
+		margin-top: $space-3;
+		font-size: $fs-caption;
+		color: var(--warning-text);
+	}
+
+	&__error {
+		margin-top: $space-2;
+		font-size: $fs-caption;
+		color: var(--danger-text);
+	}
+
+	// --- Action stack (inside QuoteDocumentView) ---
+	&__actions {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	// Brand-colored primary CTA (overrides .btn rendered by Button)
+	&__cta.btn {
+		background: var(--brand);
+		color: var(--brand-fg);
+		border-color: transparent;
+
+		&:hover:not(:disabled) {
+			background: var(--brand);
+			filter: brightness(0.95);
+		}
+	}
+
+	&__cta--block.btn {
+		width: 100%;
+		min-height: 52px;
+		font-size: $fs-body;
+	}
+
+	&__cta--lg.btn {
+		box-shadow: var(--shadow-md);
+	}
+
+	// --- E-signature card ---
+	&__sign {
+		border: 1px solid var(--color-brand);
+		border-radius: $radius-2xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		padding: $space-5;
+	}
+
+	&__sign-head {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		margin-bottom: $space-4;
+	}
+
+	&__sign-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.12);
+		color: var(--color-brand);
+
+		i {
+			font-size: 1.7rem;
+		}
+	}
+
+	&__sign-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sign-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__sign-body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__legal {
+		padding: $space-3;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__legal-org {
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__btn-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	&__decline-btn {
+		color: var(--color-text-muted);
+	}
+
+	// --- Decline reasons panel ---
+	&__decline {
+		padding: $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+	}
+
+	&__decline-prompt {
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__decline-reasons {
+		margin-top: $space-3;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__reason {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-height: 44px;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		cursor: pointer;
+		color: var(--color-text-primary);
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:has(:checked) {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.06);
+		}
+	}
+
+	&__reason-radio {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		accent-color: var(--color-brand);
+	}
+
+	&__decline-note {
+		margin-top: $space-3;
+	}
+
+	// --- Request-changes form (dialog / bottom sheet) ---
+	&__changes {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__changes-wrap {
+		margin-top: $space-3;
+	}
+}
+
+// Request-changes dialog/sheet chrome overrides
+.dialog-content.pub-quote-changes-dialog {
+	max-width: 460px;
+}
+
+.pub-quote-changes-dialog .dialog-content__header {
+	margin-bottom: $space-4;
+}
+
+// -----------------------------------------------------------------------------
+// Copy client link dialog (ShareQuoteLinkDialog)
+// -----------------------------------------------------------------------------
+.share-link {
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__status {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__spin {
+		font-size: 1.6rem;
+		animation: ql-spin 0.7s linear infinite;
+	}
+
+	&__error {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		color: var(--danger-text);
+	}
+
+	&__note {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-3;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.6rem;
+			flex-shrink: 0;
+			color: var(--color-brand);
+		}
+
+		strong {
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+		}
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__url {
+		flex: 1;
+		min-width: 0;
+		font-size: $fs-caption;
+	}
+
+	&__copy {
+		display: inline-flex;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__open {
+		display: inline-flex;
+		width: fit-content;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-brand);
+		text-decoration: none;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUOTE SIGN-IN-PERSON DIALOG (QuoteInPersonSignDialog) — "close in the field".
+// Global (not scoped) because the dialog content renders in bits-ui's portal.
+// -----------------------------------------------------------------------------
+.quote-sign {
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__loading {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: $fs-body;
+	}
+
+	&__section {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__prompt {
+		margin: 0;
+		font-size: $fs-caption;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	&__option {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		cursor: pointer;
+		transition:
+			border-color 0.12s ease,
+			background 0.12s ease;
+
+		&:hover {
+			border-color: var(--color-border-strong);
+		}
+
+		&--between {
+			justify-content: space-between;
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+		}
+	}
+
+	&__option-main {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-width: 0;
+	}
+
+	&__option-desc {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__pkg-rec {
+		color: var(--color-brand);
+		font-weight: 600;
+	}
+
+	&__option-amount {
+		font-size: $fs-body;
+		font-weight: 600;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+	}
+
+	&__check {
+		width: 18px;
+		height: 18px;
+		flex-shrink: 0;
+		accent-color: var(--color-brand);
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	&__name-input {
+		width: 100%;
+		padding: $space-3;
+		font-size: $fs-lg;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+		}
+	}
+
+	&__pad-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	&__clear {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--color-text-muted);
+		font-size: $fs-caption;
+		cursor: pointer;
+
+		&:disabled {
+			opacity: 0.4;
+			cursor: default;
+		}
+
+		&:not(:disabled):hover {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__pad {
+		width: 100%;
+		height: 200px;
+		border: 2px dashed var(--color-border-strong);
+		border-radius: $radius-md;
+		background: #fff;
+		touch-action: none;
+		cursor: crosshair;
+	}
+
+	&__ack {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+
+	&__error {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--danger-solid);
+	}
+
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-4;
+	}
+
+	&__total {
+		display: flex;
+		flex-direction: column;
+		line-height: 1.2;
+	}
+
+	&__total-label {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	&__total-value {
+		font-size: $fs-h3;
+		font-weight: 700;
+		color: var(--color-text-primary);
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__spin {
+		display: inline-block;
+		animation: quote-sign-spin 0.7s linear infinite;
+	}
+}
+
+@keyframes quote-sign-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

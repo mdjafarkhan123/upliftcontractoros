@@ -1,14 +1,11 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import { Switch } from '$lib/components/ui/switch';
 	import UnitCombobox from './UnitCombobox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { catalogStore } from '$lib/stores/catalog.svelte';
 	import type { CatalogItem } from '$lib/types/quotes';
-	import { ImagePlus, X, Loader2 } from '@lucide/svelte';
 
 	let {
 		open = $bindable(false),
@@ -26,6 +23,7 @@
 	let unitPrice = $state('');
 	let unitCost = $state('');
 	let description = $state('');
+	let defaultTaxable = $state(true);
 	let saving = $state(false);
 	let fieldErrors = $state<Record<string, string>>({});
 
@@ -47,6 +45,7 @@
 		unitPrice = item?.unit_price ?? '';
 		unitCost = item?.unit_cost ?? '';
 		description = item?.description ?? '';
+		defaultTaxable = item?.default_taxable ?? true;
 		imageUrl = item?.image_url ?? null;
 		imageR2Key = null;
 		imagePreview = null;
@@ -134,16 +133,14 @@
 				unit_price: Number(unitPrice),
 				unit_cost: unitCost.trim() === '' ? null : Number(unitCost),
 				description: description.trim() || null,
+				default_taxable: defaultTaxable,
 				image_url: resolvedImageUrl
 			};
-			const res = await fetch(
-				isEdit ? `/api/catalog-items/${item!.id}` : '/api/catalog-items',
-				{
-					method: isEdit ? 'PATCH' : 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify(payload)
-				}
-			);
+			const res = await fetch(isEdit ? `/api/catalog-items/${item!.id}` : '/api/catalog-items', {
+				method: isEdit ? 'PATCH' : 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
 			const body = (await res.json().catch(() => ({}))) as {
 				error?: string;
 				field_errors?: Record<string, string>;
@@ -166,26 +163,24 @@
 </script>
 
 <Sheet.Root bind:open>
-	<Sheet.Content side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-		<Sheet.Header class="border-b border-border/60 px-4 py-3 text-left">
-			<Sheet.Title class="text-base">{isEdit ? 'Edit item' : 'New price book item'}</Sheet.Title>
-		</Sheet.Header>
+	<Sheet.Content side="right" class="sheet-form">
+		<div class="sheet-form__header">
+			<Sheet.Title class="sheet-form__title"
+				>{isEdit ? 'Edit item' : 'New price book item'}</Sheet.Title
+			>
+		</div>
 
-		<div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+		<div class="sheet-form__body">
 			<!-- Image upload -->
-			<div class="grid gap-2">
-				<Label>Photo <span class="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-				<div class="flex items-start gap-3">
+			<div class="field">
+				<span class="field__label">Photo <span class="field__hint">(optional)</span></span>
+				<div class="catalog-item__photo-row">
 					{#if displayImage}
-						<div class="relative shrink-0">
-							<img
-								src={displayImage}
-								alt="Item"
-								class="h-20 w-20 rounded-lg border border-border/60 object-cover shadow-sm"
-							/>
+						<div class="catalog-item__photo">
+							<img src={displayImage} alt="Item" />
 							{#if imageUploading}
-								<div class="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
-									<Loader2 class="h-5 w-5 animate-spin text-white" />
+								<div class="catalog-item__photo-overlay">
+									<i class="ri-loader-4-line" aria-hidden="true"></i>
 								</div>
 							{/if}
 							{#if !imageUploading}
@@ -193,9 +188,9 @@
 									type="button"
 									onclick={removeImage}
 									aria-label="Remove image"
-									class="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white shadow"
+									class="catalog-item__photo-remove"
 								>
-									<X class="h-3 w-3" />
+									<i class="ri-close-line" aria-hidden="true"></i>
 								</button>
 							{/if}
 						</div>
@@ -204,45 +199,43 @@
 							type="button"
 							onclick={pickImage}
 							disabled={imageUploading}
-							class="flex h-20 w-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border/60 bg-muted/30 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+							class="catalog-item__photo-add"
 						>
 							{#if imageUploading}
-								<Loader2 class="h-5 w-5 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 							{:else}
-								<ImagePlus class="h-5 w-5" />
-								<span class="text-[10px] font-medium">Add photo</span>
+								<i class="ri-image-add-line" aria-hidden="true"></i>
+								<span>Add photo</span>
 							{/if}
 						</button>
 					{/if}
 					{#if displayImage && !imageUploading}
-						<button
-							type="button"
-							onclick={pickImage}
-							class="mt-1 text-xs text-primary underline-offset-2 hover:underline"
-						>
+						<button type="button" onclick={pickImage} class="catalog-item__photo-change">
 							Change photo
 						</button>
 					{/if}
 				</div>
-				<p class="text-xs text-muted-foreground">JPEG, PNG, or WebP · max 5 MB</p>
+				<p class="field__hint">JPEG, PNG, or WebP · max 5 MB</p>
 			</div>
 
-			<div class="grid gap-2">
-				<Label for="cat-name">Name <span class="text-destructive">*</span></Label>
-				<Input
+			<div class="field">
+				<label for="cat-name" class="field__label field__label--required">Name</label>
+				<input
 					id="cat-name"
+					class="field__input"
 					bind:value={name}
 					placeholder="e.g. Architectural shingle install"
 					maxlength={200}
 				/>
-				{#if fieldErrors.name}<p class="text-xs text-destructive">{fieldErrors.name}</p>{/if}
+				{#if fieldErrors.name}<p class="field__error">{fieldErrors.name}</p>{/if}
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-2">
-					<Label for="cat-price">Price <span class="text-destructive">*</span></Label>
-					<Input
+			<div class="sheet-form__grid">
+				<div class="field">
+					<label for="cat-price" class="field__label field__label--required">Price</label>
+					<input
 						id="cat-price"
+						class="field__input"
 						type="number"
 						inputmode="decimal"
 						min="0"
@@ -251,29 +244,33 @@
 						placeholder="0.00"
 					/>
 					{#if fieldErrors.unit_price}
-						<p class="text-xs text-destructive">{fieldErrors.unit_price}</p>
+						<p class="field__error">{fieldErrors.unit_price}</p>
 					{/if}
 				</div>
-				<div class="grid gap-2">
-					<Label>Unit</Label>
+				<div class="field">
+					<span class="field__label">Unit</span>
 					<UnitCombobox bind:value={unit} />
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-2">
-					<Label for="cat-category">Category</Label>
-					<Input
+			<div class="sheet-form__grid">
+				<div class="field">
+					<label for="cat-category" class="field__label">Category</label>
+					<input
 						id="cat-category"
+						class="field__input"
 						bind:value={category}
 						placeholder="e.g. Roofing"
 						maxlength={100}
 					/>
 				</div>
-				<div class="grid gap-2">
-					<Label for="cat-cost">Cost <span class="text-muted-foreground">(optional)</span></Label>
-					<Input
+				<div class="field">
+					<label for="cat-cost" class="field__label"
+						>Cost <span class="field__hint">(optional)</span></label
+					>
+					<input
 						id="cat-cost"
+						class="field__input"
 						type="number"
 						inputmode="decimal"
 						min="0"
@@ -283,27 +280,44 @@
 					/>
 				</div>
 			</div>
-			<p class="-mt-2 text-xs text-muted-foreground">
+			<p class="sheet-form__hint">
 				Cost is what the item costs your business. It stays private and is never shown to clients —
 				it's there for future profit reporting.
 			</p>
 
-			<div class="grid gap-2">
-				<Label for="cat-desc">Description</Label>
-				<Textarea
+			<div class="field">
+				<label for="cat-desc" class="field__label">Description</label>
+				<textarea
 					id="cat-desc"
+					class="field__textarea"
 					bind:value={description}
 					rows={3}
 					placeholder="Optional detail shown on the quote line"
 					maxlength={1000}
-				/>
+				></textarea>
+			</div>
+
+			<div class="catalog-item__tax-row">
+				<div class="catalog-item__tax-text">
+					<label for="cat-taxable" class="field__label">Taxable by default</label>
+					<p class="field__hint">
+						Turn off for labor-only items so tax isn't added when they're used on a quote or invoice.
+						Materials are usually taxable; labor usually isn't.
+					</p>
+				</div>
+				<Switch id="cat-taxable" bind:checked={defaultTaxable} />
 			</div>
 		</div>
 
-		<div class="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
+		<div class="sheet-form__footer">
 			<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
-			<Button disabled={saving || imageUploading || !name.trim()} onclick={() => void save()}>
-				{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add item'}
+			<Button
+				loading={saving}
+				loadingLabel="Saving…"
+				disabled={imageUploading || !name.trim()}
+				onclick={() => void save()}
+			>
+				{isEdit ? 'Save changes' : 'Add item'}
 			</Button>
 		</div>
 	</Sheet.Content>
@@ -313,6 +327,6 @@
 	bind:this={fileInput}
 	type="file"
 	accept="image/jpeg,image/png,image/webp"
-	class="sr-only"
+	class="catalog-item__file"
 	onchange={onFileChange}
 />

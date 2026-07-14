@@ -155,7 +155,8 @@ function sanitize(view: ResolvedAppointment): Record<string, unknown> {
 		contact_first_name: view.contact_first_name,
 		type: a.type,
 		title: a.title,
-		scheduled_start: a.scheduled_start.toISOString(),
+		// Non-null: manage tokens are only issued for dated booking-link appointments.
+		scheduled_start: a.scheduled_start!.toISOString(),
 		scheduled_end: a.scheduled_end ? a.scheduled_end.toISOString() : null,
 		location: a.location,
 		can_reschedule: view.booking_link !== null,
@@ -321,7 +322,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const cEnd = cStart + slotDurMs;
 		for (const a of existing) {
 			if (a.id === payload.appointmentId) continue;
-			const bStart = a.scheduled_start.getTime();
+			// Non-null: `existing` is filtered to a date window, excluding unscheduled visits.
+			const bStart = a.scheduled_start!.getTime();
 			const bEnd = (a.scheduled_end ? a.scheduled_end.getTime() : bStart + slotDurMs) + bufferMs;
 			if (cStart < bEnd && cEnd > bStart) {
 				return { kind: 'conflict' as const };
@@ -329,7 +331,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		}
 
 		const now = new Date();
-		const oldStart = current.scheduled_start;
+		// Non-null: a booking-link appointment being rescheduled always has a prior date.
+		const oldStart = current.scheduled_start!;
 		const [updated] = await tx
 			.update(appointments)
 			.set({
@@ -362,11 +365,11 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				assigned_to: updated.assigned_to,
 				assignee_ids: assigneeIds,
 				old_start_at: oldStart.toISOString(),
-				new_start_at: updated.scheduled_start.toISOString(),
+				new_start_at: updated.scheduled_start!.toISOString(),
 				reminder_flags_reset: true,
 				source: 'customer_self_serve'
 			},
-			idempotency_key: `appointment.rescheduled:${updated.id}:${updated.scheduled_start.toISOString()}`
+			idempotency_key: `appointment.rescheduled:${updated.id}:${updated.scheduled_start!.toISOString()}`
 		});
 
 		await tx.insert(activityEvents).values({
@@ -378,7 +381,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			payload: {
 				action: 'rescheduled',
 				previous_start_at: oldStart.toISOString(),
-				new_start_at: updated.scheduled_start.toISOString()
+				new_start_at: updated.scheduled_start!.toISOString()
 			},
 			occurred_at: now
 		});
@@ -400,13 +403,13 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	const newToken = sign({
 		appointmentId: txResult.row.id,
 		updatedAtEpoch: appointmentUpdatedAtEpoch(txResult.row.updated_at),
-		exp: manageTokenExpiry(txResult.row.scheduled_start)
+		exp: manageTokenExpiry(txResult.row.scheduled_start!)
 	});
 
 	const refreshed = await resolveAppointment({
 		appointmentId: txResult.row.id,
 		updatedAtEpoch: appointmentUpdatedAtEpoch(txResult.row.updated_at),
-		exp: manageTokenExpiry(txResult.row.scheduled_start)
+		exp: manageTokenExpiry(txResult.row.scheduled_start!)
 	});
 	if (!refreshed) return notFound();
 
@@ -472,7 +475,7 @@ export const DELETE: RequestHandler = async ({ params, request }) => {
 			contact_id: updated.contact_id,
 			payload: {
 				action: 'cancelled',
-				previous_start_at: current.scheduled_start.toISOString()
+				previous_start_at: current.scheduled_start!.toISOString()
 			},
 			occurred_at: now
 		});

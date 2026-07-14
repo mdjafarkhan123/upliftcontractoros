@@ -3,10 +3,21 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { media, jobs, quotes, invoices, contacts, opportunities } from '$lib/server/db/schema';
+import {
+	media,
+	jobs,
+	quotes,
+	invoices,
+	contacts,
+	opportunities,
+	jobFormSubmissions,
+	jobFormSubmissionFields,
+	appointments
+} from '$lib/server/db/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewOpportunity } from '$lib/server/pipeline/permissions';
+import { canEditJob } from '$lib/server/jobs/permissions';
 import { checkUploadRateLimit } from '$lib/server/media/rateLimiter';
 import { validateMagicBytes, isAllowedMimeType } from '$lib/server/media/mimeCheck';
 import { processImage } from '$lib/server/media/imageProcessor';
@@ -37,7 +48,12 @@ const ALLOWED_PURPOSE_TAGS = [
 	'contact_avatar',
 	'org_signature',
 	'quote_line_item_photo',
-	'catalog_item_photo'
+	'catalog_item_photo',
+	'job_form_photo',
+	'job_form_signature',
+	'job_visit_photo',
+	'job_signoff_signature',
+	'quote_signature'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
 
@@ -45,6 +61,11 @@ const JOB_PURPOSE_TAGS: PurposeTag[] = ['job_photo', 'before', 'after', 'marketi
 
 // Max photos a single quote line item can carry (matches the client-side cap).
 const LINE_ITEM_PHOTO_CAP = 6;
+// Max photos a single job-form photo field can carry. A signature field holds exactly one.
+const JOB_FORM_PHOTO_CAP = 6;
+// Max photos a single job visit can carry. Crews shoot before/after sets per visit, so this
+// is generous relative to a form field.
+const JOB_VISIT_PHOTO_CAP = 20;
 
 const uploadSchema = z.object({
 	purpose_tag: z.enum(ALLOWED_PURPOSE_TAGS),
@@ -101,6 +122,15 @@ export const POST: RequestHandler = async (event) => {
 	const { purpose_tag, contact_id, opportunity_id, job_id, quote_id, invoice_id, line_key } =
 		parsed.data;
 	const isLineItemPhoto = purpose_tag === 'quote_line_item_photo';
+	// Photo or captured signature bound to a job-form submission field (job_id + line_key=field id).
+	const isJobFormMedia = purpose_tag === 'job_form_photo' || purpose_tag === 'job_form_signature';
+	// Photo bound to a single job visit (job_id + line_key = the visit's appointment id).
+	const isJobVisitPhoto = purpose_tag === 'job_visit_photo';
+	// The customer's drawn sign-off signature bound to a job (job_id, no line_key — one per job).
+	const isJobSignoff = purpose_tag === 'job_signoff_signature';
+	// The customer's drawn signature captured in person when approving a quote (quote_id, no
+	// line_key — one per quote). "Close in the field" / sign-on-this-device.
+	const isQuoteSignature = purpose_tag === 'quote_signature';
 
 	const isOrgLogo = purpose_tag === 'org_logo';
 	const isOrgSignature = purpose_tag === 'org_signature';
@@ -122,10 +152,19 @@ export const POST: RequestHandler = async (event) => {
 		if (!auth.member.can_edit_quotes) {
 			error(403, 'Forbidden: quote edit permission required to upload catalog images');
 		}
+	} else if (isQuoteSignature) {
+		// Capturing an in-person acceptance is a quote-editing action.
+		if (!auth.member.can_edit_quotes) {
+			error(403, 'Forbidden: quote edit permission required to capture a signature');
+		}
 	} else if (isContactAvatar) {
 		if (!auth.member.can_edit_contacts) {
 			error(403, 'Forbidden: contact edit permission required');
 		}
+	} else if (isJobFormMedia || isJobVisitPhoto || isJobSignoff) {
+		// Gated on job-edit access (same as filling the form / completing the visit / capturing
+		// the client sign-off), not can_upload_files — a field tech doing these needs to attach
+		// the image. The job-scoped canEditJob check runs after the parent job loads below.
 	} else if (!auth.member.can_upload_files) {
 		error(403, 'Forbidden: upload permission required');
 	}
@@ -210,6 +249,69 @@ export const POST: RequestHandler = async (event) => {
 				);
 			}
 		}
+		if (isJobFormMedia) {
+			// Bound to a job's form field: parent is the job, line_key pins the submission field.
+			if (!job_id) {
+				return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
+			}
+			if (!line_key) {
+				return json({ error: `line_key is required for ${purpose_tag}` }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || quote_id || invoice_id) {
+				return json(
+					{ error: `${purpose_tag} must not include another parent FK` },
+					{ status: 422 }
+				);
+			}
+		}
+		if (isJobVisitPhoto) {
+			// Bound to a job's visit: parent is the job, line_key pins the visit (appointment).
+			if (!job_id) {
+				return json({ error: 'job_id is required for job_visit_photo' }, { status: 422 });
+			}
+			if (!line_key) {
+				return json({ error: 'line_key is required for job_visit_photo' }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || quote_id || invoice_id) {
+				return json(
+					{ error: 'job_visit_photo must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
+		if (isJobSignoff) {
+			// Bound to a job (one per job): parent is the job, no line_key.
+			if (!job_id) {
+				return json({ error: 'job_id is required for job_signoff_signature' }, { status: 422 });
+			}
+			if (line_key) {
+				return json(
+					{ error: 'job_signoff_signature must not include a line_key' },
+					{ status: 422 }
+				);
+			}
+			if (contact_id || opportunity_id || quote_id || invoice_id) {
+				return json(
+					{ error: 'job_signoff_signature must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
+		if (isQuoteSignature) {
+			// Bound to a quote (one per quote): parent is the quote, no line_key.
+			if (!quote_id) {
+				return json({ error: 'quote_id is required for quote_signature' }, { status: 422 });
+			}
+			if (line_key) {
+				return json({ error: 'quote_signature must not include a line_key' }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || job_id || invoice_id) {
+				return json(
+					{ error: 'quote_signature must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
 		if (purpose_tag === 'invoice_attachment' && !invoice_id) {
 			return json({ error: 'invoice_id is required for invoice_attachment' }, { status: 422 });
 		}
@@ -266,11 +368,133 @@ export const POST: RequestHandler = async (event) => {
 	}
 	if (job_id) {
 		const [j] = await db
-			.select({ id: jobs.id })
+			.select({ id: jobs.id, assigned_to: jobs.assigned_to })
 			.from(jobs)
 			.where(and(eq(jobs.id, job_id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 			.limit(1);
 		if (!j) return json({ error: 'Job not found' }, { status: 404 });
+
+		// Job-form media gates on edit access to this specific job (same as filling the form),
+		// then the line_key must resolve to a matching field on one of this job's forms.
+		if (isJobFormMedia && line_key) {
+			if (!canEditJob(auth.member, { assigned_to: j.assigned_to })) {
+				error(403, 'Forbidden');
+			}
+
+			const [field] = await db
+				.select({ field_type: jobFormSubmissionFields.field_type })
+				.from(jobFormSubmissionFields)
+				.innerJoin(
+					jobFormSubmissions,
+					eq(jobFormSubmissions.id, jobFormSubmissionFields.submission_id)
+				)
+				.where(
+					and(
+						eq(jobFormSubmissionFields.id, line_key),
+						eq(jobFormSubmissionFields.org_id, auth.orgId),
+						eq(jobFormSubmissions.job_id, job_id),
+						isNull(jobFormSubmissions.deleted_at)
+					)
+				)
+				.limit(1);
+			if (!field) return json({ error: 'Form field not found on this job' }, { status: 404 });
+
+			const expectedType = purpose_tag === 'job_form_photo' ? 'photo' : 'signature';
+			if (field.field_type !== expectedType) {
+				return json({ error: `This field does not accept a ${expectedType}.` }, { status: 422 });
+			}
+
+			// Cap before spending an R2 round-trip: 6 photos, or exactly 1 signature per field.
+			const cap = purpose_tag === 'job_form_signature' ? 1 : JOB_FORM_PHOTO_CAP;
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.job_id, job_id),
+						eq(media.line_key, line_key),
+						eq(media.purpose_tag, purpose_tag),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= cap) {
+				return json(
+					{
+						error:
+							cap === 1
+								? 'A signature is already captured. Clear it before drawing a new one.'
+								: `Up to ${JOB_FORM_PHOTO_CAP} photos per field.`
+					},
+					{ status: 422 }
+				);
+			}
+		}
+
+		// Visit photo gates on edit access to this job, then line_key must resolve to a live
+		// visit (appointment) on this job before we cap and store it.
+		if (isJobVisitPhoto && line_key) {
+			if (!canEditJob(auth.member, { assigned_to: j.assigned_to })) {
+				error(403, 'Forbidden');
+			}
+
+			const [visit] = await db
+				.select({ id: appointments.id })
+				.from(appointments)
+				.where(
+					and(
+						eq(appointments.id, line_key),
+						eq(appointments.org_id, auth.orgId),
+						eq(appointments.job_id, job_id),
+						isNull(appointments.deleted_at)
+					)
+				)
+				.limit(1);
+			if (!visit) return json({ error: 'Visit not found on this job' }, { status: 404 });
+
+			// Cap before spending an R2 round-trip.
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.job_id, job_id),
+						eq(media.line_key, line_key),
+						eq(media.purpose_tag, 'job_visit_photo'),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= JOB_VISIT_PHOTO_CAP) {
+				return json(
+					{ error: `Up to ${JOB_VISIT_PHOTO_CAP} photos per visit.` },
+					{ status: 422 }
+				);
+			}
+		}
+
+		// Sign-off signature gates on edit access to this job, then caps at exactly one per job
+		// (redo = clear the old one first, via DELETE /api/jobs/[id]/signoff).
+		if (isJobSignoff) {
+			if (!canEditJob(auth.member, { assigned_to: j.assigned_to })) {
+				error(403, 'Forbidden');
+			}
+
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.job_id, job_id),
+						eq(media.purpose_tag, 'job_signoff_signature'),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= 1) {
+				return json(
+					{ error: 'A sign-off is already captured. Clear it before drawing a new one.' },
+					{ status: 422 }
+				);
+			}
+		}
 	}
 	if (quote_id) {
 		const [q] = await db
@@ -279,6 +503,27 @@ export const POST: RequestHandler = async (event) => {
 			.where(and(eq(quotes.id, quote_id), eq(quotes.org_id, auth.orgId), isNull(quotes.deleted_at)))
 			.limit(1);
 		if (!q) return json({ error: 'Quote not found' }, { status: 404 });
+
+		// One signature per quote — redo means clearing the pad client-side before submitting,
+		// so a second upload for the same quote is a duplicate. Cap before the R2 round-trip.
+		if (isQuoteSignature) {
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.quote_id, quote_id),
+						eq(media.purpose_tag, 'quote_signature'),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= 1) {
+				return json(
+					{ error: 'A signature is already captured for this quote.' },
+					{ status: 422 }
+				);
+			}
+		}
 
 		// Enforce the per-line photo cap before spending an R2 round-trip.
 		if (isLineItemPhoto && line_key) {
@@ -347,6 +592,26 @@ export const POST: RequestHandler = async (event) => {
 	// Line item photos are images only — a PDF makes no sense as an inline line thumbnail.
 	if (isLineItemPhoto && !isImage) {
 		return json({ error: 'Line item photos must be an image (JPEG, PNG, WebP).' }, { status: 422 });
+	}
+
+	// Job-form photos and captured signatures are images only.
+	if (isJobFormMedia && !isImage) {
+		return json({ error: 'Form attachments must be an image (JPEG, PNG, WebP).' }, { status: 422 });
+	}
+
+	// Visit photos are images only.
+	if (isJobVisitPhoto && !isImage) {
+		return json({ error: 'Visit photos must be an image (JPEG, PNG, WebP).' }, { status: 422 });
+	}
+
+	// Sign-off signatures are images only (a PNG from the signature pad).
+	if (isJobSignoff && !isImage) {
+		return json({ error: 'A signature must be an image (PNG).' }, { status: 422 });
+	}
+
+	// Quote in-person signatures are images only (a PNG from the signature pad).
+	if (isQuoteSignature && !isImage) {
+		return json({ error: 'A signature must be an image (PNG).' }, { status: 422 });
 	}
 
 	// Build R2 keys

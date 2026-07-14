@@ -3,19 +3,7 @@
 	import { page } from '$app/state';
 	import { tick, untrack } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { cn } from '$lib/utils/cn';
 	import { commandPalette } from '$lib/stores/commandPalette.svelte';
-	import {
-		Search,
-		Users,
-		Layers2,
-		Briefcase,
-		FileText,
-		Receipt,
-		CalendarDays,
-		Loader2,
-		X
-	} from '@lucide/svelte';
 
 	type SearchItem = { id: string; title: string; subtitle: string | null; href: string };
 	type ResultMap = {
@@ -28,17 +16,12 @@
 	};
 
 	const GROUPS = [
-		{ key: 'contacts' as const, label: 'Contacts', Icon: Users, color: 'text-emerald-500' },
-		{ key: 'opportunities' as const, label: 'Pipeline', Icon: Layers2, color: 'text-amber-500' },
-		{ key: 'jobs' as const, label: 'Jobs', Icon: Briefcase, color: 'text-blue-500' },
-		{ key: 'quotes' as const, label: 'Quotes', Icon: FileText, color: 'text-violet-500' },
-		{ key: 'invoices' as const, label: 'Invoices', Icon: Receipt, color: 'text-rose-500' },
-		{
-			key: 'appointments' as const,
-			label: 'Appointments',
-			Icon: CalendarDays,
-			color: 'text-cyan-500'
-		}
+		{ key: 'contacts' as const, label: 'Contacts', icon: 'ri-contacts-line' },
+		{ key: 'opportunities' as const, label: 'Pipeline', icon: 'ri-stack-line' },
+		{ key: 'jobs' as const, label: 'Jobs', icon: 'ri-briefcase-line' },
+		{ key: 'quotes' as const, label: 'Quotes', icon: 'ri-file-text-line' },
+		{ key: 'invoices' as const, label: 'Invoices', icon: 'ri-receipt-line' },
+		{ key: 'appointments' as const, label: 'Appointments', icon: 'ri-calendar-line' }
 	];
 
 	type GroupKey = (typeof GROUPS)[number]['key'];
@@ -174,7 +157,7 @@
 	<!-- Backdrop -->
 	<div
 		role="presentation"
-		class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
+		class="command-palette__backdrop"
 		transition:fade={{ duration: 120 }}
 		onclick={() => (commandPalette.open = false)}
 	></div>
@@ -185,16 +168,17 @@
 		aria-modal="true"
 		aria-label="Quick search"
 		tabindex="-1"
-		class="fixed inset-x-4 top-4 z-[101] overflow-hidden rounded-xl border border-border bg-background shadow-2xl md:inset-x-auto md:left-1/2 md:top-[10vh] md:w-[640px] md:-translate-x-1/2 md:rounded-2xl"
+		class="command-palette__panel"
 		transition:fly={{ y: -10, duration: 160, opacity: 0 }}
 		onkeydown={handleKeydown}
 	>
 		<!-- Search input row -->
-		<div class="flex items-center gap-3 border-b border-border/60 px-4 py-3 md:px-5 md:py-3.5">
+		<div class="command-palette__search">
 			{#if loading}
-				<Loader2 class="h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
+				<i class="ri-loader-4-line command-palette__search-icon animate-spin" aria-hidden="true"
+				></i>
 			{:else}
-				<Search class="h-5 w-5 shrink-0 text-muted-foreground" />
+				<i class="ri-search-line command-palette__search-icon" aria-hidden="true"></i>
 			{/if}
 
 			<input
@@ -207,7 +191,7 @@
 				aria-controls="palette-listbox"
 				aria-activedescendant={activeIndex >= 0 ? `palette-item-${activeIndex}` : undefined}
 				placeholder="Search contacts, jobs, invoices…"
-				class="flex-1 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+				class="command-palette__input"
 				autocomplete="off"
 				spellcheck={false}
 			/>
@@ -216,19 +200,19 @@
 				<button
 					type="button"
 					onclick={clear}
-					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					class="command-palette__icon-btn"
 					aria-label="Clear search"
 				>
-					<X class="h-4 w-4" />
+					<i class="ri-close-line" aria-hidden="true"></i>
 				</button>
 			{:else}
 				<button
 					type="button"
 					onclick={() => (commandPalette.open = false)}
-					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+					class="command-palette__icon-btn command-palette__icon-btn--close"
 					aria-label="Close"
 				>
-					<X class="h-4 w-4" />
+					<i class="ri-close-line" aria-hidden="true"></i>
 				</button>
 			{/if}
 		</div>
@@ -238,68 +222,64 @@
 			id="palette-listbox"
 			role="listbox"
 			aria-label="Search results"
-			class="overflow-y-auto overscroll-contain max-h-[60vh] md:max-h-[420px]"
+			class="command-palette__results"
 		>
 			{#if !results && !loading}
 				<!-- Idle -->
-				<div class="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
-					<Search class="h-8 w-8 text-muted-foreground/20" />
-					<p class="text-sm text-muted-foreground">
+				<div class="command-palette__state">
+					<i class="ri-search-line command-palette__state-icon" aria-hidden="true"></i>
+					<p class="command-palette__state-text">
 						Search across contacts, pipeline, jobs, quotes & more
 					</p>
 				</div>
 			{:else if showEmpty}
 				<!-- No results -->
-				<div class="flex flex-col items-center justify-center gap-1.5 px-4 py-10 text-center">
-					<p class="text-sm text-foreground">
-						No results for <span class="font-semibold">"{query.trim()}"</span>
+				<div class="command-palette__state">
+					<p class="command-palette__state-text">
+						No results for <span class="command-palette__state-strong">"{query.trim()}"</span>
 					</p>
-					<p class="text-xs text-muted-foreground">Try a different term or check the spelling</p>
+					<p class="command-palette__state-hint">Try a different term or check the spelling</p>
 				</div>
 			{:else if hasResults}
 				<!-- Grouped results -->
-				<div class="py-2">
+				<div class="command-palette__groups">
 					{#each GROUPS as group (group.key)}
 						{@const items = results?.[group.key] ?? []}
 						{#if items.length > 0}
-							{@const GroupIcon = group.Icon}
-							<div class="px-2 pb-1 last:pb-0">
+							<div class="command-palette__group">
 								<!-- Section header -->
-								<div class="flex items-center gap-2 px-3 py-1.5">
-									<GroupIcon class={cn('h-3 w-3 shrink-0', group.color)} />
-									<span
-										class="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60"
-									>
-										{group.label}
-									</span>
+								<div class="command-palette__group-header">
+									<i
+										class="{group.icon} command-palette__icon command-palette__icon--header command-palette__icon--{group.key}"
+										aria-hidden="true"
+									></i>
+									<span class="command-palette__group-label">{group.label}</span>
 								</div>
 								<!-- Items -->
-								<div class="space-y-px">
-									{#each items as item (item.id)}
-										{@const flatIdx = getFlatIndex(group.key, item.id)}
-										{@const isActive = flatIdx === activeIndex}
-										<button
-											id="palette-item-{flatIdx}"
-											role="option"
-											aria-selected={isActive}
-											type="button"
-											class={cn(
-												'flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-												isActive ? 'bg-accent' : 'hover:bg-accent/50'
-											)}
-											onclick={() => navigate(item.href)}
-											onmouseenter={() => (activeIndex = flatIdx)}
-										>
-											<GroupIcon class={cn('h-4 w-4 shrink-0', group.color)} />
-											<div class="min-w-0 flex-1">
-												<p class="truncate text-sm font-medium text-foreground">{item.title}</p>
-												{#if item.subtitle}
-													<p class="truncate text-xs text-muted-foreground">{item.subtitle}</p>
-												{/if}
-											</div>
-										</button>
-									{/each}
-								</div>
+								{#each items as item (item.id)}
+									{@const flatIdx = getFlatIndex(group.key, item.id)}
+									{@const isActive = flatIdx === activeIndex}
+									<button
+										id="palette-item-{flatIdx}"
+										role="option"
+										aria-selected={isActive}
+										type="button"
+										class="command-palette__item {isActive ? 'command-palette__item--active' : ''}"
+										onclick={() => navigate(item.href)}
+										onmouseenter={() => (activeIndex = flatIdx)}
+									>
+										<i
+											class="{group.icon} command-palette__icon command-palette__icon--{group.key}"
+											aria-hidden="true"
+										></i>
+										<div class="command-palette__item-body">
+											<p class="command-palette__item-title">{item.title}</p>
+											{#if item.subtitle}
+												<p class="command-palette__item-subtitle">{item.subtitle}</p>
+											{/if}
+										</div>
+									</button>
+								{/each}
 							</div>
 						{/if}
 					{/each}
@@ -309,32 +289,18 @@
 
 		<!-- Keyboard hints (desktop only, shown when there are results) -->
 		{#if hasResults}
-			<div
-				class="hidden items-center gap-5 border-t border-border/60 bg-muted/20 px-5 py-2 md:flex"
-			>
-				<span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-					<kbd
-						class="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-border bg-background px-1 font-mono text-[10px]"
-						>↑</kbd
-					>
-					<kbd
-						class="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-border bg-background px-1 font-mono text-[10px]"
-						>↓</kbd
-					>
+			<div class="command-palette__footer">
+				<span class="command-palette__hint">
+					<kbd class="command-palette__kbd">↑</kbd>
+					<kbd class="command-palette__kbd">↓</kbd>
 					Navigate
 				</span>
-				<span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-					<kbd
-						class="inline-flex h-5 items-center justify-center rounded border border-border bg-background px-1.5 font-mono text-[10px]"
-						>Enter</kbd
-					>
+				<span class="command-palette__hint">
+					<kbd class="command-palette__kbd">Enter</kbd>
 					Open
 				</span>
-				<span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-					<kbd
-						class="inline-flex h-5 items-center justify-center rounded border border-border bg-background px-1.5 font-mono text-[10px]"
-						>Esc</kbd
-					>
+				<span class="command-palette__hint">
+					<kbd class="command-palette__kbd">Esc</kbd>
 					Close
 				</span>
 			</div>

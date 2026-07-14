@@ -36,6 +36,18 @@ const ORG_SAFE_FIELDS = [
 	'business_number',
 	'calendar_day_start_hour',
 	'calendar_day_end_hour',
+	// Target profit-margin floor — drives the green/yellow/red signal on the internal
+	// margin readout while quoting. Internal-only setting; never customer-facing.
+	'target_margin_pct',
+	// Invoice tips (M7): master toggle + percent presets (see (app)/+layout.server.ts).
+	'tips_enabled',
+	'tip_preset_percents',
+	// Invoice late fees (M8): master toggle + type + values (see (app)/+layout.server.ts).
+	'late_fee_enabled',
+	'late_fee_type',
+	'late_fee_flat_amount',
+	'late_fee_percent',
+	'late_fee_grace_days',
 	'feature_overrides_updated_at',
 	'created_at'
 ] as const;

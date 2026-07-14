@@ -111,7 +111,14 @@ export const GET: RequestHandler = async (event) => {
 		// as an attachment in the Files tab.
 		ne(media.purpose_tag, 'contact_avatar'),
 		// Per-line quote photos are managed inline on each line item, not in the Files list.
-		ne(media.purpose_tag, 'quote_line_item_photo')
+		ne(media.purpose_tag, 'quote_line_item_photo'),
+		// Job-form photos/signatures are managed inline on their form field, not in the Files list.
+		ne(media.purpose_tag, 'job_form_photo'),
+		ne(media.purpose_tag, 'job_form_signature'),
+		// Per-visit photos are managed inline on the visit, not in the Files list.
+		ne(media.purpose_tag, 'job_visit_photo'),
+		// The client sign-off signature is managed inline on the job, not in the Files list.
+		ne(media.purpose_tag, 'job_signoff_signature')
 	];
 	if (contactId) conditions.push(eq(media.contact_id, contactId));
 	if (opportunityId) conditions.push(eq(media.opportunity_id, opportunityId));

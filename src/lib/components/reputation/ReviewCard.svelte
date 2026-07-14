@@ -7,18 +7,18 @@
 	const dateLabel = $derived(new Date(review.created_at).toLocaleDateString());
 </script>
 
-<article class="rounded-xl border border-border bg-card p-4 shadow-sm">
-	<div class="flex items-start justify-between gap-3">
-		<div class="min-w-0">
-			<p class="truncate text-sm font-semibold text-foreground">{review.contact_name}</p>
+<article class="review-card">
+	<div class="review-card__head">
+		<div class="review-card__id">
+			<p class="review-card__name">{review.contact_name}</p>
 			{#if review.job_title}
-				<p class="truncate text-xs text-muted-foreground">{review.job_title}</p>
+				<p class="review-card__sub">{review.job_title}</p>
 			{/if}
 		</div>
 		<StarRating score={review.score} size="md" />
 	</div>
 	{#if review.body}
-		<p class="mt-3 text-sm text-foreground/90">{review.body}</p>
+		<p class="review-card__body">{review.body}</p>
 	{/if}
-	<p class="mt-3 text-xs text-muted-foreground">{dateLabel}</p>
+	<p class="review-card__date">{dateLabel}</p>
 </article>

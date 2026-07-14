@@ -1,10 +1,8 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Label } from '$lib/components/ui/label';
-	import { cn } from '$lib/utils/cn';
 	import type { LostReason } from '$lib/types/pipeline';
 	import { LOST_REASON_LABELS } from '$lib/types/pipeline';
 
@@ -52,51 +50,55 @@
 			<Dialog.Description>Why didn't this deal close?</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-4">
-			<div class="space-y-2">
-				<Label>Reason <span class="text-destructive">*</span></Label>
-				<div class="grid grid-cols-1 gap-2">
+		<div style="display:flex; flex-direction:column; gap:16px;">
+			<div>
+				<Label>Reason <span style="color:var(--danger-solid)">*</span></Label>
+				<div class="lost-reason__options" style="margin-top:8px;">
 					{#each options as option (option)}
 						<button
 							type="button"
 							onclick={() => { selected = option; errorMsg = null; }}
-							class={cn(
-								'flex min-h-[44px] items-center rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
-								selected === option
-									? 'border-destructive bg-destructive/10 font-medium text-destructive'
-									: 'border-border bg-background hover:border-destructive/40 hover:bg-muted/50'
-							)}
+							class="lost-reason__option-btn{selected === option ? ' lost-reason__option-btn--selected' : ''}"
 						>
 							{LOST_REASON_LABELS[option]}
 						</button>
 					{/each}
 				</div>
-				{#if errorMsg}<p class="text-sm text-destructive">{errorMsg}</p>{/if}
+				{#if errorMsg}
+					<p style="font-size:var(--text-body); color:var(--danger-solid); margin-top:6px;">{errorMsg}</p>
+				{/if}
 			</div>
 
-			<div class="space-y-1.5">
-				<Label for="lost-note">Additional details <span class="text-muted-foreground text-xs">(optional)</span></Label>
+			<div>
+				<Label for="lost-note">
+					Additional details
+					<span style="color:var(--color-text-muted); font-size:12px;">(optional)</span>
+				</Label>
 				<Textarea
 					id="lost-note"
 					bind:value={note}
 					rows={3}
 					maxlength={200}
 					placeholder="Any extra context…"
+					style="margin-top:6px;"
 				/>
-				<p class="text-right text-xs text-muted-foreground">{note.length}/200</p>
+				<p style="text-align:right; font-size:12px; color:var(--color-text-muted); margin-top:4px;">
+					{note.length}/200
+				</p>
 			</div>
 		</div>
 
 		<Dialog.Footer>
 			<Button variant="outline" disabled={loading} onclick={cancel}>Cancel</Button>
-			<JetEngineButton
+			<Button
 				variant="destructive"
-				label="Mark as lost"
 				loadingLabel="Saving…"
 				successLabel="Saved"
-				state={loading ? 'loading' : 'idle'}
+				loading={loading}
 				onclick={handleConfirm}
-			/>
+			>
+				Mark as lost
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

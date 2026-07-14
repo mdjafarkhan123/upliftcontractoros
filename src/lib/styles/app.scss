@@ -1,0 +1,423 @@
+// =============================================================================
+// CONTRACTOR CRM — GLOBAL STYLESHEET
+// Entry point imported once in src/routes/+layout.svelte.
+// Responsibilities: design tokens, @font-face, reset, base element rules,
+// layout helpers, and keyframe animations.
+// Component-level BEM blocks live in src/lib/styles/components/*.scss (TBD).
+// Page-specific layout overrides live in scoped <style lang="scss"> blocks.
+// =============================================================================
+
+@use './tokens' as *;
+
+// Component library — global BEM blocks, one file per block
+@use './components/app-shell';
+@use './components/button';
+@use './components/badge';
+@use './components/card';
+@use './components/sidebar';
+@use './components/topbar';
+@use './components/page-header';
+@use './components/bottom-nav';
+@use './components/command-palette';
+@use './components/pipeline';
+@use './components/table';
+@use './components/list-table';
+@use './components/bulk-bar';
+@use './components/recycle-bin';
+@use './components/field';
+@use './components/edit-action-bar';
+@use './components/phone-field';
+@use './components/dialog';
+@use './components/draggable-panel';
+@use './components/avatar';
+@use './components/progress';
+@use './components/dashboard';
+@use './components/documents';
+@use './components/send-document';
+@use './components/contacts';
+@use './components/jobs';
+@use './components/quotes';
+@use './components/invoices';
+@use './components/appointments';
+@use './components/inbox';
+@use './components/settings';
+@use './components/booking';
+@use './components/reputation';
+@use './components/growth';
+@use './components/notifications';
+@use './components/public';
+@use './components/jafar';
+@use './components/ui-primitives';
+@use './components/media';
+
+// =============================================================================
+// FONTS — self-hosted, no Google Fonts round-trip.
+// font-display:swap paints fallback text immediately so the page isn't blank
+// while the font file downloads.
+// =============================================================================
+
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('/fonts/inter-v20-latin-regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/inter-v20-latin-500.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('/fonts/inter-v20-latin-600.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url('/fonts/inter-v20-latin-700.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 800;
+	font-display: swap;
+	src: url('/fonts/inter-v20-latin-800.woff2') format('woff2');
+}
+
+// =============================================================================
+// RESET — minimal. Only what preflight used to handle; nothing opinionated.
+// =============================================================================
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+* {
+	margin: 0;
+}
+
+img,
+video,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+}
+
+// =============================================================================
+// BASE ELEMENTS
+// =============================================================================
+
+// Global rule: no button label should ever wrap to a second line. The .btn
+// block also sets this, but raw <button> elements with custom classes (e.g.
+// popover/header buttons) must obey it too.
+button {
+	white-space: nowrap;
+}
+
+// 62.5% makes 1rem = 10px (assuming the browser default of 16px).
+// The $fs-* / $text-* SIZE tokens use rem, so mental math is just moving the
+// decimal: 14px → 1.4rem, 24px → 2.4rem. ($lh-* line-heights are UNITLESS
+// multipliers, Jobber-style.) Respects browser zoom and OS font-size
+// accessibility settings; px doesn't.
+html {
+	font-size: 62.5%;
+	scrollbar-gutter: stable;
+}
+
+body {
+	font-family: $font-body;
+	font-size: $fs-body; // 1.4rem = 14px — the readable floor (Jobber "base")
+	line-height: $lh-body; // 1.25 — Jobber-exact body line-height
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	background-color: var(--color-bg-app);
+	color: var(--color-text-primary);
+	font-feature-settings:
+		'rlig' 1,
+		'calt' 1;
+}
+
+::selection {
+	background-color: var(--state-active-tint);
+	color: var(--color-text-primary);
+}
+
+// =============================================================================
+// SCROLLBAR
+// =============================================================================
+
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: var(--color-border-strong);
+	border-radius: $radius-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--color-text-muted);
+}
+
+// =============================================================================
+// FOCUS — single global default; individual components can refine via
+// their own :focus-visible rule if a shape-specific ring looks better.
+// =============================================================================
+
+:focus-visible {
+	outline: none;
+	box-shadow: var(--shadow-focus);
+}
+
+// =============================================================================
+// STATUS DOTS — shared utility used by badges, list rows, and timeline items.
+// Uses BEM modifier naming so they compose cleanly: class="status-dot status-dot--active"
+// =============================================================================
+
+.status-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: $radius-full;
+	flex-shrink: 0;
+
+	&--active {
+		background-color: var(--success-solid);
+	}
+	&--pending {
+		background-color: var(--warning-solid);
+	}
+	&--inactive {
+		background-color: var(--color-text-muted);
+	}
+	&--overdue {
+		background-color: var(--danger-solid);
+	}
+	&--lead {
+		background-color: var(--info-solid);
+	}
+	&--draft {
+		background-color: var(--color-text-muted);
+	}
+}
+
+// =============================================================================
+// SKELETON SHIMMER — applied to any loading placeholder element.
+// The gradient adapts to both themes via token vars, not hardcoded grays.
+// =============================================================================
+
+@keyframes shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+.skeleton-shimmer {
+	background: linear-gradient(
+		90deg,
+		var(--color-bg-surface-sunk) 25%,
+		var(--color-border) 50%,
+		var(--color-bg-surface-sunk) 75%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 1.4s ease-in-out infinite;
+	border-radius: $radius-sm;
+}
+
+// =============================================================================
+// INDETERMINATE PROGRESS BAR — contact import background task indicator.
+// =============================================================================
+
+.progress-indeterminate {
+	position: relative;
+	overflow: hidden;
+
+	&::after {
+		content: '';
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 40%;
+		border-radius: inherit;
+		background: var(--color-brand);
+		animation: progress-slide 1.1s ease-in-out infinite;
+	}
+}
+
+@keyframes progress-slide {
+	0% {
+		transform: translateX(-110%);
+	}
+	100% {
+		transform: translateX(360%);
+	}
+}
+
+// =============================================================================
+// JET ENGINE BUTTON — loading state animations (spool-up + sustained spin).
+// =============================================================================
+
+.animate-spool-up {
+	animation:
+		spool-up 1.4s cubic-bezier(0.45, 0, 0.2, 1) forwards,
+		spool-spin 0.45s linear 1.4s infinite;
+	transform-origin: center;
+}
+
+@keyframes spool-up {
+	0% {
+		transform: rotate(0deg);
+		animation-timing-function: cubic-bezier(0.85, 0, 0.95, 0.35);
+	}
+	100% {
+		transform: rotate(900deg);
+	}
+}
+
+@keyframes spool-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// Success checkmark — scale in with an overshoot spring.
+.animate-pop-in {
+	animation: pop-in 0.42s #{$ease-spring} forwards;
+	transform-origin: center;
+}
+
+@keyframes pop-in {
+	0% {
+		transform: scale(0);
+		opacity: 0;
+	}
+	60% {
+		transform: scale(1.25);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+// =============================================================================
+// SNAKE GLOW BORDER — conic-gradient border that appears on hover, giving
+// interactive surfaces a premium animated highlight using $brand-light.
+// @property registers --snake-angle as an animatable custom property.
+// =============================================================================
+
+@property --snake-angle {
+	syntax: '<angle>';
+	initial-value: 0deg;
+	inherits: false;
+}
+
+@keyframes snake-spin {
+	to {
+		--snake-angle: 360deg;
+	}
+}
+
+.snake-glow {
+	position: relative;
+	z-index: 0;
+	overflow: visible;
+
+	&::before {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+		z-index: -2;
+		inset: 0;
+		margin: -1px;
+		border-radius: inherit;
+		background: conic-gradient(
+			from var(--snake-angle) at 50% 50%,
+			transparent 40deg,
+			var(--color-brand-glow) 65deg,
+			var(--color-brand) 85deg,
+			transparent 115deg,
+			transparent 240deg,
+			var(--color-brand-glow) 275deg,
+			var(--color-brand) 295deg,
+			transparent 335deg
+		);
+		opacity: 0;
+		animation: snake-spin 4s linear infinite;
+		transition: opacity $duration-base $ease-standard;
+	}
+
+	&::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+		z-index: -1;
+		inset: 0;
+		border-radius: inherit;
+		background: inherit;
+	}
+
+	&:hover {
+		box-shadow: 0 0 8px 1px rgba(23, 247, 0, 0.18);
+
+		&::before {
+			opacity: 1;
+		}
+	}
+}
+
+// =============================================================================
+// LOADING SPINNER — generic infinite rotation for loading indicators.
+// =============================================================================
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.animate-spin {
+	animation: spin 0.75s linear infinite;
+	transform-origin: center;
+}
+
+// =============================================================================
+// REDUCED MOTION — collapse all animations to a single frame for users who
+// have opted out of motion in their OS accessibility settings.
+// =============================================================================
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

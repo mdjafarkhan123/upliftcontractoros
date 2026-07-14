@@ -72,6 +72,24 @@ export function buildFieldIndex(headerRow: string[]): Record<string, number> {
 	return fieldIndex;
 }
 
+/**
+ * Build the same canonical-field → column-index map from the user's EXPLICIT column
+ * mapping (the "Map columns" step), instead of auto-guessing headers. The map is an
+ * array aligned by column index: each entry is the canonical field that column feeds
+ * (e.g. 'phone') or null/'' for "don't import". First column wins on any duplicate,
+ * matching buildFieldIndex's behavior.
+ */
+export function buildFieldIndexFromMap(columnMap: (string | null)[]): Record<string, number> {
+	const fieldIndex: Record<string, number> = {};
+	for (let i = 0; i < columnMap.length; i++) {
+		const canonical = columnMap[i];
+		if (canonical && !(canonical in fieldIndex)) {
+			fieldIndex[canonical] = i;
+		}
+	}
+	return fieldIndex;
+}
+
 export type CsvAnalysis = { ok: true; dataRowCount: number } | { ok: false; error: string };
 
 /**
@@ -80,18 +98,22 @@ export type CsvAnalysis = { ok: true; dataRowCount: number } | { ok: false; erro
  * count so the route can store total_rows. The worker re-parses from R2 — this
  * is only an early-reject for a confusing/empty file.
  */
-export function analyzeCsv(text: string): CsvAnalysis {
+export function analyzeCsv(text: string, columnMap?: (string | null)[] | null): CsvAnalysis {
 	const allRows = parseCSV(text);
 	if (allRows.length < 2) {
 		return { ok: false, error: 'CSV has no data rows.' };
 	}
-	const headerRow = allRows[0].map(normalizeKey);
-	const fieldIndex = buildFieldIndex(headerRow);
+	// When the user mapped columns explicitly, validate against THAT map; otherwise
+	// fall back to auto-detecting the header row.
+	const fieldIndex =
+		columnMap && columnMap.length > 0
+			? buildFieldIndexFromMap(columnMap)
+			: buildFieldIndex(allRows[0].map(normalizeKey));
 	const hasName = 'full_name' in fieldIndex || 'first_name' in fieldIndex;
 	if (!hasName) {
 		return {
 			ok: false,
-			error: 'CSV needs a "Full Name" column (or "First Name" / "Last Name").'
+			error: 'A Name column must be mapped (or First name / Last name).'
 		};
 	}
 	return { ok: true, dataRowCount: allRows.length - 1 };

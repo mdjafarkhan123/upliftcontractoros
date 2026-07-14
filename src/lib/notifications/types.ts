@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = [
 	// Money
 	'payment_received',
 	'invoice_viewed',
+	'job_invoice_reminder',
 	// Operations
 	'message_received',
 	'appointment_booked',

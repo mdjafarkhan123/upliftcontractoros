@@ -18,6 +18,7 @@ import {
 	parseCSV,
 	normalizeKey,
 	buildFieldIndex,
+	buildFieldIndexFromMap,
 	resolveFullName
 } from '$lib/server/contacts/csvImport';
 import { toE164Loose } from '$lib/utils/phone';
@@ -170,8 +171,13 @@ async function processImport(job: Job<ContactImportJobData>): Promise<void> {
 	const allRows = parseCSV(bytes.toString('utf-8'));
 	const dataRows = allRows.length >= 1 ? allRows.slice(1) : [];
 	const BATCH = BATCH_SIZE;
-	const headerRow = (allRows[0] ?? []).map(normalizeKey);
-	const fieldIndex = buildFieldIndex(headerRow);
+	// Prefer the user's explicit column mapping (the "Map columns" step); fall back to
+	// auto-detecting the header row for older imports with no stored map.
+	const storedMap = imp.column_map as (string | null)[] | null;
+	const fieldIndex =
+		Array.isArray(storedMap) && storedMap.length > 0
+			? buildFieldIndexFromMap(storedMap)
+			: buildFieldIndex((allRows[0] ?? []).map(normalizeKey));
 
 	if (!('full_name' in fieldIndex) && !('first_name' in fieldIndex)) {
 		// Validated at upload time, so reaching here means a corrupt/edited file.

@@ -1,12 +1,10 @@
 <script lang="ts">
+	import { Dialog } from 'bits-ui';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import AddressForm from './AddressForm.svelte';
-	import { Plus, MapPin, Star, Pencil, Trash2 } from '@lucide/svelte';
 
 	type Address = {
 		id: string;
@@ -99,8 +97,6 @@
 			state: draft.state,
 			zip: draft.zip,
 			is_primary: draft.is_primary,
-			// Optimistic concurrency token (edits only) so a concurrent change by
-			// another team member is surfaced instead of silently overwritten.
 			...(editing ? { updated_at: editing.updated_at } : {})
 		};
 		try {
@@ -171,10 +167,10 @@
 	}
 </script>
 
-<div class="flex flex-col gap-4">
+<div style="display:flex; flex-direction:column; gap:1rem;">
 	{#if canEdit}
-		<Button onclick={openCreate} class="w-full md:w-auto">
-			<Plus class="h-4 w-4" /> Add address
+		<Button onclick={openCreate}>
+			<i class="ri-add-line" aria-hidden="true"></i> Add address
 		</Button>
 	{/if}
 
@@ -184,55 +180,60 @@
 			description={canEdit
 				? 'Add an address to use for jobs and invoices.'
 				: 'Addresses for this contact will appear here.'}
-			icon={MapPin}
+			iconClass="ri-map-pin-line"
 		/>
 	{:else}
-		<ul class="space-y-3">
+		<ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:0.75rem;">
 			{#each addresses as a (a.id)}
-				<li class="rounded-xl border border-border bg-card p-4">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
+				<li class="contact-address-item">
+					<div class="contact-address-item__inner">
+						<div class="contact-address-item__body">
+							<div class="contact-address-item__badge-row">
 								<Badge
 									variant={a.is_primary ? 'success' : 'default'}
 									label={a.label[0].toUpperCase() + a.label.slice(1)}
 								/>
-								{#if a.is_primary}<span
-										class="inline-flex items-center gap-1 text-xs font-medium text-green-700"
-										><Star class="h-3 w-3" /> Primary</span
-									>{/if}
+								{#if a.is_primary}
+									<span class="contact-address-item__primary-flag">
+										<i class="ri-star-fill" aria-hidden="true"></i> Primary
+									</span>
+								{/if}
 							</div>
-							<p class="mt-2 text-sm text-foreground">{a.address_line_1}</p>
-							{#if a.address_line_2}<p class="text-sm text-foreground">{a.address_line_2}</p>{/if}
-							<p class="text-sm text-muted-foreground">{a.city}, {a.state} {a.zip}</p>
+							<p class="contact-address-item__line">{a.address_line_1}</p>
+							{#if a.address_line_2}
+								<p class="contact-address-item__line">{a.address_line_2}</p>
+							{/if}
+							<p class="contact-address-item__line contact-address-item__line--city">
+								{a.city}, {a.state} {a.zip}
+							</p>
 						</div>
 						{#if canEdit}
-							<div class="flex shrink-0 flex-col items-end gap-1">
+							<div class="contact-address-item__actions">
 								<button
 									type="button"
-									class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+									class="contact-address-item__icon-btn"
 									aria-label="Edit address"
 									onclick={() => openEdit(a)}
 								>
-									<Pencil class="h-4 w-4" />
+									<i class="ri-edit-line" aria-hidden="true"></i>
 								</button>
 								{#if !a.is_primary}
 									<button
 										type="button"
-										class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+										class="contact-address-item__icon-btn"
 										aria-label="Set as primary"
 										onclick={() => setPrimary(a.id)}
 									>
-										<Star class="h-4 w-4" />
+										<i class="ri-star-line" aria-hidden="true"></i>
 									</button>
 								{/if}
 								<button
 									type="button"
-									class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+									class="contact-address-item__icon-btn contact-address-item__icon-btn--danger"
 									aria-label="Delete address"
 									onclick={() => askDelete(a.id)}
 								>
-									<Trash2 class="h-4 w-4" />
+									<i class="ri-delete-bin-line" aria-hidden="true"></i>
 								</button>
 							</div>
 						{/if}
@@ -243,24 +244,45 @@
 	{/if}
 </div>
 
-<BottomSheet bind:open={editorOpen} title={editing ? 'Edit address' : 'Add address'}>
-	<div class="space-y-4 px-1 pb-2 pt-3">
-		<AddressForm value={draft} disabled={saving} />
-		{#if errorMsg}<p class="text-sm text-destructive">{errorMsg}</p>{/if}
-		<div class="flex justify-end gap-2">
-			<Button variant="outline" disabled={saving} onclick={() => (editorOpen = false)}
-				>Cancel</Button
-			>
-			<JetEngineButton
-				label="Save address"
-				loadingLabel="Saving…"
-				successLabel="Saved"
-				state={saving ? 'loading' : 'idle'}
-				onclick={save}
-			/>
-		</div>
-	</div>
-</BottomSheet>
+<!-- Address editor dialog -->
+<Dialog.Root bind:open={editorOpen}>
+	<Dialog.Portal>
+		<Dialog.Overlay class="dialog-overlay" />
+		<Dialog.Content class="dialog-content dialog-content--wide">
+			<div class="dialog-content__header">
+				<div>
+					<h2 class="dialog-content__title">{editing ? 'Edit address' : 'Add address'}</h2>
+				</div>
+				<Dialog.Close class="dialog-content__close">
+					<i class="ri-close-line address-tab__close-icon" aria-hidden="true"></i>
+				</Dialog.Close>
+			</div>
+			<div class="dialog-content__body">
+				<AddressForm value={draft} disabled={saving} />
+				{#if errorMsg}
+					<p class="field__error">{errorMsg}</p>
+				{/if}
+			</div>
+			<div class="dialog-content__footer">
+				<Button
+					variant="secondary"
+					disabled={saving}
+					onclick={() => (editorOpen = false)}
+				>
+					Cancel
+				</Button>
+				<Button
+					loadingLabel="Saving…"
+					successLabel="Saved"
+					loading={saving}
+					onclick={save}
+				>
+					Save address
+				</Button>
+			</div>
+		</Dialog.Content>
+	</Dialog.Portal>
+</Dialog.Root>
 
 <ConfirmDialog
 	bind:open={confirmOpen}
@@ -271,3 +293,11 @@
 	loading={deleting}
 	onConfirm={confirmDelete}
 />
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.address-tab__close-icon {
+		font-size: $fs-body;
+	}
+</style>

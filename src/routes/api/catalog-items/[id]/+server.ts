@@ -5,6 +5,7 @@ import { db } from '$lib/server/db/client';
 import { catalogItems } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canManageCatalog } from '$lib/server/quotes/permissions';
+import { canViewCostMargin } from '$lib/server/finance/permissions';
 import { updateCatalogItemSchema } from '$lib/server/quotes/schemas';
 
 export const PATCH: RequestHandler = async (event) => {
@@ -62,8 +63,11 @@ export const PATCH: RequestHandler = async (event) => {
 	if (input.description !== undefined) updates.description = input.description;
 	if (input.unit_price !== undefined) updates.unit_price = String(input.unit_price);
 	if (input.unit !== undefined) updates.unit = input.unit?.trim() || null;
-	if (input.unit_cost !== undefined)
+	// Cost edits are ignored for members without revenue access (they never see the field,
+	// so their save would otherwise blank the owner's cost). The existing value is left intact.
+	if (input.unit_cost !== undefined && canViewCostMargin(auth.member))
 		updates.unit_cost = input.unit_cost === null ? null : String(input.unit_cost);
+	if (input.default_taxable !== undefined) updates.default_taxable = input.default_taxable;
 	if (input.category !== undefined) updates.category = input.category?.trim() || null;
 	if (input.image_url !== undefined) updates.image_url = input.image_url ?? null;
 

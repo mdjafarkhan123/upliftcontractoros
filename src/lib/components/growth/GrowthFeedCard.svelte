@@ -15,28 +15,23 @@
 	);
 </script>
 
-<article class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:p-5">
-	<header class="flex items-center justify-between gap-2">
+<article class="growth-card">
+	<header class="growth-card__head">
 		<Badge label={meta.label} variant="info" />
-		<time class="text-xs text-muted-foreground" datetime={item.published_at}>
+		<time class="growth-card__time" datetime={item.published_at}>
 			{publishedLabel}
 		</time>
 	</header>
 
-	<h3 class="text-base font-semibold leading-snug text-foreground md:text-lg">
+	<h3 class="growth-card__title">
 		{item.title}
 	</h3>
 
-	<p class="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+	<p class="growth-card__body">
 		{item.body}
 	</p>
 
 	{#if item.media_url}
-		<img
-			src={item.media_url}
-			alt=""
-			loading="lazy"
-			class="mt-1 w-full rounded-lg border border-border object-cover"
-		/>
+		<img src={item.media_url} alt="" loading="lazy" class="growth-card__media" />
 	{/if}
 </article>

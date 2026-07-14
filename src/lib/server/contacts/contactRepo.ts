@@ -265,6 +265,166 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Contact overview (client hub) — S2 data layer
+// ---------------------------------------------------------------------------
+
+export type OverviewQuote = {
+	id: string;
+	quote_number: number;
+	title: string;
+	status: string;
+	total: number;
+	created_at: string;
+};
+
+export type OverviewJob = {
+	id: string;
+	title: string;
+	status: string;
+	scheduled_start: string | null;
+	total: number;
+};
+
+export type OverviewInvoice = {
+	id: string;
+	invoice_number: number;
+	title: string;
+	status: string;
+	total: number;
+	amount_due: number;
+	due_date: string | null;
+};
+
+export type OverviewAppointment = {
+	id: string;
+	title: string;
+	scheduled_start: string;
+	scheduled_end: string | null;
+	location: string | null;
+};
+
+export type ContactOverview = {
+	open_quotes: { items: OverviewQuote[]; count: number };
+	active_jobs: { items: OverviewJob[]; count: number };
+	unpaid_invoices: { items: OverviewInvoice[]; count: number };
+	upcoming_appointments: { items: OverviewAppointment[]; count: number };
+};
+
+const OVERVIEW_LIMIT = 5;
+
+/**
+ * Client-hub overview for the contact detail page. Returns the most relevant
+ * open records in each of four buckets (limited lists) plus the full count per
+ * bucket for the section headers, all in a single round trip (Rule #15).
+ *
+ * Buckets:
+ *  - open quotes: draft/sent/viewed/changes_requested, newest first
+ *  - active jobs: scheduled/in_progress, soonest scheduled first (nulls last)
+ *  - unpaid invoices: sent/partially_paid/overdue with a balance, oldest due first
+ *  - upcoming appointments: scheduled and starting now or later, soonest first
+ *
+ * Every subquery is scoped by org_id + contact_id + deleted_at IS NULL.
+ * Callers must have already authorized access to this contact.
+ */
+export async function loadContactOverview(
+	orgId: string,
+	contactId: string
+): Promise<ContactOverview> {
+	const [row] = await db.execute<{
+		open_quotes: OverviewQuote[];
+		open_quotes_count: number;
+		active_jobs: OverviewJob[];
+		active_jobs_count: number;
+		unpaid_invoices: OverviewInvoice[];
+		unpaid_invoices_count: number;
+		upcoming_appointments: OverviewAppointment[];
+		upcoming_appointments_count: number;
+	}>(sql`
+		SELECT
+			COALESCE((SELECT json_agg(q) FROM (
+				SELECT id, quote_number, title, status, total::float8 AS total,
+					created_at
+				FROM quotes
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('draft', 'sent', 'viewed', 'changes_requested')
+				ORDER BY created_at DESC
+				LIMIT ${OVERVIEW_LIMIT}
+			) q), '[]') AS open_quotes,
+			(SELECT COUNT(*)::int FROM quotes
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
+
+			COALESCE((SELECT json_agg(j) FROM (
+				SELECT id, title, status, scheduled_start, total::float8 AS total
+				FROM jobs
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('scheduled', 'in_progress')
+				ORDER BY scheduled_start ASC NULLS LAST
+				LIMIT ${OVERVIEW_LIMIT}
+			) j), '[]') AS active_jobs,
+			(SELECT COUNT(*)::int FROM jobs
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('scheduled', 'in_progress')) AS active_jobs_count,
+
+			COALESCE((SELECT json_agg(i) FROM (
+				SELECT id, invoice_number, title, status, total::float8 AS total,
+					amount_due::float8 AS amount_due, due_date
+				FROM invoices
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('sent', 'partially_paid', 'overdue')
+					AND amount_due::numeric > 0
+				ORDER BY due_date ASC NULLS LAST
+				LIMIT ${OVERVIEW_LIMIT}
+			) i), '[]') AS unpaid_invoices,
+			(SELECT COUNT(*)::int FROM invoices
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status IN ('sent', 'partially_paid', 'overdue')
+					AND amount_due::numeric > 0) AS unpaid_invoices_count,
+
+			COALESCE((SELECT json_agg(a) FROM (
+				SELECT id, title, scheduled_start, scheduled_end, location
+				FROM appointments
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status = 'scheduled'
+					AND scheduled_start >= now()
+				ORDER BY scheduled_start ASC
+				LIMIT ${OVERVIEW_LIMIT}
+			) a), '[]') AS upcoming_appointments,
+			(SELECT COUNT(*)::int FROM appointments
+				WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL
+					AND status = 'scheduled'
+					AND scheduled_start >= now()) AS upcoming_appointments_count
+	`);
+
+	return {
+		open_quotes: {
+			items: row?.open_quotes ?? [],
+			count: Number(row?.open_quotes_count ?? 0)
+		},
+		active_jobs: {
+			items: row?.active_jobs ?? [],
+			count: Number(row?.active_jobs_count ?? 0)
+		},
+		unpaid_invoices: {
+			items: row?.unpaid_invoices ?? [],
+			count: Number(row?.unpaid_invoices_count ?? 0)
+		},
+		upcoming_appointments: {
+			items: row?.upcoming_appointments ?? [],
+			count: Number(row?.upcoming_appointments_count ?? 0)
+		}
+	};
+}
+
+// ---------------------------------------------------------------------------
 // Merge duplicates
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,18 @@
 import type { ActionReturn } from 'svelte/action';
-import type { Options, Item, DndZoneAttributes } from 'svelte-dnd-action';
+import type { Options, Item, DndZoneAttributes, TRIGGERS } from 'svelte-dnd-action';
+
+/**
+ * Library constants published the moment the drag engine loads. The engine and
+ * these constants come from the SAME dynamic import, and creating the zone (below)
+ * is what activates drag events — so `dndReady.consts` is guaranteed non-null
+ * before any `consider`/`finalize` event can fire. The Pipeline page reads this
+ * instead of doing its own separate, unsynchronized import, which used to race the
+ * first drag and silently drop the move. Read only inside event handlers (never a
+ * template), so a plain object — no `$state` — is correct.
+ */
+export const dndReady: {
+	consts: { TRIGGERS: typeof TRIGGERS; SHADOW: string } | null;
+} = { consts: null };
 
 /**
  * Lazy wrapper around svelte-dnd-action's `dndzone`.
@@ -21,9 +34,12 @@ export function lazyDndzone<T extends Item>(
 	let latest = options;
 	let destroyed = false;
 
-	void import('svelte-dnd-action').then(({ dndzone }) => {
+	void import('svelte-dnd-action').then((m) => {
+		if (!dndReady.consts) {
+			dndReady.consts = { TRIGGERS: m.TRIGGERS, SHADOW: m.SHADOW_ITEM_MARKER_PROPERTY_NAME };
+		}
 		if (destroyed) return;
-		handle = dndzone(node, latest);
+		handle = m.dndzone(node, latest);
 	});
 
 	return {

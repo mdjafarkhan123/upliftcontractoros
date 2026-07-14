@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import Loader2 from '@lucide/svelte/icons/loader-2';
+	import PhoneField from '$lib/components/shared/PhoneField.svelte';
 
 	type Props = {
 		submitting: boolean;
 		error: string | null;
 		fieldErrors: Record<string, string>;
+		defaultCountry?: string;
 		onSubmit: (input: {
 			customerName: string;
 			customerPhone: string;
@@ -15,7 +15,7 @@
 		}) => void;
 	};
 
-	let { submitting, error, fieldErrors, onSubmit }: Props = $props();
+	let { submitting, error, fieldErrors, defaultCountry = 'US', onSubmit }: Props = $props();
 
 	let customerName = $state('');
 	let customerPhone = $state('');
@@ -34,23 +34,20 @@
 			website
 		});
 	}
-
-	const inputBase =
-		'block w-full min-h-[48px] rounded-xl border bg-card px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 ease-out focus:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60';
 </script>
 
-<form onsubmit={handleSubmit} class="space-y-4" novalidate>
+<form onsubmit={handleSubmit} class="bk-form" novalidate>
 	<!-- Honeypot — visually hidden, never label it, never reference it on screen -->
-	<div aria-hidden="true" class="pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0">
+	<div aria-hidden="true" class="bk-form__honeypot">
 		<label>
 			Website
 			<input type="text" tabindex="-1" autocomplete="off" name="website" bind:value={website} />
 		</label>
 	</div>
 
-	<div>
-		<label for="bk-name" class="mb-1.5 block text-xs font-medium text-muted-foreground">
-			Full name <span class="text-destructive">*</span>
+	<div class="bk-form__field">
+		<label for="bk-name" class="bk-form__label">
+			Full name <span class="bk-form__req">*</span>
 		</label>
 		<input
 			id="bk-name"
@@ -60,42 +57,33 @@
 			placeholder="Jane Doe"
 			bind:value={customerName}
 			disabled={submitting}
-			class={cn(inputBase, fieldErrors.customerName ? 'border-destructive/60' : 'border-border/60')}
+			class="bk-form__input {fieldErrors.customerName ? 'bk-form__input--error' : ''}"
 		/>
 		{#if fieldErrors.customerName}
-			<p class="mt-1.5 text-xs text-destructive">{fieldErrors.customerName}</p>
+			<p class="bk-form__field-error">{fieldErrors.customerName}</p>
 		{/if}
 	</div>
 
-	<div>
-		<label for="bk-phone" class="mb-1.5 block text-xs font-medium text-muted-foreground">
-			Phone number <span class="text-destructive">*</span>
+	<div class="bk-form__field">
+		<label for="bk-phone" class="bk-form__label">
+			Phone number <span class="bk-form__req">*</span>
 		</label>
-		<input
+		<PhoneField
 			id="bk-phone"
-			type="tel"
 			required
-			inputmode="tel"
-			autocomplete="tel"
-			placeholder="+1 555 123 4567"
 			bind:value={customerPhone}
+			{defaultCountry}
+			invalid={!!fieldErrors.customerPhone}
 			disabled={submitting}
-			class={cn(
-				inputBase,
-				fieldErrors.customerPhone ? 'border-destructive/60' : 'border-border/60'
-			)}
 		/>
-		<p class="mt-1.5 text-[11px] text-muted-foreground/70">
-			Include country code (e.g. +1 for US/Canada)
-		</p>
 		{#if fieldErrors.customerPhone}
-			<p class="mt-1.5 text-xs text-destructive">{fieldErrors.customerPhone}</p>
+			<p class="bk-form__field-error">{fieldErrors.customerPhone}</p>
 		{/if}
 	</div>
 
-	<div>
-		<label for="bk-email" class="mb-1.5 block text-xs font-medium text-muted-foreground">
-			Email <span class="text-muted-foreground/50">(optional)</span>
+	<div class="bk-form__field">
+		<label for="bk-email" class="bk-form__label">
+			Email <span class="bk-form__opt">(optional)</span>
 		</label>
 		<input
 			id="bk-email"
@@ -104,19 +92,16 @@
 			placeholder="you@example.com"
 			bind:value={customerEmail}
 			disabled={submitting}
-			class={cn(
-				inputBase,
-				fieldErrors.customerEmail ? 'border-destructive/60' : 'border-border/60'
-			)}
+			class="bk-form__input {fieldErrors.customerEmail ? 'bk-form__input--error' : ''}"
 		/>
 		{#if fieldErrors.customerEmail}
-			<p class="mt-1.5 text-xs text-destructive">{fieldErrors.customerEmail}</p>
+			<p class="bk-form__field-error">{fieldErrors.customerEmail}</p>
 		{/if}
 	</div>
 
-	<div>
-		<label for="bk-notes" class="mb-1.5 block text-xs font-medium text-muted-foreground">
-			Anything we should know? <span class="text-muted-foreground/50">(optional)</span>
+	<div class="bk-form__field">
+		<label for="bk-notes" class="bk-form__label">
+			Anything we should know? <span class="bk-form__opt">(optional)</span>
 		</label>
 		<textarea
 			id="bk-notes"
@@ -124,25 +109,17 @@
 			placeholder="Brief description of what you need…"
 			bind:value={notes}
 			disabled={submitting}
-			class={cn(inputBase, 'resize-none border-border/60')}
+			class="bk-form__textarea"
 		></textarea>
 	</div>
 
 	{#if error}
-		<div
-			class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-		>
-			{error}
-		</div>
+		<div class="bk-form__error">{error}</div>
 	{/if}
 
-	<button
-		type="submit"
-		disabled={submitting}
-		class="group relative mt-2 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[hsl(var(--primary))] to-[hsl(var(--primary-deep))] px-6 text-[15px] font-semibold text-primary-foreground shadow-[0_10px_30px_-10px_hsl(var(--brand-primary)/0.7),inset_0_1px_0_hsl(0_0%_100%/0.15)] ring-1 ring-[hsl(var(--primary-edge))] transition-all duration-150 ease-out hover:shadow-[0_14px_40px_-10px_hsl(var(--brand-primary)/0.85),inset_0_1px_0_hsl(0_0%_100%/0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-70"
-	>
+	<button type="submit" disabled={submitting} class="bk-form__submit">
 		{#if submitting}
-			<Loader2 class="h-4 w-4 animate-spin" />
+			<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 			<span>Booking…</span>
 		{:else}
 			<span>Book Appointment</span>

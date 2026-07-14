@@ -1,15 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { UserCircle, Building2, Settings, LogOut } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Avatar from '$lib/components/ui/avatar';
-	import { cn } from '$lib/utils/cn';
 	import MyStatusMenu from './MyStatusMenu.svelte';
 	import { effectiveStatus } from '$lib/notifications/memberStatus';
 	import { MEMBER_STATUS_MAP } from '$lib/notifications/memberStatusPresets';
 	import type { Org, OrgMember } from '$lib/types';
 
 	let { member, org }: { member: OrgMember; org?: Org } = $props();
+
+	let avatarFailed = $state(false);
 
 	const initials = $derived(
 		member.full_name
@@ -27,6 +26,8 @@
 		]
 	);
 
+	const showAvatar = $derived(Boolean(member.avatar_url) && !avatarFailed);
+
 	async function logout() {
 		await fetch('/auth/logout', { method: 'POST' });
 		goto('/auth/login');
@@ -34,59 +35,97 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger
-		class="inline-flex h-11 w-11 items-center justify-center rounded-full ring-1 ring-primary/10 ring-offset-1 ring-offset-card-raised transition-all duration-200 ease-out hover:ring-primary/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		aria-label="Account menu"
-	>
-		<span class="relative inline-flex">
-			<Avatar.Root class="h-9 w-9">
-				{#if member.avatar_url}
-					<Avatar.Image src={member.avatar_url} alt={member.full_name} />
-				{/if}
-				<Avatar.Fallback class="bg-primary/10 text-primary font-semibold"
-					>{initials || '?'}</Avatar.Fallback
-				>
-			</Avatar.Root>
-			<span
-				class={cn(
-					'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card-raised',
-					status.dotClass
-				)}
-				aria-label={`Status: ${status.label}`}
-			></span>
+	<DropdownMenu.Trigger class="topbar__user-trigger" aria-label="Account menu">
+		<span class="topbar__user-avatar">
+			{#if showAvatar}
+				<img
+					class="topbar__user-avatar-img"
+					src={member.avatar_url}
+					alt=""
+					onerror={() => (avatarFailed = true)}
+				/>
+			{:else}
+				<span class="topbar__user-avatar-initials">{initials || '?'}</span>
+			{/if}
 		</span>
+		<span
+			class="topbar__user-status-dot"
+			style="background: {status.dotColor}"
+			aria-label="Status: {status.label}"
+		></span>
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-60">
-		<div class="px-4 py-3">
-			<p class="truncate text-sm font-semibold text-foreground">{member.full_name}</p>
-			<p class="truncate text-xs text-muted-foreground">{member.email}</p>
+
+	<DropdownMenu.Content align="end">
+		<div class="user-menu__header">
+			<p class="user-menu__name">{member.full_name}</p>
+			<p class="user-menu__email">{member.email}</p>
 		</div>
 		<DropdownMenu.Separator />
 		<MyStatusMenu {member} />
 		<DropdownMenu.Separator />
 		<DropdownMenu.Group>
-			<DropdownMenu.Label
-				class="px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-			>
-				Settings
-			</DropdownMenu.Label>
+			<DropdownMenu.Label>Settings</DropdownMenu.Label>
 			<DropdownMenu.Item onSelect={() => goto('/settings/account')}>
-				<UserCircle class="h-4 w-4 text-primary" />
+				<i class="ri-user-line user-menu__ico user-menu__ico--brand" aria-hidden="true"></i>
 				Account
 			</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={() => goto('/settings/org')}>
-				<Building2 class="h-4 w-4 text-emerald-500" />
+				<i class="ri-building-2-line user-menu__ico user-menu__ico--success" aria-hidden="true"></i>
 				Business
 			</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={() => goto('/settings')}>
-				<Settings class="h-4 w-4 text-amber-500" />
+				<i class="ri-settings-3-line user-menu__ico user-menu__ico--warning" aria-hidden="true"></i>
 				Settings
 			</DropdownMenu.Item>
 		</DropdownMenu.Group>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item variant="destructive" onSelect={logout}>
-			<LogOut class="h-4 w-4" />
+			<i class="ri-logout-box-r-line" aria-hidden="true"></i>
 			Logout
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.user-menu {
+		&__header {
+			padding: $space-3 $space-4;
+		}
+
+		&__name {
+			margin: 0;
+			font-size: $fs-body;
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		&__email {
+			margin: 2px 0 0;
+			font-size: $fs-body;
+			color: var(--color-text-muted);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		&__ico {
+			font-size: 16px;
+			flex-shrink: 0;
+
+			&--brand {
+				color: var(--color-brand);
+			}
+			&--success {
+				color: var(--success-solid);
+			}
+			&--warning {
+				color: var(--warning-solid);
+			}
+		}
+	}
+</style>

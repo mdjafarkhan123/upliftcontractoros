@@ -1,0 +1,155 @@
+@use '../tokens' as *;
+
+// -----------------------------------------------------------------------------
+// LIST TABLE — the one shared table chrome for every list page (Contacts,
+// Quotes, Jobs, Invoices…). Rendered by ListTable.svelte; cells come from each
+// entity's head/body snippets, so these classes are global on purpose (scoped
+// styles can't reach parent-rendered markup). Canonical look = the Contacts
+// table (radius-lg, caption uppercase headers, secondary text). Entity-specific
+// cell CONTENT classes (mono numbers, avatars, pills) stay in each entity's
+// own stylesheet — only the chrome lives here.
+// -----------------------------------------------------------------------------
+.list-table {
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__scroll {
+		overflow-x: auto;
+	}
+
+	&__table {
+		width: 100%;
+		min-width: var(--list-table-min, 640px);
+		border-collapse: collapse;
+		font-size: $fs-body;
+	}
+
+	&__head-row {
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__th {
+		padding: $space-3 $space-4;
+		text-align: left;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+
+		&--right {
+			text-align: right;
+		}
+		&--center {
+			text-align: center;
+		}
+		&--check {
+			width: 44px;
+			text-align: center;
+		}
+		&--actions {
+			width: 48px;
+		}
+		&--lg {
+			@media (max-width: 1023px) {
+				display: none;
+			}
+		}
+		&--xl {
+			@media (max-width: 1279px) {
+				display: none;
+			}
+		}
+		&--xxl {
+			@media (max-width: 1535px) {
+				display: none;
+			}
+		}
+	}
+
+	&__row {
+		border-bottom: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:last-child {
+			border-bottom: none;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&--selected {
+			background: rgba(34, 125, 83, 0.06);
+			&:hover {
+				background: rgba(34, 125, 83, 0.09);
+			}
+		}
+	}
+
+	&__td {
+		padding: $space-3 $space-4;
+		color: var(--color-text-secondary);
+		vertical-align: middle;
+
+		&--right {
+			text-align: right;
+		}
+		&--center {
+			text-align: center;
+		}
+		&--check {
+			text-align: center;
+		}
+		&--actions {
+			width: 48px;
+		}
+		&--lg {
+			@media (max-width: 1023px) {
+				display: none;
+			}
+		}
+		&--xl {
+			@media (max-width: 1279px) {
+				display: none;
+			}
+		}
+		&--xxl {
+			@media (max-width: 1535px) {
+				display: none;
+			}
+		}
+	}
+}
+
+// Bulk-select checkbox rendered in the `--check` column of any list table.
+// Shared by Jobs/Quotes tables (Contacts keeps its own `.contact-check`).
+.list-check {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: 2px solid var(--color-border-strong);
+	border-radius: $radius-sm;
+	background: var(--color-bg-surface);
+	color: transparent;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	i {
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+
+	&--on {
+		border-color: var(--color-brand-strong);
+		background: var(--color-brand-strong);
+		color: var(--color-text-on-brand);
+	}
+}

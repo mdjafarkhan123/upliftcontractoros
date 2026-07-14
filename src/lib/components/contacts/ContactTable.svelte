@@ -1,18 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { cn } from '$lib/utils/cn';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { contactDetailStore } from '$lib/stores/contactDetail.svelte';
 	import type { ContactListItem } from '$lib/stores/contacts.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import ContactAvatar from './ContactAvatar.svelte';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import RowActionsMenu, { type RowAction } from '$lib/components/shared/RowActionsMenu.svelte';
+	import ListTable from '$lib/components/shared/ListTable.svelte';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
 	import { formatRelativeShort } from '$lib/utils/format';
 	import { formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
 	import { TEMPERATURE_META } from '$lib/contacts/temperature';
 	import { leadSourceLabel } from '$lib/contacts/leadSource';
-	import { Check, MoreHorizontal, Trash2, Archive, RotateCcw, Pencil } from '@lucide/svelte';
 
 	let {
 		items,
@@ -42,291 +41,200 @@
 	function statusLabel(s: ContactListItem['status']) {
 		return s === 'customer' ? 'Customer' : s === 'archived' ? 'Archived' : 'Lead';
 	}
+
+	function contactActions(c: ContactListItem): RowAction[] {
+		const actions: RowAction[] = [];
+		if (c.status === 'archived') {
+			if (onRestoreRequest)
+				actions.push({
+					key: 'restore',
+					label: 'Restore contact',
+					icon: 'ri-arrow-go-back-line',
+					onSelect: () => onRestoreRequest(c.id, c.full_name)
+				});
+		} else {
+			actions.push({
+				key: 'edit',
+				label: 'Edit contact',
+				icon: 'ri-pencil-line',
+				onSelect: () => goto(`/contacts/${c.id}`)
+			});
+			if (onArchiveRequest)
+				actions.push({
+					key: 'archive',
+					label: 'Archive contact',
+					icon: 'ri-archive-line',
+					onSelect: () => onArchiveRequest(c.id, c.full_name)
+				});
+		}
+		if (onDeleteRequest)
+			actions.push({
+				key: 'delete',
+				label: 'Delete contact',
+				icon: 'ri-delete-bin-line',
+				destructive: true,
+				onSelect: () => onDeleteRequest(c.id, c.full_name)
+			});
+		return actions;
+	}
 </script>
 
-<div class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-card">
-	<div class="overflow-x-auto">
-		<table class="w-full min-w-[640px] text-sm">
-			<thead>
-				<tr class="border-b border-border/60 bg-muted/30">
-					{#if selectable}
-						<th class="w-11 px-4 py-3">
-							<button
-								type="button"
-								onclick={onToggleAll}
-								aria-label="Select all contacts"
-								class={cn(
-									'mx-auto flex h-[18px] w-[18px] items-center justify-center rounded border-2 transition-colors',
-									allSelected
-										? 'border-primary bg-primary text-primary-foreground'
-										: 'border-border bg-background hover:border-primary/60'
-								)}
-							>
-								{#if allSelected}<Check class="h-2.5 w-2.5" />{/if}
-							</button>
-						</th>
+<ListTable ariaLabel="Contacts">
+	{#snippet head()}
+		{#if selectable}
+			<th class="list-table__th list-table__th--check">
+				<button
+					type="button"
+					onclick={onToggleAll}
+					aria-label="Select all contacts"
+					class="contact-check"
+					class:contact-check--on={allSelected}
+				>
+					{#if allSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+				</button>
+			</th>
+		{/if}
+		<th class="list-table__th">Contact</th>
+		<th class="list-table__th list-table__th--xl">Email</th>
+		<th class="list-table__th list-table__th--lg">Phone</th>
+		<th class="list-table__th">Status</th>
+		<th class="list-table__th list-table__th--lg">Temp</th>
+		<th class="list-table__th list-table__th--xl">Last contacted</th>
+		<th class="list-table__th list-table__th--xl">Assignee</th>
+		<th class="list-table__th list-table__th--xxl">Source</th>
+		<th class="list-table__th list-table__th--xxl">Tags</th>
+		<th class="list-table__th list-table__th--actions"></th>
+	{/snippet}
+
+	{#snippet body()}
+		{#each items as c (c.id)}
+			{@const isSelected = selected?.has(c.id) ?? false}
+			{@const visibleTags = c.tags.slice(0, 2)}
+			{@const extraTags = Math.max(0, c.tags.length - 2)}
+			<tr
+				class="list-table__row"
+				class:list-table__row--selected={isSelected}
+				use:prefetchOnIntent={() => {
+					if (!selectable) contactDetailStore.prefetch(c.id);
+				}}
+				onclick={selectable ? () => onToggleSelect?.(c.id) : () => goto(`/contacts/${c.id}`)}
+			>
+				{#if selectable}
+					<td class="list-table__td list-table__td--check">
+						<span class="contact-check" class:contact-check--on={isSelected}>
+							{#if isSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+						</span>
+					</td>
+				{/if}
+
+				<!-- Contact: avatar + name -->
+				<td class="list-table__td">
+					<div class="contact-table__contact">
+						<ContactAvatar name={c.full_name} src={c.avatar_url} status={c.status} size={36} />
+						<div class="contact-table__contact-body">
+							{#if selectable}
+								<span class="contact-table__name">{c.full_name}</span>
+							{:else}
+								<a
+									href="/contacts/{c.id}"
+									onclick={(e) => e.stopPropagation()}
+									class="contact-table__name"
+								>
+									{c.full_name}
+								</a>
+							{/if}
+							{#if c.company_name}
+								<p class="contact-table__company">{c.company_name}</p>
+							{/if}
+							{#if c.sms_opt_out}
+								<p class="contact-table__optout">SMS opted out</p>
+							{/if}
+						</div>
+					</div>
+				</td>
+
+				<!-- Email -->
+				<td class="list-table__td list-table__td--xl">
+					<span class="contact-table__email">{c.email ?? '—'}</span>
+				</td>
+
+				<!-- Phone -->
+				<td class="list-table__td list-table__td--lg">
+					<span class="contact-table__muted">
+						{c.phone ? formatPhoneDisplay(c.phone) : '—'}
+					</span>
+				</td>
+
+				<!-- Status -->
+				<td class="list-table__td">
+					<Badge variant={statusVariant(c.status)} label={statusLabel(c.status)} />
+				</td>
+
+				<!-- Temperature -->
+				<td class="list-table__td list-table__td--lg">
+					{#if c.lead_temperature}
+						{@const meta = TEMPERATURE_META[c.lead_temperature]}
+						<span class="temp-chip temp-chip--{c.lead_temperature}">
+							<span class="temp-chip__dot"></span>
+							{meta.label}
+						</span>
+					{:else}
+						<span class="contact-table__dash">—</span>
 					{/if}
-					<th
-						class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-						>Contact</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell"
-						>Email</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell"
-						>Phone</th
-					>
-					<th
-						class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-						>Status</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell"
-						>Temp</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell"
-						>Last contacted</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell"
-						>Assignee</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground 2xl:table-cell"
-						>Source</th
-					>
-					<th
-						class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground 2xl:table-cell"
-						>Tags</th
-					>
-					<th class="w-12 px-4 py-3"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-border/30">
-				{#each items as c (c.id)}
-					{@const isSelected = selected?.has(c.id) ?? false}
-					{@const isArchived = c.status === 'archived'}
-					{@const visibleTags = c.tags.slice(0, 2)}
-					{@const extraTags = Math.max(0, c.tags.length - 2)}
-					<tr
-						class={cn(
-							'group cursor-pointer transition-colors',
-							selectable ? 'select-none hover:bg-muted/40' : 'hover:bg-muted/40',
-							isSelected && 'bg-primary/5 hover:bg-primary/[0.08]'
-						)}
-						use:prefetchOnIntent={() => {
-							if (!selectable) contactDetailStore.prefetch(c.id);
-						}}
-						onclick={selectable ? () => onToggleSelect?.(c.id) : () => goto(`/contacts/${c.id}`)}
-					>
-						{#if selectable}
-							<td class="w-11 px-4 py-4">
-								<div
-									class={cn(
-										'mx-auto flex h-[18px] w-[18px] items-center justify-center rounded border-2 transition-colors',
-										isSelected
-											? 'border-primary bg-primary text-primary-foreground'
-											: 'border-border bg-background group-hover:border-primary/60'
-									)}
-								>
-									{#if isSelected}<Check class="h-2.5 w-2.5" />{/if}
-								</div>
-							</td>
-						{/if}
+				</td>
 
-						<!-- Contact: avatar + name -->
-						<td class="px-4 py-3.5">
-							<div class="flex items-center gap-3">
-								<ContactAvatar
-									name={c.full_name}
-									src={c.avatar_url}
-									status={c.status}
-									class="h-9 w-9 text-xs ring-1"
-								/>
-								<div class="min-w-0">
-									{#if selectable}
-										<p class="truncate font-medium leading-snug text-foreground">{c.full_name}</p>
-									{:else}
-										<a
-											href="/contacts/{c.id}"
-											onclick={(e) => e.stopPropagation()}
-											class="block truncate font-medium leading-snug text-foreground transition-colors hover:text-primary focus-visible:text-primary focus-visible:outline-none"
-										>
-											{c.full_name}
-										</a>
-									{/if}
-									{#if c.company_name}
-										<p class="truncate text-[11px] font-medium text-muted-foreground">
-											{c.company_name}
-										</p>
-									{/if}
-									{#if c.sms_opt_out}
-										<p class="mt-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-											SMS opted out
-										</p>
-									{/if}
-								</div>
-							</div>
-						</td>
+				<!-- Last contacted -->
+				<td class="list-table__td list-table__td--xl">
+					{#if c.last_contacted_at}
+						<span class="contact-table__muted">{formatRelativeShort(c.last_contacted_at)}</span>
+					{:else}
+						<span class="contact-table__never">Never</span>
+					{/if}
+				</td>
 
-						<!-- Email -->
-						<td class="hidden px-4 py-3.5 xl:table-cell">
-							<span class="block max-w-[200px] truncate text-muted-foreground">
-								{c.email ?? '—'}
-							</span>
-						</td>
+				<!-- Assignee -->
+				<td class="list-table__td list-table__td--xl">
+					{#if c.assignee_name}
+						<span class="contact-table__muted">{c.assignee_name}</span>
+					{:else}
+						<span class="contact-table__never">Unassigned</span>
+					{/if}
+				</td>
 
-						<!-- Phone -->
-						<td class="hidden px-4 py-3.5 lg:table-cell">
-							<span class="whitespace-nowrap text-muted-foreground">
-								{c.phone ? formatPhoneDisplay(c.phone) : '—'}
-							</span>
-						</td>
+				<!-- Source -->
+				<td class="list-table__td list-table__td--xxl">
+					{#if c.lead_source && c.lead_source !== 'manual'}
+						<span class="contact-table__muted">{leadSourceLabel(c.lead_source)}</span>
+					{:else}
+						<span class="contact-table__dash">—</span>
+					{/if}
+				</td>
 
-						<!-- Status -->
-						<td class="px-4 py-3.5">
-							<Badge variant={statusVariant(c.status)} label={statusLabel(c.status)} />
-						</td>
-
-						<!-- Temperature -->
-						<td class="hidden px-4 py-3.5 lg:table-cell">
-							{#if c.lead_temperature}
-								{@const meta = TEMPERATURE_META[c.lead_temperature]}
-								<span
-									class={cn(
-										'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-										meta.badge
-									)}
-								>
-									<span class={cn('h-1.5 w-1.5 rounded-full', meta.dot)}></span>
-									{meta.label}
+				<!-- Tags -->
+				<td class="list-table__td list-table__td--xxl">
+					{#if visibleTags.length > 0}
+						<div class="contact-table__tags">
+							{#each visibleTags as t (t)}
+								<span class="tag-chip" class:tag-chip--destructive={isDestructiveTag(t)}>
+									{formatTagLabel(t)}
 								</span>
-							{:else}
-								<span class="text-xs text-muted-foreground/30">—</span>
+							{/each}
+							{#if extraTags > 0}
+								<span class="tag-chip">+{extraTags}</span>
 							{/if}
-						</td>
+						</div>
+					{:else}
+						<span class="contact-table__dash">—</span>
+					{/if}
+				</td>
 
-						<!-- Last contacted -->
-						<td class="hidden whitespace-nowrap px-4 py-3.5 xl:table-cell">
-							{#if c.last_contacted_at}
-								<span class="text-muted-foreground">{formatRelativeShort(c.last_contacted_at)}</span
-								>
-							{:else}
-								<span class="italic text-muted-foreground/40">Never</span>
-							{/if}
-						</td>
-
-						<!-- Assignee -->
-						<td class="hidden px-4 py-3.5 xl:table-cell">
-							{#if c.assignee_name}
-								<span class="text-muted-foreground">{c.assignee_name}</span>
-							{:else}
-								<span class="italic text-muted-foreground/40">Unassigned</span>
-							{/if}
-						</td>
-
-						<!-- Source -->
-						<td class="hidden px-4 py-3.5 2xl:table-cell">
-							{#if c.lead_source && c.lead_source !== 'manual'}
-								<span class="whitespace-nowrap text-muted-foreground">
-									{leadSourceLabel(c.lead_source)}
-								</span>
-							{:else}
-								<span class="text-xs text-muted-foreground/30">—</span>
-							{/if}
-						</td>
-
-						<!-- Tags -->
-						<td class="hidden px-4 py-3.5 2xl:table-cell">
-							{#if visibleTags.length > 0}
-								<div class="flex flex-wrap items-center gap-1.5">
-									{#each visibleTags as t (t)}
-										<span
-											class={cn(
-												'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium',
-												isDestructiveTag(t)
-													? 'border-destructive/30 bg-destructive/5 text-destructive'
-													: 'border-border bg-muted/50 text-muted-foreground'
-											)}
-										>
-											{formatTagLabel(t)}
-										</span>
-									{/each}
-									{#if extraTags > 0}
-										<span
-											class="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-											>+{extraTags}</span
-										>
-									{/if}
-								</div>
-							{:else}
-								<span class="text-xs text-muted-foreground/30">—</span>
-							{/if}
-						</td>
-
-						<!-- Actions -->
-						<td class="w-12 px-2 py-3.5" onclick={(e) => e.stopPropagation()}>
-							{#if !selectable}
-								<DropdownMenu.Root>
-									<DropdownMenu.Trigger
-										class={cn(
-											'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-											'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
-										)}
-										aria-label="Actions for {c.full_name}"
-									>
-										<MoreHorizontal class="h-4 w-4" />
-									</DropdownMenu.Trigger>
-									<DropdownMenu.Content align="end">
-										{#if isArchived}
-											{#if onRestoreRequest}
-												<DropdownMenu.Item onclick={() => onRestoreRequest(c.id, c.full_name)}>
-													<RotateCcw class="h-4 w-4" />
-													Restore contact
-												</DropdownMenu.Item>
-											{/if}
-											{#if onDeleteRequest}
-												<DropdownMenu.Separator />
-												<DropdownMenu.Item
-													class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-													onclick={() => onDeleteRequest(c.id, c.full_name)}
-												>
-													<Trash2 class="h-4 w-4" />
-													Delete contact
-												</DropdownMenu.Item>
-											{/if}
-										{:else}
-											<DropdownMenu.Item onclick={() => goto(`/contacts/${c.id}/edit`)}>
-												<Pencil class="h-4 w-4" />
-												Edit contact
-											</DropdownMenu.Item>
-											{#if onArchiveRequest}
-												<DropdownMenu.Item onclick={() => onArchiveRequest(c.id, c.full_name)}>
-													<Archive class="h-4 w-4" />
-													Archive contact
-												</DropdownMenu.Item>
-											{/if}
-											{#if onDeleteRequest}
-												<DropdownMenu.Separator />
-												<DropdownMenu.Item
-													class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-													onclick={() => onDeleteRequest(c.id, c.full_name)}
-												>
-													<Trash2 class="h-4 w-4" />
-													Delete contact
-												</DropdownMenu.Item>
-											{/if}
-										{/if}
-									</DropdownMenu.Content>
-								</DropdownMenu.Root>
-							{/if}
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-</div>
+				<!-- Actions -->
+				<td class="list-table__td list-table__td--actions" onclick={(e) => e.stopPropagation()}>
+					{#if !selectable}
+						<RowActionsMenu actions={contactActions(c)} label="Actions for {c.full_name}" />
+					{/if}
+				</td>
+			</tr>
+		{/each}
+	{/snippet}
+</ListTable>

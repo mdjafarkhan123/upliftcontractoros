@@ -6,6 +6,7 @@ import { appointments, outboxEvents, type Appointment } from '$lib/server/db/sch
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canRescheduleAppointment } from '$lib/server/appointments/permissions';
 import { transitionStatusSchema } from '$lib/server/appointments/schemas';
+import { repinOneOffJobSchedule } from '$lib/server/jobs/repinSchedule';
 
 const EVENT_TYPE: Record<'completed' | 'cancelled' | 'no_show', string> = {
 	completed: 'appointment.completed',
@@ -44,6 +45,37 @@ export const PATCH: RequestHandler = async (event) => {
 		const existing = (lockRows as unknown as Appointment[])[0];
 		if (!existing) return { kind: 'notFound' as const };
 
+		const now = new Date();
+
+		// ── Mark as incomplete (Jobber's reverse action) ────────────────────────────────
+		// Un-complete a completed visit: clear the completion stamp/notes and send it back to
+		// 'scheduled' (if it has a date) or 'unscheduled' (if it doesn't). No outbox event —
+		// reverting a completion is an internal correction with no client-facing side effect.
+		if (next === 'incomplete') {
+			if (existing.status !== 'completed') {
+				return { kind: 'notCompleted' as const, status: existing.status };
+			}
+			const revertTo = existing.scheduled_start === null ? 'unscheduled' : 'scheduled';
+			const [reverted] = await tx
+				.update(appointments)
+				.set({
+					status: revertTo,
+					completed_at: null,
+					completed_by: null,
+					completion_notes: null,
+					updated_at: now
+				})
+				.where(eq(appointments.id, id))
+				.returning();
+			// Reviving a visit changes the job's earliest-open visit, so re-pin its schedule copy.
+			if (reverted.job_id) {
+				await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: reverted.job_id });
+			}
+			return { kind: 'ok' as const, row: reverted };
+		}
+
+		// Forward transitions can't move an already-terminal visit. 'scheduled' and
+		// 'unscheduled' are both live sources that may be completed / cancelled / no-showed.
 		if (
 			existing.status === 'completed' ||
 			existing.status === 'cancelled' ||
@@ -52,9 +84,14 @@ export const PATCH: RequestHandler = async (event) => {
 			return { kind: 'terminal' as const, status: existing.status };
 		}
 
-		const now = new Date();
 		const updates: Record<string, unknown> = { status: next, updated_at: now };
 		if (next === 'cancelled') updates.cancelled_at = now;
+		// Per-visit completion (S5): stamp who/when and store the crew's completion note.
+		if (next === 'completed') {
+			updates.completed_at = now;
+			updates.completed_by = auth.member.id;
+			updates.completion_notes = parsed.data.completion_notes;
+		}
 
 		const [updated] = await tx
 			.update(appointments)
@@ -78,6 +115,11 @@ export const PATCH: RequestHandler = async (event) => {
 			idempotency_key: `${EVENT_TYPE[next]}:${updated.id}`
 		});
 
+		// Completing/cancelling/no-showing a visit removes it from the job's open set, so
+		// re-pin the one-off job to its next open visit (or clear it when none remain).
+		if (updated.job_id) {
+			await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: updated.job_id });
+		}
 		return { kind: 'ok' as const, row: updated };
 	});
 
@@ -85,12 +127,18 @@ export const PATCH: RequestHandler = async (event) => {
 	if (result.kind === 'terminal') {
 		return json({ error: `Appointment is already ${result.status}.` }, { status: 422 });
 	}
+	if (result.kind === 'notCompleted') {
+		return json({ error: 'Only a completed visit can be marked incomplete.' }, { status: 422 });
+	}
 
 	return json({
 		data: {
 			id: result.row.id,
 			status: result.row.status,
-			cancelled_at: result.row.cancelled_at?.toISOString() ?? null
+			cancelled_at: result.row.cancelled_at?.toISOString() ?? null,
+			completed_at: result.row.completed_at?.toISOString() ?? null,
+			completed_by: result.row.completed_by ?? null,
+			completion_notes: result.row.completion_notes ?? null
 		}
 	});
 };

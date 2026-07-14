@@ -85,3 +85,35 @@ export const CANONICAL_FIELD_LABELS: Record<string, string> = {
 	state: 'State',
 	zip: 'Zip'
 };
+
+// Ordered options for the manual "Map columns" step dropdowns. Order mirrors how a
+// contractor scans a mapping screen: identity → contact → address → meta. Every value
+// is a key of CANONICAL_FIELD_LABELS. Server validation uses CANONICAL_FIELD_SET.
+export const CANONICAL_FIELDS: { value: string; label: string }[] = [
+	{ value: 'full_name', label: 'Name' },
+	{ value: 'first_name', label: 'First name' },
+	{ value: 'last_name', label: 'Last name' },
+	{ value: 'company_name', label: 'Company' },
+	{ value: 'phone', label: 'Phone' },
+	{ value: 'alt_phone', label: 'Alt phone' },
+	{ value: 'email', label: 'Email' },
+	{ value: 'address_line_1', label: 'Address' },
+	{ value: 'address_line_2', label: 'Address line 2' },
+	{ value: 'city', label: 'City' },
+	{ value: 'state', label: 'State' },
+	{ value: 'zip', label: 'Zip' },
+	{ value: 'status', label: 'Status' },
+	{ value: 'lead_source', label: 'Lead source' },
+	{ value: 'tags', label: 'Tags' },
+	{ value: 'notes', label: 'Notes' }
+];
+
+// Valid canonical field names — the server rejects any column_map entry outside this
+// set (plus null / '' for "don't import").
+export const CANONICAL_FIELD_SET = new Set<string>(Object.keys(CANONICAL_FIELD_LABELS));
+
+// The canonical field a raw header auto-maps to (the default dropdown suggestion in
+// the mapping step), or null when unrecognized.
+export function guessCanonical(header: string): string | null {
+	return HEADER_MAP[normalizeKey(header)] ?? null;
+}

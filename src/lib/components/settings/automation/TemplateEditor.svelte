@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { Label } from '$lib/components/ui/label';
 	import { previewTemplate, VAR_LABELS } from '$lib/automation/cardDefinitions';
-	import { cn } from '$lib/utils/cn';
-	import { Eye } from '@lucide/svelte';
 
 	let {
 		id,
@@ -51,23 +49,19 @@
 	let preview = $derived(previewTemplate(value ?? ''));
 </script>
 
-<div class="flex flex-col gap-2">
-	<div class="flex items-center justify-between gap-2">
-		<Label for={id} class="text-xs font-medium">
+<div class="tpl-field">
+	<div class="tpl-field__top">
+		<Label for={id} class="field__label">
 			{label}
-			{#if required}<span class="text-destructive">*</span>{/if}
+			{#if required}<span class="tpl-field__req">*</span>{/if}
 		</Label>
-		<span class="text-[11px] tabular-nums text-muted-foreground/70">{(value ?? '').length}/{maxlength}</span>
+		<span class="tpl-field__count">{(value ?? '').length}/{maxlength}</span>
 	</div>
 
 	{#if allowedVars.length > 0}
-		<div class="flex flex-wrap gap-1.5">
+		<div class="tpl-field__vars">
 			{#each allowedVars as v (v)}
-				<button
-					type="button"
-					onclick={() => insertVar(v)}
-					class="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
-				>
+				<button type="button" onclick={() => insertVar(v)} class="tpl-field__var">
 					+ {VAR_LABELS[v] ?? v}
 				</button>
 			{/each}
@@ -81,10 +75,8 @@
 			bind:this={el}
 			{maxlength}
 			{rows}
-			class={cn(
-				'flex min-h-[88px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-				error && 'border-destructive'
-			)}
+			class="field__textarea"
+			class:field__textarea--error={error}
 		></textarea>
 	{:else}
 		<input
@@ -92,23 +84,21 @@
 			bind:value
 			bind:this={el}
 			{maxlength}
-			class={cn(
-				'flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background transition-all placeholder:text-muted-foreground focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-card-raised/70 dark:shadow-card',
-				error && 'border-destructive'
-			)}
+			class="field__input"
+			class:field__input--error={error}
 		/>
 	{/if}
 
 	{#if (value ?? '').trim().length > 0}
-		<div class="flex items-start gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2">
-			<Eye class="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
-			<p class="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{preview}</p>
+		<div class="tpl-field__preview">
+			<i class="ri-eye-line tpl-field__preview-icon" aria-hidden="true"></i>
+			<p class="tpl-field__preview-text">{preview}</p>
 		</div>
 	{/if}
 
 	{#if error}
-		<p class="text-xs text-destructive">{error}</p>
+		<p class="field__error">{error}</p>
 	{:else if hint}
-		<p class="text-[11px] text-muted-foreground/70">{hint}</p>
+		<p class="field__hint">{hint}</p>
 	{/if}
 </div>

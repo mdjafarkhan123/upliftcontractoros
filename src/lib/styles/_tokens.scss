@@ -1,0 +1,318 @@
+// =============================================================================
+// CONTRACTOR CRM — DESIGN TOKENS (LIGHT + DARK)
+// Single source of truth for color, spacing, radius, shadow, type, and motion.
+// Every color value is hex / rgb / rgba — never hsl(), never tailwind-style
+// slash opacity ("bg-primary/50"). This file has two layers:
+//   1. SCSS variables  → compile-time only. Use for things that never change
+//      between light/dark mode: spacing, radius, type, motion, breakpoints,
+//      and the raw color ramps these tokens are generated from.
+//   2. CSS custom properties on :root → runtime, theme-aware. ALL color and
+//      shadow values components actually paint with must come from here
+//      (var(--token-name)), not from the Sass $variables — a Sass variable
+//      is baked into the compiled CSS forever, so it can never respond to a
+//      dark-mode toggle. CSS custom properties can be reassigned per-theme
+//      with zero JS re-render, which is the whole point.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. BRAND
+// -----------------------------------------------------------------------------
+$brand-deep: #13452d;
+$brand-primary: #227d53;
+$brand-light: #17f700; // neon glow accent — shadows/gradient stops only
+
+// -----------------------------------------------------------------------------
+// 2. GREEN RAMP
+// -----------------------------------------------------------------------------
+$green-50: #effbf5;
+$green-100: #dbf5e8;
+$green-200: #b3eacf;
+$green-300: #83ddb0;
+$green-400: #4fcf8f;
+$green-500: #30b070;
+$green-600: #238052;
+$green-700: #1a603d;
+$green-800: #14482e;
+$green-900: #0d301f;
+$green-950: #092014;
+
+// -----------------------------------------------------------------------------
+// 3. NEUTRAL / SLATE RAMP
+// -----------------------------------------------------------------------------
+$slate-0: #ffffff;
+$slate-50: #f9fafb;
+$slate-100: #f7f7f7;
+$slate-200: #e4e7ec;
+$slate-300: #d0d4dd;
+$slate-400: #a3abbd;
+$slate-500: #77829c;
+$slate-600: #5a647c;
+$slate-700: #454c5f;
+$slate-800: #2f3541;
+$slate-900: #2f333f;
+$slate-950: #222530;
+$slate-1000: #232b2f;
+
+// -----------------------------------------------------------------------------
+// 4. SPACING — 4px base unit
+// -----------------------------------------------------------------------------
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-7: 28px;
+$space-8: 32px;
+$space-10: 40px;
+$space-12: 48px;
+$space-16: 64px;
+$space-20: 80px;
+
+// -----------------------------------------------------------------------------
+// 5. RADIUS — generous by design; cards at 20–28px, not default 8px Bootstrap
+// -----------------------------------------------------------------------------
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 20px;
+$radius-2xl: 28px;
+$radius-full: 999px;
+
+// -----------------------------------------------------------------------------
+// 6. TYPOGRAPHY — Inter (self-hosted) is the single UI font, weighted
+//    proportionally (400/500/600/700/800). No second display face — one font,
+//    Jobber-style, keeps a dense CRM consistent and fast.
+// -----------------------------------------------------------------------------
+$font-body: 'Inter', system-ui, -apple-system, sans-serif;
+$font-display: $font-body; // kept as an alias so old references don't break
+
+// -----------------------------------------------------------------------------
+// 6a. SEMANTIC TYPE SCALE — THE ONE SOURCE OF TRUTH FOR FONT SIZE.
+//     Locked 1:1 to Jobber's Atlantis type scale (their open-source design
+//     system, @jobber/design). Jobber runs an 8-step scale off a 16px base —
+//     10 / 12 / 14 / 16 / 20 / 24 / 36 / 48 — with TIGHT line-heights
+//     (headings 1.08–1.2, body 1.25). We keep our semantic role names, but the
+//     px + line-height pairs below match Jobber exactly. html is 62.5% so
+//     1rem = 10px.
+//
+//     Rule: NEVER type a raw `font-size` in a component. Reach for a role token
+//     (SCSS `$fs-*`, or the runtime `var(--text-*)` mirror on :root).
+//     14px floor: $fs-body is the smallest READABLE size. 12px ($fs-caption,
+//     Jobber "small") is reserved ONLY for UPPERCASE tracked micro-labels and
+//     badge text — never for sentence-case body/secondary text. Jobber's 10px
+//     "smaller" is intentionally NOT a text token here (below our floor); the
+//     few 10px glyphs we keep — avatar initials, icons — stay as raw px.
+// -----------------------------------------------------------------------------
+$fs-caption: 1.2rem; // 12px — Jobber "small"       — UPPERCASE labels & badges ONLY
+$fs-body: 1.4rem; //    14px — Jobber "base"        — DEFAULT readable floor
+$fs-lg: 1.6rem; //      16px — Jobber "large"       — emphasis / lead-in / inputs
+$fs-h3: 2rem; //        20px — Jobber "larger"      — section / card headings
+$fs-h2: 2.4rem; //      24px — Jobber "largest"     — page headings
+$fs-h1: 3.6rem; //      36px — Jobber "jumbo"       — page title
+$fs-display: 4.8rem; // 48px — Jobber "extravagant" — hero stats / display
+
+// Line-heights — Jobber-exact, UNITLESS multipliers (tight; Jobber's signature).
+$lh-caption: 1.143; // 12px
+$lh-body: 1.25; //     14px
+$lh-lg: 1.34; //       16px
+$lh-h3: 1.2; //        20px
+$lh-h2: 1.12; //       24px
+$lh-h1: 1.08; //       36px
+$lh-display: 1.08; //  48px
+
+$weight-regular: 400;
+$weight-medium: 500;
+$weight-semibold: 600;
+$weight-bold: 700;
+$weight-extrabold: 800; // heaviest Inter weight loaded (Jobber's heaviest UI weight)
+
+$tracking-label: 0.06em;
+
+// -----------------------------------------------------------------------------
+// 7. MOTION
+// -----------------------------------------------------------------------------
+$duration-fast: 120ms;
+$duration-base: 180ms;
+$duration-slow: 280ms;
+
+$ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+// -----------------------------------------------------------------------------
+// 8. Z-INDEX & BREAKPOINTS
+// -----------------------------------------------------------------------------
+$z-dropdown: 100;
+$z-sticky: 200;
+$z-overlay: 900;
+$z-modal: 1000;
+$z-popover: 1050; // portaled floating menus (Select/dropdown) opened from inside a modal
+$z-toast: 1100;
+$z-tooltip: 1200;
+
+$bp-tablet: 1024px;
+$bp-mobile: 640px;
+
+// =============================================================================
+// 9. THEME TOKENS — CSS custom properties.
+//    Light mode on :root; dark mode in dark-theme-tokens mixin applied via
+//    prefers-color-scheme (when no explicit choice) and data-theme="dark"
+//    (when user has explicitly chosen). Components bind to var(--token-name).
+// =============================================================================
+
+:root {
+	// Brand
+	--color-brand: #{$brand-primary};
+	--color-brand-strong: #{$brand-deep};
+	--color-brand-glow: #{$brand-light};
+	--color-focus-ring: rgba(34, 125, 83, 0.35);
+
+	// Surfaces
+	--color-bg-app: #{$slate-50};
+	--color-bg-surface: #{$slate-0};
+	--color-bg-surface-sunk: #{$slate-100};
+	--color-border: #{$slate-200};
+	--color-border-strong: #{$slate-300};
+
+	// Text
+	--color-text-primary: #{$slate-900};
+	--color-text-secondary: #{$slate-600};
+	--color-text-muted: #{$slate-400};
+	--color-text-on-brand: #{$slate-0};
+
+	// Status
+	--success-bg: #{$green-100};
+	--success-text: #{$green-800};
+	--success-solid: #{$green-600};
+	--warning-bg: #fef3e2;
+	--warning-text: #92400e;
+	--warning-solid: #f59e0b;
+	--danger-bg: #fde8e8;
+	--danger-text: #b42318;
+	--danger-solid: #e11d48;
+	--info-bg: #e0eaff;
+	--info-text: #3538cd;
+	--info-solid: #3b82f6;
+
+	// Component-specific
+	--surface-hero-from: #{$brand-deep};
+	--surface-hero-to: #{$green-900};
+	--state-active-tint: #{$green-50};
+	--avatar-fallback-bg: #{$green-100};
+	--avatar-fallback-text: #{$green-800};
+
+	// Shadows — tinted dark-green rather than pure black for warmth
+	--shadow-xs: 0 1px 2px rgba(13, 21, 15, 0.04);
+	--shadow-sm: 0 2px 6px rgba(13, 21, 15, 0.05);
+	--shadow-md: 0 8px 20px rgba(13, 21, 15, 0.06);
+	--shadow-lg: 0 16px 40px rgba(13, 21, 15, 0.07);
+	--shadow-xl: 0 24px 56px rgba(13, 21, 15, 0.09);
+	--shadow-glow: 0 20px 48px rgba(19, 69, 45, 0.35), 0 0 0 1px rgba(23, 247, 0, 0.06);
+	--shadow-focus: 0 0 0 3px rgba(34, 125, 83, 0.35);
+
+	// Radius/font as runtime vars for use outside compiled Sass
+	--radius-sm: #{$radius-sm};
+	--radius-md: #{$radius-md};
+	--radius-lg: #{$radius-lg};
+	--radius-xl: #{$radius-xl};
+	--radius-2xl: #{$radius-2xl};
+	--radius-full: #{$radius-full};
+	--font-display: #{$font-display};
+	--font-body: #{$font-body};
+
+	// Semantic type scale — runtime mirror of the $fs-*/$lh-* scale above.
+	// Use var(--text-*) / var(--leading-*) anywhere outside compiled Sass.
+	--text-caption: #{$fs-caption};
+	--text-body: #{$fs-body};
+	--text-lg: #{$fs-lg};
+	--text-h3: #{$fs-h3};
+	--text-h2: #{$fs-h2};
+	--text-h1: #{$fs-h1};
+	--text-display: #{$fs-display};
+
+	--leading-caption: #{$lh-caption};
+	--leading-body: #{$lh-body};
+	--leading-lg: #{$lh-lg};
+	--leading-h3: #{$lh-h3};
+	--leading-h2: #{$lh-h2};
+	--leading-h1: #{$lh-h1};
+	--leading-display: #{$lh-display};
+
+	--weight-regular: #{$weight-regular};
+	--weight-medium: #{$weight-medium};
+	--weight-semibold: #{$weight-semibold};
+	--weight-bold: #{$weight-bold};
+	--weight-extrabold: #{$weight-extrabold};
+
+	// Layout
+	--sidebar-width: 280px;
+	--header-height: 56px;
+	--bottom-nav-height: 64px;
+}
+
+// -----------------------------------------------------------------------------
+// 10. DARK MODE VALUES — NOT a naive inversion. Key intentional differences:
+//     • Brand greens brighten 1–2 ramp steps (green-500/600 vs brand-primary)
+//       so they don't go muddy against the near-black background.
+//     • Borders become translucent white — reads on both flat and gradient surfaces.
+//     • Shadow-glow gets MORE prominent; that's exactly when $brand-light shines.
+//     • Status badges flip contrast direction (dark tint + bright text).
+// -----------------------------------------------------------------------------
+@mixin dark-theme-tokens {
+	--color-brand: #{$green-500};
+	--color-brand-strong: #{$green-600};
+	--color-brand-glow: #{$brand-light};
+	--color-focus-ring: rgba(48, 176, 112, 0.45);
+
+	--color-bg-app: #{$slate-950};
+	--color-bg-surface: #{$slate-900};
+	--color-bg-surface-sunk: #{$slate-1000};
+	--color-border: rgba(255, 255, 255, 0.08);
+	--color-border-strong: rgba(255, 255, 255, 0.14);
+
+	--color-text-primary: #{$slate-50};
+	--color-text-secondary: #{$slate-300};
+	--color-text-muted: #{$slate-400};
+	--color-text-on-brand: #{$slate-0};
+
+	--success-bg: rgba(79, 207, 143, 0.14);
+	--success-text: #{$green-400};
+	--success-solid: #{$green-500};
+	--warning-bg: rgba(245, 158, 11, 0.16);
+	--warning-text: #fcd34d;
+	--warning-solid: #f59e0b;
+	--danger-bg: rgba(225, 29, 72, 0.16);
+	--danger-text: #fca5a5;
+	--danger-solid: #f43f5e;
+	--info-bg: rgba(59, 130, 246, 0.16);
+	--info-text: #93c5fd;
+	--info-solid: #3b82f6;
+
+	--surface-hero-from: #{$green-700};
+	--surface-hero-to: #{$green-950};
+	--state-active-tint: rgba(48, 176, 112, 0.14);
+	--avatar-fallback-bg: rgba(79, 207, 143, 0.18);
+	--avatar-fallback-text: #{$green-300};
+
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+	--shadow-md: 0 8px 20px rgba(0, 0, 0, 0.5);
+	--shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+	--shadow-xl: 0 24px 56px rgba(0, 0, 0, 0.6);
+	--shadow-glow:
+		0 20px 56px rgba(23, 247, 0, 0.2), 0 0 0 1px rgba(23, 247, 0, 0.14),
+		0 10px 28px rgba(0, 0, 0, 0.55);
+	--shadow-focus: 0 0 0 3px rgba(48, 176, 112, 0.45);
+}
+
+// OS dark mode (no explicit user choice yet)
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		@include dark-theme-tokens;
+	}
+}
+
+// Explicit user choice via in-app toggle
+:root[data-theme='dark'] {
+	@include dark-theme-tokens;
+}

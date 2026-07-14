@@ -1,0 +1,1 @@
+ALTER TABLE "invoices" ADD COLUMN "send_payment_reminders" boolean DEFAULT true NOT NULL;

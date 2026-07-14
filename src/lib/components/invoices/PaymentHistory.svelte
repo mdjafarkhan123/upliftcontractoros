@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { formatCurrency, formatDate } from '$lib/utils/format';
 	import type { InvoicePaymentRow, PaymentMethod } from '$lib/types/invoices';
-	import { ChevronDown, ChevronUp, Receipt } from '@lucide/svelte';
 
 	let {
 		payments,
@@ -21,45 +20,45 @@
 	const total = $derived(payments.reduce((s, p) => s + Number(p.amount), 0));
 </script>
 
-<div class="rounded-xl border border-border bg-card">
-	<button
-		type="button"
-		onclick={() => (expanded = !expanded)}
-		class="flex w-full items-center justify-between gap-2 p-4 text-left"
-	>
-		<div class="flex items-center gap-2">
-			<Receipt class="h-4 w-4 text-muted-foreground" />
-			<span class="text-sm font-semibold">Payment history</span>
-			<span class="text-xs text-muted-foreground">
+<div class="payment-history">
+	<button type="button" onclick={() => (expanded = !expanded)} class="payment-history__toggle">
+		<span class="payment-history__head">
+			<i class="ri-receipt-line payment-history__icon" aria-hidden="true"></i>
+			<span class="payment-history__title">Payment history</span>
+			<span class="payment-history__meta">
 				{payments.length}
 				{payments.length === 1 ? 'payment' : 'payments'} · {formatCurrency(total)}
 			</span>
-		</div>
-		{#if expanded}
-			<ChevronUp class="h-4 w-4 text-muted-foreground" />
-		{:else}
-			<ChevronDown class="h-4 w-4 text-muted-foreground" />
-		{/if}
+		</span>
+		<i
+			class="payment-history__chevron {expanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}"
+			aria-hidden="true"
+		></i>
 	</button>
 
 	{#if expanded}
-		<div class="border-t border-border">
+		<div class="payment-history__body">
 			{#if payments.length === 0}
-				<p class="p-4 text-sm text-muted-foreground">No payments recorded yet.</p>
+				<p class="payment-history__empty">No payments recorded yet.</p>
 			{:else}
-				<ul class="divide-y divide-border">
+				<ul class="payment-history__list">
 					{#each payments as p (p.id)}
-						<li class="flex items-start justify-between gap-3 p-4">
-							<div class="min-w-0">
-								<p class="text-sm font-medium">{formatCurrency(p.amount)}</p>
-								<p class="text-xs text-muted-foreground">
+						<li class="payment-history__item">
+							<div>
+								<p class="payment-history__amount">
+									{formatCurrency(p.amount)}
+									{#if Number(p.tip_amount) > 0}
+										<span class="payment-history__tip">+ {formatCurrency(p.tip_amount)} tip</span>
+									{/if}
+								</p>
+								<p class="payment-history__detail">
 									{methodLabels[p.payment_method]} · {formatDate(p.paid_at)}
 								</p>
 								{#if p.recorded_by_name}
-									<p class="text-xs text-muted-foreground">Recorded by {p.recorded_by_name}</p>
+									<p class="payment-history__detail">Recorded by {p.recorded_by_name}</p>
 								{/if}
 								{#if p.notes}
-									<p class="mt-1 text-xs text-muted-foreground">{p.notes}</p>
+									<p class="payment-history__note">{p.notes}</p>
 								{/if}
 							</div>
 						</li>

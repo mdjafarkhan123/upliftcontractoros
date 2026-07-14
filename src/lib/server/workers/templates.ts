@@ -18,6 +18,9 @@ export type TemplateVars = {
 	invoice_number?: string | null;
 	payment_link?: string | null;
 	due_date?: string | null;
+	// Job-anchored vars. Job scheduled confirmation.
+	job_title?: string | null;
+	scheduled_datetime?: string | null;
 };
 
 export function interpolate(template: string, vars: TemplateVars): string {
@@ -39,5 +42,7 @@ export function interpolate(template: string, vars: TemplateVars): string {
 		.replaceAll('{quote_link}', vars.quote_link ?? '')
 		.replaceAll('{invoice_number}', vars.invoice_number ?? '')
 		.replaceAll('{payment_link}', vars.payment_link ?? '')
-		.replaceAll('{due_date}', vars.due_date ?? '');
+		.replaceAll('{due_date}', vars.due_date ?? '')
+		.replaceAll('{job_title}', vars.job_title ?? '')
+		.replaceAll('{scheduled_datetime}', vars.scheduled_datetime ?? '');
 }

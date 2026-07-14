@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import QuoteDocumentView from '$lib/components/quotes/QuoteDocumentView.svelte';
-	import { Check, Eye, MessageSquare, X } from '@lucide/svelte';
 	import type { PublicQuoteView } from '$lib/types/quotes';
 	import { resolveBrandTheme } from '$lib/utils/brandColor';
 
@@ -27,47 +26,44 @@
 </svelte:head>
 
 <!-- Preview banner — makes it unmistakable this is the contractor's view, not the live link. -->
-<div
-	class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 backdrop-blur"
->
-	<div class="flex min-w-0 items-center gap-2 text-amber-800 dark:text-amber-300">
-		<Eye class="h-4 w-4 shrink-0" />
-		<p class="truncate text-sm font-medium">
+<div class="qpv__banner">
+	<div class="qpv__banner-info">
+		<i class="ri-eye-line qpv__banner-icon" aria-hidden="true"></i>
+		<p class="qpv__banner-text">
 			Client preview — this is exactly what your customer sees. Actions are disabled.
 		</p>
 	</div>
-	<Button variant="ghost" size="sm" class="shrink-0" onclick={closePreview}>
-		<X class="mr-1 h-4 w-4" />Close
+	<Button variant="ghost" size="sm" onclick={closePreview}>
+		<i class="ri-close-line" aria-hidden="true"></i>Close
 	</Button>
 </div>
 
-<div
-	class="min-h-screen bg-background px-4 py-8 md:py-12"
-	style="--brand: {brand.accent}; --brand-fg: {brand.accentFg};"
->
-	<div class="mx-auto max-w-xl">
+<div class="qpv__page" style="--brand: {brand.accent}; --brand-fg: {brand.accentFg};">
+	<div class="qpv__container">
 		{#if !data.quote}
-			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<h1 class="text-lg font-semibold">Preview unavailable</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
-					This quote could not be loaded. It may have been deleted.
-				</p>
+			<div class="qpv__empty">
+				<h1 class="qpv__empty-title">Preview unavailable</h1>
+				<p class="qpv__empty-text">This quote could not be loaded. It may have been deleted.</p>
 			</div>
 		{:else}
 			<QuoteDocumentView quote={data.quote} bind:selectedOptional>
 				{#snippet actions()}
 					<!-- Inert mirror of the live action buttons so the layout matches the client view. -->
-					<div class="space-y-2" aria-hidden="true">
+					<div class="qpv__actions" aria-hidden="true">
 						<Button
 							disabled
-							class="min-h-[52px] w-full bg-[color:var(--brand)] text-base text-[color:var(--brand-fg)] opacity-100"
+							style="width:100%;min-height:52px;font-size:1.6rem;background:var(--brand);color:var(--brand-fg);opacity:1;"
 						>
-							<Check class="mr-1.5 h-5 w-5" />Accept quote
+							<i class="ri-check-line" aria-hidden="true"></i>Accept quote
 						</Button>
-						<Button variant="outline" disabled class="min-h-[44px] w-full">
-							<MessageSquare class="mr-2 h-4 w-4" />Request changes
+						<Button variant="outline" disabled style="width:100%;min-height:44px;">
+							<i class="ri-message-2-line" aria-hidden="true"></i>Request changes
 						</Button>
-						<Button variant="ghost" disabled class="min-h-[44px] w-full text-muted-foreground">
+						<Button
+							variant="ghost"
+							disabled
+							style="width:100%;min-height:44px;color:var(--color-text-muted);"
+						>
 							Decline
 						</Button>
 					</div>
@@ -76,3 +72,88 @@
 		{/if}
 	</div>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.qpv {
+		&__banner {
+			position: sticky;
+			top: 0;
+			z-index: 20;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: $space-3;
+			padding: 10px $space-4;
+			border-bottom: 1px solid var(--warning-solid);
+			background: var(--warning-bg);
+			backdrop-filter: blur(8px);
+		}
+
+		&__banner-info {
+			display: flex;
+			min-width: 0;
+			align-items: center;
+			gap: $space-2;
+			color: var(--warning-text);
+		}
+
+		&__banner-icon {
+			flex-shrink: 0;
+			font-size: 16px;
+		}
+
+		&__banner-text {
+			margin: 0;
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		&__page {
+			min-height: 100vh;
+			padding: $space-8 $space-4;
+			background: var(--color-bg-app);
+
+			@media (min-width: 768px) {
+				padding-top: 48px;
+				padding-bottom: 48px;
+			}
+		}
+
+		&__container {
+			margin: 0 auto;
+			max-width: 1366px;
+		}
+
+		&__empty {
+			padding: $space-8;
+			text-align: center;
+			border: 1px solid var(--color-border);
+			border-radius: $radius-2xl;
+			background: var(--color-bg-surface);
+		}
+
+		&__empty-title {
+			margin: 0;
+			font-size: $fs-lg;
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+		}
+
+		&__empty-text {
+			margin: $space-2 0 0;
+			font-size: $fs-body;
+			color: var(--color-text-muted);
+		}
+
+		&__actions {
+			display: flex;
+			flex-direction: column;
+			gap: $space-2;
+		}
+	}
+</style>

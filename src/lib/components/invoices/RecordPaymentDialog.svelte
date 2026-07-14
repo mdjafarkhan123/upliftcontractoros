@@ -1,10 +1,9 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCurrency } from '$lib/utils/format';
 	import type { PaymentMethod } from '$lib/types/invoices';
@@ -13,17 +12,22 @@
 		open = $bindable(false),
 		invoiceId,
 		amountDue,
+		tipsEnabled = false,
 		onRecorded
 	}: {
 		open?: boolean;
 		invoiceId: string;
 		amountDue: string;
+		// M7: when the org has tips enabled, show an optional tip field so a cash/check payment
+		// can carry a logged gratuity. Default off so nothing changes for orgs without tips.
+		tipsEnabled?: boolean;
 		onRecorded?: () => void;
 	} = $props();
 
 	let amount = $state('');
 	let method = $state<PaymentMethod>('cash');
 	let notes = $state('');
+	let tip = $state('');
 	let busy = $state(false);
 
 	const methods: { value: PaymentMethod; label: string }[] = [
@@ -38,6 +42,7 @@
 			amount = amountDue;
 			method = 'cash';
 			notes = '';
+			tip = '';
 		}
 	});
 
@@ -52,6 +57,17 @@
 			return;
 		}
 
+		// Tip is optional and separate from the balance — validate only if one was entered.
+		let tipValue = 0;
+		if (tipsEnabled && tip.trim() !== '') {
+			const t = Number(tip);
+			if (!Number.isFinite(t) || t < 0) {
+				toast.error('Enter a valid tip amount');
+				return;
+			}
+			tipValue = t;
+		}
+
 		busy = true;
 		try {
 			const res = await fetch(`/api/invoices/${invoiceId}/record-payment`, {
@@ -60,7 +76,8 @@
 				body: JSON.stringify({
 					amount: n,
 					payment_method: method,
-					notes: notes.trim() || null
+					notes: notes.trim() || null,
+					...(tipsEnabled && tipValue > 0 ? { tip_amount: tipValue } : {})
 				})
 			});
 			const body = await res.json();
@@ -80,16 +97,22 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>Record payment</Dialog.Title>
-			<Dialog.Description>
-				Balance due: <span class="font-medium text-foreground">{formatCurrency(amountDue)}</span>
-			</Dialog.Description>
-		</Dialog.Header>
-		<div class="space-y-4">
-			<div class="grid gap-2">
-				<Label for="payment-amount">Amount <span class="text-destructive">*</span></Label>
+	<Dialog.Content class="record-payment" showClose={false}>
+		<div class="dialog-content__header">
+			<div class="dialog-content__header-main">
+				<Dialog.Title>Record payment</Dialog.Title>
+				<Dialog.Description>
+					Balance due: <span class="record-payment__balance">{formatCurrency(amountDue)}</span>
+				</Dialog.Description>
+			</div>
+			<Dialog.Close class="dialog-content__close" aria-label="Close">
+				<i class="ri-close-line" aria-hidden="true"></i>
+			</Dialog.Close>
+		</div>
+
+		<div class="record-payment__body">
+			<div class="record-payment__field">
+				<Label for="payment-amount">Amount <span class="record-payment__req">*</span></Label>
 				<Input
 					id="payment-amount"
 					type="number"
@@ -99,36 +122,54 @@
 					bind:value={amount}
 				/>
 			</div>
-			<div class="grid gap-2">
-				<Label>Method <span class="text-destructive">*</span></Label>
-				<div class="grid grid-cols-2 gap-2">
+			<div class="record-payment__field">
+				<Label>Method <span class="record-payment__req">*</span></Label>
+				<div class="record-payment__methods">
 					{#each methods as m (m.value)}
 						<button
 							type="button"
 							onclick={() => (method = m.value)}
-							class={method === m.value
-								? 'min-h-[44px] rounded-lg bg-foreground px-3 text-sm font-medium text-background'
-								: 'min-h-[44px] rounded-lg border border-border bg-card px-3 text-sm text-muted-foreground hover:bg-accent'}
+							class="record-payment__method"
+							class:record-payment__method--active={method === m.value}
 						>
 							{m.label}
 						</button>
 					{/each}
 				</div>
 			</div>
-			<div class="grid gap-2">
+			{#if tipsEnabled}
+				<div class="record-payment__field">
+					<Label for="payment-tip">Tip (optional)</Label>
+					<Input
+						id="payment-tip"
+						type="number"
+						inputmode="decimal"
+						min="0"
+						step="0.01"
+						placeholder="0.00"
+						bind:value={tip}
+					/>
+					<p class="record-payment__hint">Added on top of the payment — doesn't reduce the balance.</p>
+				</div>
+			{/if}
+			<div class="record-payment__field">
 				<Label for="payment-notes">Notes</Label>
 				<Textarea id="payment-notes" rows={3} bind:value={notes} placeholder="Check # 1042, etc." />
 			</div>
 		</div>
-		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (open = false)} disabled={busy}>Cancel</Button>
-			<JetEngineButton
-				label="Record payment"
+
+		<div class="dialog-content__footer">
+			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>
+				Cancel
+			</Button>
+			<Button
 				loadingLabel="Recording…"
 				successLabel="Recorded"
-				state={busy ? 'loading' : 'idle'}
+				loading={busy}
 				onclick={submit}
-			/>
-		</Dialog.Footer>
+			>
+				Record payment
+			</Button>
+		</div>
 	</Dialog.Content>
 </Dialog.Root>

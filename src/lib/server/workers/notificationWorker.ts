@@ -6,6 +6,7 @@ import {
 	contacts,
 	conversations,
 	invoices,
+	jobs,
 	memberNotificationPreferences,
 	notifications,
 	notificationDeliveryState,
@@ -562,6 +563,81 @@ async function handleJobCreated(data: EventJobData) {
 		},
 		'job.created'
 	);
+}
+
+// One-off billing reminder. When a job marked invoice_on_close is completed, nudge the
+// contractor to bill it — unless an active invoice already exists for that job. Goes to the
+// assignee (admin/manager fallback). Idempotent per (job, member) across outbox retries.
+async function handleJobCompleted(data: EventJobData) {
+	if (!data.org_id) return;
+	const jobId = data.resource_id;
+
+	const [job] = await db
+		.select({
+			invoice_on_close: jobs.invoice_on_close,
+			assigned_to: jobs.assigned_to,
+			title: jobs.title,
+			contact_id: jobs.contact_id,
+			contact_name: contacts.full_name
+		})
+		.from(jobs)
+		.innerJoin(contacts, eq(contacts.id, jobs.contact_id))
+		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, data.org_id)))
+		.limit(1);
+	if (!job || !job.invoice_on_close) return;
+
+	// Already billed → no reminder. Only a *sent* invoice (sent/partially_paid/paid/
+	// overdue) counts as billed. An unsent DRAFT does NOT suppress the nudge — the
+	// contractor still needs the reminder to finish and send it. Cancelled/deleted
+	// invoices are ignored too.
+	const [activeInvoice] = await db
+		.select({ id: invoices.id })
+		.from(invoices)
+		.where(
+			and(
+				eq(invoices.job_id, jobId),
+				eq(invoices.org_id, data.org_id),
+				isNull(invoices.deleted_at),
+				sql`${invoices.status} NOT IN ('draft', 'cancelled')`
+			)
+		)
+		.limit(1);
+	if (activeInvoice) return;
+
+	const recipients = job.assigned_to
+		? [{ id: job.assigned_to }]
+		: await adminManagerMembers(data.org_id);
+	if (recipients.length === 0) return;
+
+	const title = job.contact_name
+		? `Time to invoice ${job.contact_name}`
+		: 'A finished job is ready to invoice';
+
+	// Deep-link straight to a pre-filled New Invoice (Jobber/HCP behaviour) instead of
+	// the job page — same prefill the job's "New invoice" button uses. Falls back to the
+	// job page if the contact link is somehow missing.
+	const invoiceRoute = job.contact_id
+		? `/invoices/new?contact_id=${encodeURIComponent(job.contact_id)}` +
+			`&contact_name=${encodeURIComponent(job.contact_name ?? '')}` +
+			`&job_id=${encodeURIComponent(jobId)}` +
+			`&job_title=${encodeURIComponent(job.title ?? '')}`
+		: NOTIFICATION_SPEC.job_invoice_reminder.route(jobId);
+
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'job_invoice_reminder',
+			title,
+			body: job.title,
+			resourceType: 'job',
+			resourceId: jobId,
+			route: invoiceRoute,
+			metadata: { customer_name: job.contact_name ?? '', job_title: job.title },
+			idempotencyKey: `job.invoice_reminder:${jobId}:${r.id}`
+		});
+	}
 }
 
 async function handleInvoicePaid(data: EventJobData) {
@@ -1589,6 +1665,8 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleOpportunityWon(data);
 			case 'job.created':
 				return handleJobCreated(data);
+			case 'job.completed':
+				return handleJobCompleted(data);
 			case 'invoice.paid':
 				return handleInvoicePaid(data);
 			case 'quote.viewed':

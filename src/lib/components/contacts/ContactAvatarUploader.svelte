@@ -1,23 +1,21 @@
 <script lang="ts">
-	import { Camera, Loader2 } from '@lucide/svelte';
 	import ContactAvatar from './ContactAvatar.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { cn } from '$lib/utils/cn';
 
 	let {
 		contactId,
 		name,
 		src = null,
 		status = null,
-		class: className,
+		size = 64,
 		onChange
 	}: {
 		contactId: string;
 		name: string;
 		src?: string | null;
 		status?: 'lead' | 'customer' | 'archived' | null;
-		/** Sizing utilities for the avatar, e.g. "h-16 w-16 text-xl". */
-		class?: string;
+		/** Diameter of the avatar in px. */
+		size?: number;
 		/** Fires after a successful upload/remove with the fresh photo URL and the
 		 * contact's new updated_at (so callers can refresh their concurrency token). */
 		onChange: (result: { avatar_url: string | null; updated_at: string }) => void;
@@ -123,31 +121,79 @@
 	type="button"
 	onclick={pick}
 	disabled={uploading}
-	class={cn(
-		'group relative block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-		className
-	)}
+	class="contact-avatar-uploader"
+	style:width="{size}px"
+	style:height="{size}px"
+	style:font-size="{Math.round(size * 0.4)}px"
 	aria-label={src ? 'Change contact photo' : 'Add contact photo'}
 >
-	<ContactAvatar {name} src={displaySrc} {status} class="h-full w-full ring-2" />
+	<ContactAvatar {name} src={displaySrc} {status} fill />
 
-	{#if uploading}
-		<span class="absolute inset-0 flex items-center justify-center rounded-full bg-black/45">
-			<Loader2 class="h-2/5 w-2/5 animate-spin text-white" />
-		</span>
-	{:else}
-		<span
-			class="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-		>
-			<Camera class="h-2/5 w-2/5 text-white" />
-		</span>
-	{/if}
+	<span class="contact-avatar-uploader__overlay" class:contact-avatar-uploader__overlay--busy={uploading}>
+		{#if uploading}
+			<i class="ri-loader-4-line contact-avatar-uploader__spin" aria-hidden="true"></i>
+		{:else}
+			<i class="ri-camera-line" aria-hidden="true"></i>
+		{/if}
+	</span>
 </button>
 
 <input
 	bind:this={fileInput}
 	type="file"
 	accept="image/jpeg,image/png,image/webp"
-	class="hidden"
+	class="contact-avatar-uploader__input"
 	onchange={onFileChange}
 />
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.contact-avatar-uploader {
+		position: relative;
+		display: block;
+		padding: 0;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		cursor: pointer;
+		flex-shrink: 0;
+
+		&:disabled {
+			cursor: default;
+		}
+
+		&__overlay {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: $radius-full;
+			background: rgba(0, 0, 0, 0.45);
+			color: #fff;
+			opacity: 0;
+			transition: opacity $duration-fast $ease-standard;
+
+			i {
+				font-size: 1em;
+			}
+
+			&--busy {
+				opacity: 1;
+			}
+		}
+
+		&:hover &__overlay {
+			opacity: 1;
+		}
+
+		&__spin {
+			animation: spin 0.75s linear infinite;
+		}
+
+		&__input {
+			display: none;
+		}
+	}
+</style>

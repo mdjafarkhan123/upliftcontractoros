@@ -1,0 +1,182 @@
+@use '../tokens' as *;
+
+// -----------------------------------------------------------------------------
+// DOC EDITOR — shared card chassis for the inline document-setting editors
+// rendered on quotes/[id] and invoices/[id] (DocumentDiscountEditor,
+// DocumentDepositEditor). Card frame + title/hint header + segmented toggle +
+// revealed fields. Any component using these classes is a "doc editor"; keep the
+// styles here (global) — never re-scope them into a single component (Rule 2).
+// -----------------------------------------------------------------------------
+.doc-editor {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		margin-bottom: $space-3;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__hint {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	// Flush variant — drop the card frame so the editor sits cleanly inside a parent
+	// section card (the quote "Discount" / "Deposit" blocks wrap it in a DocumentSectionCard).
+	&--bare {
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+	}
+
+	// Standalone hint (bare mode, where the parent card owns the title) needs its own bottom
+	// spacing since there's no header block below it to separate it from the controls.
+	&__hint--standalone {
+		margin-bottom: $space-3;
+	}
+
+	&__toggle {
+		display: flex;
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+	}
+
+	&__toggle-btn {
+		flex: 1;
+		padding: $space-1 $space-3;
+		border: none;
+		border-left: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:first-child {
+			border-left: none;
+		}
+
+		&:hover:not(&--active) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			background: var(--color-brand);
+			color: #fff;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__fields {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		margin-top: $space-3;
+	}
+
+	&__field-suffix {
+		position: absolute;
+		right: $space-3;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		pointer-events: none;
+	}
+
+	&__field-hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		margin-top: 2px;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DOC SECTION-BLOCK EDIT — shared read-only + editing chrome for the section
+// cards on quotes/[id] and invoices/[id] (Details, Notes, Terms, Pricing). One
+// pencil per card opens the whole block; a block-level Save/Cancel commits it
+// (Jobber pattern). Used by 2+ pages, so it lives here (global) — never re-scope
+// into a single component (Rule 2 / Rule 24).
+// -----------------------------------------------------------------------------
+
+// Muted placeholder text shown when a read-only fact is empty.
+.doc-inline-muted {
+	color: var(--color-text-muted);
+}
+
+// Preserves line breaks for free-text read-only values (notes / terms).
+.doc-inline-pre {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+// Read-only label/value list shown when a section card is NOT being edited.
+.doc-facts {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin: 0;
+
+	&__row {
+		display: grid;
+		grid-template-columns: 140px 1fr;
+		gap: $space-3;
+		align-items: start;
+
+		@media (max-width: #{$bp-tablet - 1px}) {
+			grid-template-columns: 1fr;
+			gap: 2px;
+		}
+	}
+
+	&__label {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__value {
+		margin: 0;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		min-width: 0;
+	}
+}
+
+// Editable form column inside a section card.
+.doc-form {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+}
+
+// Block-level Save/Cancel rows now render via the shared EditActionBar
+// (components/_edit-action-bar.scss); the old .doc-section-actions rules were removed.

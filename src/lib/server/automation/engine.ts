@@ -492,6 +492,10 @@ async function loadResourceContext(
 		if (appt.status !== expected) {
 			return { closed: true, closedReason: `appointment_${appt.status}`, vars: {} };
 		}
+		// An unscheduled visit (no date) can't anchor a time-based reminder sequence — close out.
+		if (appt.scheduled_start === null) {
+			return { closed: true, closedReason: 'appointment_unscheduled', vars: {} };
+		}
 		const formatted = formatAppointmentForOrg(appt.scheduled_start, org.timezone);
 		return {
 			closed: false,

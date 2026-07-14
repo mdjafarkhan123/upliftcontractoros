@@ -1,9 +1,6 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { Button } from '$lib/components/ui/button';
-	import { SlidersHorizontal } from '@lucide/svelte';
 	import { SUGGESTED_CONTACT_TAGS, formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
 	import { LEAD_TEMPERATURES, TEMPERATURE_META } from '$lib/contacts/temperature';
 
@@ -15,6 +12,12 @@
 		{ value: 'team', label: 'Whole team', description: 'All contacts' },
 		{ value: 'unassigned', label: 'Unassigned', description: 'No owner yet' }
 	];
+
+	const TEMP_DOT: Record<'hot' | 'warm' | 'cold', string> = {
+		hot: '#f97316',
+		warm: '#f59e0b',
+		cold: '#0ea5e9'
+	};
 
 	let {
 		scope = $bindable<ScopeValue>('team'),
@@ -48,48 +51,31 @@
 </script>
 
 {#snippet triggerContent()}
-	<SlidersHorizontal class="h-4 w-4 shrink-0" />
-	<span class="hidden sm:inline">Filter</span>
+	<i class="ri-equalizer-line" aria-hidden="true"></i>
+	<span>Filter</span>
 	{#if activeCount > 0}
-		<span
-			class="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
-		>
-			{activeCount}
-		</span>
+		<span class="contact-filter__count">{activeCount}</span>
 	{/if}
 {/snippet}
 
 {#snippet filterBody()}
 	{#if showScope}
-		<div class="border-b border-border/60 p-4">
-			<p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-				Assigned to
-			</p>
-			<div class="flex flex-col gap-1">
+		<div class="contact-filter__section">
+			<p class="contact-filter__heading">Assigned to</p>
+			<div class="contact-filter__scope">
 				{#each SCOPE_OPTIONS as opt (opt.value)}
 					<button
 						type="button"
 						onclick={() => (scope = opt.value)}
-						class={cn(
-							'flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150',
-							scope === opt.value
-								? 'bg-primary/10 text-primary'
-								: 'text-foreground hover:bg-accent'
-						)}
+						class="contact-filter__scope-option"
+						class:contact-filter__scope-option--active={scope === opt.value}
 					>
-						<span
-							class={cn(
-								'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-								scope === opt.value ? 'border-primary' : 'border-border'
-							)}
-						>
-							{#if scope === opt.value}
-								<span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
-							{/if}
+						<span class="contact-filter__radio">
+							{#if scope === opt.value}<span></span>{/if}
 						</span>
 						<span>
-							<span class="font-medium">{opt.label}</span>
-							<span class="ml-1.5 text-xs text-muted-foreground">{opt.description}</span>
+							<span>{opt.label}</span>
+							<span class="contact-filter__scope-desc">{opt.description}</span>
 						</span>
 					</button>
 				{/each}
@@ -97,11 +83,9 @@
 		</div>
 	{/if}
 
-	<div class="border-b border-border/60 p-4">
-		<p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-			Lead temperature
-		</p>
-		<div class="flex flex-wrap gap-2">
+	<div class="contact-filter__section">
+		<p class="contact-filter__heading">Lead temperature</p>
+		<div class="contact-filter__chips">
 			{#each LEAD_TEMPERATURES as t (t)}
 				{@const active = temperature === t}
 				{@const meta = TEMPERATURE_META[t]}
@@ -109,15 +93,12 @@
 					type="button"
 					onclick={() => setTemperature(t)}
 					aria-pressed={active}
-					class={cn(
-						'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-150',
-						active
-							? 'border-primary bg-primary text-primary-foreground'
-							: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-					)}
+					class="contact-filter__chip"
+					class:contact-filter__chip--active={active}
 				>
 					<span
-						class={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-primary-foreground' : meta.dot)}
+						class="contact-filter__chip-dot"
+						style:background-color={active ? undefined : TEMP_DOT[t]}
 					></span>
 					{meta.label}
 				</button>
@@ -125,9 +106,9 @@
 		</div>
 	</div>
 
-	<div class="p-4">
-		<p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tag</p>
-		<div class="flex flex-wrap gap-2">
+	<div class="contact-filter__section">
+		<p class="contact-filter__heading">Tag</p>
+		<div class="contact-filter__chips">
 			{#each SUGGESTED_CONTACT_TAGS as t (t)}
 				{@const active = tag === t}
 				{@const destructive = isDestructiveTag(t)}
@@ -135,16 +116,9 @@
 					type="button"
 					onclick={() => setTag(t)}
 					aria-pressed={active}
-					class={cn(
-						'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors duration-150',
-						active
-							? destructive
-								? 'border-destructive bg-destructive text-destructive-foreground'
-								: 'border-primary bg-primary text-primary-foreground'
-							: destructive
-								? 'border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10'
-								: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-					)}
+					class="contact-filter__chip"
+					class:contact-filter__chip--active={active}
+					class:contact-filter__chip--danger={destructive}
 				>
 					{formatTagLabel(t)}
 				</button>
@@ -153,46 +127,58 @@
 	</div>
 
 	{#if activeCount > 0}
-		<div class="border-t border-border/60 px-4 py-3">
-			<button
-				type="button"
-				onclick={clearAll}
-				class="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-			>
-				Clear all filters
-			</button>
-		</div>
+		<button type="button" onclick={clearAll} class="contact-filter__clear">
+			Clear all filters
+		</button>
 	{/if}
 {/snippet}
 
 <!-- ── Desktop: Popover ──────────────────────────────────────────────── -->
-<div class="hidden lg:block">
+<div class="contact-filter__desktop">
 	<Popover.Root>
 		<Popover.Trigger>
-			<Button variant="outline" size="sm" class="h-9 gap-1.5">
+			<span class="btn btn--secondary btn--sm">
 				{@render triggerContent()}
-			</Button>
+			</span>
 		</Popover.Trigger>
-		<Popover.Content align="end" class="w-80 p-0">
+		<Popover.Content align="end" class="contact-filter__panel">
 			{@render filterBody()}
 		</Popover.Content>
 	</Popover.Root>
 </div>
 
 <!-- ── Mobile: Bottom Sheet ──────────────────────────────────────────── -->
-<div class="lg:hidden">
+<div class="contact-filter__mobile">
 	<Sheet.Root>
 		<Sheet.Trigger>
-			<Button variant="outline" size="sm" class="h-9 gap-1.5">
+			<span class="btn btn--secondary btn--sm">
 				{@render triggerContent()}
-			</Button>
+			</span>
 		</Sheet.Trigger>
-		<Sheet.Content side="bottom" class="rounded-t-2xl border-border/50 bg-card px-0 pb-safe">
-			<div class="mx-auto mt-3 h-1.5 w-12 rounded-full bg-border" aria-hidden="true"></div>
-			<Sheet.Header class="px-6 pb-2 pt-4">
-				<Sheet.Title class="text-base font-semibold">Filter Contacts</Sheet.Title>
+		<Sheet.Content side="bottom">
+			<div class="contact-filter__sheet-grip" aria-hidden="true"></div>
+			<Sheet.Header>
+				<Sheet.Title>
+					<span class="contact-filter__sheet-title">Filter Contacts</span>
+				</Sheet.Title>
 			</Sheet.Header>
 			{@render filterBody()}
 		</Sheet.Content>
 	</Sheet.Root>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.contact-filter__desktop {
+		display: none;
+		@media (min-width: $bp-tablet) {
+			display: block;
+		}
+	}
+	.contact-filter__mobile {
+		@media (min-width: $bp-tablet) {
+			display: none;
+		}
+	}
+</style>

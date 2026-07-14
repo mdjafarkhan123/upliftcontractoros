@@ -7,19 +7,8 @@
 	import { leadSourceLabel } from '$lib/contacts/leadSource';
 	import ContactAvatar from './ContactAvatar.svelte';
 	import { goto } from '$app/navigation';
-	import { cn } from '$lib/utils/cn';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { contactDetailStore } from '$lib/stores/contactDetail.svelte';
-	import {
-		Check,
-		Phone,
-		MessageSquare,
-		MoreHorizontal,
-		Pencil,
-		Trash2,
-		Archive,
-		RotateCcw
-	} from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	let {
@@ -83,46 +72,34 @@
 </script>
 
 {#snippet inner()}
-	<div class="flex items-start gap-3">
+	<div class="contact-card__inner">
 		{#if selectable}
-			<div
-				class={cn(
-					'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-					selected
-						? 'border-primary bg-primary text-primary-foreground'
-						: 'border-border bg-card text-transparent'
-				)}
-			>
-				<Check class="h-5 w-5" />
+			<div class="contact-card__check-avatar" class:contact-card__check-avatar--on={selected}>
+				<i class="ri-check-line" aria-hidden="true"></i>
 			</div>
 		{:else}
-			<ContactAvatar name={full_name} src={avatar_url} {status} class="h-11 w-11 text-sm ring-1" />
+			<ContactAvatar name={full_name} src={avatar_url} {status} size={44} />
 		{/if}
-		<div class="min-w-0 flex-1">
-			<div class="flex items-start justify-between gap-2">
-				<div class="min-w-0">
-					<h3 class="truncate text-base font-semibold text-foreground">{full_name}</h3>
+		<div class="contact-card__body">
+			<div class="contact-card__top">
+				<div class="contact-card__identity">
+					<h3 class="contact-card__name">{full_name}</h3>
 					{#if company_name}
-						<p class="truncate text-xs font-medium text-muted-foreground">{company_name}</p>
+						<p class="contact-card__company">{company_name}</p>
 					{/if}
-					<p class="truncate text-sm text-muted-foreground">
+					<p class="contact-card__contactline">
 						{phone ? formatPhoneDisplay(phone) : 'No phone'}
 					</p>
 					{#if email}
-						<p class="truncate text-xs text-muted-foreground">{email}</p>
+						<p class="contact-card__email">{email}</p>
 					{/if}
 				</div>
-				<div class="flex shrink-0 items-start gap-1.5">
-					<div class="flex flex-col items-end gap-1">
+				<div class="contact-card__badges">
+					<div class="contact-card__badge-col">
 						<Badge variant={statusVariant} label={statusLabel} />
-						{#if temp}
-							<span
-								class={cn(
-									'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-									temp.badge
-								)}
-							>
-								<span class={cn('h-1.5 w-1.5 rounded-full', temp.dot)}></span>
+						{#if temp && lead_temperature}
+							<span class="temp-chip temp-chip--{lead_temperature}">
+								<span class="temp-chip__dot"></span>
 								{temp.label}
 							</span>
 						{/if}
@@ -131,47 +108,47 @@
 						<div onclick={(e) => e.stopPropagation()} role="none">
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger
-									class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									class="contact-menu-trigger"
 									aria-label="Actions for {full_name}"
 								>
-									<MoreHorizontal class="h-4 w-4" />
+									<i class="ri-more-2-fill" aria-hidden="true"></i>
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content align="end">
 									{#if isArchived}
 										{#if onRestoreRequest}
 											<DropdownMenu.Item onclick={() => onRestoreRequest(id, full_name)}>
-												<RotateCcw class="h-4 w-4" />
+												<i class="ri-arrow-go-back-line" aria-hidden="true"></i>
 												Restore contact
 											</DropdownMenu.Item>
 										{/if}
 										{#if onDeleteRequest}
 											<DropdownMenu.Separator />
 											<DropdownMenu.Item
-												class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+												variant="destructive"
 												onclick={() => onDeleteRequest(id, full_name)}
 											>
-												<Trash2 class="h-4 w-4" />
+												<i class="ri-delete-bin-line" aria-hidden="true"></i>
 												Delete contact
 											</DropdownMenu.Item>
 										{/if}
 									{:else}
-										<DropdownMenu.Item onclick={() => goto(`/contacts/${id}/edit`)}>
-											<Pencil class="h-4 w-4" />
+										<DropdownMenu.Item onclick={() => goto(`/contacts/${id}`)}>
+											<i class="ri-pencil-line" aria-hidden="true"></i>
 											Edit contact
 										</DropdownMenu.Item>
 										{#if onArchiveRequest}
 											<DropdownMenu.Item onclick={() => onArchiveRequest(id, full_name)}>
-												<Archive class="h-4 w-4" />
+												<i class="ri-archive-line" aria-hidden="true"></i>
 												Archive contact
 											</DropdownMenu.Item>
 										{/if}
 										{#if onDeleteRequest}
 											<DropdownMenu.Separator />
 											<DropdownMenu.Item
-												class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+												variant="destructive"
 												onclick={() => onDeleteRequest(id, full_name)}
 											>
-												<Trash2 class="h-4 w-4" />
+												<i class="ri-delete-bin-line" aria-hidden="true"></i>
 												Delete contact
 											</DropdownMenu.Item>
 										{/if}
@@ -182,17 +159,17 @@
 					{/if}
 				</div>
 			</div>
-			<div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+			<div class="contact-card__meta">
 				{#if assignee_name}
 					<span>Assigned to {assignee_name}</span>
 				{:else}
-					<span class="italic">Unassigned</span>
+					<span class="contact-card__meta-italic">Unassigned</span>
 				{/if}
 				<span aria-hidden="true">•</span>
 				{#if last_contacted_at}
 					<span>Last contacted {formatRelativeShort(last_contacted_at)}</span>
 				{:else}
-					<span class="italic">Never contacted</span>
+					<span class="contact-card__meta-italic">Never contacted</span>
 				{/if}
 				{#if sourceLabel}
 					<span aria-hidden="true">•</span>
@@ -200,51 +177,40 @@
 				{/if}
 				{#if sms_opt_out}
 					<span aria-hidden="true">•</span>
-					<span class="font-medium text-amber-700 dark:text-amber-400">SMS opted out</span>
+					<span class="contact-card__meta-optout">SMS opted out</span>
 				{/if}
 			</div>
 			{#if visibleTags.length > 0}
-				<div class="mt-2 flex flex-wrap gap-1.5">
+				<div class="contact-card__tag-row">
 					{#each visibleTags as t (t)}
-						<span
-							class={cn(
-								'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-								isDestructiveTag(t)
-									? 'border-destructive/30 bg-destructive/5 text-destructive'
-									: 'border-border bg-muted/40 text-muted-foreground'
-							)}
-						>
+						<span class="tag-chip" class:tag-chip--destructive={isDestructiveTag(t)}>
 							{formatTagLabel(t)}
 						</span>
 					{/each}
 					{#if extraTagCount > 0}
-						<span
-							class="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-						>
-							+{extraTagCount}
-						</span>
+						<span class="tag-chip">+{extraTagCount}</span>
 					{/if}
 				</div>
 			{/if}
 			{#if !selectable && phone}
-				<div class="mt-2.5 flex items-center gap-2">
+				<div class="contact-card__quick">
 					<a
 						href={`tel:${phone}`}
 						onclick={(e) => e.stopPropagation()}
-						class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent hover:text-foreground"
+						class="contact-card__quick-btn"
 						aria-label={`Call ${full_name}`}
 					>
-						<Phone class="h-3.5 w-3.5" />
+						<i class="ri-phone-line" aria-hidden="true"></i>
 						Call
 					</a>
 					{#if !sms_opt_out}
 						<a
 							href={`sms:${phone}`}
 							onclick={(e) => e.stopPropagation()}
-							class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent hover:text-foreground"
+							class="contact-card__quick-btn"
 							aria-label={`Text ${full_name}`}
 						>
-							<MessageSquare class="h-3.5 w-3.5" />
+							<i class="ri-message-2-line" aria-hidden="true"></i>
 							Text
 						</a>
 					{/if}
@@ -259,10 +225,8 @@
 		type="button"
 		aria-pressed={selected}
 		onclick={() => onToggleSelect?.(id)}
-		class={cn(
-			'group block w-full rounded-xl border border-border/70 bg-card p-4 text-left shadow-card transition-all duration-150 ease-out active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10',
-			selected && 'border-primary/50 bg-primary/5'
-		)}
+		class="contact-card"
+		class:contact-card--selected={selected}
 	>
 		{@render inner()}
 	</button>
@@ -270,9 +234,7 @@
 	<a
 		href={`/contacts/${id}`}
 		use:prefetchOnIntent={() => contactDetailStore.prefetch(id)}
-		class={cn(
-			'group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10'
-		)}
+		class="contact-card"
 	>
 		{@render inner()}
 	</a>

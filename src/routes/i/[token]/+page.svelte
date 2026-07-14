@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import { Check, CreditCard, Clock, AlertCircle, Download } from '@lucide/svelte';
 	import { page } from '$app/state';
 
 	type LineItem = {
@@ -11,21 +9,31 @@
 		quantity: string;
 		unit_price: string;
 		total: string;
+		taxable: boolean;
 	};
 	type PublicInvoice = {
 		invoice_number_display: string;
 		title: string;
 		status: 'sent' | 'partially_paid' | 'paid' | 'overdue';
 		subtotal: string;
+		discount_type: string;
+		discount_value: string | null;
+		discount_amount: string | null;
+		discount_label: string | null;
 		tax_rate: string;
 		tax_amount: string;
 		total: string;
 		amount_paid: string;
 		amount_due: string;
+		tip_total: string;
+		late_fee_total: string;
 		notes: string | null;
+		terms: string | null;
 		due_date: string | null;
 		org_name: string;
 		has_stripe: boolean;
+		tips_enabled: boolean;
+		tip_presets: number[];
 		line_items: LineItem[];
 	};
 
@@ -43,6 +51,11 @@
 	let showCustom = $state(false);
 	let customAmountInput = $state('');
 
+	// M7 tip selector: null = no tip chosen, a number = that preset percent, 'custom' = the
+	// homeowner is typing a dollar amount. Tips are extra money on top of what's being charged.
+	let tipChoice = $state<number | 'custom' | null>(null);
+	let customTipInput = $state('');
+
 	const amountDueCents = $derived(
 		data.invoice ? Math.round(Number(data.invoice.amount_due) * 100) : 0
 	);
@@ -57,6 +70,23 @@
 		customAmountCents !== null && customAmountCents > 0 && customAmountCents <= amountDueCents
 	);
 
+	const tipsEnabled = $derived(data.invoice?.tips_enabled ?? false);
+	// Tip presets are computed off the invoice balance due (industry norm — the tip is on the
+	// job, not on a partial payment). A custom tip is a flat dollar amount the homeowner types.
+	const tipCents = $derived.by(() => {
+		if (!tipsEnabled || tipChoice === null) return 0;
+		if (tipChoice === 'custom') {
+			const n = Number(customTipInput.trim());
+			if (!Number.isFinite(n) || n <= 0) return 0;
+			return Math.round(n * 100);
+		}
+		return Math.round((amountDueCents * tipChoice) / 100);
+	});
+	// What the primary "Pay" button will charge = balance due + any tip. The custom-amount
+	// flow shows its own total (custom amount + tip) on its Continue button.
+	const payFullTotalCents = $derived(amountDueCents + tipCents);
+	const payCustomTotalCents = $derived((customAmountCents ?? 0) + tipCents);
+
 	const isPaid = $derived(data.invoice?.status === 'paid' || justPaid);
 	const isOverdue = $derived(data.invoice?.status === 'overdue' && !isPaid);
 	const canPay = $derived(
@@ -69,6 +99,25 @@
 	const taxPct = $derived(
 		data.invoice ? (Number(data.invoice.tax_rate) * 100).toFixed(2) + '%' : '0%'
 	);
+	// Only surface the per-line "Tax exempt" hint when tax actually applies to the invoice.
+	const hasTax = $derived(data.invoice ? Number(data.invoice.tax_rate) > 0 : false);
+
+	// Tip already collected on this invoice (M7) — shown as its own row when > 0. Extra money,
+	// separate from the balance, so it never appears in Subtotal/Total/Balance math.
+	const tipTotalNum = $derived(data.invoice ? Number(data.invoice.tip_total ?? 0) : 0);
+
+	// Invoice-level discount row — shown only when a real dollars-off amount exists.
+	const discountNum = $derived(data.invoice ? Number(data.invoice.discount_amount ?? 0) : 0);
+	const discountLabel = $derived.by(() => {
+		const inv = data.invoice;
+		if (!inv) return 'Discount';
+		const base = inv.discount_label?.trim() || 'Discount';
+		if (inv.discount_type === 'percent' && inv.discount_value) {
+			const v = Number(inv.discount_value);
+			return `${base} (${v.toFixed(v % 1 === 0 ? 0 : 2)}%)`;
+		}
+		return base;
+	});
 
 	async function downloadPdf() {
 		if (pdfBusy) return;
@@ -87,9 +136,12 @@
 		payError = null;
 		try {
 			const init: RequestInit = { method: 'POST' };
-			if (amountCents !== undefined) {
+			const payload: { amount_cents?: number; tip_cents?: number } = {};
+			if (amountCents !== undefined) payload.amount_cents = amountCents;
+			if (tipCents > 0) payload.tip_cents = tipCents;
+			if (Object.keys(payload).length > 0) {
 				init.headers = { 'Content-Type': 'application/json' };
-				init.body = JSON.stringify({ amount_cents: amountCents });
+				init.body = JSON.stringify(payload);
 			}
 			const res = await fetch(`/i/${token}/pay`, init);
 			const body = await res.json().catch(() => ({}));
@@ -124,132 +176,149 @@
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<div class="min-h-screen bg-background px-4 py-8 md:py-16">
-	<div class="mx-auto max-w-xl">
+<div class="pub">
+	<div class="pub__shell">
 		{#if !data.invoice}
-			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<h1 class="text-lg font-semibold">Invoice no longer available</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
+			<div class="pub-card pub-card--center">
+				<h1 class="pub-card__title">Invoice no longer available</h1>
+				<p class="pub-card__text">
 					This link is invalid or has expired. Please contact the sender for assistance.
 				</p>
 			</div>
 		{:else if isPaid}
-			<div class="space-y-4">
-				<div class="rounded-2xl border border-border bg-card p-8 text-center">
-					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
-					>
-						<Check class="h-6 w-6" />
+			<div class="pub__stack">
+				<div class="pub-card pub-card--center">
+					<div class="pub-statusicon pub-statusicon--success">
+						<i class="ri-check-line" aria-hidden="true"></i>
 					</div>
-					<h1 class="mt-4 text-lg font-semibold">Payment received</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
+					<h1 class="pub-card__title">Payment received</h1>
+					<p class="pub-card__text">
 						{data.invoice.org_name} has been notified. Thank you for your payment.
 					</p>
 				</div>
 
-				<div class="rounded-2xl border border-border bg-card p-4">
-					<div class="flex items-center justify-between text-sm">
-						<span class="text-muted-foreground">Invoice</span>
-						<span class="font-medium">{data.invoice.invoice_number_display}</span>
+				<div class="pub-invoice__summary">
+					<div class="pub-invoice__summary-row">
+						<dt>Invoice</dt>
+						<dd>{data.invoice.invoice_number_display}</dd>
 					</div>
-					<div
-						class="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold"
-					>
-						<span>Total paid</span>
-						<span>{formatCurrency(data.invoice.total)}</span>
+					{#if tipTotalNum > 0}
+						<div class="pub-invoice__summary-row">
+							<dt>Tip</dt>
+							<dd>{formatCurrency(data.invoice.tip_total)}</dd>
+						</div>
+					{/if}
+					<div class="pub-invoice__summary-row pub-invoice__summary-row--total">
+						<dt>Total paid</dt>
+						<dd>{formatCurrency(Number(data.invoice.total) + tipTotalNum)}</dd>
 					</div>
 				</div>
 
 				<Button
+					type="button"
 					variant="outline"
-					class="min-h-[44px] w-full"
+					class="btn--full"
+					loading={pdfBusy}
+					loadingLabel="Preparing PDF…"
 					onclick={downloadPdf}
-					disabled={pdfBusy}
 				>
-					<Download class="mr-2 h-4 w-4" />
-					{pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
+					<i class="ri-download-line" aria-hidden="true"></i>
+					Download PDF
 				</Button>
 			</div>
 		{:else}
 			{@const inv = data.invoice}
-			<div class="space-y-6">
-				<header>
-					<p class="text-sm text-muted-foreground">{inv.org_name}</p>
-					<h1 class="mt-1 text-2xl font-semibold">Invoice {inv.invoice_number_display}</h1>
-					<p class="mt-1 text-sm text-muted-foreground">{inv.title}</p>
+			<div class="pub__stack pub-invoice">
+				<header class="pub-invoice__header">
+					<p class="pub-invoice__org">{inv.org_name}</p>
+					<h1 class="pub-invoice__title">Invoice {inv.invoice_number_display}</h1>
+					<p class="pub-invoice__subtitle">{inv.title}</p>
 				</header>
 
 				{#if isOverdue}
-					<div
-						class="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300"
-					>
-						<AlertCircle class="h-4 w-4 shrink-0" />
-						<p class="font-medium">This invoice is overdue.</p>
+					<div class="pub-notice pub-notice--overdue">
+						<i class="pub-notice__icon ri-error-warning-line" aria-hidden="true"></i>
+						<p class="pub-notice__title">This invoice is overdue.</p>
 					</div>
 				{/if}
 
 				{#if inv.status === 'partially_paid'}
-					<div
-						class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"
-					>
-						<Clock class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+					<div class="pub-notice pub-notice--partial">
+						<i class="pub-notice__icon ri-time-line" aria-hidden="true"></i>
 						<div>
-							<p class="font-medium text-amber-800 dark:text-amber-200">Partial payment received</p>
-							<p class="mt-0.5 text-amber-700/90 dark:text-amber-300/80">
+							<p class="pub-notice__title">Partial payment received</p>
+							<p class="pub-notice__text">
 								{formatCurrency(inv.amount_paid)} received — {formatCurrency(inv.amount_due)} remaining.
 							</p>
 						</div>
 					</div>
 				{/if}
 
-				<div class="rounded-2xl border border-border bg-card">
-					<div
-						class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground"
-					>
-						<div class="grid grid-cols-12">
-							<div class="col-span-7">Item</div>
-							<div class="col-span-2 text-right">Qty</div>
-							<div class="col-span-3 text-right">Amount</div>
-						</div>
+				<div class="pub-invoice__lines">
+					<div class="pub-invoice__lines-head">
+						<span>Item</span>
+						<span class="pub-invoice__qty">Qty</span>
+						<span class="pub-invoice__amount">Amount</span>
 					</div>
-					<ul class="divide-y divide-border">
-						{#each inv.line_items as li (li.id)}
-							<li class="grid grid-cols-12 px-4 py-3 text-sm">
-								<div class="col-span-7">{li.description}</div>
-								<div class="col-span-2 text-right tabular-nums">{Number(li.quantity)}</div>
-								<div class="col-span-3 text-right tabular-nums">{formatCurrency(li.total)}</div>
-							</li>
-						{/each}
-					</ul>
+					{#each inv.line_items as li (li.id)}
+						<div class="pub-invoice__line">
+							<span>
+								{li.description}
+								{#if hasTax && !li.taxable}
+									<span class="pub-invoice__taxexempt">Tax exempt</span>
+								{/if}
+							</span>
+							<span class="pub-invoice__qty">{Number(li.quantity)}</span>
+							<span class="pub-invoice__amount">{formatCurrency(li.total)}</span>
+						</div>
+					{/each}
 				</div>
 
-				<dl class="space-y-2 rounded-2xl border border-border bg-card p-4 text-sm">
-					<div class="flex justify-between">
-						<dt class="text-muted-foreground">Subtotal</dt>
-						<dd class="tabular-nums">{formatCurrency(inv.subtotal)}</dd>
+				<dl class="pub-invoice__totals">
+					<div class="pub-invoice__total-row">
+						<dt>Subtotal</dt>
+						<dd>{formatCurrency(inv.subtotal)}</dd>
 					</div>
-					<div class="flex justify-between">
-						<dt class="text-muted-foreground">Tax ({taxPct})</dt>
-						<dd class="tabular-nums">{formatCurrency(inv.tax_amount)}</dd>
+					{#if discountNum > 0}
+						<div class="pub-invoice__total-row pub-invoice__total-row--discount">
+							<dt>{discountLabel}</dt>
+							<dd>−{formatCurrency(inv.discount_amount ?? '0')}</dd>
+						</div>
+					{/if}
+					<div class="pub-invoice__total-row">
+						<dt>Tax ({taxPct})</dt>
+						<dd>{formatCurrency(inv.tax_amount)}</dd>
 					</div>
-					<div class="flex justify-between border-t border-border pt-2 text-base font-semibold">
+					{#if Number(inv.late_fee_total) > 0}
+						<div class="pub-invoice__total-row">
+							<dt>Late fee</dt>
+							<dd>{formatCurrency(inv.late_fee_total)}</dd>
+						</div>
+					{/if}
+					<div class="pub-invoice__total-row pub-invoice__total-row--grand">
 						<dt>Total</dt>
-						<dd class="tabular-nums">{formatCurrency(inv.total)}</dd>
+						<dd>{formatCurrency(inv.total)}</dd>
 					</div>
 					{#if inv.status === 'partially_paid' && Number(inv.amount_paid) > 0}
-						<div class="flex justify-between text-emerald-700 dark:text-emerald-400">
+						<div class="pub-invoice__total-row pub-invoice__total-row--paid">
 							<dt>Paid</dt>
-							<dd class="tabular-nums">−{formatCurrency(inv.amount_paid)}</dd>
+							<dd>−{formatCurrency(inv.amount_paid)}</dd>
 						</div>
-						<div class="flex justify-between border-t border-border pt-2 font-semibold">
+						<div class="pub-invoice__total-row pub-invoice__total-row--balance">
 							<dt>Balance due</dt>
-							<dd class="tabular-nums">{formatCurrency(inv.amount_due)}</dd>
+							<dd>{formatCurrency(inv.amount_due)}</dd>
+						</div>
+					{/if}
+					{#if tipTotalNum > 0}
+						<div class="pub-invoice__total-row pub-invoice__total-row--paid">
+							<dt>Tip</dt>
+							<dd>{formatCurrency(inv.tip_total)}</dd>
 						</div>
 					{/if}
 				</dl>
 
 				{#if inv.due_date}
-					<p class="text-center text-sm text-muted-foreground">
+					<p class="pub-invoice__due">
 						Due {new Date(inv.due_date + 'T00:00:00').toLocaleDateString('en-US', {
 							month: 'long',
 							day: 'numeric',
@@ -259,41 +328,101 @@
 				{/if}
 
 				{#if inv.notes}
-					<div class="rounded-2xl border border-border bg-card p-4 text-sm whitespace-pre-wrap">
-						{inv.notes}
+					<div class="pub-invoice__notes">{inv.notes}</div>
+				{/if}
+
+				{#if inv.terms?.trim()}
+					<div class="pub-invoice__terms">
+						<p class="pub-invoice__terms-title">Terms &amp; Conditions</p>
+						<div class="pub-invoice__terms-body">{inv.terms}</div>
 					</div>
 				{/if}
 
 				{#if canPay}
-					<div class="space-y-2">
-						<JetEngineButton
-							class="min-h-[52px] w-full text-base"
-							label="Pay {formatCurrency(inv.amount_due)}"
+					<div class="pub-invoice__pay">
+						{#if tipsEnabled}
+							<div class="pub-invoice__tip">
+								<p class="pub-invoice__tip-title">Add a tip for {inv.org_name}?</p>
+								<div class="pub-invoice__tip-options">
+									{#each inv.tip_presets as pct (pct)}
+										<button
+											type="button"
+											class="pub-invoice__tip-btn"
+											class:pub-invoice__tip-btn--active={tipChoice === pct}
+											onclick={() => (tipChoice = tipChoice === pct ? null : pct)}
+											disabled={busy}
+										>
+											<span class="pub-invoice__tip-pct">{pct}%</span>
+											<span class="pub-invoice__tip-amt"
+												>{formatCurrency((amountDueCents * pct) / 100 / 100)}</span
+											>
+										</button>
+									{/each}
+									<button
+										type="button"
+										class="pub-invoice__tip-btn"
+										class:pub-invoice__tip-btn--active={tipChoice === 'custom'}
+										onclick={() => (tipChoice = tipChoice === 'custom' ? null : 'custom')}
+										disabled={busy}
+									>
+										Custom
+									</button>
+									<button
+										type="button"
+										class="pub-invoice__tip-btn"
+										class:pub-invoice__tip-btn--active={tipChoice === null}
+										onclick={() => (tipChoice = null)}
+										disabled={busy}
+									>
+										No tip
+									</button>
+								</div>
+								{#if tipChoice === 'custom'}
+									<div class="pub-invoice__custom-field">
+										<span class="pub-invoice__custom-prefix">$</span>
+										<input
+											type="text"
+											inputmode="decimal"
+											pattern="[0-9]*\.?[0-9]*"
+											autocomplete="off"
+											bind:value={customTipInput}
+											placeholder="0.00"
+											disabled={busy}
+											aria-label="Custom tip amount"
+											class="field__input pub-invoice__custom-input"
+										/>
+									</div>
+								{/if}
+							</div>
+						{/if}
+
+						<Button
+							class="btn--full"
 							loadingLabel="Redirecting to payment…"
 							successLabel="Redirecting…"
-							state={busy ? 'loading' : 'idle'}
+							loading={busy}
 							onclick={payFull}
 						>
-							{#snippet icon()}<CreditCard class="h-5 w-5" />{/snippet}
-						</JetEngineButton>
+							{tipCents > 0
+								? `Pay ${formatCurrency(payFullTotalCents / 100)} (incl. ${formatCurrency(tipCents / 100)} tip)`
+								: `Pay ${formatCurrency(inv.amount_due)}`}
+							{#snippet icon()}<i class="ri-bank-card-line" aria-hidden="true"></i>{/snippet}
+						</Button>
 
 						{#if !showCustom}
 							<button
 								type="button"
-								class="block w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+								class="pub-invoice__pay-alt"
 								onclick={() => (showCustom = true)}
 								disabled={busy}
 							>
 								Pay a different amount
 							</button>
 						{:else}
-							<div class="rounded-2xl border border-border bg-card p-4 space-y-3">
-								<label class="block text-sm font-medium" for="custom-amount"> Custom amount </label>
-								<div class="relative">
-									<span
-										class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
-										>$</span
-									>
+							<div class="pub-invoice__custom">
+								<label class="pub-invoice__custom-label" for="custom-amount">Custom amount</label>
+								<div class="pub-invoice__custom-field">
+									<span class="pub-invoice__custom-prefix">$</span>
 									<input
 										id="custom-amount"
 										type="text"
@@ -303,59 +432,68 @@
 										bind:value={customAmountInput}
 										placeholder="0.00"
 										disabled={busy}
-										class="min-h-[44px] w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field__input pub-invoice__custom-input"
 									/>
 								</div>
-								<p class="text-xs text-muted-foreground">
+								<p class="pub-invoice__custom-hint">
 									Balance due: {formatCurrency(inv.amount_due)}
 								</p>
-								<div class="flex gap-2">
+								<div class="pub-invoice__custom-actions">
 									<Button
+										type="button"
 										variant="outline"
-										class="min-h-[44px] flex-1"
+										class="btn--full"
+										disabled={busy}
 										onclick={() => {
 											showCustom = false;
 											customAmountInput = '';
 											payError = null;
 										}}
-										disabled={busy}
 									>
 										Cancel
 									</Button>
 									<Button
-										class="min-h-[44px] flex-1"
+										type="button"
+										variant="default"
+										class="btn--full"
+										loading={busy}
+										loadingLabel="Redirecting…"
+										disabled={!customAmountValid}
 										onclick={payCustom}
-										disabled={busy || !customAmountValid}
 									>
-										{busy ? 'Redirecting…' : 'Continue'}
+										{#if customAmountValid && tipCents > 0}
+											Pay {formatCurrency(payCustomTotalCents / 100)}
+										{:else}
+											Continue
+										{/if}
 									</Button>
 								</div>
 							</div>
 						{/if}
 
 						{#if payError}
-							<p class="text-center text-xs text-destructive">{payError}</p>
+							<p class="pub-invoice__error">{payError}</p>
 						{/if}
 					</div>
 				{:else if !inv.has_stripe}
-					<div
-						class="rounded-2xl border border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground"
-					>
+					<div class="pub-invoice__no-stripe">
 						Contact {inv.org_name} for payment instructions.
 					</div>
 				{/if}
 
 				<Button
+					type="button"
 					variant="outline"
-					class="min-h-[44px] w-full"
+					class="btn--full"
+					loading={pdfBusy}
+					loadingLabel="Preparing PDF…"
 					onclick={downloadPdf}
-					disabled={pdfBusy}
 				>
-					<Download class="mr-2 h-4 w-4" />
-					{pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
+					<i class="ri-download-line" aria-hidden="true"></i>
+					Download PDF
 				</Button>
 
-				<p class="text-center text-xs text-muted-foreground">
+				<p class="pub-invoice__footnote">
 					This invoice was sent to you by {inv.org_name}.
 				</p>
 			</div>

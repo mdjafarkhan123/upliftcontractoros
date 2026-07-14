@@ -16,8 +16,7 @@
 	} from '$lib/components/pipeline/PipelineFilters.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { getOrgContext } from '$lib/context/org';
-	import { GitBranch, Plus } from '@lucide/svelte';
-	import type { OpportunityRow, OpportunityDetail } from '$lib/types/pipeline';
+	import type { OpportunityRow, OpportunityDetail, PipelineStageRow } from '$lib/types/pipeline';
 	import { pipelineStore } from '$lib/stores/pipeline.svelte';
 	import { jobsStore } from '$lib/stores/jobs.svelte';
 	import { formatCurrency } from '$lib/utils/format';
@@ -37,15 +36,6 @@
 	const fillColumns = $derived(stages.length <= 5);
 	const opportunities = $derived(pipelineStore.opportunities);
 	const assignees = $derived(pipelineStore.assignees);
-
-	// svelte-dnd-action's TRIGGERS/SHADOW marker are only read inside drag handlers,
-	// which can't fire until lazyDndzone has loaded the engine. Load them lazily
-	// (same cached chunk) so they never sit on the board's first-paint critical path.
-	type DndConsts = {
-		TRIGGERS: typeof import('svelte-dnd-action').TRIGGERS;
-		SHADOW: typeof import('svelte-dnd-action').SHADOW_ITEM_MARKER_PROPERTY_NAME;
-	};
-	let dndConsts = $state<DndConsts | null>(null);
 
 	// Heavy pop-ups (deal detail sheet, new-opportunity form, won/lost dialogs) are
 	// only needed after a later click, so they're loaded on demand — clicking the
@@ -98,6 +88,8 @@
 	function onFiltersChange(next: PipelineFilterState) {
 		filters = next;
 		syncUrl(next);
+		// Re-group the authoritative board for the new filter (never mid-drag).
+		seedColumns();
 	}
 
 	function clearFilters() {
@@ -156,11 +148,6 @@
 	const errorMsg = $derived(pipelineStore.status === 'error' ? pipelineStore.error : null);
 
 	onMount(() => {
-		// Warm the dnd constants off the first-paint path. Resolves from the same
-		// chunk lazyDndzone fetches, so by the time dragging is possible they're set.
-		void import('svelte-dnd-action').then((m) => {
-			dndConsts = { TRIGGERS: m.TRIGGERS, SHADOW: m.SHADOW_ITEM_MARKER_PROPERTY_NAME };
-		});
 		void pipelineStore.load().then(() => {
 			// Deep-link from a follow-up notification: /pipeline?deal={id} auto-opens
 			// the deal's detail sheet, then the param is stripped so a refresh/back
@@ -191,7 +178,7 @@
 		const iso = preset === 'clear' ? null : quickFollowUpIso(preset === 'tomorrow' ? 1 : 3);
 		// Optimistic — the dot/chip flips immediately; revert on failure.
 		const prev = opportunities.find((o) => o.id === id)?.next_follow_up_at ?? null;
-		pipelineStore.update({ id, next_follow_up_at: iso });
+		patchCard(id, { next_follow_up_at: iso });
 		try {
 			const res = await fetch(`/api/pipeline/opportunities/${id}`, {
 				method: 'PATCH',
@@ -199,14 +186,14 @@
 				body: JSON.stringify({ next_follow_up_at: iso })
 			});
 			if (!res.ok) {
-				pipelineStore.update({ id, next_follow_up_at: prev });
+				patchCard(id, { next_follow_up_at: prev });
 				const body = await res.json().catch(() => ({}));
 				toast.error(body.error ?? 'Failed to set follow-up');
 				return;
 			}
 			toast.success(iso ? 'Follow-up set' : 'Follow-up cleared');
 		} catch {
-			pipelineStore.update({ id, next_follow_up_at: prev });
+			patchCard(id, { next_follow_up_at: prev });
 			toast.error('Failed to set follow-up');
 		}
 	}
@@ -220,6 +207,17 @@
 		createStageId = stageId;
 		createOpen = true;
 	}
+
+	// Global "Add new → Deal" lands here with ?new=1 — open the create sheet, then
+	// strip the param so a refresh/back doesn't reopen it. Respects create perms.
+	$effect(() => {
+		if ($page.url.searchParams.get('new') === '1') {
+			if (canCreate) openCreate();
+			const url = new URL($page.url);
+			url.searchParams.delete('new');
+			replaceState(url, {});
+		}
+	});
 
 	let pendingWonOpen = $state(false);
 	let pendingLostOpen = $state(false);
@@ -258,12 +256,6 @@
 
 	function newRequestId(): string {
 		return crypto.randomUUID();
-	}
-
-	// On a stage-move conflict the server no longer echoes the current stage
-	// (Rule #14 error shape) — re-pull the board to reconcile.
-	async function handleStageConflict() {
-		await pipelineStore.refreshOpportunities();
 	}
 
 	function onMarkStatus(id: string, status: 'won' | 'lost') {
@@ -314,6 +306,8 @@
 			pendingStatusId = null;
 			pendingWonOpen = false;
 			pendingLostOpen = false;
+			// Re-seed the board from the reconciled store (won/lost removes the card).
+			seedColumns();
 		}
 	}
 
@@ -349,122 +343,160 @@
 
 	const wonMtd = $derived(parseFloat(pipelineStore.wonMtd || '0'));
 
-	const grouped = $derived.by(() => {
-		const m = new Map<string, OpportunityRow[]>();
-		for (const s of stages) m.set(s.id, []);
-		for (const o of filteredOpportunities) {
-			const list = m.get(o.stage_id);
-			if (list) list.push(o);
+	// --- Authoritative board model (canonical svelte-dnd-action pattern) ---
+	//
+	// `columns` is the SINGLE source of truth for BOTH rendering AND dragging. The
+	// drag engine owns these `items` arrays: every `consider`/`finalize` assigns
+	// `e.detail.items` straight in, and NOTHING re-derives `columns` from the store
+	// while a drag is in flight. That decoupling is the whole fix — the old design
+	// kept re-deriving `columns` from the store in a reactive effect, so any
+	// background load that resolved mid-drag would rebuild the arrays out from under
+	// the library and snap the held card back to its origin (the flicker bug).
+	//
+	// We re-seed `columns` from the store ONLY on explicit, drag-free moments:
+	// initial load, a filter change, and after a create/win/lose. Never on a timer,
+	// never mid-drag. Matches Pipedrive / Jobber / the library's documented Kanban.
+	//
+	// `$state.raw` (shallow) — NOT deep `$state`. svelte-dnd-action's canonical Svelte 5
+	// shape wants the drag arrays to be plain values it owns: every update reassigns a
+	// whole new array, nothing is deep-proxied and nothing is mutated in place. Deep
+	// `$state` here is what made the library's flip reconciliation fight our state
+	// (sveltejs/svelte#10115) and forced the fragile per-consider `flushSync`.
+	let columns = $state.raw<{ stage: PipelineStageRow; items: OpportunityRow[] }[]>([]);
+
+	// id -> the card's current stage, rebuilt on every seed. A cross-stage drop reads
+	// this to discover the card's ORIGIN without having to diff the live (already
+	// mutated) columns during the drag.
+	let stageByCard = new Map<string, string>();
+
+	// Rebuild `columns` (and `stageByCard`) from the store's filtered deals, grouped
+	// by stage in server sort order. Only ever called outside a drag.
+	function seedColumns() {
+		const g = new Map<string, OpportunityRow[]>();
+		for (const s of stages) g.set(s.id, []);
+		for (const o of filteredOpportunities) g.get(o.stage_id)?.push(o);
+		columns = stages.map((stage) => ({ stage, items: g.get(stage.id) ?? [] }));
+		stageByCard = new Map(filteredOpportunities.map((o) => [o.id, o.stage_id]));
+	}
+
+	// One-time seed the instant the board data is first ready. Guarded by `seeded`
+	// so it can NEVER become a continuous rebuild (which was the root cause). It
+	// re-runs on remount (revisit), re-seeding from the cached store.
+	let seeded = false;
+	$effect(() => {
+		if (!seeded && pipelineStore.status === 'ready' && stages.length > 0) {
+			seeded = true;
+			seedColumns();
 		}
-		return m;
 	});
 
-	function applyStage(id: string, toStageId: string) {
-		pipelineStore.applyStage(id, toStageId);
+	// Patch a single card in place — in the store (for KPIs + future re-seeds) and
+	// in whichever column currently holds it (for the live board). Used for edits
+	// that do NOT change stage/order (e.g. follow-up), so no re-group/reflow.
+	function patchCard(id: string, patch: Partial<OpportunityRow>) {
+		pipelineStore.update({ id, ...patch });
+		columns = columns.map((col) =>
+			col.items.some((i) => i.id === id)
+				? { ...col, items: col.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }
+				: col
+		);
 	}
 
-	function findStage(id: string) {
-		return stages.find((s) => s.id === id);
+	// Reassign `columns` wholesale (shallow `$state.raw`) so the drag arrays are never
+	// deep-proxied and never mutated in place — the canonical Svelte-5 shape the drag
+	// engine expects. Only the touched column gets a new object/array; untouched
+	// columns keep their identical `items` reference so their zone doesn't re-configure.
+	function setItems(stageId: string, items: OpportunityRow[]) {
+		columns = columns.map((c) => (c.stage.id === stageId ? { ...c, items } : c));
 	}
 
-	function reconcile(stageId: string, incoming: OpportunityRow[]) {
-		const incomingIds = new Set(incoming.map((i) => i.id));
-		const result: OpportunityRow[] = [];
-		for (let i = 0; i < opportunities.length; i++) {
-			const o = opportunities[i]!;
-			if (incomingIds.has(o.id)) continue;
-			if (o.stage_id === stageId && matchesFilters(o)) continue;
-			result.push(o);
-		}
-		for (let i = 0; i < incoming.length; i++) {
-			result.push({ ...incoming[i]!, stage_id: stageId });
-		}
-		return result;
-	}
-
-	// Origin of the in-flight drag, captured at DRAG_STARTED via the library's
-	// `info` API. We must NOT infer the source stage by diffing the store at drop
-	// time: `handleConsider` mutates the store mid-drag, so by finalize the card
-	// already reports the destination stage. Capturing the origin up front is the
-	// library's intended pattern for cross-zone moves.
-	let draggingId: string | null = null;
-	let dragOriginStage: string | null = null;
-
+	// consider + finalize both just hand the library's array straight back to the
+	// owning column — this IS the canonical contract, a plain assignment with NO
+	// `flushSync`. (The old `flushSync`-per-consider forced a synchronous reflow +
+	// re-entrant re-configure on every pointer frame, which was the flicker. The drop
+	// crash it was papering over is fixed at the source in svelte-dnd-action 0.9.70.)
 	function handleConsider(stageId: string) {
-		let rafPending = false;
-		let latestItems: OpportunityRow[] | null = null;
-		return (e: CustomEvent<DndEvent<OpportunityRow>>) => {
-			if (dndConsts && e.detail.info.trigger === dndConsts.TRIGGERS.DRAG_STARTED) {
-				draggingId = e.detail.info.id;
-				dragOriginStage = stageId;
-			}
-			latestItems = e.detail.items;
-			if (!rafPending) {
-				rafPending = true;
-				requestAnimationFrame(() => {
-					rafPending = false;
-					if (latestItems) {
-						pipelineStore.setOpportunities(reconcile(stageId, latestItems));
-					}
-				});
-			}
-		};
+		return (e: CustomEvent<DndEvent<OpportunityRow>>) => setItems(stageId, e.detail.items);
 	}
 
 	function handleFinalize(stageId: string) {
-		return async (e: CustomEvent<DndEvent<OpportunityRow>>) => {
-			// dndConsts is always set by the time a real finalize fires (the drag
-			// engine and the consts resolve from the same chunk).
-			if (!dndConsts) return;
-			const shadowMarker = dndConsts.SHADOW;
-			const cleanItems = e.detail.items.map((it) => {
-				const copy = { ...it } as Record<string, unknown>;
-				delete copy[shadowMarker];
-				return copy as OpportunityRow;
-			});
+		return (e: CustomEvent<DndEvent<OpportunityRow>>) => {
+			setItems(stageId, e.detail.items);
 
-			// Always reconcile this zone's items — both the source and destination
-			// zones receive a finalize on a cross-column move and each must update.
-			pipelineStore.setOpportunities(reconcile(stageId, cleanItems));
+			// finalize fires on BOTH the source and destination zones. Act only on the
+			// zone that now actually holds the card (destination, or a same-column
+			// settle); the source zone no longer contains it, so we skip.
+			const movedId = e.detail.info.id;
+			const col = columns.find((c) => c.stage.id === stageId);
+			if (!col || !col.items.some((i) => i.id === movedId)) return;
 
-			// A cross-column move emits TWO finalize events: DROPPED_INTO_ANOTHER on
-			// the source zone and DROPPED_INTO_ZONE on the destination. Only the
-			// destination side owns the persistence + origin bookkeeping. The source
-			// side just reconciles (above) and leaves the captured origin intact so
-			// the destination event — regardless of firing order — can still use it.
-			if (e.detail.info.trigger === dndConsts.TRIGGERS.DROPPED_INTO_ANOTHER) return;
+			const origin = stageByCard.get(movedId);
+			// Same-column reorder — auto-sort model persists nothing.
+			if (!origin || origin === stageId) return;
 
-			// Destination side (or a same-column reorder): consume the captured origin.
-			const movedId = draggingId;
-			const originalStage = dragOriginStage;
-			draggingId = null;
-			dragOriginStage = null;
-
-			// No tracked drag, or dropped back in its origin column → just a reorder.
-			if (!movedId || !originalStage || originalStage === stageId) return;
-
-			const target = findStage(stageId);
-			if (!target) return;
-
-			try {
-				const res = await fetch(`/api/pipeline/opportunities/${movedId}/stage`, {
-					method: 'PATCH',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({
-						stage_id: stageId,
-						from_stage_id: originalStage,
-						move_request_id: newRequestId()
-					})
-				});
-				if (res.status === 409) {
-					await handleStageConflict();
-					return;
-				}
-				if (!res.ok) applyStage(movedId, originalStage);
-			} catch {
-				applyStage(movedId, originalStage);
-			}
+			void persistMove(movedId, origin, stageId);
 		};
+	}
+
+	async function persistMove(id: string, fromStageId: string, toStageId: string) {
+		// Update the card's stage bookkeeping IN PLACE only. We deliberately do NOT
+		// reorder the destination array here: svelte-dnd-action is still running its
+		// drop animation, and re-sorting the settling list swaps the dropped card's
+		// DOM node out from under `animateDraggedToFinalPosition` — which throws
+		// "Cannot read properties of undefined (reading 'getBoundingClientRect')",
+		// leaves a stuck ghost clone on screen, and re-fires finalize several times
+		// (the burst of duplicate 409s). Mutating stage_id/stage_entered_at is
+		// prop-level and safe (keyed `each` never moves the node). The card stays
+		// exactly where the user dropped it; server sort order is applied on the next
+		// drag-free re-seed. Keep the store in sync for the KPI header + re-seeds.
+		stageByCard.set(id, toStageId);
+		// Stamp the moved card's new stage bookkeeping in its destination column
+		// IMMUTABLY (new object + new array, never in place). Same id/position means the
+		// keyed `each` reuses the node, so this never fights the running drop animation.
+		const enteredAt = new Date().toISOString();
+		columns = columns.map((c) =>
+			c.stage.id === toStageId
+				? {
+						...c,
+						items: c.items.map((i) =>
+							i.id === id ? { ...i, stage_id: toStageId, stage_entered_at: enteredAt } : i
+						)
+					}
+				: c
+		);
+		pipelineStore.moveToStage(id, toStageId);
+
+		try {
+			const res = await fetch(`/api/pipeline/opportunities/${id}/stage`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					stage_id: toStageId,
+					from_stage_id: fromStageId,
+					move_request_id: newRequestId()
+				})
+			});
+			if (res.status === 409) {
+				// Someone else moved it first — re-pull and re-seed to reconcile.
+				await pipelineStore.refreshOpportunities();
+				seedColumns();
+				return;
+			}
+			if (!res.ok) {
+				revertMove(id, fromStageId);
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				toast.error(body.error ?? 'Failed to move deal.');
+			}
+		} catch {
+			revertMove(id, fromStageId);
+			toast.error('Failed to move deal.');
+		}
+	}
+
+	function revertMove(id: string, originStageId: string) {
+		stageByCard.set(id, originStageId);
+		pipelineStore.applyStage(id, originStageId);
+		seedColumns();
 	}
 
 	async function openDetail(id: string) {
@@ -488,11 +520,15 @@
 		detail = next;
 		opportunityDetailStore.set(next.id, next);
 		pipelineStore.update(next);
+		// The detail sheet can change the stage — re-seed so the card lands in the
+		// right column. Safe: a detail edit never overlaps an in-flight drag.
+		seedColumns();
 	}
 
 	async function onCreated(id: string) {
 		createOpen = false;
 		await pipelineStore.refreshOpportunities();
+		seedColumns();
 		await openDetail(id);
 	}
 </script>
@@ -506,17 +542,16 @@
 >
 	{#snippet actions()}
 		{#if canCreate}
-			<Button onclick={() => openCreate(null)}><Plus class="h-4 w-4" /> New</Button>
+			<Button onclick={() => openCreate(null)}><i class="ri-add-line" aria-hidden="true"></i> New</Button>
 		{/if}
 	{/snippet}
 
 	{#if loading}
 		<SkeletonLoader lines={6} height="80px" label="Loading pipeline" />
 	{:else if errorMsg}
-		<EmptyState icon={GitBranch} title="Couldn't load pipeline" description={errorMsg} />
+		<EmptyState title="Couldn't load pipeline" description={errorMsg} />
 	{:else if stages.length === 0}
 		<EmptyState
-			icon={GitBranch}
 			title="No pipeline stages"
 			description="Your default stages should be created on org setup. Contact support if this persists."
 		/>
@@ -530,46 +565,29 @@
 			onClear={clearFilters}
 		/>
 		{#if showStageTotal}
-			<div
-				class="mb-3 grid grid-cols-3 gap-2 rounded-lg border border-border/60 bg-card p-2 text-center sm:gap-3 sm:p-3"
-			>
-				<div>
-					<div class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						Open
-					</div>
-					<div class="text-sm font-semibold tabular-nums text-foreground sm:text-base">
-						{formatCurrency(openPipeline)}
-					</div>
+			<div class="pipeline-kpi">
+				<div class="pipeline-kpi__cell">
+					<div class="pipeline-kpi__label">Open</div>
+					<div class="pipeline-kpi__value">{formatCurrency(openPipeline)}</div>
 				</div>
-				<div class="border-x border-border/60">
-					<div class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						Forecast
-					</div>
-					<div class="text-sm font-semibold tabular-nums text-foreground sm:text-base">
-						{formatCurrency(weightedForecast)}
-					</div>
+				<div class="pipeline-kpi__cell">
+					<div class="pipeline-kpi__label">Forecast</div>
+					<div class="pipeline-kpi__value">{formatCurrency(weightedForecast)}</div>
 				</div>
-				<div>
-					<div class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						Won MTD
-					</div>
-					<div class="text-sm font-semibold tabular-nums text-emerald-600 sm:text-base">
-						{formatCurrency(wonMtd)}
-					</div>
+				<div class="pipeline-kpi__cell">
+					<div class="pipeline-kpi__label">Won MTD</div>
+					<div class="pipeline-kpi__value pipeline-kpi__value--success">{formatCurrency(wonMtd)}</div>
 				</div>
 			</div>
 		{/if}
-		<div
-			class="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 md:mx-0 md:px-0 md:snap-none"
-			style="height: calc(100vh - 220px); min-height: 480px; touch-action: pan-x;"
-		>
-			{#each stages as stage (stage.id)}
+		<div class="pipeline" style="height: calc(100vh - 220px); min-height: 480px; touch-action: pan-x;">
+			{#each columns as col (col.stage.id)}
 				<PipelineColumn
-					stageId={stage.id}
-					stageName={stage.name}
-					stageColor={stage.color}
-					staleAfterDays={stage.stale_after_days}
-					items={grouped.get(stage.id) ?? []}
+					stageId={col.stage.id}
+					stageName={col.stage.name}
+					stageColor={col.stage.color}
+					staleAfterDays={col.stage.stale_after_days}
+					items={col.items}
 					canDrag={canMove}
 					canAdd={canCreate}
 					canMarkStatus={canMove}
@@ -577,8 +595,8 @@
 					{isFiltering}
 					fill={fillColumns}
 					ghostLeadDays={org().ghost_lead_days}
-					onConsider={handleConsider(stage.id)}
-					onFinalize={handleFinalize(stage.id)}
+					onConsider={handleConsider(col.stage.id)}
+					onFinalize={handleFinalize(col.stage.id)}
 					onCardClick={openDetail}
 					onAdd={openCreate}
 					{onMarkStatus}

@@ -12,6 +12,13 @@ export function invoiceSentEvent(args: {
 	publicToken: string | null;
 	paymentLinkUrl: string | null;
 	dueDate: string | null;
+	// Channels the contractor chose to deliver on. Null = legacy/default (every
+	// available channel). The worker still hard-blocks SMS on opt-out.
+	channels?: ('email' | 'sms')[] | null;
+	// Optional message overrides (merge tokens, interpolated at delivery). Null = default copy.
+	smsBody?: string | null;
+	emailSubject?: string | null;
+	emailBody?: string | null;
 }): NewOutboxEvent {
 	return {
 		org_id: args.orgId,
@@ -27,9 +34,39 @@ export function invoiceSentEvent(args: {
 			invoice_number_display: args.invoiceNumberDisplay,
 			public_token: args.publicToken,
 			payment_link_url: args.paymentLinkUrl,
-			due_date: args.dueDate
+			due_date: args.dueDate,
+			channels: args.channels ?? null,
+			sms_body: args.smsBody ?? null,
+			email_subject: args.emailSubject ?? null,
+			email_body: args.emailBody ?? null
 		},
 		idempotency_key: `invoice.sent:${args.invoiceId}:${randomUUID()}`
+	};
+}
+
+// Emitted only for already-sent invoices when the contractor flips the per-invoice
+// "Send automatic payment reminders" switch. The automation worker re-enrolls the
+// invoice into dunning (enabled) or stops its pending reminders (disabled). Each
+// toggle is a distinct event (random idempotency key) — never deduped.
+export function invoiceRemindersToggledEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	contactId: string;
+	enabled: boolean;
+	dueDate: string | null;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'invoice.reminders_toggled',
+		resource_type: 'invoice',
+		resource_id: args.invoiceId,
+		payload: {
+			invoice_id: args.invoiceId,
+			contact_id: args.contactId,
+			enabled: args.enabled,
+			due_date: args.dueDate
+		},
+		idempotency_key: `invoice.reminders_toggled:${args.invoiceId}:${randomUUID()}`
 	};
 }
 

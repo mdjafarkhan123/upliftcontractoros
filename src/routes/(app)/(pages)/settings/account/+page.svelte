@@ -1,16 +1,11 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import UnsavedChangesGuard from '$lib/components/settings/UnsavedChangesGuard.svelte';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { cn } from '$lib/utils/cn';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getBrowserSupabase } from '$lib/supabase/browser';
-	import { Lock, Eye, EyeOff, AlertCircle, Check, X, Mail, User } from '@lucide/svelte';
 
 	type Account = {
 		id: string;
@@ -49,14 +44,6 @@
 
 	const roleLabel = $derived(
 		original?.role === 'admin' ? 'Admin' : original?.role === 'manager' ? 'Manager' : 'Member'
-	);
-
-	const roleBadgeClass = $derived(
-		original?.role === 'admin'
-			? 'bg-primary/10 text-primary border-primary/20'
-			: original?.role === 'manager'
-				? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-				: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
 	);
 
 	const pwRules = $derived([
@@ -168,280 +155,194 @@
 
 <PageWrapper title="Account" subtitle="Your name, email, and password" back="/settings">
 	{#if loading || !form}
-		<div class="mx-auto w-full max-w-2xl space-y-4">
+		<div class="settings-form">
 			<SkeletonLoader lines={2} label="Loading profile" height="80px" />
 			<SkeletonLoader lines={6} label="Loading account" height="48px" />
 		</div>
 	{:else}
-		<div class="mx-auto w-full max-w-2xl space-y-4 pb-24">
-			<!-- Profile header — identity block -->
-			<Card
-				class="overflow-hidden border-border/60 bg-card shadow-card transition-shadow duration-200 hover:shadow-dropdown"
-			>
-				<CardContent class="p-5">
-					<div class="flex items-center gap-4">
-						<div
-							class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary ring-2 ring-primary/15"
-						>
-							{initials}
+		<div class="settings-form">
+			<!-- Identity hero -->
+			<div class="settings-card">
+				<div class="settings-card__body">
+					<div class="settings-identity">
+						<div class="settings-identity__avatar">{initials}</div>
+						<div class="settings-identity__info">
+							<p class="settings-identity__name">{original?.full_name}</p>
+							<p class="settings-identity__email">{original?.email}</p>
 						</div>
-						<div class="min-w-0 flex-1">
-							<p class="truncate text-base font-semibold text-foreground">
-								{original?.full_name}
-							</p>
-							<p class="truncate text-sm text-muted-foreground">{original?.email}</p>
-						</div>
-						<span
-							class={cn(
-								'shrink-0 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-								roleBadgeClass
-							)}
-						>
-							{roleLabel}
-						</span>
+						<span class="role-pill role-pill--{original?.role}">{roleLabel}</span>
 					</div>
-				</CardContent>
-			</Card>
+				</div>
+			</div>
 
-			<!-- Profile section -->
-			<p class="px-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Profile
-			</p>
+			<!-- Profile -->
+			<p class="settings-eyebrow">Profile</p>
 			<form
 				onsubmit={(e) => {
 					e.preventDefault();
 					void save();
 				}}
 			>
-				<Card class="border-border/60 bg-card shadow-card">
-					<CardContent class="space-y-5 p-5">
-						<div class="flex flex-col gap-1.5">
-							<Label for="full_name">
-								Full name <span class="text-destructive">*</span>
-							</Label>
-							<div class="relative">
-								<User
-									class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
-								/>
-								<Input
+				<div class="settings-card">
+					<div class="settings-card__body">
+						<div class="field">
+							<label class="field__label field__label--required" for="full_name">Full name</label>
+							<div class="field__input-wrap">
+								<i class="field__icon ri-user-line" aria-hidden="true"></i>
+								<input
 									id="full_name"
+									class="field__input"
+									data-invalid={fieldErrors.full_name ? '' : undefined}
 									bind:value={form.full_name}
 									required
 									maxlength={200}
 									autocomplete="name"
-									class={cn(
-										'pl-9 transition-colors duration-150',
-										fieldErrors.full_name &&
-											'border-destructive/50 focus-visible:border-destructive focus-visible:ring-destructive/20'
-									)}
 								/>
 							</div>
 							{#if fieldErrors.full_name}
-								<p class="flex items-center gap-1 text-xs text-destructive">
-									<AlertCircle class="h-3 w-3" />
-									{fieldErrors.full_name}
-								</p>
+								<p class="field__error">{fieldErrors.full_name}</p>
 							{/if}
 						</div>
 
-						<div class="flex flex-col gap-1.5">
-							<Label for="email">
-								Email <span class="text-destructive">*</span>
-							</Label>
-							<div class="relative">
-								<Mail
-									class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
-								/>
-								<Input
+						<div class="field">
+							<label class="field__label field__label--required" for="email">Email</label>
+							<div class="field__input-wrap">
+								<i class="field__icon ri-mail-line" aria-hidden="true"></i>
+								<input
 									id="email"
 									type="email"
+									class="field__input"
+									data-invalid={fieldErrors.email ? '' : undefined}
 									bind:value={form.email}
 									required
 									autocomplete="email"
-									class={cn(
-										'pl-9 transition-colors duration-150',
-										fieldErrors.email &&
-											'border-destructive/50 focus-visible:border-destructive focus-visible:ring-destructive/20'
-									)}
 								/>
 							</div>
 							{#if fieldErrors.email}
-								<p class="flex items-center gap-1 text-xs text-destructive">
-									<AlertCircle class="h-3 w-3" />
-									{fieldErrors.email}
-								</p>
+								<p class="field__error">{fieldErrors.email}</p>
 							{:else}
-								<p class="text-xs text-muted-foreground">
+								<p class="field__hint">
 									Changing your email updates the address you use to sign in.
 								</p>
 							{/if}
 						</div>
-					</CardContent>
+					</div>
 
 					{#if dirty}
-						<div
-							class="flex flex-col-reverse items-stretch gap-2 border-t border-border/60 bg-muted/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-end"
-						>
-							<p
-								class="flex items-center gap-2 text-xs font-medium text-amber-700 sm:mr-auto dark:text-amber-400"
-							>
-								<span class="relative flex h-2 w-2">
-									<span
-										class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"
-									></span>
-									<span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
-								</span>
+						<div class="unsaved-bar">
+							<span class="unsaved-bar__status">
+								<span class="unsaved-bar__dot"></span>
 								Unsaved changes
-							</p>
-							<Button
-								variant="outline"
-								type="button"
-								disabled={saving}
-								onclick={resetForm}
-								class="min-h-[44px] sm:min-h-0"
-							>
+							</span>
+							<Button variant="secondary" disabled={saving} onclick={resetForm}>
 								Discard
 							</Button>
-							<Button type="submit" disabled={saving} class="min-h-[44px] sm:min-h-0">
-								{saving ? 'Saving…' : 'Save changes'}
+							<Button type="submit" loading={saving} loadingLabel="Saving…">
+								Save changes
 							</Button>
 						</div>
 					{/if}
-				</Card>
+				</div>
 			</form>
 
-			<!-- Security section -->
-			<p class="px-1 pt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Security
-			</p>
+			<!-- Security -->
+			<p class="settings-eyebrow">Security</p>
 			<form
 				onsubmit={(e) => {
 					e.preventDefault();
 					void changePassword();
 				}}
 			>
-				<Card class="border-border/60 bg-card shadow-card">
-					<CardContent class="space-y-5 p-5">
-						<div class="flex items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-							>
-								<Lock class="h-5 w-5" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<h3 class="text-sm font-semibold text-foreground">Password</h3>
-								<p class="text-xs text-muted-foreground">
-									Use at least 8 characters. Choose something strong you haven't used elsewhere.
-								</p>
-							</div>
+				<div class="settings-card">
+					<div class="settings-card__header">
+						<span class="settings-card__head-icon"
+							><i class="ri-lock-line" aria-hidden="true"></i></span
+						>
+						<div class="settings-card__head-text">
+							<p class="settings-card__title">Password</p>
+							<p class="settings-card__desc">
+								Use at least 8 characters. Choose something strong you haven't used elsewhere.
+							</p>
 						</div>
-
-						<div class="flex flex-col gap-1.5">
-							<Label for="pw_new">
-								New password <span class="text-destructive">*</span>
-							</Label>
-							<div class="relative">
-								<Lock
-									class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
-								/>
-								<Input
+					</div>
+					<div class="settings-card__body">
+						<div class="field">
+							<label class="field__label field__label--required" for="pw_new">New password</label>
+							<div class="pw-field">
+								<i class="pw-field__icon ri-lock-line" aria-hidden="true"></i>
+								<input
 									id="pw_new"
+									class="field__input"
 									type={showPw.new ? 'text' : 'password'}
 									autocomplete="new-password"
 									bind:value={pwForm.password}
 									minlength={8}
 									required
-									class="px-9 transition-colors duration-150"
 								/>
 								<button
 									type="button"
+									class="pw-field__reveal"
 									onclick={() => (showPw.new = !showPw.new)}
 									aria-label={showPw.new ? 'Hide password' : 'Show password'}
 									aria-pressed={showPw.new}
-									class="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								>
-									{#if showPw.new}
-										<EyeOff class="h-4 w-4" />
-									{:else}
-										<Eye class="h-4 w-4" />
-									{/if}
+									<i class={showPw.new ? 'ri-eye-off-line' : 'ri-eye-line'} aria-hidden="true"></i>
 								</button>
 							</div>
 						</div>
 
-						<div class="flex flex-col gap-1.5">
-							<Label for="pw_confirm">
-								Confirm new password <span class="text-destructive">*</span>
-							</Label>
-							<div class="relative">
-								<Lock
-									class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
-								/>
-								<Input
+						<div class="field">
+							<label class="field__label field__label--required" for="pw_confirm">
+								Confirm new password
+							</label>
+							<div class="pw-field">
+								<i class="pw-field__icon ri-lock-line" aria-hidden="true"></i>
+								<input
 									id="pw_confirm"
+									class="field__input"
 									type={showPw.confirm ? 'text' : 'password'}
 									autocomplete="new-password"
 									bind:value={pwForm.confirm}
 									minlength={8}
 									required
-									class="px-9 transition-colors duration-150"
 								/>
 								<button
 									type="button"
+									class="pw-field__reveal"
 									onclick={() => (showPw.confirm = !showPw.confirm)}
 									aria-label={showPw.confirm ? 'Hide password' : 'Show password'}
 									aria-pressed={showPw.confirm}
-									class="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								>
-									{#if showPw.confirm}
-										<EyeOff class="h-4 w-4" />
-									{:else}
-										<Eye class="h-4 w-4" />
-									{/if}
+									<i class={showPw.confirm ? 'ri-eye-off-line' : 'ri-eye-line'} aria-hidden="true"
+									></i>
 								</button>
 							</div>
 						</div>
 
 						{#if pwForm.password.length > 0}
-							<div
-								class="rounded-lg border border-border/60 bg-muted/30 p-3"
-								aria-label="Password requirements"
-							>
-								<ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-									{#each pwRules as rule}
-										<li
-											class={cn(
-												'flex items-center gap-1.5 text-xs transition-colors duration-150',
-												rule.met
-													? 'text-emerald-600 dark:text-emerald-400'
-													: 'text-muted-foreground'
-											)}
-										>
-											{#if rule.met}
-												<Check class="h-3 w-3" />
-											{:else}
-												<X class="h-3 w-3" />
-											{/if}
-											{rule.label}
-										</li>
-									{/each}
-								</ul>
+							<div class="pw-rules" aria-label="Password requirements">
+								{#each pwRules as rule}
+									<span class="pw-rules__item" class:pw-rules__item--met={rule.met}>
+										<i class={rule.met ? 'ri-check-line' : 'ri-close-line'} aria-hidden="true"></i>
+										{rule.label}
+									</span>
+								{/each}
 							</div>
 						{/if}
 
 						{#if pwError}
-							<p class="flex items-center gap-1 text-xs text-destructive">
-								<AlertCircle class="h-3 w-3" />
+							<p class="field__error">
+								<i class="ri-error-warning-line" aria-hidden="true"></i>
 								{pwError}
 							</p>
 						{/if}
-					</CardContent>
-					<div class="flex justify-end border-t border-border/60 bg-muted/30 px-5 py-4">
-						<Button type="submit" disabled={pwSaving || pwForm.password.length === 0}>
-							{pwSaving ? 'Updating…' : 'Update password'}
+					</div>
+					<div class="settings-card__footer">
+						<Button type="submit" disabled={pwForm.password.length === 0} loading={pwSaving} loadingLabel="Updating…">
+							Update password
 						</Button>
 					</div>
-				</Card>
+				</div>
 			</form>
 		</div>
 	{/if}

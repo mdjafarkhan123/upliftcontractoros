@@ -109,6 +109,7 @@ export const POST: RequestHandler = async (event) => {
 			.set({
 				status: 'sent',
 				public_token_hash: tokenHash,
+				public_token: rawToken,
 				sent_at: sentAt,
 				expires_at: expiresAt,
 				updated_at: sentAt

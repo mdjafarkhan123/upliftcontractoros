@@ -1,0 +1,1242 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// UI PRIMITIVES — BEM blocks for shared bits-ui/headless component wrappers.
+// Covers: Select, DropdownMenu, Popover, Tabs, Switch, Alert, Sheet additions.
+// Input / Label / Textarea map to .field__* in _field.scss (already done).
+// Dialog overlay/content map to .dialog-* in _dialog.scss (already done).
+// =============================================================================
+
+// Shared float animation — used by select, dropdown, popover
+@keyframes popover-in {
+	from {
+		opacity: 0;
+		transform: scale(0.97) translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+@keyframes popover-out {
+	from {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.97) translateY(-4px);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SELECT
+// -----------------------------------------------------------------------------
+.ui-select {
+	&__trigger {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-4;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover:not([data-disabled]) {
+			border-color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&[data-placeholder] {
+			color: var(--color-text-muted);
+		}
+		&[data-disabled] {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		i {
+			color: var(--color-text-muted);
+			font-size: 1.8rem;
+			flex-shrink: 0;
+		}
+	}
+
+	&__content {
+		position: relative;
+		// Portaled to <body>; must sit above a dialog backdrop ($z-modal) so the
+		// Select menu is visible/clickable when opened from inside a modal.
+		z-index: $z-popover;
+		max-height: min(60vh, 22rem);
+		min-width: max(8rem, var(--bits-floating-anchor-width, 8rem));
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-lg);
+
+		&[data-state='open'] {
+			animation: popover-in $duration-base $ease-standard;
+		}
+		&[data-state='closed'] {
+			animation: popover-out $duration-fast $ease-standard;
+		}
+	}
+
+	&__viewport {
+		max-height: inherit;
+		overflow-y: auto;
+		padding: $space-1;
+	}
+
+	&__item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-height: 44px;
+		width: 100%;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		cursor: pointer;
+		user-select: none;
+		color: var(--color-text-primary);
+		transition: background-color $duration-fast $ease-standard;
+
+		&[data-highlighted] {
+			background: var(--state-active-tint);
+		}
+		&[data-selected] {
+			font-weight: $weight-medium;
+			color: var(--color-brand);
+		}
+		&[data-disabled] {
+			pointer-events: none;
+			opacity: 0.5;
+		}
+
+		// Check icon — hidden by default, shown when selected
+		.ui-select__item-check {
+			margin-left: auto;
+			font-size: 1.4rem;
+			color: var(--color-brand);
+			opacity: 0;
+			transition: opacity $duration-fast $ease-standard;
+		}
+
+		&[data-selected] .ui-select__item-check {
+			opacity: 1;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DROPDOWN MENU
+// -----------------------------------------------------------------------------
+.dropdown {
+	&__content {
+		z-index: $z-dropdown;
+		min-width: 14rem;
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-2;
+		box-shadow: var(--shadow-lg);
+
+		&[data-state='open'] {
+			animation: popover-in $duration-base $ease-standard;
+		}
+		&[data-state='closed'] {
+			animation: popover-out $duration-fast $ease-standard;
+		}
+	}
+
+	&__item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-height: 30px;
+		width: 100%;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		cursor: pointer;
+		user-select: none;
+		color: var(--color-text-primary);
+		border: none;
+		background: transparent;
+		text-align: left;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:focus,
+		&[data-highlighted] {
+			background: var(--state-active-tint);
+			outline: none;
+		}
+		&[data-disabled] {
+			pointer-events: none;
+			opacity: 0.5;
+		}
+
+		&--destructive {
+			color: var(--danger-text);
+			&:focus,
+			&[data-highlighted] {
+				background: var(--danger-bg);
+			}
+		}
+	}
+
+	&__label {
+		padding: $space-2 $space-3;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__sep {
+		height: 1px;
+		background: var(--color-border);
+		margin: $space-1 0;
+	}
+}
+
+// "Add new" quick-create popup — portaled (position: fixed); force it above
+// other layers per request.
+.add-new__menu {
+	z-index: 200;
+	min-width: 20rem;
+}
+
+// -----------------------------------------------------------------------------
+// CONTACT PICKER — shared client search+select (ContactPicker.svelte). Search
+// field with icon + spinner, recent-on-focus list, and a selected chip. Used by
+// the New Job form and the Schedule quick-create popup; keep it here (global) so
+// every host renders it identically.
+// -----------------------------------------------------------------------------
+.contact-picker {
+	position: relative;
+
+	&__field {
+		position: relative;
+
+		.field__input {
+			padding-left: 2.5rem;
+		}
+	}
+
+	&__icon {
+		position: absolute;
+		left: $space-3;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 1.6rem;
+		color: var(--color-text-muted);
+		pointer-events: none;
+		z-index: 1;
+	}
+
+	// Selected-client chip (name + phone + Change).
+	&__selected {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__selected-info {
+		min-width: 0;
+	}
+	&__selected-name {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	&__selected-phone {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+}
+
+// Floating results dropdown for ContactPicker. Portaled to <body> (via bits-ui
+// Popover) so it never grows its host or gets clipped by a popup's overflow, and
+// anchored under the input via `customAnchor`. Because it lives at body level it
+// must be a top-level class — a selector nested under `.contact-picker` would not
+// match the portaled node. Width tracks the anchored input.
+.contact-picker-panel {
+	z-index: $z-popover;
+	width: var(--bits-floating-anchor-width);
+	max-height: 224px;
+	overflow-y: auto;
+	padding: $space-1;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-lg);
+	outline: none;
+
+	&__results {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__result {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		width: 100%;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+		font-family: $font-body;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--state-active-tint);
+		}
+	}
+
+	&__result-name {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__result-phone {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__status {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin: 0;
+		padding: $space-2 $space-3;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__spinner {
+		font-size: 1.4rem;
+		color: var(--color-brand);
+		animation: spin 0.7s linear infinite;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// POPOVER
+// -----------------------------------------------------------------------------
+.popover__content {
+	z-index: $z-dropdown;
+	border-radius: $radius-lg;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	padding: $space-4;
+	box-shadow: var(--shadow-lg);
+	outline: none;
+
+	&[data-state='open'] {
+		animation: popover-in $duration-base $ease-standard;
+	}
+	&[data-state='closed'] {
+		animation: popover-out $duration-fast $ease-standard;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TABS
+// -----------------------------------------------------------------------------
+.tabs {
+	&__list {
+		display: inline-flex;
+		align-items: center;
+		justify-content: flex-start;
+		gap: $space-1;
+		height: 44px;
+		width: 100%;
+		overflow-x: auto;
+		border-radius: $radius-xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		padding: $space-1;
+		scrollbar-width: none;
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	&__trigger {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		white-space: nowrap;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		border: none;
+		background: transparent;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover:not([data-disabled]) {
+			color: var(--color-text-primary);
+		}
+		&:disabled,
+		&[data-disabled] {
+			pointer-events: none;
+			opacity: 0.5;
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&[data-state='active'] {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	&__content {
+		margin-top: $space-4;
+		&:focus-visible {
+			outline: none;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SWITCH
+// -----------------------------------------------------------------------------
+.ui-switch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	width: 44px;
+	height: 24px;
+	flex-shrink: 0;
+	border-radius: $radius-full;
+	border: none;
+	cursor: pointer;
+	background: var(--color-border-strong);
+	padding: 0;
+	transition: background-color $duration-base $ease-standard;
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	&[aria-checked='true'] {
+		background: var(--color-brand);
+	}
+
+	&__thumb {
+		pointer-events: none;
+		display: block;
+		width: 20px;
+		height: 20px;
+		border-radius: $radius-full;
+		background: white;
+		box-shadow: var(--shadow-xs);
+		transform: translateX(2px);
+		transition: transform $duration-base $ease-standard;
+	}
+
+	&[aria-checked='true'] &__thumb {
+		transform: translateX(22px);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ALERT
+// -----------------------------------------------------------------------------
+.ui-alert {
+	position: relative;
+	width: 100%;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	color: var(--color-text-primary);
+	padding: $space-3 $space-4;
+	font-size: $fs-body;
+
+	&--destructive {
+		border-color: rgba(225, 29, 72, 0.3);
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+
+	&--success {
+		border-color: rgba(34, 128, 82, 0.2);
+		background: var(--success-bg);
+		color: var(--success-text);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ALERT description element
+// -----------------------------------------------------------------------------
+.ui-alert__description {
+	font-size: $fs-body;
+	line-height: $lh-body;
+}
+
+// -----------------------------------------------------------------------------
+// LABEL (supplement to .field__label for standalone use)
+// -----------------------------------------------------------------------------
+.ui-label {
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-primary);
+	line-height: 1;
+	cursor: default;
+
+	&[for] {
+		cursor: pointer;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DATE-TIME PICKER — calendar + time-list popover. Trigger looks like a field
+// input; content overrides the base .popover__content sizing/padding.
+// -----------------------------------------------------------------------------
+
+// The popover surface override (added alongside .popover__content on the element)
+.dtp__popover {
+	width: auto;
+	max-width: calc(100vw - 32px);
+	padding: 0;
+	overflow: hidden;
+	box-shadow: var(--shadow-lg);
+	// Portaled to <body>; must sit above a modal backdrop ($z-modal) so the picker
+	// is visible/clickable when opened from inside a dialog (e.g. the Schedule
+	// quick-create popup's Start/End fields), matching the Select menu pattern.
+	z-index: $z-popover;
+}
+
+.dtp {
+	// Two-panel shell: calendar left, time-list right
+	&__panels {
+		display: flex;
+		flex-direction: column;
+
+		@media (min-width: 640px) {
+			flex-direction: row;
+			height: 326px;
+		}
+	}
+
+	// Trigger — styled like a field input + icon
+	&__trigger {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-4;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-text-muted);
+			flex-shrink: 0;
+		}
+		span {
+			flex: 1;
+			text-align: left;
+		}
+	}
+
+	&__trigger--empty {
+		color: var(--color-text-muted);
+	}
+
+	// Calendar panel
+	&__cal {
+		display: flex;
+		flex-direction: column;
+		padding: $space-4;
+	}
+
+	// Month nav row
+	&__nav {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-bottom: $space-3;
+	}
+
+	&__nav-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__month-label {
+		flex: 1;
+		min-width: 138px;
+		text-align: center;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// Day-of-week headers
+	&__day-headers {
+		display: grid;
+		grid-template-columns: repeat(7, 36px);
+		margin-bottom: $space-1;
+	}
+
+	&__day-hdr {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 32px;
+		font-size: 11px;
+		font-weight: $weight-medium;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	// Days grid
+	&__days {
+		display: grid;
+		grid-template-columns: repeat(7, 36px);
+	}
+
+	&__day {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			pointer-events: none;
+			color: rgba(0, 0, 0, 0);
+		}
+
+		&--out {
+			color: var(--color-text-muted);
+			opacity: 0.3;
+		}
+		// Below the min bound (e.g. an end date earlier than the start): visibly greyed
+		// but the number stays readable, and it can't be clicked. Overrides the bare
+		// :disabled transparent-text rule above.
+		&--disabled {
+			color: var(--color-text-muted);
+			opacity: 0.35;
+			pointer-events: none;
+			text-decoration: line-through;
+		}
+		&--today {
+			font-weight: $weight-semibold;
+		}
+		&--selected {
+			background: var(--color-brand);
+			color: white;
+			font-weight: $weight-medium;
+		}
+		&--selected:hover {
+			background: var(--color-brand);
+		}
+	}
+
+	&__today-dot {
+		position: absolute;
+		bottom: 3px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 5px;
+		height: 5px;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+	}
+
+	// Thin divider between calendar + time panels
+	&__divider {
+		height: 1px;
+		background: var(--color-border);
+
+		@media (min-width: 640px) {
+			width: 1px;
+			height: auto;
+		}
+	}
+
+	// Time list panel
+	&__times {
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		padding: $space-1 0;
+		max-height: 220px;
+		scrollbar-width: thin;
+
+		@media (min-width: 640px) {
+			width: 116px;
+			flex-shrink: 0;
+			max-height: none;
+		}
+	}
+
+	&__time {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		height: 36px;
+		flex-shrink: 0;
+		padding: 0 $space-4;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&--selected {
+			background: var(--color-bg-surface-sunk);
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+		}
+		&:disabled {
+			opacity: 0.35;
+			cursor: not-allowed;
+			text-decoration: line-through;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// NATIVE SELECT — legacy <select> wrapper (chevron + optional leading icon).
+// Self-sufficient: composes with any caller-passed class appended after the base.
+// -----------------------------------------------------------------------------
+.native-select {
+	position: relative;
+
+	&__field {
+		display: block;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-8 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		appearance: none;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&--has-leading {
+			padding-left: $space-10;
+		}
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__leading,
+	&__chevron {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		pointer-events: none;
+		color: var(--color-text-muted);
+	}
+	&__leading {
+		left: $space-3;
+	}
+	&__chevron {
+		right: $space-3;
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DATE PICKER (date-only) — calendar popover. Sibling of .dtp (date + time).
+// Trigger looks like a field input; content overrides .popover__content sizing.
+// -----------------------------------------------------------------------------
+.cal-pick {
+	display: flex;
+	flex-direction: column;
+	padding: $space-4;
+
+	// Popover surface override (added alongside .popover__content on the element)
+	&__popover {
+		width: auto;
+		max-width: calc(100vw - 32px);
+		padding: 0;
+		overflow: hidden;
+		box-shadow: var(--shadow-lg);
+		// Portaled to <body>; must sit above a modal backdrop ($z-modal) so the
+		// calendar is visible/clickable when opened from inside a dialog (e.g. the
+		// Schedule quick-create popup), matching the Select menu pattern.
+		z-index: $z-popover;
+	}
+
+	// Trigger — styled like a field input + icon
+	&__trigger {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-4;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-text-muted);
+			flex-shrink: 0;
+		}
+		span {
+			flex: 1;
+			text-align: left;
+		}
+	}
+
+	&__trigger--empty {
+		color: var(--color-text-muted);
+	}
+
+	// Month nav row
+	&__nav {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-bottom: $space-3;
+	}
+
+	&__nav-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__month-label {
+		flex: 1;
+		min-width: 138px;
+		text-align: center;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// Day-of-week headers
+	&__day-headers {
+		display: grid;
+		grid-template-columns: repeat(7, 36px);
+		margin-bottom: $space-1;
+	}
+
+	&__day-hdr {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 32px;
+		font-size: 11px;
+		font-weight: $weight-medium;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	// Days grid
+	&__days {
+		display: grid;
+		grid-template-columns: repeat(7, 36px);
+	}
+
+	&__day {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		// Out-of-month + before-min days: visible but dimmed, non-interactive
+		&--muted {
+			pointer-events: none;
+			color: var(--color-text-muted);
+			opacity: 0.35;
+		}
+		&--today {
+			font-weight: $weight-semibold;
+		}
+		&--selected {
+			background: var(--color-brand);
+			color: white;
+			font-weight: $weight-medium;
+		}
+		&--selected:hover {
+			background: var(--color-brand);
+		}
+	}
+
+	&__today-dot {
+		position: absolute;
+		bottom: 3px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 5px;
+		height: 5px;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+	}
+
+	// Clear-date button
+	&__clear {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 32px;
+		margin-top: $space-2;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TIME PICKER (time-only) — scrollable 30-min slot list in a popover. Sibling of
+// .dtp / .cal-pick; pairs with a Calendar for a date + separate start/end time.
+// Trigger looks like a field input; content overrides .popover__content sizing.
+// -----------------------------------------------------------------------------
+.tp {
+	// Popover surface override (added alongside .popover__content on the element)
+	&__popover {
+		width: 160px;
+		max-width: calc(100vw - 32px);
+		padding: 0;
+		overflow: hidden;
+		box-shadow: var(--shadow-lg);
+		// Portaled to <body>; sit above a modal backdrop so it's usable inside a dialog.
+		z-index: $z-popover;
+	}
+
+	// Trigger — styled like a field input + icon
+	&__trigger {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-4;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+		}
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-text-muted);
+			flex-shrink: 0;
+		}
+		span {
+			flex: 1;
+			text-align: left;
+		}
+	}
+
+	&__trigger--empty {
+		color: var(--color-text-muted);
+	}
+
+	// Slot list
+	&__list {
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		padding: $space-1 0;
+		max-height: 260px;
+		scrollbar-width: thin;
+	}
+
+	&__time {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		height: 36px;
+		flex-shrink: 0;
+		padding: 0 $space-4;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		font-family: $font-body;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&--selected {
+			background: var(--color-bg-surface-sunk);
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+		}
+		&:disabled {
+			opacity: 0.35;
+			cursor: not-allowed;
+			text-decoration: line-through;
+		}
+	}
+
+	// Clear button (sits below the list; shown only when a time is set)
+	&__clear {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 32px;
+		border: none;
+		border-top: 1px solid var(--color-border);
+		background: transparent;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+}

@@ -39,6 +39,7 @@ export const GET: RequestHandler = async (event) => {
 				  AND jobs.scheduled_start <= ${todayEnd}::timestamptz
 			)::int`,
 			in_progress: sql<number>`COUNT(*) FILTER (WHERE jobs.status = 'in_progress')::int`,
+			on_hold: sql<number>`COUNT(*) FILTER (WHERE jobs.status = 'on_hold')::int`,
 			awaiting_review: sql<number>`COUNT(*) FILTER (
 				WHERE jobs.status = 'completed'
 				  AND NOT EXISTS (
@@ -47,20 +48,50 @@ export const GET: RequestHandler = async (event) => {
 					  AND review_requests.status IN ('likely_reviewed','completed_internal')
 				)
 			)::int`,
-			unscheduled: sql<number>`COUNT(*) FILTER (
+			// Four date-derived faces of a stored 'scheduled' job (mirrors deriveJobScheduleState):
+			// pending = no date · upcoming = future · today = today · overdue = date passed. A job
+			// that has been started reports as in_progress, never today/overdue.
+			pending: sql<number>`COUNT(*) FILTER (
 				WHERE jobs.status = 'scheduled'
 				  AND jobs.scheduled_start IS NULL
-			)::int`
+			)::int`,
+			upcoming: sql<number>`COUNT(*) FILTER (
+				WHERE jobs.status = 'scheduled'
+				  AND jobs.scheduled_start > ${todayEnd}::timestamptz
+			)::int`,
+			today_scheduled: sql<number>`COUNT(*) FILTER (
+				WHERE jobs.status = 'scheduled'
+				  AND jobs.scheduled_start >= ${todayStart}::timestamptz
+				  AND jobs.scheduled_start <= ${todayEnd}::timestamptz
+			)::int`,
+			overdue: sql<number>`COUNT(*) FILTER (
+				WHERE jobs.status = 'scheduled'
+				  AND jobs.scheduled_start < ${todayStart}::timestamptz
+			)::int`,
+			completed: sql<number>`COUNT(*) FILTER (WHERE jobs.status = 'completed')::int`,
+			cancelled: sql<number>`COUNT(*) FILTER (WHERE jobs.status = 'cancelled')::int`
 		})
 		.from(jobs)
 		.where(and(...scopeFilters));
 
 	return json({
 		data: {
+			// Legacy KPI cards (current page) — kept until Session 2 swaps the UI.
 			today: row?.today ?? 0,
 			in_progress: row?.in_progress ?? 0,
 			awaiting_review: row?.awaiting_review ?? 0,
-			unscheduled: row?.unscheduled ?? 0
+			unscheduled: row?.pending ?? 0,
+			// Redesigned KPI strip — one count per display state.
+			status_counts: {
+				pending: row?.pending ?? 0,
+				upcoming: row?.upcoming ?? 0,
+				today: row?.today_scheduled ?? 0,
+				overdue: row?.overdue ?? 0,
+				in_progress: row?.in_progress ?? 0,
+				on_hold: row?.on_hold ?? 0,
+				completed: row?.completed ?? 0,
+				cancelled: row?.cancelled ?? 0
+			}
 		}
 	});
 };

@@ -94,20 +94,23 @@ export const POST: RequestHandler = async (event) => {
 
 		const now = new Date();
 		const wasChangesRequested = existing.status === 'changes_requested';
-		// A re-send out of changes_requested is a real revision → new version.
+		// A revision = new content going out to the customer, which freezes a new version so the
+		// timeline shows "Sent v(N+1)" and the new copy tracks its own views. Two ways to revise:
+		//   • resolving a change request (customer asked for edits), or
+		//   • an edit-after-send (contractor edited a sent/viewed quote, client sends revision:true).
 		// A plain re-delivery of unchanged sent/viewed content keeps the same version.
-		const newVersion = wasChangesRequested
-			? existing.current_version + 1
-			: existing.current_version;
+		const isRevision = wasChangesRequested || send?.revision === true;
+		const newVersion = isRevision ? existing.current_version + 1 : existing.current_version;
 
 		await tx
 			.update(quotes)
 			.set({
 				public_token_hash: tokenHash,
-				// Re-send returns a change-requested quote to the normal sent lifecycle
-				// so existing quote.sent follow-up automation resumes. Reset viewed_at so the
-				// new version can register its own "Viewed" + fire a fresh view notification.
-				...(wasChangesRequested
+				public_token: rawToken,
+				// A revision returns the quote to the normal 'sent' lifecycle (so quote.sent
+				// follow-up automation resumes) and resets viewed_at so the new version registers
+				// its own "Viewed" + fires a fresh view notification.
+				...(isRevision
 					? { status: 'sent' as const, current_version: newVersion, viewed_at: null }
 					: {}),
 				updated_at: now
@@ -125,7 +128,9 @@ export const POST: RequestHandler = async (event) => {
 						isNull(quoteChangeRequests.resolved_at)
 					)
 				);
+		}
 
+		if (isRevision) {
 			// Freeze the revised quote as the new version snapshot.
 			await snapshotQuoteVersion(tx, {
 				orgId: auth.orgId,

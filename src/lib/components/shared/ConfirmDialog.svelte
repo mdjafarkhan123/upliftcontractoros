@@ -1,7 +1,6 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 
 	let {
 		open = $bindable(false),
@@ -29,6 +28,14 @@
 		await onConfirm();
 		open = false;
 	}
+
+	// The Cancel button sets `open` programmatically, which does NOT trigger bits-ui's
+	// onOpenChange (that fires only for primitive-driven closes like ESC / click-outside).
+	// So invoke onCancel here explicitly, otherwise a Cancel-button dismiss skips it.
+	function handleCancel() {
+		open = false;
+		onCancel?.();
+	}
 </script>
 
 <Dialog.Root bind:open onOpenChange={(o) => !o && onCancel?.()}>
@@ -40,17 +47,18 @@
 			{/if}
 		</Dialog.Header>
 		<Dialog.Footer>
-			<Button variant="outline" disabled={loading} onclick={() => (open = false)}>
+			<Button variant="outline" disabled={loading} onclick={handleCancel}>
 				{cancelLabel}
 			</Button>
-			<JetEngineButton
+			<Button
 				{variant}
-				label={confirmLabel}
 				loadingLabel="Working…"
 				successLabel="Done"
-				state={loading ? 'loading' : 'idle'}
+				loading={loading}
 				onclick={handleConfirm}
-			/>
+			>
+				{confirmLabel}
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

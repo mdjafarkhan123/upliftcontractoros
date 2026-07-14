@@ -97,7 +97,10 @@ function validateSteps(
 		if (card.timingMode === 'offset' && card.audience !== 'staff') {
 			if (step.offset_minutes === null) {
 				errors[`${p}.offset_minutes`] = 'Choose when this reminder sends.';
-			} else if (step.offset_minutes >= 0) {
+			} else if (card.offsetAnchor !== 'due' && step.offset_minutes >= 0) {
+				// Appointment reminders must land before the visit (negative offset).
+				// Invoice reminders (offsetAnchor === 'due') allow before, on, or after
+				// the due date, so any sign is valid there.
 				errors[`${p}.offset_minutes`] = 'Reminders must be scheduled before the appointment.';
 			}
 			offset_minutes = step.offset_minutes;

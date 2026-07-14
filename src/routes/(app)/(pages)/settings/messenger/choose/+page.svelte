@@ -1,9 +1,9 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
 
@@ -89,39 +89,116 @@
 	{#if loading}
 		<SkeletonLoader lines={4} label="Loading your Facebook Pages" height="56px" />
 	{:else if expired}
-		<div class="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-			<p class="text-sm text-muted-foreground">
-				This connection step expired. Start the Facebook connection again to choose a Page.
-			</p>
-			<div class="flex justify-end">
-				<Button onclick={() => goto('/api/settings/messenger/connect')}>Reconnect Facebook</Button>
+		<div class="fb-choose">
+			<div class="fb-choose__card">
+				<p class="fb-choose__expired">
+					This connection step expired. Start the Facebook connection again to choose a Page.
+				</p>
+				<footer class="fb-choose__footer">
+				<Button onclick={() => goto('/api/settings/messenger/connect')}>
+					Reconnect Facebook
+				</Button>
+				</footer>
 			</div>
 		</div>
 	{:else}
-		<div class="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-			<fieldset class="flex flex-col gap-2">
-				<legend class="sr-only">Facebook Pages</legend>
-				{#each pages as page (page.id)}
-					<label
-						class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-accent"
-					>
-						<input
-							type="radio"
-							name="page"
-							value={page.id}
-							bind:group={selectedId}
-							class="size-4 accent-primary"
-						/>
-						<span class="text-sm font-medium text-foreground">{page.name}</span>
-					</label>
-				{/each}
-			</fieldset>
+		<div class="fb-choose">
+			<div class="fb-choose__card">
+				<fieldset class="fb-choose__pages" aria-label="Facebook Pages">
+					{#each pages as page (page.id)}
+						<label class="fb-choose__page" class:fb-choose__page--active={selectedId === page.id}>
+							<input
+								type="radio"
+								name="page"
+								value={page.id}
+								bind:group={selectedId}
+								class="fb-choose__radio"
+							/>
+							<span class="fb-choose__name">{page.name}</span>
+						</label>
+					{/each}
+				</fieldset>
 
-			<footer class="flex justify-end">
-				<Button onclick={connect} disabled={connecting || !selectedId}>
-					{connecting ? 'Connecting…' : 'Connect Page'}
+				<footer class="fb-choose__footer">
+				<Button onclick={connect} disabled={!selectedId} loading={connecting} loadingLabel="Connecting…">
+					Connect Page
 				</Button>
-			</footer>
+				</footer>
+			</div>
 		</div>
 	{/if}
 </PageWrapper>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.fb-choose {
+		max-width: 560px;
+
+		&__card {
+			display: flex;
+			flex-direction: column;
+			gap: $space-4;
+			padding: $space-5;
+			border-radius: $radius-xl;
+			background: var(--color-bg-surface);
+			box-shadow: var(--shadow-sm);
+		}
+
+		&__expired {
+			font-size: $fs-body;
+			line-height: $lh-body;
+			color: var(--color-text-secondary);
+		}
+
+		&__pages {
+			display: flex;
+			flex-direction: column;
+			gap: $space-2;
+			margin: 0;
+			padding: 0;
+			border: 0;
+		}
+
+		&__page {
+			display: flex;
+			align-items: center;
+			gap: $space-3;
+			min-height: 52px;
+			padding: $space-3 $space-4;
+			border: 1px solid var(--color-border);
+			border-radius: $radius-lg;
+			cursor: pointer;
+			transition:
+				background $duration-fast $ease-standard,
+				border-color $duration-fast $ease-standard;
+
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+			}
+
+			&--active {
+				border-color: var(--color-brand);
+				background: var(--state-active-tint);
+			}
+		}
+
+		&__radio {
+			width: 18px;
+			height: 18px;
+			flex-shrink: 0;
+			accent-color: var(--color-brand);
+		}
+
+		&__name {
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+
+		&__footer {
+			display: flex;
+			justify-content: flex-end;
+		}
+	}
+</style>

@@ -131,6 +131,15 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		label: 'Invoice opened',
 		description: 'A customer just looked at your invoice'
 	},
+	job_invoice_reminder: {
+		priority: 'high',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		route: (id) => `/jobs/${id}`,
+		label: 'Time to invoice',
+		description: "A job you finished is ready to bill — don't leave money on the table"
+	},
 	appointment_booked: {
 		priority: 'high',
 		defaultVisible: false,

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
@@ -9,11 +8,10 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { getOrgContext } from '$lib/context/org';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { bookingPublicUrl } from '$lib/components/booking/publicUrl';
-	import { Copy, Trash2 } from '@lucide/svelte';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -137,31 +135,31 @@
 {:else if errorMsg || !link}
 	<EmptyState title="Couldn't load booking link" description={errorMsg ?? 'Not found.'} />
 {:else}
-	<form class="space-y-6" onsubmit={save}>
-		<div class="space-y-1.5">
-			<Label for="public-url">Public URL</Label>
-			<div class="flex gap-2">
-				<Input id="public-url" value={publicUrl} readonly class="flex-1 font-mono text-xs" />
-				<Button type="button" variant="outline" size="icon" onclick={copyUrl}>
-					<Copy class="h-4 w-4" />
+	<form class="book-form" onsubmit={save}>
+		<div class="field">
+			<Label for="public-url" class="field__label">Public URL</Label>
+			<div class="book-url">
+				<Input id="public-url" value={publicUrl} readonly class="book-url__input" />
+				<Button variant="outline" size="icon" onclick={copyUrl} aria-label="Copy URL">
+					<i class="ri-file-copy-line" aria-hidden="true"></i>
 				</Button>
 			</div>
 		</div>
 
-		<div class="space-y-1.5">
-			<Label for="slug-ro">URL slug</Label>
-			<Input id="slug-ro" value={link.slug} readonly class="font-mono text-sm" />
-			<p class="text-xs text-muted-foreground">URL cannot be changed after creation.</p>
+		<div class="field">
+			<Label for="slug-ro" class="field__label">URL slug</Label>
+			<Input id="slug-ro" value={link.slug} readonly class="book-url__input" />
+			<p class="field__hint">URL cannot be changed after creation.</p>
 		</div>
 
-		<div class="space-y-1.5">
-			<Label for="title">Title <span class="text-destructive">*</span></Label>
+		<div class="field">
+			<Label for="title" class="field__label field__label--required">Title</Label>
 			<Input id="title" bind:value={link.title} required maxlength={120} />
-			{#if fieldErrors.title}<p class="text-xs text-destructive">{fieldErrors.title}</p>{/if}
+			{#if fieldErrors.title}<p class="field__error">{fieldErrors.title}</p>{/if}
 		</div>
 
-		<div class="space-y-1.5">
-			<Label for="desc">Description</Label>
+		<div class="field">
+			<Label for="desc" class="field__label">Description</Label>
 			<Textarea
 				id="desc"
 				value={link.description ?? ''}
@@ -171,10 +169,10 @@
 			/>
 		</div>
 
-		<div class="space-y-1.5">
-			<Label for="type">Appointment type <span class="text-destructive">*</span></Label>
+		<div class="field">
+			<Label for="type" class="field__label field__label--required">Appointment type</Label>
 			<Select.Root bind:value={link.appointment_type}>
-				<Select.Trigger class="h-11 w-full">
+				<Select.Trigger>
 					<Select.Value />
 				</Select.Trigger>
 				<Select.Content>
@@ -187,11 +185,11 @@
 			</Select.Root>
 		</div>
 
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-			<div class="space-y-1.5">
-				<Label for="slot">Slot duration <span class="text-destructive">*</span></Label>
+		<div class="book-grid book-grid--two">
+			<div class="field">
+				<Label for="slot" class="field__label field__label--required">Slot duration</Label>
 				<Select.Root bind:value={link.slot_duration_minutes}>
-					<Select.Trigger class="h-11 w-full">
+					<Select.Trigger>
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
@@ -203,10 +201,10 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
-			<div class="space-y-1.5">
-				<Label for="buf">Buffer <span class="text-destructive">*</span></Label>
+			<div class="field">
+				<Label for="buf" class="field__label field__label--required">Buffer</Label>
 				<Select.Root bind:value={link.buffer_minutes}>
-					<Select.Trigger class="h-11 w-full">
+					<Select.Trigger>
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
@@ -216,10 +214,10 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
-			<div class="space-y-1.5">
-				<Label for="adv">Min advance <span class="text-destructive">*</span></Label>
+			<div class="field">
+				<Label for="adv" class="field__label field__label--required">Min advance</Label>
 				<Select.Root bind:value={link.min_advance_hours}>
-					<Select.Trigger class="h-11 w-full">
+					<Select.Trigger>
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
@@ -230,10 +228,10 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
-			<div class="space-y-1.5">
-				<Label for="hor">Booking horizon <span class="text-destructive">*</span></Label>
+			<div class="field">
+				<Label for="hor" class="field__label field__label--required">Booking horizon</Label>
 				<Select.Root bind:value={link.max_future_days}>
-					<Select.Trigger class="h-11 w-full">
+					<Select.Trigger>
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
@@ -245,37 +243,36 @@
 			</div>
 		</div>
 
-		<div class="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+		<div class="book-active">
 			<div>
-				<p class="text-sm font-semibold text-foreground">
-					Link is {link.is_active ? 'active' : 'inactive'}
-				</p>
-				<p class="text-xs text-muted-foreground">
+				<p class="book-active__title">Link is {link.is_active ? 'active' : 'inactive'}</p>
+				<p class="book-active__desc">
 					{link.is_active ? 'Customers can book through this link.' : 'Public URL returns 404.'}
 				</p>
 			</div>
 			<Switch bind:checked={link.is_active} />
 		</div>
 
-		<div class="flex justify-end gap-2 pt-2">
-			<JetEngineButton
+		<div class="book-actions book-actions--end">
+			<Button
 				type="submit"
-				label="Save changes"
 				loadingLabel="Saving…"
 				successLabel="Saved"
-				state={saving ? 'loading' : 'idle'}
-			/>
+				loading={saving}
+			>
+				Save changes
+			</Button>
 		</div>
 	</form>
 
-	<section class="mt-10 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-		<h3 class="text-sm font-semibold text-foreground">Danger zone</h3>
-		<p class="mt-1 text-xs text-muted-foreground">
+	<section class="book-danger">
+		<h3 class="book-danger__title">Danger zone</h3>
+		<p class="book-danger__text">
 			Deleting removes this link permanently. The public URL will return 404.
 		</p>
-		<div class="mt-3">
+		<div class="book-danger__action">
 			<Button variant="destructive" onclick={() => (deleteOpen = true)}>
-				<Trash2 class="h-4 w-4" /> Delete booking link
+				<i class="ri-delete-bin-line" aria-hidden="true"></i> Delete booking link
 			</Button>
 		</div>
 	</section>

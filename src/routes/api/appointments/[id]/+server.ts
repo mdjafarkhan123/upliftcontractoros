@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
@@ -22,6 +22,7 @@ import {
 	validateAssigneesBelongToOrg,
 	type AssigneeRow
 } from '$lib/server/appointments/assignees';
+import { repinOneOffJobSchedule } from '$lib/server/jobs/repinSchedule';
 
 function serialize(
 	row: Appointment & {
@@ -43,7 +44,9 @@ function serialize(
 		type: row.type,
 		status: row.status,
 		title: row.title,
-		scheduled_start: row.scheduled_start.toISOString(),
+		all_day: row.all_day,
+		// NULL for an unscheduled visit (Jobber "Schedule later").
+		scheduled_start: row.scheduled_start?.toISOString() ?? null,
 		scheduled_end: row.scheduled_end?.toISOString() ?? null,
 		location: row.location,
 		notes: row.notes,
@@ -162,14 +165,21 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	const updated = await db.transaction(async (tx) => {
-		const lockRows = await tx.execute<Appointment>(sql`
-			SELECT * FROM appointments
-			WHERE id = ${id}
-				AND org_id = ${auth.orgId}
-				AND deleted_at IS NULL
-			FOR UPDATE
-		`);
-		const existing = (lockRows as unknown as Appointment[])[0];
+		// Lock the row for the duration of the txn. Use Drizzle's typed select
+		// (not raw `SELECT *`) so timestamp columns deserialize to JS Date objects —
+		// a raw execute returns them as strings, which breaks the .getTime() checks below.
+		const [existing] = await tx
+			.select()
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.id, id),
+					eq(appointments.org_id, auth.orgId),
+					isNull(appointments.deleted_at)
+				)
+			)
+			.for('update')
+			.limit(1);
 		if (!existing) return { kind: 'notFound' as const };
 
 		if (
@@ -180,14 +190,12 @@ export const PATCH: RequestHandler = async (event) => {
 			return { kind: 'terminal' as const, status: existing.status };
 		}
 
-		const isReschedule =
-			input.scheduled_start !== undefined &&
-			input.scheduled_end !== undefined &&
-			(input.scheduled_start.getTime() !== existing.scheduled_start.getTime() ||
-				input.scheduled_end.getTime() !== (existing.scheduled_end?.getTime() ?? -1));
+		// Anytime toggle: `all_day` may flip on/off; when on, the visit carries no end.
+		const nextAllDay = input.all_day ?? existing.all_day;
+		const allDayChanged = input.all_day !== undefined && input.all_day !== existing.all_day;
 
 		const nextStart = input.scheduled_start ?? existing.scheduled_start;
-		const nextEnd = input.scheduled_end ?? existing.scheduled_end;
+		const nextEnd = nextAllDay ? null : (input.scheduled_end ?? existing.scheduled_end);
 
 		// Resolve the effective crew for overlap checking. If the caller didn't
 		// touch assignees, use the existing crew from the join table.
@@ -203,14 +211,25 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 
 		const startChanged =
-			input.scheduled_start !== undefined &&
-			input.scheduled_start.getTime() !== existing.scheduled_start.getTime();
-		const endChanged =
-			input.scheduled_end !== undefined &&
-			input.scheduled_end.getTime() !== (existing.scheduled_end?.getTime() ?? -1);
+			input.scheduled_start != null &&
+			// A previously unscheduled visit (null start) gaining a date counts as a change.
+			(existing.scheduled_start === null ||
+				input.scheduled_start.getTime() !== existing.scheduled_start.getTime());
+		const endChanged = (nextEnd?.getTime() ?? null) !== (existing.scheduled_end?.getTime() ?? null);
 		const crewChanged = crew !== null;
 
-		if ((startChanged || endChanged || crewChanged) && effectiveCrew.length > 0 && nextEnd) {
+		// A "reschedule" for reminder/notify purposes = the slot moved in any way:
+		// start moved, end moved, or the timed⇄anytime nature flipped.
+		const isReschedule = startChanged || endChanged || allDayChanged;
+
+		// Only timed visits with a crew can time-conflict — Anytime visits never do.
+		if (
+			(startChanged || endChanged || crewChanged) &&
+			effectiveCrew.length > 0 &&
+			!nextAllDay &&
+			nextEnd &&
+			nextStart
+		) {
 			const conflictMember = await findConflictingAssignee(tx, {
 				orgId: auth.orgId,
 				assigneeIds: effectiveCrew,
@@ -224,10 +243,18 @@ export const PATCH: RequestHandler = async (event) => {
 		const updates: Record<string, unknown> = { updated_at: new Date() };
 		if (input.type !== undefined) updates.type = input.type;
 		if (input.title !== undefined) updates.title = input.title;
-		if (input.scheduled_start !== undefined) updates.scheduled_start = input.scheduled_start;
-		if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
+		if (input.all_day !== undefined) updates.all_day = input.all_day;
+		if (input.scheduled_start != null) updates.scheduled_start = input.scheduled_start;
+		// Becoming Anytime clears the end; otherwise honour an explicit end change.
+		if (nextAllDay) updates.scheduled_end = null;
+		else if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
 		if (input.location !== undefined) updates.location = input.location;
 		if (input.notes !== undefined) updates.notes = input.notes;
+		// Promote a "Schedule later" placeholder the moment it gains a date: an unscheduled
+		// visit given a start becomes a real scheduled visit, so it lands on the calendar AND
+		// the reminder worker (which gates on status === 'scheduled') enrolls it. startChanged
+		// above already flagged this null→date move, so isReschedule fires the outbox event.
+		if (existing.status === 'unscheduled' && nextStart != null) updates.status = 'scheduled';
 
 		if (isReschedule) {
 			updates.reminder_24h_sent = false;
@@ -251,29 +278,94 @@ export const PATCH: RequestHandler = async (event) => {
 			});
 		}
 
-		if (isReschedule) {
-			const finalLead = crew ? crew.leadMemberId : row.assigned_to;
-			await tx.insert(outboxEvents).values({
-				org_id: auth.orgId,
-				event_type: 'appointment.rescheduled',
-				resource_type: 'appointment',
-				resource_id: row.id,
-				payload: {
-					appointment_id: row.id,
-					org_id: auth.orgId,
-					contact_id: row.contact_id,
-					job_id: row.job_id,
-					assigned_to: finalLead,
-					assignee_ids: effectiveCrew,
-					old_start_at: existing.scheduled_start.toISOString(),
-					new_start_at: row.scheduled_start.toISOString(),
-					reminder_flags_reset: true
-				},
-				idempotency_key: `appointment.rescheduled:${row.id}:${row.scheduled_start.toISOString()}`
-			});
+		// Keep the parent job's schedule in lockstep when its visit moves. For a one-off job the
+		// visit IS the job's schedule (Jobber / Housecall Pro), so dating/moving one must re-point
+		// the job to its earliest OPEN visit — not blindly to THIS visit, which would wrongly drag
+		// the job's anchor onto a later visit when a multi-visit job edits a non-earliest one.
+		// Recurring jobs are excluded inside the helper (the job row stays the series anchor).
+		let repinnedJob: {
+			id: string;
+			scheduled_start: string | null;
+			scheduled_end: string | null;
+		} | null = null;
+		if (isReschedule && row.job_id) {
+			const repinned = await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: row.job_id });
+			// `repinned` is null for a recurring/deleted job (no row updated) — nothing to echo.
+			if (repinned) {
+				repinnedJob = {
+					id: row.job_id,
+					scheduled_start: repinned.scheduled_start?.toISOString() ?? null,
+					scheduled_end: repinned.scheduled_end?.toISOString() ?? null
+				};
+			}
 		}
 
-		return { kind: 'ok' as const, row };
+		// Enter when the slot actually moved OR the caller asked to notify the client.
+		// The two-step drag flow saves the move first (notify_channel:'none') and then,
+		// in a follow-up PATCH whose time is unchanged, opts to notify — so the client
+		// confirmation must be reachable even when isReschedule is false.
+		if (isReschedule || (input.notify_channel && input.notify_channel !== 'none')) {
+			const finalLead = crew ? crew.leadMemberId : row.assigned_to;
+			// Staff-facing reschedule event fires ONLY when the slot genuinely moved.
+			if (isReschedule)
+				await tx
+					.insert(outboxEvents)
+					.values({
+						org_id: auth.orgId,
+						event_type: 'appointment.rescheduled',
+						resource_type: 'appointment',
+						resource_id: row.id,
+						payload: {
+							appointment_id: row.id,
+							org_id: auth.orgId,
+							contact_id: row.contact_id,
+							job_id: row.job_id,
+							assigned_to: finalLead,
+							assignee_ids: effectiveCrew,
+							old_start_at: existing.scheduled_start?.toISOString() ?? null,
+							new_start_at: row.scheduled_start?.toISOString() ?? null,
+							reminder_flags_reset: true
+						},
+						idempotency_key: `appointment.rescheduled:${row.id}:${row.scheduled_start?.toISOString() ?? row.updated_at.toISOString()}`
+					})
+					// The idempotency_key (…:<new start>) is deliberately deterministic so a
+					// repeat save to the same time dedupes. Skip on collision instead of
+					// throwing — dragging a visit away and back, or flipping Anytime⇄timed at the
+					// same clock time, would otherwise 500 and roll back the whole reschedule.
+					.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+
+			// Client-facing "your appointment moved to…" confirmation, gated to the
+			// channel the contractor picked in the drag-confirm popover. Separate
+			// event from appointment.rescheduled (which only re-anchors reminders +
+			// notifies staff) so the client send is opt-in per reschedule, mirroring
+			// the job.scheduled reschedule confirmation. The time-stamped key makes
+			// each distinct new time its own event and dedupes a repeat save.
+			if (input.notify_channel && input.notify_channel !== 'none') {
+				await tx
+					.insert(outboxEvents)
+					.values({
+						org_id: auth.orgId,
+						event_type: 'appointment.reschedule_confirmation',
+						resource_type: 'appointment',
+						resource_id: row.id,
+						payload: {
+							appointment_id: row.id,
+							org_id: auth.orgId,
+							contact_id: row.contact_id,
+							channel: input.notify_channel,
+							scheduled_start: row.scheduled_start?.toISOString() ?? null,
+							// Per-reschedule copy overrides (null = worker falls back to the org template).
+							sms_message: input.notify_sms_message ?? null,
+							email_subject: input.notify_email_subject ?? null,
+							email_message: input.notify_email_message ?? null
+						},
+						idempotency_key: `appointment.reschedule_confirmation:${row.id}:${row.scheduled_start?.toISOString() ?? row.updated_at.toISOString()}`
+					})
+					.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+			}
+		}
+
+		return { kind: 'ok' as const, row, repinnedJob };
 	});
 
 	if (updated.kind === 'notFound') error(404, 'Appointment not found');
@@ -287,5 +379,5 @@ export const PATCH: RequestHandler = async (event) => {
 	const detail = await loadDetail(auth.orgId, id);
 	if (!detail) error(404, 'Appointment not found');
 	const assignees = await loadAssignees(db, id);
-	return json({ data: serialize(detail, assignees) });
+	return json({ data: { ...serialize(detail, assignees), affected_job: updated.repinnedJob } });
 };

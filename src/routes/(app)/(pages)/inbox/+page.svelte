@@ -1,13 +1,9 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { MessageSquare, RefreshCw, WifiOff } from '@lucide/svelte';
-	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import InboxCommandBar from '$lib/components/inbox/InboxCommandBar.svelte';
-	import InboxInlineSummary from '$lib/components/inbox/InboxInlineSummary.svelte';
 	import InboxActiveFilters from '$lib/components/inbox/InboxActiveFilters.svelte';
 	import ThreadEmptyState from '$lib/components/inbox/ThreadEmptyState.svelte';
 	import ConversationRow from '$lib/components/inbox/ConversationRow.svelte';
@@ -275,145 +271,126 @@
 
 <svelte:head><title>Inbox</title></svelte:head>
 
-<PageWrapper title="Inbox" class="!max-w-none p-0">
-	{#if !canView}
-		<div class="px-4 py-12 md:px-6">
-			<EmptyState
-				icon={MessageSquare}
-				title="No access"
-				description="You don't have permission to view conversations."
+{#if !canView}
+	<div class="inbox-noaccess">
+		<EmptyState
+			iconClass="ri-chat-off-line"
+			title="No access"
+			description="You don't have permission to view conversations."
+		/>
+	</div>
+{:else}
+	<div class="inbox-page">
+		{#if realtimeFailed}
+			<div class="inbox-banner">
+				<i class="ri-wifi-off-line inbox-banner__icon" aria-hidden="true"></i>
+				<span>Connection lost</span>
+				<button type="button" onclick={() => location.reload()} class="inbox-banner__action">
+					<i class="ri-refresh-line" aria-hidden="true"></i>
+					Refresh
+				</button>
+			</div>
+		{:else if !isRealtimeConnected}
+			<div class="inbox-banner inbox-banner--muted">Live updates paused — reconnecting…</div>
+		{/if}
+
+		<!-- Unified command bar: search + status + filters (with triage) + message search -->
+		<div class="inbox-page__cmd">
+			<InboxCommandBar
+				bind:status
+				bind:assignee
+				bind:unread
+				bind:tag
+				bind:search
+				{orgTags}
+				{canViewAll}
+				openCount={summaryCounts.open}
+				awaitingCount={summaryCounts.awaiting}
+				unassignedCount={summaryCounts.unassigned}
+				failedCount={summaryCounts.failed}
+				{messageHits}
+				bind:messageSearchOpen
+				{messageSearchLoading}
+				onSelectMessageHit={handleSelect}
 			/>
 		</div>
-	{:else}
-		<div class="flex h-[calc(100dvh-64px)] flex-col">
-			{#if realtimeFailed}
-				<div
-					class="flex h-7 shrink-0 items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 text-[11px] font-medium text-amber-700 dark:text-amber-300"
-				>
-					<WifiOff class="h-3 w-3" />
-					<span>Connection lost</span>
-					<button
-						type="button"
-						onclick={() => location.reload()}
-						class="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/30 dark:text-amber-200"
-					>
-						<RefreshCw class="h-2.5 w-2.5" />
-						Refresh
-					</button>
-				</div>
-			{:else if !isRealtimeConnected}
-				<div
-					class="flex h-7 shrink-0 items-center justify-center border-b border-amber-500/20 bg-amber-500/5 px-4 text-[11px] text-amber-700 dark:text-amber-300"
-				>
-					Live updates paused — reconnecting…
-				</div>
-			{/if}
 
-			<!-- Inline summary (replaces the decorative KPI tile strip) -->
-			<div class="shrink-0 px-4 pt-3 lg:px-6 lg:pt-4">
-				<InboxInlineSummary
-					openCount={summaryCounts.open}
-					awaitingCount={summaryCounts.awaiting}
-					unassignedCount={summaryCounts.unassigned}
-					failedCount={summaryCounts.failed}
-					onSetStatus={(s) => (status = s)}
-					onSetAssignee={(a) => (assignee = a)}
-				/>
-			</div>
+		<!-- Active filter chips (only renders when something is active) -->
+		<InboxActiveFilters
+			bind:assignee
+			bind:tag
+			bind:unread
+			{canViewAll}
+			onClearAssignee={() => (assignee = 'all')}
+			onClearTag={() => (tag = '')}
+			onClearUnread={() => (unread = false)}
+		/>
 
-			<!-- Unified command bar (search + filters + status + message search) -->
-			<div class="mt-2 shrink-0 lg:mt-3">
-				<InboxCommandBar
-					bind:status
-					bind:assignee
-					bind:unread
-					bind:tag
-					bind:search
-					{orgTags}
-					{canViewAll}
-					{messageHits}
-					bind:messageSearchOpen
-					{messageSearchLoading}
-					onSelectMessageHit={handleSelect}
-				/>
-			</div>
-
-			<!-- Active filter chips (only renders when something is active) -->
-			<InboxActiveFilters
-				bind:assignee
-				bind:tag
-				bind:unread
-				{canViewAll}
-				onClearAssignee={() => (assignee = 'all')}
-				onClearTag={() => (tag = '')}
-				onClearUnread={() => (unread = false)}
-			/>
-
-			<!-- Chathead list + thread view -->
-			<div
-				class="mt-1 flex min-h-0 flex-1 flex-col border-t border-border/60 lg:mt-0 lg:flex-row lg:border-t-0"
-			>
-				<div
-					class="flex min-h-0 flex-1 flex-col lg:w-[380px] lg:flex-initial lg:border-r lg:border-border/60"
-				>
-					<div class="min-h-0 flex-1 overflow-y-auto">
-						{#if showSkeleton}
-							<div class="p-3">
-								<SkeletonLoader lines={6} height="64px" label="Loading conversations" />
-							</div>
-						{:else if showError}
-							<div
-								class="m-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-							>
-								{errorMsg}
-							</div>
-						{:else if items.length === 0}
-							<EmptyState icon={MessageSquare} title={emptyTitle} description={emptyDescription} />
-						{:else}
-							<ul class="grid gap-2 p-3 lg:hidden">
-								{#each items as c (c.id)}
-									<li>
-										<ConversationRow conversation={c} />
-									</li>
-								{/each}
-							</ul>
-							<ul class="hidden lg:block">
-								{#each items as c (c.id)}
-									<li>
-										<ConversationRow
-											conversation={c}
-											dense
-											selected={selectedId === c.id}
-											onSelect={handleSelect}
-										/>
-									</li>
-								{/each}
-							</ul>
-							{#if nextCursor}
-								<div class="flex justify-center p-3">
-									<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
-										{loadingMore ? 'Loading…' : 'Load more'}
-									</Button>
-								</div>
-							{/if}
-						{/if}
-					</div>
-				</div>
-
-				<div class="hidden min-h-0 min-w-0 flex-1 lg:flex">
-					{#if selectedId}
-						{#if ThreadView}
-							<ThreadView conversationId={selectedId} showBackButton={false} fill />
-						{:else}
-							<div class="flex-1 p-4">
-								<SkeletonLoader lines={6} height="48px" label="Loading conversation" />
-							</div>
-						{/if}
+		<!-- Chathead list + thread view -->
+		<div class="inbox-split">
+			<div class="inbox-list">
+				<div class="inbox-list__scroll">
+					{#if showSkeleton}
+						<div class="inbox-list__skeleton">
+							<SkeletonLoader lines={6} height="64px" label="Loading conversations" />
+						</div>
+					{:else if showError}
+						<div class="inbox-list__error">{errorMsg}</div>
+					{:else if items.length === 0}
+						<EmptyState
+							iconClass="ri-chat-3-line"
+							title={emptyTitle}
+							description={emptyDescription}
+						/>
 					{:else}
-						<ThreadEmptyState />
+						<ul class="inbox-list__cards">
+							{#each items as c (c.id)}
+								<li>
+									<ConversationRow conversation={c} />
+								</li>
+							{/each}
+						</ul>
+						<ul class="inbox-list__rows">
+							{#each items as c (c.id)}
+								<li>
+									<ConversationRow
+										conversation={c}
+										dense
+										selected={selectedId === c.id}
+										onSelect={handleSelect}
+									/>
+								</li>
+							{/each}
+						</ul>
+						{#if nextCursor}
+							<div class="inbox-list__more">
+								<button
+									type="button"
+									class="btn btn--outline btn--sm"
+									disabled={loadingMore}
+									onclick={loadMore}
+								>
+									{loadingMore ? 'Loading…' : 'Load more'}
+								</button>
+							</div>
+						{/if}
 					{/if}
 				</div>
 			</div>
+
+			<div class="inbox-thread-pane">
+				{#if selectedId}
+					{#if ThreadView}
+						<ThreadView conversationId={selectedId} showBackButton={false} fill />
+					{:else}
+						<div class="inbox-thread-pane__loading">
+							<SkeletonLoader lines={6} height="48px" label="Loading conversation" />
+						</div>
+					{/if}
+				{:else}
+					<ThreadEmptyState />
+				{/if}
+			</div>
 		</div>
-	{/if}
-</PageWrapper>
+	</div>
+{/if}

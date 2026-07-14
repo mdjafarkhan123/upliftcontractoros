@@ -1,8 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-
 	type Props = {
 		month: string; // YYYY-MM
 		availableDates: Set<string>; // YYYY-MM-DD
@@ -97,48 +93,44 @@
 	}
 </script>
 
-<div class="w-full">
-	<div class="mb-5 flex items-center justify-between">
+<div class="bk-cal">
+	<div class="bk-cal__head">
 		<div>
-			<h2 class="text-lg font-semibold tracking-tight text-foreground">{monthLabel}</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">Pick a date that works for you</p>
+			<h2 class="bk-cal__month">{monthLabel}</h2>
+			<p class="bk-cal__hint">Pick a date that works for you</p>
 		</div>
-		<div class="flex items-center gap-1">
+		<div class="bk-cal__nav">
 			<button
 				type="button"
 				onclick={prevMonth}
 				disabled={!canGoPrev}
 				aria-label="Previous month"
-				class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-all duration-150 ease-out hover:border-border hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-card"
+				class="bk-cal__nav-btn"
 			>
-				<ChevronLeft class="h-5 w-5" />
+				<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 			</button>
 			<button
 				type="button"
 				onclick={nextMonth}
 				disabled={!canGoNext}
 				aria-label="Next month"
-				class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-all duration-150 ease-out hover:border-border hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-card"
+				class="bk-cal__nav-btn"
 			>
-				<ChevronRight class="h-5 w-5" />
+				<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 			</button>
 		</div>
 	</div>
 
-	<div class="mb-2 grid grid-cols-7 gap-1">
+	<div class="bk-cal__weekdays">
 		{#each WEEKDAYS as wd (wd)}
-			<div
-				class="py-2 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
-			>
-				{wd}
-			</div>
+			<div class="bk-cal__wd">{wd}</div>
 		{/each}
 	</div>
 
-	<div class="grid grid-cols-7 gap-1" aria-busy={loading}>
+	<div class="bk-cal__grid" aria-busy={loading}>
 		{#each cells as cell, i (i)}
 			{#if cell === null}
-				<div class="aspect-square"></div>
+				<div class="bk-cal__empty-cell"></div>
 			{:else}
 				{@const isPast = cell.iso < todayIso}
 				{@const isAvailable = !isPast && availableDates.has(cell.iso) && !loading}
@@ -150,24 +142,19 @@
 					onclick={() => isAvailable && onSelectDate(cell.iso)}
 					aria-label={cell.iso}
 					aria-pressed={isSelected}
-					class={cn(
-						'group relative aspect-square min-h-[44px] rounded-xl text-sm font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-						isSelected &&
-							'bg-primary text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--brand-primary)/0.6)]',
-						!isSelected &&
-							isAvailable &&
-							'bg-muted text-foreground hover:bg-accent hover:shadow-[0_4px_14px_-6px_hsl(var(--brand-primary)/0.4)]',
-						!isAvailable && !isPast && !loading && 'text-muted-foreground/30',
-						isPast && 'text-muted-foreground/20',
-						loading && !isSelected && 'animate-pulse bg-muted/40 text-transparent'
-					)}
+					class="bk-cal__day {isSelected
+						? 'bk-cal__day--selected'
+						: isAvailable
+							? 'bk-cal__day--available'
+							: loading && !isPast
+								? 'bk-cal__day--loading'
+								: isPast
+									? 'bk-cal__day--past'
+									: 'bk-cal__day--unavail'}"
 				>
-					<span class="relative z-10">{cell.day}</span>
+					<span>{cell.day}</span>
 					{#if isToday && !isSelected}
-						<span
-							class="absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary"
-							aria-hidden="true"
-						></span>
+						<span class="bk-cal__today-dot" aria-hidden="true"></span>
 					{/if}
 				</button>
 			{/if}

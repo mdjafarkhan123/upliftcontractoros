@@ -5,16 +5,12 @@
 	import Calendar from '$lib/components/booking/Calendar.svelte';
 	import TimeSlots from '$lib/components/booking/TimeSlots.svelte';
 	import CustomerForm from '$lib/components/booking/CustomerForm.svelte';
-	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-	import Building2 from '@lucide/svelte/icons/building-2';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import Clock from '@lucide/svelte/icons/clock';
-	import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
 
 	type Config = {
 		org_name: string;
 		org_logo_url: string | null;
 		org_timezone: string;
+		org_country: string | null;
 		title: string;
 		description: string | null;
 		appointment_type: string;
@@ -247,64 +243,45 @@
 	<title>Book an appointment</title>
 </svelte:head>
 
-<main class="mx-auto w-full max-w-xl px-4 pb-16 pt-10 sm:pt-16">
+<main class="book-portal">
 	<!-- Header -->
-	<header class="mb-8 text-center">
-		<div
-			class="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-card shadow-[0_8px_30px_-12px_hsl(var(--brand-primary)/0.4)]"
-		>
+	<header class="book-portal__header">
+		<div class="book-portal__logo">
 			{#if config?.org_logo_url}
-				<img
-					src={config.org_logo_url}
-					alt={config.org_name}
-					class="h-10 w-10 rounded-xl object-cover"
-				/>
+				<img src={config.org_logo_url} alt={config.org_name} class="book-portal__logo-img" />
 			{:else}
-				<Building2 class="h-6 w-6 text-primary" />
+				<i class="ri-building-2-line" aria-hidden="true"></i>
 			{/if}
 		</div>
+
 		{#if configLoading}
-			<div class="mx-auto h-5 w-40 animate-pulse rounded bg-muted/40"></div>
-			<div class="mx-auto mt-3 h-3 w-56 animate-pulse rounded bg-muted/30"></div>
+			<div class="book-portal__skel-name"></div>
+			<div class="book-portal__skel-desc"></div>
 		{:else if config}
-			<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-				{config.org_name}
-			</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-				{config.title}
-			</h1>
+			<p class="book-portal__org">{config.org_name}</p>
+			<h1 class="book-portal__title">{config.title}</h1>
 			{#if config.description}
-				<p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-					{config.description}
-				</p>
+				<p class="book-portal__desc">{config.description}</p>
 			{/if}
-			<div
-				class="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground"
-			>
-				<Clock class="h-3 w-3" />
+			<div class="book-portal__duration">
+				<i class="ri-time-line" aria-hidden="true"></i>
 				{config.slot_duration_minutes} min
 			</div>
 		{/if}
 	</header>
 
-	<!-- Step indicator -->
+	<!-- Step progress bars -->
 	{#if config}
-		<div class="mb-6 flex items-center justify-center gap-2">
+		<div class="book-portal__steps">
 			{#each [1, 2, 3] as n (n)}
-				<div
-					class={`h-1 w-10 rounded-full transition-all duration-300 ease-out ${
-						n <= step ? 'bg-primary' : 'bg-muted/40'
-					}`}
-				></div>
+				<div class="book-portal__step {n <= step ? 'book-portal__step--active' : ''}"></div>
 			{/each}
 		</div>
 	{/if}
 
-	<!-- Card -->
+	<!-- Content card -->
 	{#if config}
-		<section
-			class="overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)] sm:p-7"
-		>
+		<section class="book-portal__card">
 			{#if step === 1}
 				<Calendar
 					{month}
@@ -317,24 +294,16 @@
 				/>
 			{:else if step === 2}
 				<div>
-					<button
-						type="button"
-						onclick={backToCalendar}
-						class="mb-5 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-					>
-						<ArrowLeft class="h-3.5 w-3.5" /> Back
+					<button type="button" onclick={backToCalendar} class="book-portal__back">
+						<i class="ri-arrow-left-s-line" aria-hidden="true"></i> Back
 					</button>
-					<div class="mb-5 flex items-start gap-3">
-						<div
-							class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
-						>
-							<CalendarIcon class="h-4 w-4" />
+					<div class="book-portal__date-head">
+						<div class="book-portal__date-icon">
+							<i class="ri-calendar-event-line" aria-hidden="true"></i>
 						</div>
 						<div>
-							<h2 class="text-lg font-semibold tracking-tight text-foreground">
-								{selectedDateLabel}
-							</h2>
-							<p class="mt-0.5 text-xs text-muted-foreground">Choose a time</p>
+							<h2 class="book-portal__date-title">{selectedDateLabel}</h2>
+							<p class="book-portal__date-hint">Choose a time</p>
 						</div>
 					</div>
 					<TimeSlots
@@ -347,36 +316,27 @@
 				</div>
 			{:else}
 				<div>
-					<button
-						type="button"
-						onclick={backToSlots}
-						class="mb-5 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-					>
-						<ArrowLeft class="h-3.5 w-3.5" /> Back
+					<button type="button" onclick={backToSlots} class="book-portal__back">
+						<i class="ri-arrow-left-s-line" aria-hidden="true"></i> Back
 					</button>
-					<div
-						class="mb-5 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
-					>
-						<CheckCircle2 class="h-5 w-5 shrink-0 text-primary" />
-						<div class="min-w-0">
-							<p class="text-[11px] font-medium uppercase tracking-wider text-primary/80">
-								Your time
-							</p>
-							<p class="truncate text-sm font-medium text-foreground">{selectedSlotLabel}</p>
+					<div class="book-portal__slot-bar">
+						<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+						<div class="booking-portal__slot-info">
+							<p class="book-portal__slot-eyebrow">Your time</p>
+							<p class="book-portal__slot-time">{selectedSlotLabel}</p>
 						</div>
 					</div>
 					<CustomerForm
 						{submitting}
 						error={submitError}
 						fieldErrors={submitFieldErrors}
+						defaultCountry={config.org_country ?? 'US'}
 						onSubmit={submit}
 					/>
 				</div>
 			{/if}
 		</section>
 
-		<p class="mt-6 text-center text-[11px] text-muted-foreground/60">
-			Times shown in {config.org_timezone.replace(/_/g, ' ')}
-		</p>
+		<p class="book-portal__tz">Times shown in {config.org_timezone.replace(/_/g, ' ')}</p>
 	{/if}
 </main>

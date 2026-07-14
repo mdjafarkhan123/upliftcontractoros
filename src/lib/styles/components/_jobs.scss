@@ -1,0 +1,2466 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// JOBS LIST VIEW (S5.0) — shared widgets for the jobs index page: the stat
+// cards, the status segmented control, the list card, and the active-filter
+// banner. Page-only layout stays scoped in the jobs page itself.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// STAT CARDS — Today / In progress / Awaiting review / Unscheduled. Each is a
+// pressable filter toggle with a tinted icon ring.
+// -----------------------------------------------------------------------------
+.job-stats {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: $space-3;
+
+	@media (min-width: $bp-tablet) {
+		grid-template-columns: repeat(4, 1fr);
+	}
+
+	&__card {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		gap: $space-3;
+		min-height: 88px;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		text-align: left;
+		font: inherit;
+		cursor: pointer;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: translateY(-1px);
+			box-shadow: var(--shadow-md);
+			border-color: rgba(34, 125, 83, 0.3);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			border-color: rgba(34, 125, 83, 0.4);
+			box-shadow: 0 0 0 1px rgba(34, 125, 83, 0.4);
+		}
+	}
+
+	&__top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--today {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+		&--in-progress {
+			background: rgba(14, 165, 233, 0.12);
+			color: #0369a1;
+		}
+		&--awaiting-review {
+			background: rgba(245, 158, 11, 0.14);
+			color: #b45309;
+		}
+		&--unscheduled {
+			background: rgba(244, 63, 94, 0.12);
+			color: #be123c;
+		}
+	}
+
+	&__value {
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		line-height: 1;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+
+	&__skeleton {
+		display: inline-block;
+		height: 28px;
+		width: 40px;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface-sunk);
+		animation: job-pulse 1.4s ease-in-out infinite;
+	}
+}
+
+@keyframes job-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
+:root[data-theme='dark'] .job-stats__icon {
+	&--in-progress {
+		color: #7dd3fc;
+	}
+	&--awaiting-review {
+		color: #fcd34d;
+	}
+	&--unscheduled {
+		color: #fda4af;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// STATUS TABS — segmented control (All / Scheduled / In Progress / Completed).
+// -----------------------------------------------------------------------------
+.job-tabs {
+	display: inline-flex;
+	width: 100%;
+	height: 44px;
+	align-items: center;
+	gap: $space-1;
+	overflow-x: auto;
+	padding: $space-1;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface-sunk);
+	box-shadow: var(--shadow-xs);
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	&__trigger {
+		display: inline-flex;
+		flex: 1;
+		min-height: 36px;
+		align-items: center;
+		justify-content: center;
+		white-space: nowrap;
+		padding: $space-1 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LIST CARD — a single job in the index list.
+// -----------------------------------------------------------------------------
+.job-card {
+	display: block;
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	color: inherit;
+	transition:
+		border-color $duration-fast $ease-standard,
+		box-shadow $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: rgba(34, 125, 83, 0.3);
+		background: var(--color-bg-surface-sunk);
+		box-shadow: var(--shadow-md);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&__top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__identity {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__contact {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	&__title {
+		margin-top: 2px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__recurring {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.1);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__top-right {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__meta {
+		margin-top: $space-3;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-1 $space-4;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__meta-item {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		i {
+			font-size: 1.3rem;
+			color: var(--color-text-muted);
+		}
+		em {
+			font-style: italic;
+		}
+	}
+
+	&__foot {
+		margin-top: $space-3;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+	}
+
+	&__total {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ACTIVE-FILTER BANNER — "Showing jobs for {contact}" with a clear button.
+// -----------------------------------------------------------------------------
+.jobs-filter-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: $space-2;
+	padding: $space-2 $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+	font-size: $fs-body;
+
+	&__label {
+		color: var(--color-text-secondary);
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-2;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__clear {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		margin-left: auto;
+		height: 28px;
+		padding: 0 $space-2;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// =============================================================================
+// JOBS LIST REDESIGN (S6) — Contacts-style list workspace: the per-status KPI
+// strip, the underline status tabs, and the desktop data table. The mobile card
+// reuses .job-card above (extended with total / recurring / actions below).
+// =============================================================================
+
+// Jobs KPI strip + status tabs now render via the shared <JobListKpiStrip> and
+// <JobFilterTabs> thin adapters over <KpiStrip> / <ListTabs> — the old
+// .job-list-kpis and .job-status-tabs styles live in those shared components now.
+
+// -----------------------------------------------------------------------------
+// DATA TABLE — desktop jobs table. Mirrors .contact-table column behaviour.
+// -----------------------------------------------------------------------------
+// JobTable now renders through the shared ListTable shell (`.list-table`),
+// which owns all chrome. Only job-specific cell CONTENT classes live here.
+.job-table {
+	&__customer {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+	&__customer-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__title {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		&:hover {
+			color: var(--color-brand);
+		}
+	}
+
+	&__recurring {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		margin-left: $space-2;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.1);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		white-space: nowrap;
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__assignee {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		i {
+			font-size: 1.3rem;
+			color: var(--color-text-muted);
+		}
+		em {
+			font-style: italic;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__muted {
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+	}
+	&__dash {
+		color: var(--color-text-muted);
+	}
+	&__never {
+		font-style: italic;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+	}
+
+	&__total {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// BILLING BADGE (BILLING.md) — one money badge + optional payment-progress bar
+// per job row. Used in both the desktop table cell and the mobile card. Renders
+// nothing when there is no billing action, so the wrapper only exists with content.
+// -----------------------------------------------------------------------------
+.job-billing-badge {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: $space-1;
+	min-width: 0;
+
+	&__progress {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		width: 100%;
+		max-width: 140px;
+	}
+
+	&__track {
+		display: block;
+		width: 100%;
+		height: 4px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		overflow: hidden;
+	}
+
+	&__fill {
+		display: block;
+		height: 100%;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+}
+
+// Mobile card placement: sits between the meta row and the total footer.
+.job-card__billing {
+	margin-top: $space-3;
+
+	.job-billing-badge__progress {
+		max-width: 100%;
+	}
+}
+
+// =============================================================================
+// JOB DETAIL (S5.1) — read-only section cards shown on the job detail page.
+// Shared "section card" shell + the schedule / scope / client / links / line-
+// item / appointments / review widgets that compose the view-mode layout.
+// =============================================================================
+
+@keyframes job-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// Small uppercase eyebrow label used as a sidebar-card heading.
+.job-eyebrow {
+	font-size: $fs-body;
+	font-weight: $weight-semibold;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--color-text-secondary);
+
+	&__req {
+		color: var(--danger-text);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SECTION CARD — the standard bordered card a detail section sits in.
+// -----------------------------------------------------------------------------
+.job-section {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-bottom: $space-3;
+	}
+
+	&__head-main {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		min-width: 0;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+
+	&__title {
+		// font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: $space-1;
+		white-space: pre-wrap;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		line-height: $lh-body;
+	}
+
+	&__empty {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		font-style: italic;
+		color: var(--color-text-muted);
+
+		&--error {
+			font-style: normal;
+			color: var(--danger-text);
+		}
+	}
+
+	&__spin {
+		animation: job-spin 0.7s linear infinite;
+	}
+
+	// Shared across all section cards (Schedule / Products & Services / Billing /
+	// Recurring Billing) — MUST be global per the Styling Law. Previously lived in
+	// JobScheduleSection's scoped <style>, which left the other 3 buttons unstyled.
+	&__head-actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__edit {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		font-size: $fs-body;
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			color: var(--color-brand);
+		}
+
+		i {
+			font-size: 1.1rem;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// META LIST — icon + term/value rows (schedule card).
+// -----------------------------------------------------------------------------
+.job-meta {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+	}
+
+	&__icon {
+		margin-top: 2px;
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+
+	&__term {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+	&__value {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+	&__value--muted {
+		font-style: italic;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CLIENT CARD — contact identity + phone/email + service address.
+// -----------------------------------------------------------------------------
+.job-client {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__contact {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		margin: $space-3 (-$space-2) 0;
+		padding: $space-2;
+		border-radius: $radius-md;
+		text-decoration: none;
+		transition: background-color $duration-fast $ease-standard;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.12);
+		font-size: $fs-body;
+		font-weight: $weight-bold;
+		color: var(--color-brand);
+	}
+
+	&__identity {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__view {
+		font-size: $fs-body;
+		color: var(--color-brand);
+	}
+
+	&__rows {
+		margin-top: $space-3;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-height: 36px;
+		padding: $space-1;
+		border-radius: $radius-sm;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		transition: background-color $duration-fast $ease-standard;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		i {
+			flex-shrink: 0;
+			color: var(--color-text-muted);
+			font-size: 1.4rem;
+		}
+		span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	&__addr {
+		margin-top: $space-3;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__addr-body {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+	}
+
+	&__addr-icon {
+		margin-top: 2px;
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.4rem;
+	}
+
+	&__addr-lines {
+		min-width: 0;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		p {
+			margin: 0;
+		}
+	}
+
+	&__maps {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-brand);
+		text-decoration: none;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LINKS CARD — related opportunity / invoices / appointments rows.
+// -----------------------------------------------------------------------------
+.job-links {
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__spin {
+		animation: job-spin 0.7s linear infinite;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		padding: $space-4;
+		border-bottom: 1px solid var(--color-border);
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__row--link {
+		text-decoration: none;
+		color: inherit;
+		transition: background-color $duration-fast $ease-standard;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__main {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-width: 0;
+	}
+	&__icon {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+	}
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__count {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+	&__chevron {
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+	}
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LINE ITEMS — products & services list + totals.
+// -----------------------------------------------------------------------------
+.job-lines {
+	&__group {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+	&__groups {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__group-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+
+	&__item {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+		padding-bottom: $space-2;
+		border-bottom: 1px solid var(--color-border);
+		&:last-child {
+			border-bottom: none;
+		}
+	}
+
+	&__item-main {
+		min-width: 0;
+	}
+	&__item-desc {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__item-details {
+		margin-top: 2px;
+		white-space: pre-wrap;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__item-qty {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	// Per-line "Tax exempt" chip, shown on the read-only view when a line is non-taxable
+	// (mirrors the editor's quote-lines__tax-tag). Muted amber = "excluded from tax".
+	&__item-tax {
+		margin-left: $space-2;
+		padding: 1px 6px;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: #b45309;
+		background: rgba(251, 191, 36, 0.14);
+	}
+
+	&__item-total {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__totals {
+		margin-top: $space-4;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__total-row {
+		display: flex;
+		justify-content: space-between;
+		font-size: $fs-body;
+	}
+
+	&__total-row--grand {
+		margin-top: $space-1;
+		padding-top: $space-2;
+		border-top: 1px solid var(--color-border);
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+	}
+
+	&__total-term {
+		color: var(--color-text-secondary);
+	}
+	&__total-term--discount {
+		color: var(--success-text);
+	}
+	&__total-val {
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+	&__total-val--discount {
+		color: var(--success-text);
+	}
+
+	// ── Internal profitability summary (revenue-only) ──────────────────────────
+	&__margin-panel {
+		margin-top: $space-4;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__margin-panel-head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-3;
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__margin-panel-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__margin-panel-note {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__margin-panel-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: $space-3;
+	}
+
+	&__margin-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__margin-stat-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__margin-stat-value {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// APPOINTMENTS LIST — wrapper list inside the upcoming-appointments card.
+// -----------------------------------------------------------------------------
+.job-appts {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+// -----------------------------------------------------------------------------
+// REVIEW INDICATOR — status badge + send/resend action.
+// -----------------------------------------------------------------------------
+.job-review {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-2;
+}
+
+// =============================================================================
+// JOB DETAIL (S5.2) — VIEW MODE layout widgets: the page title/header block,
+// the status-and-actions sidebar card, and the job-info (type/tags) sidebar
+// card. The 2-col grid layout itself is scoped on the page.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// PAGE LAYOUT — the shared 2-col grid (main + sticky 320px sidebar) used by both
+// the New Job page and the job detail view/edit page, so the two screens stay in
+// lockstep. New Job is the visual reference; this mirrors it.
+// -----------------------------------------------------------------------------
+.job-layout {
+	display: grid;
+	gap: $space-4;
+	padding-bottom: calc(var(--bottom-nav-height) + 32px);
+
+	@media (min-width: $bp-tablet) {
+		grid-template-columns: 1fr 320px;
+		align-items: start;
+		padding-bottom: $space-6;
+	}
+
+	&__main {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__sidebar {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+
+		@media (min-width: $bp-tablet) {
+			position: sticky;
+			top: calc(var(--header-height) + 16px);
+			align-self: start;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DETAIL HEADER — contact eyebrow + job title + status badge (view mode only).
+// -----------------------------------------------------------------------------
+.job-detail-header {
+	margin-bottom: $space-5;
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__main {
+		min-width: 0;
+	}
+
+	&__eyebrow {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	&__title {
+		margin-top: 2px;
+		font-size: $fs-h2;
+		font-weight: $weight-semibold;
+		line-height: 1.25;
+		color: var(--color-text-primary);
+		letter-spacing: -0.01em;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// STATUS CARD — sidebar card with status badge + review indicator + action
+// buttons (Start / Mark complete / Cancel).
+// -----------------------------------------------------------------------------
+.job-status-card {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__review {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-top: $space-3;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__review-label {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__error {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--danger-text);
+	}
+
+	&__actions {
+		display: grid;
+		gap: $space-2;
+		margin-top: $space-3;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// JOB INFO CARD — sidebar card with job type, assignee, and tag chips.
+// -----------------------------------------------------------------------------
+.job-info-card {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	.job-eyebrow {
+		margin-bottom: $space-3;
+		display: block;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		font-size: 1.4rem;
+		color: var(--color-text-muted);
+	}
+
+	&__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-1;
+		margin-top: $space-2;
+	}
+}
+
+// =============================================================================
+// JOB DETAIL (S5.3) — EDIT MODE forms. Edit cards reuse .job-section as shell.
+// =============================================================================
+
+// Toggle row — "All day / Anytime" switch with label + hint
+.job-toggle-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-4;
+	padding: $space-3 $space-4;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface-sunk);
+
+	&__text {
+		min-width: 0;
+	}
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__hint {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+}
+
+// Quick date chip bar
+.job-quick-dates {
+	margin-top: $space-4;
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		margin-bottom: $space-2;
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+}
+
+// Individual quick-date button
+.job-quick-date {
+	height: 32px;
+	padding: 0 $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	font-family: $font-body;
+	color: var(--color-text-primary);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: rgba(34, 125, 83, 0.4);
+		background: rgba(34, 125, 83, 0.05);
+		color: var(--color-brand);
+	}
+	&:active {
+		transform: scale(0.97);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+}
+
+// 2-col grid for start/end date pickers
+.job-schedule-grid {
+	display: grid;
+	gap: $space-3;
+	margin-top: $space-4;
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	// Recurring / one-off timed: date + start time + end time (Jobber's 3-up row).
+	// Declared after the base so it wins when both classes are present.
+	&--recur,
+	&--oneoff {
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1.4fr 1fr 1fr;
+		}
+	}
+}
+
+// Estimated duration hint under the date pickers
+.job-duration-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	margin-top: $space-3;
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-brand);
+	i {
+		font-size: 1.4rem;
+	}
+}
+
+// Assignee sub-section inside schedule card
+.job-assignee-section {
+	margin-top: $space-5;
+	padding-top: $space-4;
+	border-top: 1px solid var(--color-border);
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+}
+
+// Selected assignee pill (chip with remove button)
+.job-assignee-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	height: 36px;
+	padding: 0 $space-1 0 $space-3;
+	border: 1px solid rgba(34, 125, 83, 0.25);
+	border-radius: $radius-full;
+	background: rgba(34, 125, 83, 0.08);
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-brand);
+	i {
+		font-size: 1.4rem;
+	}
+
+	&__remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		margin-left: 2px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		cursor: pointer;
+		color: inherit;
+		transition: background-color $duration-fast $ease-standard;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			background: rgba(34, 125, 83, 0.2);
+		}
+	}
+}
+
+// Header row for scope field — label + char counter on same line
+.job-scope-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-2;
+	margin-bottom: $space-2;
+}
+
+.job-scope-counter {
+	font-size: $fs-caption;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+	&--warn {
+		color: var(--danger-text);
+	}
+}
+
+// Pricing inputs (discount + tax rate) — 2-col grid beneath LineItemEditor
+.job-pricing-inputs {
+	display: grid;
+	gap: $space-3;
+	margin-top: $space-4;
+	padding-top: $space-4;
+	border-top: 1px solid var(--color-border);
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+// Discount type selector + value input on one row
+.job-discount-row {
+	display: flex;
+	gap: $space-2;
+	align-items: flex-start;
+
+	.ui-select__trigger {
+		width: 128px;
+		flex-shrink: 0;
+	}
+}
+
+// Totals summary box inside line-items edit card
+.job-edit-summary {
+	margin-top: $space-4;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__row {
+		display: flex;
+		justify-content: space-between;
+		font-size: $fs-body;
+	}
+
+	&__row--total {
+		margin-top: $space-1;
+		padding-top: $space-2;
+		border-top: 1px solid var(--color-border);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+	}
+
+	&__row--discount &__term {
+		color: var(--success-text);
+	}
+	&__row--discount &__val {
+		color: var(--success-text);
+	}
+
+	&__term {
+		color: var(--color-text-secondary);
+	}
+	&__val {
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+	}
+}
+
+// Service address card inner layout (sidebar, edit mode)
+.job-addr-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-2;
+	margin-bottom: $space-3;
+}
+
+.job-addr-maps-link {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	font-size: $fs-caption;
+	color: var(--color-brand);
+	text-decoration: none;
+	i {
+		font-size: 1.3rem;
+	}
+	&:hover {
+		text-decoration: underline;
+	}
+}
+
+.job-addr-fields {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+}
+
+.job-addr-city-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: $space-2;
+}
+
+// Job type chip picker
+.job-type-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $space-1;
+	margin-bottom: $space-2;
+}
+
+.job-type-chip {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-full;
+	background: var(--color-bg-surface);
+	font-size: $fs-caption;
+	font-weight: $weight-medium;
+	font-family: $font-body;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		color: var(--color-text-primary);
+		border-color: rgba(34, 125, 83, 0.3);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&--active {
+		border-color: var(--color-brand);
+		background: var(--color-brand);
+		color: white;
+	}
+}
+
+// Horizontal divider within a card (used between job-type and tags sections)
+.job-section-divider {
+	height: 1px;
+	background: var(--color-border);
+	margin: $space-4 0;
+}
+
+// Job tags editor component layout
+.job-tags-editor {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__suggested {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-1;
+	}
+	&__custom {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-1;
+	}
+
+	&__custom-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 32px;
+		padding: 0 $space-1 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		cursor: pointer;
+		color: var(--color-text-muted);
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__add {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+	}
+
+	&__input-wrap {
+		flex: 1;
+	}
+}
+
+// =============================================================================
+// JOB BILLING (S3.2) — one-off billing: the close-reminder checkbox, the
+// payment-schedule editor (jobs/new + detail edit) and the read-only billing
+// card with payment-progress bar + per-milestone Create-invoice (detail view).
+// =============================================================================
+.job-billing {
+	// Checkbox rows ("Remind me to invoice…", "Split into multiple invoices…").
+	&__check {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		cursor: pointer;
+
+		input {
+			width: 18px;
+			height: 18px;
+			flex-shrink: 0;
+			accent-color: var(--color-brand);
+			cursor: pointer;
+		}
+	}
+
+	&__split-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	// %/$ segmented toggle.
+	&__mode {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__mode-label {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__mode-toggle {
+		display: inline-flex;
+		padding: 3px;
+		gap: 2px;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__mode-btn {
+		min-width: 44px;
+		border: none;
+		background: transparent;
+		padding: $space-1 $space-3;
+		border-radius: calc(#{$radius-md} - 2px);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: all $duration-fast $ease-standard;
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-brand);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	// Allocation helper (editor).
+	&__alloc {
+		margin-top: $space-4;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__alloc-row {
+		display: flex;
+		justify-content: space-between;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		strong {
+			color: var(--color-text-primary);
+			font-variant-numeric: tabular-nums;
+		}
+
+		&--remain {
+			margin-top: $space-1;
+			padding-top: $space-2;
+			border-top: 1px solid var(--color-border);
+			color: var(--color-text-primary);
+			font-weight: $weight-medium;
+		}
+
+		&--over strong {
+			color: var(--danger-text);
+		}
+	}
+
+	// Over-allocation blocker message (editor): the schedule bills more than the job total.
+	&__cap-error {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		margin-top: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--danger-solid);
+		border-radius: $radius-md;
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.1rem;
+			line-height: 1.4;
+		}
+	}
+
+	// Editor rows.
+	&__rows {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__row {
+		display: grid;
+		grid-template-columns: 1fr 150px 150px 40px;
+		gap: $space-2;
+		align-items: start;
+
+		@media (max-width: #{$bp-tablet - 1px}) {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		&--locked {
+			opacity: 0.85;
+		}
+	}
+
+	&__amount-field {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	&__affix {
+		position: absolute;
+		left: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		pointer-events: none;
+
+		&--suffix {
+			left: auto;
+			right: $space-3;
+		}
+	}
+
+	&__row-amount .field__input {
+		padding-left: 1.75rem;
+	}
+	&__row-amount .job-billing__amount-field:has(.job-billing__affix--suffix) .field__input {
+		padding-left: $space-3;
+		padding-right: 1.75rem;
+	}
+
+	&__row-live {
+		display: block;
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__row-action {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 40px;
+	}
+
+	&__del {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background: var(--danger-bg, rgba(244, 63, 94, 0.1));
+			color: var(--danger-text);
+		}
+	}
+
+	&__locked-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__add {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		margin-top: $space-4;
+		padding: 0;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	// Close-reminder note (view).
+	&__reminder {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		i {
+			font-size: 1.4rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	// Payment-progress bar (view).
+	&__progress {
+		margin-top: $space-4;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__progress-total {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		margin-bottom: $space-2;
+		strong {
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+			font-variant-numeric: tabular-nums;
+		}
+	}
+
+	&__bar {
+		display: flex;
+		height: 10px;
+		border-radius: $radius-full;
+		overflow: hidden;
+		background: var(--color-border);
+	}
+
+	&__bar-seg {
+		height: 100%;
+		&--paid {
+			background: var(--color-brand);
+		}
+		&--awaiting {
+			background: #f59e0b;
+		}
+		&--draft {
+			background: #94a3b8;
+		}
+		&--remaining {
+			background: transparent;
+		}
+	}
+
+	&__legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-1 $space-4;
+		margin-top: $space-3;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__legend-item {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__dot {
+		width: 9px;
+		height: 9px;
+		border-radius: 2px;
+		flex-shrink: 0;
+		background: var(--color-text-muted);
+
+		&--paid {
+			background: var(--color-brand);
+		}
+		&--awaiting {
+			background: #f59e0b;
+		}
+		&--draft {
+			background: #94a3b8;
+		}
+		&--remaining {
+			background: var(--color-border);
+		}
+		&--upcoming {
+			background: var(--color-text-muted);
+		}
+		&--cancelled {
+			background: var(--danger-text);
+		}
+	}
+
+	// Milestone rows (view).
+	&__table {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__trow {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 0;
+		border-bottom: 1px solid var(--color-border);
+		&:first-child {
+			padding-top: 0;
+		}
+	}
+
+	&__cell--action {
+		flex-shrink: 0;
+		width: 84px;
+	}
+
+	&__cell--meta {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__cell--amounts {
+		flex-shrink: 0;
+		text-align: right;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__status {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+
+		&--paid {
+			color: var(--color-brand);
+		}
+		&--awaiting {
+			color: #b45309;
+		}
+	}
+
+	&__desc {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__due {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__total {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__balance {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__muted {
+		color: var(--color-text-muted);
+	}
+
+	&__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: $space-3;
+		padding-top: $space-3;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__foot-amounts {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+	}
+}
+
+// ── Recurring billing (S4) — "Billing & automatic payments" card ────────────
+.recur-billing {
+	// Summary line: "N invoices · First … · Last …" (editor).
+	&__summary {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		strong {
+			color: var(--color-text-primary);
+			font-variant-numeric: tabular-nums;
+		}
+	}
+
+	&__summary-sep {
+		color: var(--color-border-strong, var(--color-border));
+	}
+	&__summary-loading {
+		color: var(--color-text-muted);
+		font-style: italic;
+	}
+
+	// Two-column: config on the left, deferred auto-charge card on the right.
+	&__grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+		gap: $space-5;
+		margin-top: $space-4;
+
+		@media (max-width: 880px) {
+			grid-template-columns: 1fr;
+			gap: $space-4;
+		}
+	}
+
+	&__config {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__fieldset {
+		border: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__legend {
+		padding: 0;
+		margin-bottom: $space-1;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// Radio option (Visit based / Fixed price).
+	&__radio {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+
+		input {
+			margin-top: 2px;
+			accent-color: var(--color-brand);
+			cursor: pointer;
+			flex-shrink: 0;
+		}
+
+		&:hover {
+			border-color: var(--color-border-strong, var(--color-border));
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--color-brand-subtle, var(--color-bg-surface-sunk));
+		}
+	}
+
+	&__radio-body {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	&__radio-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__radio-desc {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	// Fixed-amount input with a leading $.
+	&__amount-field {
+		position: relative;
+		display: flex;
+		align-items: center;
+		.field__input {
+			padding-left: 1.75rem;
+		}
+	}
+
+	&__affix {
+		position: absolute;
+		left: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		pointer-events: none;
+	}
+
+	// Deferred auto-charge placeholder (greyed). Standalone in the detail view (top margin),
+	// reset to grid alignment when it sits in the editor's two-column grid.
+	&__auto {
+		margin-top: $space-4;
+		padding: $space-4;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		border: 1px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		align-self: start;
+	}
+
+	&__grid &__auto {
+		margin-top: 0;
+	}
+
+	&__auto-title {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin: 0;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		i {
+			font-size: 1.4rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__auto-text {
+		margin: 0;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	&__auto-badge {
+		align-self: flex-start;
+		margin-top: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		border: 1px solid var(--color-border);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+	}
+
+	// Read-only view (detail).
+	&__view {
+		margin: $space-3 0 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__view-row {
+		display: flex;
+		justify-content: space-between;
+		gap: $space-3;
+		font-size: $fs-body;
+		dt {
+			color: var(--color-text-secondary);
+		}
+		dd {
+			margin: 0;
+			color: var(--color-text-primary);
+			font-weight: $weight-medium;
+			text-align: right;
+		}
+	}
+
+	&__view-actions {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__view-hint {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// Fixed bottom save bar — visible on mobile only while editing
+.job-mobile-bar {
+	position: fixed;
+	inset-inline: 0;
+	bottom: var(--bottom-nav-height);
+	z-index: $z-sticky;
+	display: flex;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	box-shadow: 0 -4px 12px rgba(13, 21, 15, 0.06);
+
+	@media (min-width: $bp-tablet) {
+		display: none;
+	}
+}
+
+// =============================================================================
+// JOB NEW PAGE (S5.4) — provenance banner, prefilled client card, contact
+// search dropdown, selected-contact row. Page layout grid is scoped on page.
+// =============================================================================
+
+// "From Quote #XXX" amber info banner in the sidebar.
+.job-provenance {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+	padding: $space-3 $space-4;
+	border: 1px solid rgba(245, 158, 11, 0.3);
+	border-radius: $radius-lg;
+	background: rgba(245, 158, 11, 0.1);
+
+	&__icon {
+		font-size: 1.6rem;
+		flex-shrink: 0;
+		color: #b45309;
+	}
+	&__text {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: #92400e;
+	}
+	&__num {
+		font-weight: $weight-semibold;
+	}
+}
+
+[data-theme='dark'] .job-provenance {
+	background: rgba(245, 158, 11, 0.08);
+	border-color: rgba(245, 158, 11, 0.2);
+
+	.job-provenance__icon {
+		color: #fbbf24;
+	}
+	.job-provenance__text {
+		color: #fcd34d;
+	}
+}
+
+// Prefilled client display (from-quote flow) — avatar + name + phone/email.
+.job-new-client {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: rgba(34, 125, 83, 0.12);
+		font-size: $fs-body;
+		font-weight: $weight-bold;
+		color: var(--color-brand);
+	}
+
+	&__info {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+		}
+		&:is(a):hover {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__email {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+}
+
+// Service-address lock notice — the address is owned by the contact record, so the
+// fields are read-only here with a clear pointer to where it can be edited.
+.job-addr-hint {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+	margin-top: $space-2;
+	font-size: $fs-caption;
+	color: var(--color-text-muted);
+
+	i {
+		font-size: 1.4rem;
+		flex-shrink: 0;
+	}
+
+	a {
+		color: var(--color-brand);
+		font-weight: $weight-medium;
+		text-decoration: underline;
+	}
+
+	&--warn {
+		color: var(--color-text-secondary);
+
+		i {
+			color: var(--warning-solid);
+		}
+	}
+}

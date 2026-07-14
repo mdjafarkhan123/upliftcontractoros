@@ -6,23 +6,19 @@
 	}: { columns?: number; rows?: number; title?: string } = $props();
 </script>
 
-<section
-	class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-	aria-busy="true"
-	aria-label={title}
->
-	<header class="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+<section class="jafar-skel-section" aria-busy="true" aria-label={title}>
+	<header class="jafar-skel-section__head">
 		<div>
-			<div class="h-4 w-32 animate-pulse rounded bg-slate-800"></div>
-			<div class="mt-2 h-3 w-24 animate-pulse rounded bg-slate-800/70"></div>
+			<div class="j-skel j-skel--h4" style="width: 8rem;"></div>
+			<div class="j-skel j-skel--h3 j-skel--dim" style="width: 6rem; margin-top: 0.5rem;"></div>
 		</div>
 	</header>
-	<div class="divide-y divide-slate-800/70">
+	<div>
 		{#each Array(rows) as _, r (r)}
-			<div class="flex items-center gap-4 px-5 py-3.5">
+			<div class="jafar-skel-section__row">
 				{#each Array(columns) as _, c (c)}
 					<div
-						class="h-4 animate-pulse rounded bg-slate-800/60"
+						class="j-skel j-skel--h4 j-skel--dim"
 						style="width: {c === 0 ? 22 : c === columns - 1 ? 10 : 14}%"
 					></div>
 				{/each}

@@ -20,6 +20,7 @@ import {
 	invoiceLineItems,
 	invoices,
 	orgCounters,
+	organizations,
 	outboxEvents,
 	payments,
 	quoteLineItems,
@@ -28,6 +29,7 @@ import {
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { createInvoiceSchema } from '$lib/server/invoices/schemas';
+import { orgLateFeeSnapshot } from '$lib/server/invoices/lateFee';
 import { textMatch, textRank } from '$lib/server/search/textSearch';
 import { generateToken } from '$lib/server/quotes/token';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
@@ -230,6 +232,21 @@ export const POST: RequestHandler = async (event) => {
 			.set({ next_invoice_number: invoiceNumber + 1, updated_at: new Date() })
 			.where(eq(orgCounters.org_id, auth.orgId));
 
+		// Snapshot the org's default Terms & Conditions onto the invoice at create time so the
+		// customer's agreed terms stay frozen even if the org default changes later. An explicit
+		// terms value in the request overrides the default. Shares organizations.default_quote_terms
+		// with quotes (one org-wide T&C default; no separate invoice default column).
+		const [orgRow] = await tx
+			.select({ default_quote_terms: organizations.default_quote_terms })
+			.from(organizations)
+			.where(eq(organizations.id, auth.orgId))
+			.limit(1);
+
+		// Snapshot the org's active late-fee terms onto the invoice (M8 Phase 2) so a later change to
+		// the company default never rewrites this invoice — and the contractor can waive/adjust the
+		// fee per client. An explicit request value overrides the snapshot (New Invoice form).
+		const lf = await orgLateFeeSnapshot(tx, auth.orgId);
+
 		const rawToken = generateToken();
 		const [inserted] = await tx
 			.insert(invoices)
@@ -246,6 +263,17 @@ export const POST: RequestHandler = async (event) => {
 				tax_rate: input.tax_rate !== undefined ? String(input.tax_rate) : '0',
 				due_date: input.due_date ?? null,
 				notes: input.notes ?? null,
+				terms: input.terms !== undefined ? input.terms : (orgRow?.default_quote_terms ?? null),
+				send_payment_reminders: input.send_payment_reminders ?? true,
+				accept_tips: input.accept_tips ?? true,
+				late_fee_enabled: input.late_fee_enabled ?? lf.late_fee_enabled,
+				late_fee_type: input.late_fee_type ?? lf.late_fee_type,
+				late_fee_value:
+					input.late_fee_value !== undefined
+						? input.late_fee_value === null
+							? null
+							: input.late_fee_value.toFixed(2)
+						: lf.late_fee_value,
 				public_token: rawToken
 			})
 			.returning();
@@ -254,6 +282,7 @@ export const POST: RequestHandler = async (event) => {
 			description: string;
 			quantity: string;
 			unit_price: string;
+			taxable: boolean;
 			total: string;
 			position: number;
 		}> = [];
@@ -263,6 +292,7 @@ export const POST: RequestHandler = async (event) => {
 				description: li.description,
 				quantity: String(li.quantity),
 				unit_price: String(li.unit_price),
+				taxable: li.taxable ?? true,
 				total: computeLineTotal(li.quantity, li.unit_price),
 				position: li.position ?? idx
 			}));
@@ -272,6 +302,7 @@ export const POST: RequestHandler = async (event) => {
 					description: quoteLineItems.description,
 					quantity: quoteLineItems.quantity,
 					unit_price: quoteLineItems.unit_price,
+					taxable: quoteLineItems.taxable,
 					total: quoteLineItems.total,
 					position: quoteLineItems.position
 				})
@@ -300,6 +331,7 @@ export const POST: RequestHandler = async (event) => {
 					description: li.description,
 					quantity: li.quantity,
 					unit_price: li.unit_price,
+					taxable: li.taxable,
 					total: li.total,
 					position: li.position
 				}))

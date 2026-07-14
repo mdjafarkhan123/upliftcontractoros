@@ -23,39 +23,19 @@
 >
 	{#snippet children()}
 		{#if form?.error}
-			<div class="mb-5">
+			<div class="change-pw__alert">
 				<AuthAlert message={form.error} variant="destructive" />
 			</div>
 		{/if}
 
-		<div
-			class="mb-5 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3.5"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="mt-0.5 shrink-0 text-blue-600"
-				aria-hidden="true"
-			>
-				<circle cx="12" cy="12" r="10" />
-				<line x1="12" y1="16" x2="12" y2="12" />
-				<line x1="12" y1="8" x2="12.01" y2="8" />
-			</svg>
-			<p class="text-sm text-blue-700 leading-relaxed">
-				Your password must be at least 8 characters long.
-			</p>
+		<div class="change-pw__note">
+			<i class="ri-information-line change-pw__note-icon" aria-hidden="true"></i>
+			<p>Your password must be at least 8 characters long.</p>
 		</div>
 
 		<form
 			method="POST"
-			class="space-y-5"
+			class="change-pw__form"
 			use:enhance={() => {
 				loading = true;
 				return async ({ update }) => {
@@ -84,35 +64,10 @@
 				required
 			/>
 
-			<button
-				type="submit"
-				disabled={loading}
-				class="w-full h-11 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer"
-			>
+			<button type="submit" disabled={loading} class="btn btn--primary change-pw__submit">
 				{#if loading}
-					<span class="inline-flex items-center justify-center gap-2">
-						<svg
-							class="animate-spin h-4 w-4"
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-						>
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-							></path>
-						</svg>
-						Updating…
-					</span>
+					<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
+					Updating…
 				{:else}
 					Set password & continue
 				{/if}
@@ -120,3 +75,44 @@
 		</form>
 	{/snippet}
 </AuthCard>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.change-pw__alert {
+		margin-bottom: $space-5;
+	}
+
+	.change-pw__note {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		margin-bottom: $space-5;
+		border-radius: $radius-lg;
+		border: 1px solid rgba(53, 56, 205, 0.2);
+		background: var(--info-bg);
+		padding: $space-3 $space-4;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--info-text);
+	}
+
+	.change-pw__note-icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 16px;
+		line-height: 1;
+	}
+
+	.change-pw__form {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+	}
+
+	.change-pw__submit {
+		width: 100%;
+		height: 44px;
+		margin-top: $space-1;
+	}
+</style>

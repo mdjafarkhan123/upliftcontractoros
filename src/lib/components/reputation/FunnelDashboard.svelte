@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Send, MousePointerClick, Star, CheckCircle2 } from '@lucide/svelte';
 	import type { FunnelPeriod, FunnelSummary } from '$lib/types/reputation';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { reputationFunnelStore } from '$lib/stores/reputation.svelte';
@@ -21,21 +20,33 @@
 	const steps = $derived(
 		data
 			? [
-					{ key: 'sent', label: 'Sent', value: data.sent, of: data.sent, icon: Send },
+					{
+						key: 'sent',
+						label: 'Sent',
+						value: data.sent,
+						of: data.sent,
+						icon: 'ri-send-plane-line'
+					},
 					{
 						key: 'opened',
 						label: 'Opened',
 						value: data.opened,
 						of: data.sent,
-						icon: MousePointerClick
+						icon: 'ri-cursor-line'
 					},
-					{ key: 'rated', label: 'Rated', value: data.rated, of: data.opened, icon: Star },
+					{
+						key: 'rated',
+						label: 'Rated',
+						value: data.rated,
+						of: data.opened,
+						icon: 'ri-star-line'
+					},
 					{
 						key: 'converted',
 						label: 'Converted',
 						value: data.converted,
 						of: data.rated,
-						icon: CheckCircle2
+						icon: 'ri-checkbox-circle-line'
 					}
 				]
 			: []
@@ -58,26 +69,21 @@
 	];
 </script>
 
-<section class="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-	<header class="flex items-center justify-between gap-3">
+<section class="rep-funnel">
+	<header class="rep-funnel__head">
 		<div>
-			<h2 class="text-sm font-semibold text-foreground">Review funnel</h2>
-			<p class="text-xs text-muted-foreground">Where requests convert — and where they leak.</p>
+			<h2 class="rep-funnel__title">Review funnel</h2>
+			<p class="rep-funnel__sub">Where requests convert — and where they leak.</p>
 		</div>
-		<div
-			role="tablist"
-			aria-label="Funnel period"
-			class="inline-flex rounded-lg border border-border bg-muted p-0.5"
-		>
+		<div class="rep-funnel__periods" role="tablist" aria-label="Funnel period">
 			{#each periods as p (p.value)}
 				<button
 					role="tab"
 					aria-selected={period === p.value}
 					type="button"
 					onclick={() => (period = p.value)}
-					class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors {period === p.value
-						? 'bg-card text-foreground shadow-sm'
-						: 'text-muted-foreground hover:text-foreground'}"
+					class="rep-funnel__period"
+					class:rep-funnel__period--active={period === p.value}
 				>
 					{p.label}
 				</button>
@@ -86,89 +92,73 @@
 	</header>
 
 	{#if !data && status === 'loading'}
-		<div class="mt-4"><SkeletonLoader lines={2} height="64px" label="Loading funnel" /></div>
+		<div style="margin-top: 1rem">
+			<SkeletonLoader lines={2} height="64px" label="Loading funnel" />
+		</div>
 	{:else if data && data.sent === 0}
-		<p class="mt-4 text-sm text-muted-foreground">
+		<p class="rep-funnel__empty">
 			Once you start sending review requests, your funnel will appear here.
 		</p>
 	{:else if data}
 		<!-- Step tiles: count + conversion from previous step -->
-		<div class="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+		<div class="rep-funnel__steps">
 			{#each steps as s, i (s.key)}
-				{@const StepIcon = s.icon}
 				{@const conv = i === 0 ? null : pct(s.value, s.of)}
-				<div class="rounded-xl border border-border bg-background p-3">
-					<div class="flex items-center gap-1.5 text-muted-foreground">
-						<StepIcon class="h-3.5 w-3.5" />
-						<span class="text-[11px] font-medium uppercase tracking-wide">{s.label}</span>
+				<div class="rep-step">
+					<div class="rep-step__head">
+						<i class={s.icon} aria-hidden="true"></i>
+						<span class="rep-step__label">{s.label}</span>
 					</div>
-					<p class="mt-1 text-2xl font-semibold text-foreground tabular-nums">{s.value}</p>
+					<p class="rep-step__value">{s.value}</p>
 					{#if conv !== null}
-						<p class="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
-							{conv}% of {s.of}
-						</p>
+						<p class="rep-step__conv">{conv}% of {s.of}</p>
 					{:else}
-						<p class="mt-0.5 text-[11px] text-muted-foreground">total</p>
+						<p class="rep-step__conv">total</p>
 					{/if}
 				</div>
 			{/each}
 		</div>
 
 		<!-- Horizontal funnel bars (each bar widthed against `sent`) -->
-		<div class="mt-4 space-y-1.5">
+		<div class="rep-funnel__bars">
 			{#each steps as s (s.key)}
 				{@const w = data.sent > 0 ? Math.max(2, Math.round((s.value / data.sent) * 100)) : 0}
-				<div class="flex items-center gap-2">
-					<span class="w-16 shrink-0 text-[11px] text-muted-foreground">{s.label}</span>
-					<div class="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
-						<div
-							class="h-full rounded-full bg-primary/70 transition-[width] duration-500"
-							style="width: {w}%"
-						></div>
+				<div class="rep-bar">
+					<span class="rep-bar__label">{s.label}</span>
+					<div class="rep-bar__track">
+						<div class="rep-bar__fill" style="width: {w}%"></div>
 					</div>
-					<span
-						class="w-10 shrink-0 text-right text-[11px] font-medium tabular-nums text-foreground"
-					>
-						{s.value}
-					</span>
+					<span class="rep-bar__val">{s.value}</span>
 				</div>
 			{/each}
 		</div>
 
 		<!-- Star distribution -->
 		{#if totalRatings > 0}
-			<div class="mt-5 border-t border-border pt-4">
-				<div class="flex items-center justify-between">
-					<h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-						Star distribution
-					</h3>
-					<span class="text-[11px] text-muted-foreground tabular-nums">
-						{totalRatings} rated
-					</span>
+			<div class="rep-funnel__stars">
+				<div class="rep-funnel__stars-head">
+					<h3 class="rep-funnel__stars-title">Star distribution</h3>
+					<span class="rep-funnel__stars-count">{totalRatings} rated</span>
 				</div>
-				<div class="mt-2 space-y-1.5">
+				<div class="rep-funnel__star-rows">
 					{#each [5, 4, 3, 2, 1] as star (star)}
 						{@const count = data.star_distribution[String(star) as '1' | '2' | '3' | '4' | '5']}
 						{@const pctOfRated = totalRatings > 0 ? Math.round((count / totalRatings) * 100) : 0}
 						{@const positive = star >= 4}
-						<div class="flex items-center gap-2">
-							<span class="flex w-8 shrink-0 items-center gap-0.5 text-[11px] tabular-nums">
+						<div class="rep-bar">
+							<span class="rep-bar__label-star">
 								{star}
-								<Star class="h-3 w-3 fill-current text-amber-500" />
+								<i class="ri-star-fill" aria-hidden="true"></i>
 							</span>
-							<div class="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
+							<div class="rep-bar__track">
 								<div
-									class="h-full rounded-full transition-[width] duration-500 {positive
-										? 'bg-emerald-500/80'
-										: 'bg-rose-500/70'}"
+									class="rep-bar__fill"
+									class:rep-bar__fill--positive={positive}
+									class:rep-bar__fill--negative={!positive}
 									style="width: {Math.max(count > 0 ? 2 : 0, pctOfRated)}%"
 								></div>
 							</div>
-							<span
-								class="w-12 shrink-0 text-right text-[11px] font-medium tabular-nums text-foreground"
-							>
-								{count} · {pctOfRated}%
-							</span>
+							<span class="rep-bar__val-wide">{count} · {pctOfRated}%</span>
 						</div>
 					{/each}
 				</div>

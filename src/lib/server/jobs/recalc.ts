@@ -5,23 +5,35 @@ type Tx = Parameters<Parameters<typeof DbClient.transaction>[0]>[0];
 
 /**
  * Recalculate a job's subtotal/discount/tax/total from its non-deleted line items.
- * Mirrors recalcQuoteTotals: `subtotal` is the sum of all line totals, a job-level discount
- * (fixed or percent) is applied to that subtotal BEFORE tax (industry-standard order), and tax
- * is charged on the discounted amount. A fixed discount is clamped to the subtotal (total can
- * never go negative); a percent discount is clamped to 100%. Jobs have no optional add-ons and
- * no deposit, so every line counts and there is no deposit math. Caller MUST hold a row lock on
- * the job (SELECT ... FOR UPDATE) before calling to serialize against concurrent line edits.
+ * Mirrors recalcInvoiceTotals: `subtotal` is the sum of all line totals, a job-level discount
+ * (fixed or percent) is applied to that subtotal BEFORE tax (industry-standard order). A fixed
+ * discount is clamped to the subtotal (total can never go negative); a percent discount is
+ * clamped to 100%. Jobs have no optional add-ons and no deposit, so every line counts and there
+ * is no deposit math.
+ *
+ * Per-line tax: only lines with taxable = true feed the tax base (labor is commonly non-taxable).
+ * The job-level discount is allocated proportionally across the whole subtotal, so tax is charged
+ * on the taxable SHARE of the discounted amount
+ * (taxable_subtotal * discounted / subtotal * tax_rate) — identical to recalcInvoiceTotals. With
+ * no discount and every line taxable this collapses to subtotal * tax_rate exactly, so existing
+ * jobs (all lines default taxable) keep the same totals.
+ *
+ * Caller MUST hold a row lock on the job (SELECT ... FOR UPDATE) before calling to serialize
+ * against concurrent line edits.
  */
 export async function recalcJobTotals(tx: Tx, jobId: string): Promise<void> {
 	await tx.execute(sql`
 		WITH agg AS (
-			SELECT COALESCE(SUM(total), 0)::numeric(12,2) AS subtotal
+			SELECT
+				COALESCE(SUM(total), 0)::numeric(12,2) AS subtotal,
+				COALESCE(SUM(total) FILTER (WHERE taxable = true), 0)::numeric(12,2) AS taxable_subtotal
 			FROM job_line_items
 			WHERE job_id = ${jobId} AND deleted_at IS NULL
 		),
 		disc AS (
 			SELECT
 				agg.subtotal,
+				agg.taxable_subtotal,
 				CASE
 					WHEN j.discount_type = 'percent' AND j.discount_value IS NOT NULL
 						THEN ROUND(agg.subtotal * LEAST(j.discount_value, 100) / 100, 2)
@@ -36,9 +48,16 @@ export async function recalcJobTotals(tx: Tx, jobId: string): Promise<void> {
 			SELECT
 				disc.subtotal,
 				disc.discount_amount,
-				ROUND((disc.subtotal - disc.discount_amount) * j.tax_rate, 2)                  AS tax_amount,
+				ROUND(
+					CASE WHEN disc.subtotal > 0
+						THEN disc.taxable_subtotal * (disc.subtotal - disc.discount_amount) / disc.subtotal
+						ELSE 0
+					END * j.tax_rate, 2) AS tax_amount,
 				ROUND((disc.subtotal - disc.discount_amount)
-					+ (disc.subtotal - disc.discount_amount) * j.tax_rate, 2)                   AS new_total
+					+ CASE WHEN disc.subtotal > 0
+						THEN disc.taxable_subtotal * (disc.subtotal - disc.discount_amount) / disc.subtotal
+						ELSE 0
+					END * j.tax_rate, 2) AS new_total
 			FROM disc, jobs j
 			WHERE j.id = ${jobId}
 		)

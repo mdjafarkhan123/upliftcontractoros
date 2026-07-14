@@ -223,11 +223,12 @@ export async function seedAutomationSequences(orgId: string, client: DbOrTx = db
 		]);
 	}
 
-	// ── invoice_dunning (Stage 3.c.2) ────────────────────────────────────────────
+	// ── invoice_dunning (Stage 3.c.2 / 5.2) ──────────────────────────────────────
 	// SMS-only, invoice-anchored; steps fire at due_date + offset (engine anchors to
-	// due_date). Clean port of the old due+0/3/7/14 cadence. delay_minutes chains
-	// from the previous step (0, 3d, 4d, 7d → cumulative 0/3/7/14). All steps reuse
-	// invoice_reminder_message. MUST stay in sync with migration 0090.
+	// due_date). OFFSET mode with mixed sign: a nudge 3 days BEFORE due, one ON the
+	// due date, then chase at +3d / +7d / +14d — the Jobber/QuickBooks/Housecall
+	// cadence. Negative offset = before due, 0 = on due, positive = after due. All
+	// steps reuse invoice_reminder_message. Keep in sync with migration 0153.
 	const [id] = await client
 		.insert(automationSequences)
 		.values({
@@ -240,11 +241,12 @@ export async function seedAutomationSequences(orgId: string, client: DbOrTx = db
 		.returning();
 	if (id) {
 		await client.insert(automationSequenceSteps).values(
-			[0, 4320, 5760, 10080].map((delay_minutes, position) => ({
+			[-4320, 0, 4320, 10080, 20160].map((offset_minutes, position) => ({
 				org_id: orgId,
 				sequence_id: id.id,
 				position,
-				delay_minutes,
+				delay_minutes: 0,
+				offset_minutes,
 				channel: null,
 				sms_body: settings.invoice_reminder_message,
 				email_subject: null,

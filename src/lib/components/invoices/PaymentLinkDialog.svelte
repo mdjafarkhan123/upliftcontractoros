@@ -1,10 +1,8 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Copy, ExternalLink, Link as LinkIcon } from '@lucide/svelte';
 
 	let {
 		open = $bindable(false),
@@ -57,54 +55,56 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>Payment link</Dialog.Title>
-			<Dialog.Description>
-				Share this Stripe Checkout link with your customer. Payment goes directly to your Stripe
-				account.
-			</Dialog.Description>
-		</Dialog.Header>
-		<div class="space-y-4">
+	<Dialog.Content class="payment-link" showClose={false}>
+		<div class="dialog-content__header">
+			<div class="dialog-content__header-main">
+				<Dialog.Title>Payment link</Dialog.Title>
+				<Dialog.Description>
+					Share this Stripe Checkout link with your customer. Payment goes directly to your Stripe
+					account.
+				</Dialog.Description>
+			</div>
+			<Dialog.Close class="dialog-content__close" aria-label="Close">
+				<i class="ri-close-line" aria-hidden="true"></i>
+			</Dialog.Close>
+		</div>
+
+		<div class="payment-link__body">
 			{#if url}
-				<div class="flex items-center gap-2">
-					<Input value={url} readonly class="text-xs" />
-					<Button variant="outline" size="icon" onclick={copy} aria-label="Copy link">
-						<Copy class="h-4 w-4" />
-					</Button>
+				<div class="payment-link__row">
+					<Input value={url} readonly class="payment-link__url" />
+					<button type="button" class="payment-link__copy" onclick={copy} aria-label="Copy link">
+						<i class="ri-file-copy-line" aria-hidden="true"></i>
+					</button>
 				</div>
-				<a
-					href={url}
-					target="_blank"
-					rel="noopener"
-					class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-				>
-					<ExternalLink class="h-3 w-3" />Open checkout
+				<a href={url} target="_blank" rel="noopener" class="payment-link__open">
+					<i class="ri-external-link-line" aria-hidden="true"></i>Open checkout
 				</a>
-				<JetEngineButton
-					label="Regenerate link"
+				<Button
 					loadingLabel="Generating…"
 					successLabel="Generated"
-					state={busy ? 'loading' : 'idle'}
+					loading={busy}
 					onclick={generate}
 				>
-					{#snippet icon()}<LinkIcon class="h-4 w-4" />{/snippet}
-				</JetEngineButton>
+					Regenerate link
+					{#snippet icon()}<i class="ri-link" aria-hidden="true"></i>{/snippet}
+				</Button>
 			{:else}
-				<p class="text-sm text-muted-foreground">No payment link yet.</p>
-				<JetEngineButton
-					label="Generate payment link"
+				<p class="payment-link__empty">No payment link yet.</p>
+				<Button
 					loadingLabel="Generating…"
 					successLabel="Generated"
-					state={busy ? 'loading' : 'idle'}
+					loading={busy}
 					onclick={generate}
 				>
-					{#snippet icon()}<LinkIcon class="h-4 w-4" />{/snippet}
-				</JetEngineButton>
+					Generate payment link
+					{#snippet icon()}<i class="ri-link" aria-hidden="true"></i>{/snippet}
+				</Button>
 			{/if}
 		</div>
-		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (open = false)}>Close</Button>
-		</Dialog.Footer>
+
+		<div class="dialog-content__footer">
+			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
+		</div>
 	</Dialog.Content>
 </Dialog.Root>

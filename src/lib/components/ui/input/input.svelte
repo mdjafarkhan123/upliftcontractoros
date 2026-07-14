@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
 	let {
@@ -14,9 +13,6 @@
 
 <input
 	bind:value
-	class={cn(
-		'flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background transition-all placeholder:text-muted-foreground focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-card-raised/70 dark:shadow-card',
-		className
-	)}
+	class={['field__input', className].filter(Boolean).join(' ')}
 	{...rest}
 />

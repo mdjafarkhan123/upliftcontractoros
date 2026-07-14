@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { cn } from '$lib/utils/cn';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import type { NavItem } from '$lib/permissions/nav';
 	import { SETTINGS_NAV } from '$lib/permissions/nav';
@@ -32,35 +31,90 @@
 		<Sheet.Header>
 			<Sheet.Title>More</Sheet.Title>
 		</Sheet.Header>
-		<div class="grid grid-cols-3 gap-2 pt-2">
+		<div class="more-sheet">
 			{#each items as item (item.key)}
-				{@const Icon = item.icon}
 				{@const active = isActive(item.href)}
 				<button
 					type="button"
 					onclick={() => navigate(item.href)}
-					class={cn(
-						'flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-xl border border-border px-3 py-3 text-xs font-medium transition-colors',
-						active
-							? 'border-primary/40 bg-primary/10 text-primary'
-							: 'text-foreground hover:bg-accent'
-					)}
+					class="more-sheet__item{active ? ' more-sheet__item--active' : ''}"
 				>
-					<Icon class="h-5 w-5" />
-					<span class="truncate">{item.label}</span>
+					<i class="{item.icon} more-sheet__icon" aria-hidden="true"></i>
+					<span class="more-sheet__label">{item.label}</span>
 				</button>
 			{/each}
 			{#if showSettings}
-				{@const Icon = SETTINGS_NAV.icon}
+				{@const active = isActive(SETTINGS_NAV.href)}
 				<button
 					type="button"
 					onclick={() => navigate(SETTINGS_NAV.href)}
-					class="flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-xl border border-border px-3 py-3 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+					class="more-sheet__item{active ? ' more-sheet__item--active' : ''}"
 				>
-					<Icon class="h-5 w-5" />
-					<span>Settings</span>
+					<i class="{SETTINGS_NAV.icon} more-sheet__icon" aria-hidden="true"></i>
+					<span class="more-sheet__label">{SETTINGS_NAV.label}</span>
 				</button>
 			{/if}
 		</div>
 	</Sheet.Content>
 </Sheet.Root>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.more-sheet {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: $space-2;
+		padding-top: $space-2;
+
+		&__item {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: $space-2;
+			min-height: 80px;
+			padding: $space-3;
+			border-radius: $radius-xl;
+			border: 1px solid var(--color-border);
+			background: none;
+			color: var(--color-text-primary);
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			cursor: pointer;
+			transition: background-color $duration-fast $ease-standard,
+			            border-color $duration-fast $ease-standard,
+			            color $duration-fast $ease-standard;
+
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+			}
+
+			&:focus-visible {
+				outline: none;
+				box-shadow: var(--shadow-focus);
+			}
+
+			&--active {
+				border-color: var(--color-brand);
+				background: var(--state-active-tint);
+				color: var(--color-brand);
+
+				.more-sheet__icon { color: var(--color-brand); }
+			}
+		}
+
+		&__icon {
+			font-size: 1.25rem;
+			line-height: 1;
+			color: var(--color-text-secondary);
+		}
+
+		&__label {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			max-width: 100%;
+		}
+	}
+</style>

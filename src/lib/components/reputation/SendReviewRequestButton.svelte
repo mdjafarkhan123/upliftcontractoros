@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Send } from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { reviewRequestsStore, reputationSummaryStore } from '$lib/stores/reputation.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { jobId, label = 'Send review request' }: { jobId: string; label?: string } = $props();
 
@@ -29,7 +28,7 @@
 	}
 </script>
 
-<Button size="sm" class="h-9" onclick={send} disabled={loading}>
-	<Send class="h-4 w-4" />
-	{loading ? 'Sending…' : label}
+<Button size="sm" loading={loading} loadingLabel="Sending…" onclick={send}>
+	<i class="ri-send-plane-line" aria-hidden="true"></i>
+	{label}
 </Button>

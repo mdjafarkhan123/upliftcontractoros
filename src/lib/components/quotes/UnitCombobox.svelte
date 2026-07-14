@@ -1,7 +1,5 @@
 <script lang="ts">
 	import * as Popover from '$lib/components/ui/popover';
-	import { cn } from '$lib/utils/cn';
-	import { Check, ChevronDown, X } from '@lucide/svelte';
 	import type { Attachment } from 'svelte/attachments';
 
 	// Common contractor units of measure offered as suggestions. The contractor can
@@ -80,61 +78,44 @@
 >
 	<Popover.Trigger
 		{disabled}
-		class={cn(
-			'flex h-9 w-full items-center justify-between gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent/40 focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-			!value && 'text-muted-foreground',
-			className
-		)}
+		class="unit-combo__trigger {!value ? 'unit-combo__trigger--placeholder' : ''} {className}"
 	>
-		<span class="truncate">{value || placeholder}</span>
-		<ChevronDown class="h-3.5 w-3.5 shrink-0 opacity-50" />
+		<span class="unit-combo__label">{value || placeholder}</span>
+		<i class="ri-arrow-down-s-line" aria-hidden="true"></i>
 	</Popover.Trigger>
 	<Popover.Content
-		class="w-52 p-0"
+		class="unit-combo__panel"
 		align="start"
 		onOpenAutoFocus={(e) => e.preventDefault()}
 	>
-		<div class="border-b border-border p-2">
-			<input
-				{@attach focusOnMount}
-				bind:value={query}
-				placeholder="Type or pick a unit…"
-				class="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-			/>
+		<div class="unit-combo__search">
+			<input {@attach focusOnMount} bind:value={query} placeholder="Type or pick a unit…" />
 		</div>
-		<div class="max-h-56 overflow-y-auto p-1">
+		<div class="unit-combo__list">
 			{#each filtered as u (u)}
-				<button
-					type="button"
-					class="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent"
-					onclick={() => choose(u)}
-				>
+				<button type="button" class="unit-combo__option" onclick={() => choose(u)}>
 					<span>{u}</span>
-					{#if value === u}<Check class="h-3.5 w-3.5 text-primary" />{/if}
+					{#if value === u}<i class="ri-check-line" aria-hidden="true"></i>{/if}
 				</button>
 			{/each}
 
 			{#if showCustom}
 				<button
 					type="button"
-					class="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm text-primary transition-colors hover:bg-accent"
+					class="unit-combo__option unit-combo__option--custom"
 					onclick={() => choose(query.trim())}
 				>
-					<span class="text-base leading-none">+</span> Use “{query.trim()}”
+					<i class="ri-add-line" aria-hidden="true"></i> Use “{query.trim()}”
 				</button>
 			{/if}
 
 			{#if filtered.length === 0 && !showCustom}
-				<p class="px-2 py-1.5 text-sm text-muted-foreground">No units</p>
+				<p class="unit-combo__empty">No units</p>
 			{/if}
 
 			{#if value}
-				<button
-					type="button"
-					class="mt-1 flex w-full items-center gap-1.5 rounded-sm border-t border-border px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-					onclick={clear}
-				>
-					<X class="h-3.5 w-3.5" /> Clear unit
+				<button type="button" class="unit-combo__option unit-combo__option--clear" onclick={clear}>
+					<i class="ri-close-line" aria-hidden="true"></i> Clear unit
 				</button>
 			{/if}
 		</div>

@@ -7,6 +7,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canSendInvoice } from '$lib/server/invoices/permissions';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
 import { invoiceSentEvent } from '$lib/server/invoices/events';
+import { sendInvoiceSchema } from '$lib/server/invoices/schemas';
 import { generateToken } from '$lib/server/quotes/token';
 import { createInvoicePaymentLink, getOrgStripeClient, toCents } from '$lib/server/invoices/stripe';
 
@@ -16,6 +17,28 @@ export const POST: RequestHandler = async (event) => {
 	if (!canSendInvoice(auth.member)) error(403, 'Forbidden');
 
 	const id = event.params.id!;
+
+	// Parse the optional channel/copy override. A bodyless POST (legacy / re-send button)
+	// keeps the old behaviour: deliver on every available channel with the default copy.
+	let send: import('$lib/server/invoices/schemas').SendInvoiceInput | null = null;
+	try {
+		const raw = await event.request.json();
+		const parsed = sendInvoiceSchema.safeParse(raw);
+		if (!parsed.success) {
+			const fieldErrors: Record<string, string> = {};
+			for (const issue of parsed.error.issues) {
+				const key = issue.path[0];
+				if (typeof key === 'string' && !fieldErrors[key]) fieldErrors[key] = issue.message;
+			}
+			return json(
+				{ error: 'Please fix the highlighted fields', field_errors: fieldErrors },
+				{ status: 422 }
+			);
+		}
+		send = parsed.data;
+	} catch {
+		send = null;
+	}
 
 	// Phase A — read-only validation. No tx yet; Stripe call must run outside any tx.
 	const [existing] = await db
@@ -38,7 +61,12 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 
 	if (!existing) error(404, 'Invoice not found');
-	if (existing.status !== 'draft') error(422, 'Only draft invoices can be sent');
+	// Send (draft) OR re-send (sent / partially_paid / overdue) — the same delivery path. Only a
+	// fully-paid or cancelled invoice can't be sent. A re-send after an edit regenerates the payment
+	// link below (edits null a stale link) and re-notifies the customer, without resetting status.
+	if (existing.status === 'paid' || existing.status === 'cancelled') {
+		error(422, 'Paid or cancelled invoices can’t be sent');
+	}
 
 	const [lineCount] = await db.execute<{ c: number }>(sql`
 		SELECT COUNT(*)::int AS c FROM invoice_line_items
@@ -46,6 +74,36 @@ export const POST: RequestHandler = async (event) => {
 	`);
 	if (!lineCount || lineCount.c === 0) {
 		error(422, 'Add at least one line item before sending');
+	}
+
+	// When channels were chosen, pre-validate they're actually deliverable for this contact
+	// (clean field-error response). The worker still hard-blocks SMS on opt-out as a final net.
+	if (send) {
+		const [reach] = await db.execute<{ email: string | null; sms_opt_out: boolean }>(sql`
+			SELECT c.email, c.sms_opt_out
+			FROM invoices i JOIN contacts c ON c.id = i.contact_id
+			WHERE i.id = ${id} AND i.org_id = ${auth.orgId} AND i.deleted_at IS NULL
+		`);
+		if (reach) {
+			if (send.channels.includes('email') && !reach.email) {
+				return json(
+					{
+						error: 'This customer has no email address — choose Text instead.',
+						field_errors: { channels: 'No email on file for this customer' }
+					},
+					{ status: 422 }
+				);
+			}
+			if (send.channels.includes('sms') && reach.sms_opt_out) {
+				return json(
+					{
+						error: 'This customer opted out of texts — choose Email instead.',
+						field_errors: { channels: 'This customer opted out of texts' }
+					},
+					{ status: 422 }
+				);
+			}
+		}
 	}
 
 	const [orgRow] = await db
@@ -98,19 +156,22 @@ export const POST: RequestHandler = async (event) => {
 			FOR UPDATE
 		`);
 		if (!locked) throw error(404, 'Invoice not found');
-		if (locked.status !== 'draft') {
-			throw error(422, 'Only draft invoices can be sent');
+		if (locked.status === 'paid' || locked.status === 'cancelled') {
+			throw error(422, 'Paid or cancelled invoices can’t be sent');
 		}
 
 		const sentAt = new Date();
+		const isFirstSend = locked.status === 'draft';
 
 		// Use the stable public token; lazily mint for legacy rows.
 		let rawToken = locked.public_token;
-		const updates: Record<string, unknown> = {
-			status: 'sent',
-			sent_at: sentAt,
-			updated_at: sentAt
-		};
+		// First send flips draft → sent and stamps sent_at. A re-send keeps the current status and
+		// the original sent_at (it's the "first delivered" date), only re-delivering the notification.
+		const updates: Record<string, unknown> = { updated_at: sentAt };
+		if (isFirstSend) {
+			updates.status = 'sent';
+			updates.sent_at = sentAt;
+		}
 		if (!rawToken) {
 			rawToken = generateToken();
 			updates.public_token = rawToken;
@@ -143,17 +204,21 @@ export const POST: RequestHandler = async (event) => {
 				invoiceNumberDisplay: formatInvoiceNumber(existing.invoice_number),
 				publicToken: rawToken,
 				paymentLinkUrl: effectivePaymentLinkUrl,
-				dueDate: existing.due_date
+				dueDate: existing.due_date,
+				channels: send?.channels ?? null,
+				smsBody: send?.sms_body ?? null,
+				emailSubject: send?.email_subject ?? null,
+				emailBody: send?.email_body ?? null
 			})
 		);
 
-		return { id: existing.id, sentAt };
+		return { id: existing.id, sentAt, status: isFirstSend ? 'sent' : locked.status };
 	});
 
 	return json({
 		data: {
 			id: result.id,
-			status: 'sent',
+			status: result.status,
 			sent_at: result.sentAt.toISOString()
 		}
 	});

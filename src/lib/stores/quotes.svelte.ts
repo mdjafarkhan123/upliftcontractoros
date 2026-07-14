@@ -31,7 +31,7 @@ let error = $state<string | null>(null);
 let activeController: AbortController | null = null;
 
 function buildKey(f: QuotesFilters): string {
-	return `${f.group}|${f.status}|${f.search}`;
+	return `${f.group}|${f.status}|${f.search}|${f.issuedBy ?? ''}|${f.dateFrom ?? ''}|${f.dateTo ?? ''}`;
 }
 
 function statusParam(f: QuotesFilters): string {
@@ -42,9 +42,17 @@ function statusParam(f: QuotesFilters): string {
 
 function buildParams(f: QuotesFilters, cursor: string | null): URLSearchParams {
 	const params = new URLSearchParams();
-	const s = statusParam(f);
-	if (s !== 'all') params.set('status', s);
+	if (f.status === 'deleted') {
+		// Recycle-bin view — show soft-deleted quotes; status tabs don't apply.
+		params.set('deleted', '1');
+	} else {
+		const s = statusParam(f);
+		if (s !== 'all') params.set('status', s);
+	}
 	if (f.search) params.set('q', f.search);
+	if (f.issuedBy) params.set('issued_by', f.issuedBy);
+	if (f.dateFrom) params.set('date_from', f.dateFrom);
+	if (f.dateTo) params.set('date_to', f.dateTo);
 	if (cursor) params.set('cursor', cursor);
 	return params;
 }

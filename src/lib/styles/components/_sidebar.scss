@@ -1,0 +1,276 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// SIDEBAR — fixed left rail. Full-width at desktop, icon-only at tablet,
+// hidden at mobile (bottom nav takes over).
+// =============================================================================
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  z-index: $z-sticky;
+  overflow: hidden;
+
+  // ── Logo / org header ───────────────────────────────────────────────────
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    height: 72px;
+    padding: 0 $space-5;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color $duration-fast $ease-standard;
+
+    &:hover { background: var(--color-bg-surface-sunk); }
+    &:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+  }
+
+  &__org-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__org-name {
+    display: block;
+    font-size: $fs-body;
+    font-weight: $weight-semibold;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__org-sub {
+    display: block;
+    font-size: $fs-caption;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // ── Scrollable nav body ─────────────────────────────────────────────────
+  &__body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: $space-4 $space-3;
+    display: flex;
+    flex-direction: column;
+    gap: $space-5;
+
+    // subtle scrollbar
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: $radius-full; }
+  }
+
+  // ── Nav sections ────────────────────────────────────────────────────────
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__section--footer {
+    margin-top: auto;
+    padding-top: $space-3;
+    border-top: 1px solid var(--color-border);
+  }
+
+  &__section-label {
+    font-size: $fs-caption;
+    line-height: $lh-caption;
+    font-weight: $weight-semibold;
+    letter-spacing: $tracking-label;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding: 0 $space-3 $space-1;
+  }
+
+  // ── Nav items ────────────────────────────────────────────────────────────
+  &__nav-item {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    height: 44px;
+    padding: 0 $space-3;
+    border-radius: $radius-md;
+    color: var(--color-text-secondary);
+    font-size: $fs-body;
+    font-weight: $weight-medium;
+    position: relative;
+    text-decoration: none;
+    transition: background-color $duration-fast $ease-standard,
+                color $duration-fast $ease-standard;
+
+    &:hover {
+      background: var(--color-bg-surface-sunk);
+      color: var(--color-text-primary);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: var(--shadow-focus);
+    }
+
+    // Active: left brand bar + tinted bg + bold text
+    &--active {
+      color: var(--color-text-primary);
+      font-weight: $weight-semibold;
+      background: var(--state-active-tint);
+
+      // The left indicator bar bleeds to the sidebar's inner left edge
+      &::before {
+        content: '';
+        position: absolute;
+        left: -$space-3;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 22px;
+        border-radius: 0 $radius-sm $radius-sm 0;
+        background: var(--color-brand);
+      }
+    }
+  }
+
+  &__nav-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+    flex-shrink: 0;
+    // Keep glyph weight constant — active items bold the label, not the icon.
+    font-weight: 400;
+    transition: transform $duration-fast $ease-standard;
+
+    // Each destination keeps its own color in every state (default/hover/active),
+    // like the quick-create menu. The active state is signalled by the tinted row
+    // + left bar + bold text, not by recoloring the icon.
+    &--brand { color: var(--color-brand); }
+    &--blue { color: #3b82f6; }
+    &--violet { color: #8b5cf6; }
+    &--indigo { color: #6366f1; }
+    &--teal { color: #14b8a6; }
+    &--sky { color: #0ea5e9; }
+    &--green { color: var(--success-solid); }
+    &--amber { color: var(--warning-solid); }
+    &--rose { color: #ec4899; }
+    &--emerald { color: #10b981; }
+    &--slate { color: var(--color-text-muted); }
+
+    // Subtle lift on hover — the delight touch from the quick-create menu.
+    .sidebar__nav-item:hover & { transform: scale(1.08); }
+  }
+
+  &__nav-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 $space-1;
+    border-radius: $radius-full;
+    background: #0ea5e9;
+    color: #fff;
+    font-size: 11px;
+    font-weight: $weight-semibold;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  // ── Tablet: icon-only (641–1024px) ───────────────────────────────────────
+  @media (max-width: $bp-tablet) {
+    width: 72px;
+
+    &__header {
+      justify-content: center;
+      padding: 0;
+    }
+
+    &__org-info { display: none; }
+
+    &__section-label { display: none; }
+
+    &__section { align-items: center; }
+    &__section--footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    &__body { align-items: center; padding: $space-4 $space-2; }
+
+    &__nav-item {
+      width: 44px;
+      padding: 0;
+      justify-content: center;
+
+      &--active::before {
+        left: -8px;
+      }
+    }
+
+    &__nav-label { display: none; }
+
+    &__nav-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0;
+      font-size: 9px;
+    }
+  }
+
+  // ── Mobile: hidden (bottom nav handles mobile nav) ────────────────────────
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
+}
+
+// Compact dark rail — intentionally always dark, secondary/admin rails only.
+// NOT the responsive state of the primary sidebar above — a distinct variant.
+.sidebar--compact {
+  width: 72px;
+  background: $slate-900;
+  border-right-color: rgba(255, 255, 255, 0.06);
+  align-items: center;
+
+  .sidebar__nav-item {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+    color: $slate-400;
+    border-radius: $radius-lg;
+
+    &:hover { background: rgba(255, 255, 255, 0.07); color: $slate-0; }
+
+    &--active {
+      background: rgba(255, 255, 255, 0.1);
+      color: $slate-0;
+      &::before { display: none; }
+    }
+  }
+}

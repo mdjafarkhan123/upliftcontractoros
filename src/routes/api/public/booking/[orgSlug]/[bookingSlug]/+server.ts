@@ -101,6 +101,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			org_name: organizations.name,
 			org_logo_url: organizations.logo_url,
 			org_timezone: organizations.timezone,
+			org_country: organizations.country,
 			title: bookingLinks.title,
 			description: bookingLinks.description,
 			appointment_type: bookingLinks.appointment_type,
@@ -131,6 +132,7 @@ export const GET: RequestHandler = async ({ params }) => {
 				org_name: row.org_name,
 				org_logo_url: resolvedLogoUrl,
 				org_timezone: row.org_timezone,
+				org_country: row.org_country,
 				title: row.title,
 				description: row.description,
 				appointment_type: row.appointment_type,
@@ -345,7 +347,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			const cStart = slotMatch.getTime();
 			const cEnd = cStart + slotDurMs;
 			for (const a of existing) {
-				const bStart = a.scheduled_start.getTime();
+				// Non-null: `existing` is filtered to a date window, excluding unscheduled visits.
+				const bStart = a.scheduled_start!.getTime();
 				const bEnd = (a.scheduled_end ? a.scheduled_end.getTime() : bStart + slotDurMs) + bufferMs;
 				if (cStart < bEnd && cEnd > bStart) {
 					return {
@@ -485,7 +488,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					contact_id: contactId,
 					job_id: null,
 					assigned_to: null,
-					scheduled_start: insertedAppt.scheduled_start.toISOString(),
+					scheduled_start: insertedAppt.scheduled_start!.toISOString(),
 					scheduled_end: slotEndDate.toISOString(),
 					source: 'booking_link',
 					booking_referrer: input.source ?? null,
@@ -497,7 +500,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			return {
 				ok: true as const,
 				appointmentId: insertedAppt.id,
-				scheduledStart: insertedAppt.scheduled_start,
+				// Non-null: a booking-link appointment is always created with a concrete slot.
+				scheduledStart: insertedAppt.scheduled_start!,
 				orgName: link.org_name,
 				bookingTitle: link.title
 			};

@@ -17,14 +17,25 @@ export type ValidInvoiceRow = {
 	title: string;
 	status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
 	subtotal: string;
+	discount_type: string;
+	discount_value: string | null;
+	discount_amount: string | null;
+	discount_label: string | null;
 	tax_rate: string;
 	tax_amount: string;
 	total: string;
 	amount_paid: string;
 	amount_due: string;
+	tip_total: string;
+	// Late fee charged on this invoice (M8). Part of Total/Balance; shown as its own row.
+	late_fee_total: string;
 	notes: string | null;
+	terms: string | null;
 	viewed_at: Date | null;
 	due_date: string | null;
+	// M7 tips: org master toggle + percent presets, projected for the pay page (gate + UI).
+	tips_enabled: boolean;
+	tip_preset_percents: number[];
 	stripe_secret_key: string | null;
 };
 
@@ -56,14 +67,24 @@ export async function lookupValidInvoiceByToken(rawToken: string): Promise<Invoi
 			title: invoices.title,
 			status: invoices.status,
 			subtotal: invoices.subtotal,
+			discount_type: invoices.discount_type,
+			discount_value: invoices.discount_value,
+			discount_amount: invoices.discount_amount,
+			discount_label: invoices.discount_label,
 			tax_rate: invoices.tax_rate,
 			tax_amount: invoices.tax_amount,
 			total: invoices.total,
 			amount_paid: invoices.amount_paid,
 			amount_due: invoices.amount_due,
+			tip_total: invoices.tip_total,
+			late_fee_total: invoices.late_fee_total,
 			notes: invoices.notes,
+			terms: invoices.terms,
 			viewed_at: invoices.viewed_at,
 			due_date: invoices.due_date,
+			tips_enabled: organizations.tips_enabled,
+			tip_preset_percents: organizations.tip_preset_percents,
+			accept_tips: invoices.accept_tips,
 			stored_token: invoices.public_token,
 			deleted_at: invoices.deleted_at,
 			stripe_secret_key: organizations.stripe_restricted_key
@@ -93,14 +114,23 @@ export async function lookupValidInvoiceByToken(rawToken: string): Promise<Invoi
 			title: row.title,
 			status: row.status,
 			subtotal: row.subtotal,
+			discount_type: row.discount_type,
+			discount_value: row.discount_value,
+			discount_amount: row.discount_amount,
+			discount_label: row.discount_label,
 			tax_rate: row.tax_rate,
 			tax_amount: row.tax_amount,
 			total: row.total,
 			amount_paid: row.amount_paid,
 			amount_due: row.amount_due,
+			tip_total: row.tip_total,
+			late_fee_total: row.late_fee_total,
 			notes: row.notes,
+			terms: row.terms,
 			viewed_at: row.viewed_at,
 			due_date: row.due_date,
+			tips_enabled: row.tips_enabled && row.accept_tips,
+			tip_preset_percents: row.tip_preset_percents,
 			stripe_secret_key: row.stripe_secret_key
 		}
 	};

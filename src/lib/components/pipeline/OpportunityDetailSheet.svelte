@@ -1,7 +1,6 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
@@ -18,8 +17,6 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
-	import { cn } from '$lib/utils/cn';
-	import { Phone, MessageSquare, Mail } from '@lucide/svelte';
 	import type {
 		OpportunityDetail,
 		OpportunityFollowUp,
@@ -85,8 +82,6 @@
 	let errorMsg = $state<string | null>(null);
 	let followUpPopoverOpen = $state(false);
 
-	// New entries logged this session, keyed by opportunity.id so they scope
-	// automatically when the sheet re-opens for a different deal.
 	const followUpAdditions = new SvelteMap<string, OpportunityFollowUp[]>();
 	const localFollowUps = $derived([
 		...(followUpAdditions.get(opportunity.id) ?? []),
@@ -148,7 +143,6 @@
 		}
 	}
 
-	// Open→open stage move between board columns.
 	async function moveToStage(targetStageId: string) {
 		const fromStageId = opportunity.stage_id;
 		const res = await fetch(`/api/pipeline/opportunities/${opportunity.id}/stage`, {
@@ -173,7 +167,6 @@
 		return body;
 	}
 
-	// Terminal status transition (won/lost) via the pure-status endpoint.
 	async function markStatus(
 		status: 'won' | 'lost',
 		lost_reason?: string,
@@ -225,245 +218,240 @@
 <Sheet.Root bind:open onOpenChange={(o) => !o && onClose()}>
 	<Sheet.Content
 		side={isDesktop ? 'right' : 'bottom'}
-		class={cn('overflow-y-auto', isDesktop ? 'w-[520px] sm:max-w-[520px]' : 'max-h-[92vh]')}
+		class={isDesktop ? 'overflow-y-auto w-[520px] sm:max-w-[520px]' : 'overflow-y-auto max-h-[92vh]'}
 	>
 		<Sheet.Header>
 			<Sheet.Title>{opportunity.contact_name}</Sheet.Title>
-			<p class="text-sm text-muted-foreground">{opportunity.title}</p>
+			<p style="font-size: var(--text-body); color: var(--color-text-muted);">{opportunity.title}</p>
 		</Sheet.Header>
 
-		<div class="mt-4 space-y-5">
-			<div class="rounded-xl border border-border bg-muted/40 p-3">
-				<div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Contact</div>
-				<a
-					href="/contacts/{opportunity.contact_id}"
-					class="mt-1 block text-base font-semibold text-foreground hover:text-primary hover:underline"
-				>
+		<div class="opp-sheet">
+			<!-- Contact block -->
+			<div class="opp-sheet__contact-block">
+				<div class="opp-sheet__contact-label">Contact</div>
+				<a href="/contacts/{opportunity.contact_id}" class="opp-sheet__contact-name">
 					{opportunity.contact_name}
 				</a>
-				<div class="text-sm text-muted-foreground">{opportunity.contact_phone}</div>
+				<div class="opp-sheet__contact-meta">{opportunity.contact_phone}</div>
 				{#if opportunity.contact_email}
-					<div class="text-sm text-muted-foreground">{opportunity.contact_email}</div>
+					<div class="opp-sheet__contact-meta">{opportunity.contact_email}</div>
 				{/if}
-				<div class="mt-3 flex flex-wrap gap-2">
-					<a
-						href="tel:{opportunity.contact_phone}"
-						class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-					>
-						<Phone class="h-3.5 w-3.5 text-muted-foreground" />
+				<div class="opp-sheet__quick-actions">
+					<a href="tel:{opportunity.contact_phone}" class="opp-sheet__quick-btn">
+						<i class="ri-phone-line" aria-hidden="true"></i>
 						Call
 					</a>
 					<button
 						type="button"
 						onclick={() => goto(`/inbox?contact=${opportunity.contact_id}`)}
-						class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+						class="opp-sheet__quick-btn"
 					>
-						<MessageSquare class="h-3.5 w-3.5 text-muted-foreground" />
+						<i class="ri-message-2-line" aria-hidden="true"></i>
 						Text
 					</button>
 					{#if opportunity.contact_email}
-						<a
-							href="mailto:{opportunity.contact_email}"
-							class="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-						>
-							<Mail class="h-3.5 w-3.5 text-muted-foreground" />
+						<a href="mailto:{opportunity.contact_email}" class="opp-sheet__quick-btn">
+							<i class="ri-mail-line" aria-hidden="true"></i>
 							Email
 						</a>
 					{/if}
 				</div>
 			</div>
 
-			<div class="space-y-1.5">
-				<Label for="d-title">Title <span class="text-destructive">*</span></Label>
-				<Input id="d-title" bind:value={title} disabled={!canEdit} />
-			</div>
-
-			<div class="grid grid-cols-2 gap-3">
-				<div class="space-y-1.5">
-					<Label for="d-value">Value</Label>
-					<Input
-						id="d-value"
-						bind:value
-						type="text"
-						inputmode="decimal"
-						disabled={!canEdit}
-						placeholder="0.00"
-					/>
+			<!-- Fields -->
+			<div class="opp-sheet__fields">
+				<div>
+					<Label for="d-title">Title <span style="color: var(--danger-solid)">*</span></Label>
+					<Input id="d-title" bind:value={title} disabled={!canEdit} />
 				</div>
-				<div class="space-y-1.5">
-					<Label for="d-assignee">Assigned to</Label>
-					<Select.Root bind:value={assignedTo} disabled={!canEdit}>
-						<Select.Trigger class="h-11 w-full" disabled={!canEdit}>
-							{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
+
+				<div class="opp-sheet__grid-2">
+					<div>
+						<Label for="d-value">Value</Label>
+						<Input
+							id="d-value"
+							bind:value
+							type="text"
+							inputmode="decimal"
+							disabled={!canEdit}
+							placeholder="0.00"
+						/>
+					</div>
+					<div>
+						<Label for="d-assignee">Assigned to</Label>
+						<Select.Root bind:value={assignedTo} disabled={!canEdit}>
+							<Select.Trigger class="h-11 w-full" disabled={!canEdit}>
+								{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="">Unassigned</Select.Item>
+								{#each assignees as m (m.id)}
+									<Select.Item value={m.id}>{m.full_name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					</div>
+				</div>
+
+				<div class="opp-sheet__grid-2">
+					<div>
+						<Label for="d-expected-close">Expected close date</Label>
+						<Input
+							id="d-expected-close"
+							type="date"
+							bind:value={expectedCloseDate}
+							disabled={!canEdit}
+						/>
+					</div>
+					<div>
+						<Label for="d-follow-up">Next follow-up</Label>
+						<OpportunityFollowUpPopover
+							opportunityId={opportunity.id}
+							currentValue={opportunity.next_follow_up_at}
+							disabled={!canEdit}
+							bind:open={followUpPopoverOpen}
+							onUpdated={(iso) => onChanged({ ...opportunity, next_follow_up_at: iso })}
+						/>
+					</div>
+				</div>
+
+				<div>
+					<Label for="d-stage">Stage</Label>
+					<Select.Root
+						bind:value={stageId}
+						disabled={!canEdit || !isOpen || stageSaving}
+						onValueChange={changeStage}
+					>
+						<Select.Trigger class="h-11 w-full" disabled={!canEdit || !isOpen || stageSaving}>
+							{stages.find((s) => s.id === stageId)?.name ?? 'Select stage'}
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="">Unassigned</Select.Item>
-							{#each assignees as m (m.id)}
-								<Select.Item value={m.id}>{m.full_name}</Select.Item>
+							{#each stages as s (s.id)}
+								<Select.Item value={s.id}>{s.name}</Select.Item>
 							{/each}
 						</Select.Content>
 					</Select.Root>
 				</div>
-			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="space-y-1.5">
-					<Label for="d-expected-close">Expected close date</Label>
-					<Input
-						id="d-expected-close"
-						type="date"
-						bind:value={expectedCloseDate}
-						disabled={!canEdit}
-					/>
-				</div>
-				<div class="space-y-1.5">
-					<Label for="d-follow-up">Next follow-up</Label>
-					<OpportunityFollowUpPopover
-						opportunityId={opportunity.id}
-						currentValue={opportunity.next_follow_up_at}
-						disabled={!canEdit}
-						bind:open={followUpPopoverOpen}
-						onUpdated={(iso) => onChanged({ ...opportunity, next_follow_up_at: iso })}
-					/>
-				</div>
-			</div>
-
-			<div class="space-y-1.5">
-				<Label for="d-stage">Stage</Label>
-				<Select.Root
-					bind:value={stageId}
-					disabled={!canEdit || !isOpen || stageSaving}
-					onValueChange={changeStage}
-				>
-					<Select.Trigger class="h-11 w-full" disabled={!canEdit || !isOpen || stageSaving}>
-						{stages.find((s) => s.id === stageId)?.name ?? 'Select stage'}
-					</Select.Trigger>
-					<Select.Content>
-						{#each stages as s (s.id)}
-							<Select.Item value={s.id}>{s.name}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-			</div>
-
-			{#if showAging}
-				<div
-					class={isStale
-						? 'flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3'
-						: 'flex items-center justify-between gap-3 text-xs text-muted-foreground'}
-				>
-					<div class={isStale ? 'text-sm text-amber-700 dark:text-amber-300' : ''}>
+				{#if showAging}
+					<div class="opp-sheet__aging opp-sheet__aging--{isStale ? 'stale' : 'normal'}">
 						{#if isStale}
-							<span class="font-semibold">Stuck:</span>
+							<p class="opp-sheet__aging-text">
+								<strong>Stuck:</strong>
+								In stage for {daysInStage} day{daysInStage === 1 ? '' : 's'}
+								{#if staleAfter !== null}
+									<span style="opacity:0.8"> · threshold {staleAfter}d</span>
+								{/if}
+							</p>
+							<Button size="sm" variant="outline" onclick={openFollowUp}>Send follow-up</Button>
+						{:else}
+							In stage for {daysInStage} day{daysInStage === 1 ? '' : 's'}
 						{/if}
-						In stage for {daysInStage} day{daysInStage === 1 ? '' : 's'}
-						{#if isStale && staleAfter !== null}
-							<span class="opacity-80"> · threshold {staleAfter}d</span>
-						{/if}
-					</div>
-					{#if isStale}
-						<Button size="sm" variant="outline" onclick={openFollowUp}>Send follow-up</Button>
-					{/if}
-				</div>
-			{/if}
-
-			{#if opportunity.status === 'lost' && opportunity.lost_reason}
-				<div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
-					<div class="text-xs font-medium uppercase tracking-wide text-rose-600">Lost reason</div>
-					<p class="mt-1 text-sm font-medium text-foreground">
-						{LOST_REASON_LABELS[opportunity.lost_reason]}
-					</p>
-					{#if opportunity.lost_reason_note}
-						<p class="mt-1 text-sm text-muted-foreground">{opportunity.lost_reason_note}</p>
-					{/if}
-				</div>
-			{/if}
-
-			{#if opportunity.status === 'won'}
-				<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-					<div class="text-xs font-medium uppercase tracking-wide text-emerald-600">Won</div>
-					<p class="mt-1 text-sm text-foreground">A job was created for this opportunity.</p>
-				</div>
-			{/if}
-
-			{#if canViewRevenue}
-				<OpportunityQuotesSection
-					quotes={opportunity.quotes ?? []}
-					contactId={opportunity.contact_id}
-					opportunityId={opportunity.id}
-					canCreate={canCreateQuotes}
-				/>
-			{/if}
-
-			{#if canViewFiles}
-				<AttachmentList
-					parentFk={{ opportunity_id: opportunity.id }}
-					purposeTag="opportunity_attachment"
-					title="Photos & Files"
-					uploadLabel="Add photos"
-					canUpload={canUploadFiles}
-					canDelete={canUploadFiles}
-				/>
-			{/if}
-
-			<OpportunityFollowUpHistory
-				opportunityId={opportunity.id}
-				followUps={localFollowUps}
-				{canEdit}
-				onLogged={onFollowUpLogged}
-				onScheduleNext={() => (followUpPopoverOpen = true)}
-			/>
-
-			<OpportunityActivitySection
-				activity={opportunity.activity ?? []}
-				hasQuotes={(opportunity.quotes?.length ?? 0) > 0}
-				canCreate={canViewRevenue && canCreateQuotes}
-				{newQuoteHref}
-			/>
-
-			<ActiveAutomations contactId={opportunity.contact_id} />
-
-			{#if opportunity.closed_at}
-				<p class="text-xs text-muted-foreground">
-					Closed {formatDate(opportunity.closed_at)}
-					{#if opportunity.value}
-						· {formatCurrency(opportunity.value)}{/if}
-				</p>
-			{/if}
-
-			{#if errorMsg}<p class="text-sm text-destructive">{errorMsg}</p>{/if}
-
-			{#if canEdit}
-				<div class="flex gap-2">
-					<JetEngineButton
-						class="flex-1"
-						label="Save changes"
-						loadingLabel="Saving…"
-						successLabel="Saved"
-						state={saving ? 'loading' : 'idle'}
-						onclick={saveFields}
-					/>
-				</div>
-
-				{#if isOpen}
-					<div class="grid grid-cols-2 gap-2 pt-2">
-						<Button
-							variant="outline"
-							class="border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10"
-							onclick={() => (wonOpen = true)}
-						>
-							Mark won
-						</Button>
-						<Button
-							variant="outline"
-							class="border-rose-500/40 text-rose-700 hover:bg-rose-500/10"
-							onclick={() => (lostOpen = true)}
-						>
-							Mark lost
-						</Button>
 					</div>
 				{/if}
-			{/if}
+
+				{#if opportunity.status === 'lost' && opportunity.lost_reason}
+					<div class="opp-sheet__status-banner opp-sheet__status-banner--lost">
+						<div class="opp-sheet__status-label opp-sheet__status-label--lost">Lost reason</div>
+						<p class="opp-sheet__status-reason">
+							{LOST_REASON_LABELS[opportunity.lost_reason]}
+						</p>
+						{#if opportunity.lost_reason_note}
+							<p class="opp-sheet__status-note">{opportunity.lost_reason_note}</p>
+						{/if}
+					</div>
+				{/if}
+
+				{#if opportunity.status === 'won'}
+					<div class="opp-sheet__status-banner opp-sheet__status-banner--won">
+						<div class="opp-sheet__status-label opp-sheet__status-label--won">Won</div>
+						<p class="opp-sheet__status-desc">A job was created for this opportunity.</p>
+					</div>
+				{/if}
+
+				{#if canViewRevenue}
+					<OpportunityQuotesSection
+						quotes={opportunity.quotes ?? []}
+						contactId={opportunity.contact_id}
+						opportunityId={opportunity.id}
+						canCreate={canCreateQuotes}
+					/>
+				{/if}
+
+				{#if canViewFiles}
+					<AttachmentList
+						parentFk={{ opportunity_id: opportunity.id }}
+						purposeTag="opportunity_attachment"
+						title="Photos & Files"
+						uploadLabel="Add photos"
+						canUpload={canUploadFiles}
+						canDelete={canUploadFiles}
+					/>
+				{/if}
+
+				<OpportunityFollowUpHistory
+					opportunityId={opportunity.id}
+					followUps={localFollowUps}
+					{canEdit}
+					onLogged={onFollowUpLogged}
+					onScheduleNext={() => (followUpPopoverOpen = true)}
+				/>
+
+				<OpportunityActivitySection
+					activity={opportunity.activity ?? []}
+					hasQuotes={(opportunity.quotes?.length ?? 0) > 0}
+					canCreate={canViewRevenue && canCreateQuotes}
+					{newQuoteHref}
+				/>
+
+				<ActiveAutomations contactId={opportunity.contact_id} />
+
+				{#if opportunity.closed_at}
+					<p class="opp-sheet__closed-at">
+						Closed {formatDate(opportunity.closed_at)}
+						{#if opportunity.value}
+							· {formatCurrency(opportunity.value)}
+						{/if}
+					</p>
+				{/if}
+
+				{#if errorMsg}
+					<p class="opp-sheet__error">{errorMsg}</p>
+				{/if}
+
+				{#if canEdit}
+					<div class="opp-sheet__actions">
+						<Button
+							class="flex-1"
+							loadingLabel="Saving…"
+							successLabel="Saved"
+							loading={saving}
+							onclick={saveFields}
+						>
+							Save changes
+						</Button>
+					</div>
+
+					{#if isOpen}
+						<div class="opp-sheet__won-lost">
+							<Button
+								variant="outline"
+								style="border-color: rgba(79,207,143,0.4); color: var(--success-text);"
+								onclick={() => (wonOpen = true)}
+							>
+								Mark won
+							</Button>
+							<Button
+								variant="outline"
+								style="border-color: rgba(225,29,72,0.4); color: var(--danger-text);"
+								onclick={() => (lostOpen = true)}
+							>
+								Mark lost
+							</Button>
+						</div>
+					{/if}
+				{/if}
+			</div>
 		</div>
 	</Sheet.Content>
 

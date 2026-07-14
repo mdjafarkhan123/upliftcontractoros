@@ -8,6 +8,7 @@ import {
 	media,
 	organizations,
 	quoteLineItems,
+	quotePackages,
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -48,6 +49,8 @@ export const POST: RequestHandler = async (event) => {
 			unit: quoteLineItems.unit,
 			section_label: quoteLineItems.section_label,
 			is_optional: quoteLineItems.is_optional,
+			taxable: quoteLineItems.taxable,
+			package_id: quoteLineItems.package_id,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total
 		})
@@ -60,6 +63,20 @@ export const POST: RequestHandler = async (event) => {
 			)
 		)
 		.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));
+
+	// Good-Better-Best tiers (empty on a simple quote) — ordered so the PDF renders them in the
+	// contractor's arranged order.
+	const packageRows = await db
+		.select({
+			id: quotePackages.id,
+			name: quotePackages.name,
+			is_recommended: quotePackages.is_recommended,
+			subtotal: quotePackages.subtotal,
+			total: quotePackages.total
+		})
+		.from(quotePackages)
+		.where(and(eq(quotePackages.quote_id, id), isNull(quotePackages.deleted_at)))
+		.orderBy(asc(quotePackages.position));
 
 	// Per-line photos rendered as small thumbnails under each line. Use the web variant for
 	// crisp print; Puppeteer loads the signed URLs (page waits for networkidle0).
@@ -101,6 +118,38 @@ export const POST: RequestHandler = async (event) => {
 		? await resolveLogoUrl(row.org.signature_image_url)
 		: null;
 
+	// Customer acceptance signature (in-person "sign on this device"): resolve the drawn image's
+	// signed URL from its media row so Puppeteer can embed it. Only present when signed in person.
+	let acceptanceSignatureUrl: string | null = null;
+	if (row.quote.acceptance_signature_media_id) {
+		const [sig] = await db
+			.select({ r2_key: media.r2_key, web_key: media.web_key })
+			.from(media)
+			.where(
+				and(
+					eq(media.id, row.quote.acceptance_signature_media_id),
+					eq(media.org_id, auth.orgId),
+					eq(media.purpose_tag, 'quote_signature'),
+					isNull(media.deleted_at)
+				)
+			)
+			.limit(1);
+		if (sig) acceptanceSignatureUrl = await r2Presign(sig.web_key ?? sig.r2_key, 3600);
+	}
+
+	// Signed "Accepted by" block: only on an accepted quote that carries a signature (online
+	// typed or in-person drawn). Offline "mark approved" captures no signature → no block.
+	const acceptance =
+		row.quote.status === 'accepted' && row.quote.acceptance_signature_name
+			? {
+					signerName: row.quote.acceptance_signature_name,
+					signedAt:
+						row.quote.acceptance_signed_at ?? row.quote.accepted_at ?? row.quote.created_at,
+					imageUrl: acceptanceSignatureUrl,
+					inPerson: !!row.quote.acceptance_signature_media_id
+				}
+			: null;
+
 	const { url } = await generateAndStoreQuotePdf({
 		org: {
 			name: row.org.name,
@@ -131,6 +180,7 @@ export const POST: RequestHandler = async (event) => {
 			tax_amount: row.quote.tax_amount,
 			total: row.quote.total,
 			notes: row.quote.notes,
+			terms: row.quote.terms,
 			deposit_required: row.quote.deposit_required,
 			deposit_amount: row.quote.deposit_amount,
 			created_at: row.quote.created_at
@@ -149,7 +199,9 @@ export const POST: RequestHandler = async (event) => {
 					zip: row.address.zip
 				}
 			: null,
-		lineItems
+		lineItems,
+		packages: packageRows,
+		acceptance
 	});
 
 	return json({ data: { url, expires_in: 3600 } });

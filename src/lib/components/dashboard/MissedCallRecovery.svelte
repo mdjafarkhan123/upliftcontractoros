@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { DashboardMissedCallRecovery } from '$lib/types/dashboard';
-	import { PhoneMissed, PhoneIncoming } from '@lucide/svelte';
 
 	let { stats }: { stats: DashboardMissedCallRecovery } = $props();
 
@@ -9,49 +8,91 @@
 	);
 </script>
 
-<section
-	class="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card dark:border-white/10"
->
-	<header
-		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-5 py-4"
-	>
-		<h2 class="text-base font-semibold tracking-tight text-foreground">Missed-call recovery</h2>
-		<span class="text-xs font-medium text-muted-foreground">This month</span>
+<section class="widget-card">
+	<header class="widget-card__header">
+		<h2 class="widget-card__title">Missed-call recovery</h2>
+		<span class="widget-card__meta">This month</span>
 	</header>
 
 	{#if stats.missed_count === 0}
-		<div class="flex flex-col items-center gap-2 bg-muted/20 px-6 py-8 text-center">
-			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-				<PhoneIncoming class="h-5 w-5 text-muted-foreground" />
-			</div>
-			<p class="text-sm font-medium text-foreground">No missed calls this month</p>
-			<p class="text-xs text-muted-foreground">Every call got through. Nice.</p>
+		<div class="widget-card__empty">
+			<span class="widget-card__empty-icon">
+				<i class="ri-phone-line"></i>
+			</span>
+			<p class="widget-card__empty-title">No missed calls this month</p>
+			<p class="widget-card__empty-sub">Every call got through. Nice.</p>
 		</div>
 	{:else}
-		<div class="grid grid-cols-2 divide-x divide-border/60">
-			<div class="flex flex-col gap-1 px-5 py-5">
-				<span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-					<PhoneMissed class="h-3.5 w-3.5 text-rose-500" />
+		<div class="mcr-stats">
+			<div class="mcr-stat">
+				<span class="mcr-stat__label">
+					<i class="ri-phone-line mcr-stat__icon mcr-stat__icon--danger"></i>
 					Missed calls
 				</span>
-				<span class="text-3xl font-semibold leading-none tracking-tight text-foreground">
-					{stats.missed_count}
-				</span>
+				<span class="mcr-stat__value">{stats.missed_count}</span>
 			</div>
-			<div class="flex flex-col gap-1 px-5 py-5">
-				<span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-					<PhoneIncoming class="h-3.5 w-3.5 text-emerald-500" />
+			<div class="mcr-stat">
+				<span class="mcr-stat__label">
+					<i class="ri-phone-line mcr-stat__icon mcr-stat__icon--success"></i>
 					Recovered
 				</span>
-				<span class="flex items-baseline gap-2">
-					<span class="text-3xl font-semibold leading-none tracking-tight text-foreground">
-						{rate}%
-					</span>
-					<span class="text-xs text-muted-foreground">
-						{stats.recovered_count} of {stats.missed_count}
-					</span>
+				<span class="mcr-stat__value">
+					{rate}%
+					<small>{stats.recovered_count} of {stats.missed_count}</small>
 				</span>
 			</div>
 		</div>
 	{/if}
 </section>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.mcr-stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.mcr-stat {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		padding: $space-5;
+
+		&:first-child {
+			border-right: 1px solid var(--color-border);
+		}
+
+		&__label {
+			display: flex;
+			align-items: center;
+			gap: $space-1;
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+		}
+
+		&__icon {
+			font-size: 1.4rem;
+
+			&--danger  { color: var(--danger-solid); }
+			&--success { color: var(--success-solid); }
+		}
+
+		&__value {
+			font: $weight-semibold 3.2rem/1 $font-display;
+			color: var(--color-text-primary);
+			letter-spacing: -0.02em;
+			display: flex;
+			align-items: baseline;
+			gap: $space-2;
+
+			small {
+				font-size: $fs-body;
+				font-weight: $weight-regular;
+				color: var(--color-text-muted);
+			}
+		}
+	}
+</style>

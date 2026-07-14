@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { Check } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import {
@@ -69,50 +67,45 @@
 	}
 </script>
 
-<div class="px-2 py-2">
-	<p class="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-		My status
-	</p>
-	<div class="flex flex-col gap-0.5">
+<div class="status-menu">
+	<p class="status-menu__heading">My status</p>
+	<div class="status-menu__list">
 		{#each MEMBER_STATUS_PRESETS as preset (preset.value)}
-			{@const Icon = preset.icon}
 			{@const active = current === preset.value}
 			<button
 				type="button"
 				onclick={() => setStatus(preset.value)}
 				disabled={saving !== null}
 				aria-pressed={active}
-				class={cn(
-					'flex min-h-[40px] w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-					active ? 'bg-accent' : 'hover:bg-accent/60',
-					saving !== null && 'opacity-70'
-				)}
+				class="status-menu__option"
+				class:status-menu__option--active={active}
+				class:status-menu__option--busy={saving !== null}
 			>
-				<span class={cn('h-2 w-2 shrink-0 rounded-full', preset.dotClass)}></span>
-				<Icon class={cn('h-4 w-4 shrink-0', preset.textClass)} />
-				<span class="min-w-0 flex-1 truncate font-medium text-foreground">{preset.label}</span>
+				<span class="status-menu__dot" style="background: {preset.dotColor}"></span>
+				<i
+					class="{preset.iconClass} status-menu__icon"
+					style="color: {preset.textColor}"
+					aria-hidden="true"
+				></i>
+				<span class="status-menu__label">{preset.label}</span>
 				{#if active}
-					<Check class="h-4 w-4 shrink-0 text-primary" />
+					<i class="ri-check-line status-menu__check" aria-hidden="true"></i>
 				{/if}
 			</button>
 		{/each}
 	</div>
 
 	<!-- Auto-revert window. Applies to the next status you pick (ignored for In office). -->
-	<div class="mt-2 border-t border-border/50 pt-2">
-		<p class="px-2 pb-1.5 text-[11px] text-muted-foreground">Clear after</p>
-		<div class="flex flex-wrap gap-1 px-1">
+	<div class="status-menu__clear">
+		<p class="status-menu__clear-label">Clear after</p>
+		<div class="status-menu__chips">
 			{#each STATUS_CLEAR_OPTIONS as opt (opt.value)}
 				<button
 					type="button"
 					onclick={() => (clearAfter = opt.value)}
 					aria-pressed={clearAfter === opt.value}
-					class={cn(
-						'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
-						clearAfter === opt.value
-							? 'border-primary/40 bg-primary/10 text-primary'
-							: 'border-border/60 text-muted-foreground hover:bg-accent/60'
-					)}
+					class="status-menu__chip"
+					class:status-menu__chip--active={clearAfter === opt.value}
 				>
 					{opt.label}
 				</button>
@@ -120,3 +113,125 @@
 		</div>
 	</div>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.status-menu {
+		padding: $space-2;
+
+		&__heading {
+			margin: 0;
+			padding: 0 $space-2 6px;
+			font-size: $fs-caption;
+			font-weight: $weight-medium;
+			letter-spacing: $tracking-label;
+			text-transform: uppercase;
+			color: var(--color-text-muted);
+		}
+
+		&__list {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		&__option {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			min-height: 40px;
+			width: 100%;
+			padding: 6px $space-2;
+			border: none;
+			border-radius: $radius-md;
+			background: transparent;
+			text-align: left;
+			cursor: pointer;
+			transition: background-color $duration-fast $ease-standard;
+
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+			}
+			&--active {
+				background: var(--state-active-tint);
+			}
+			&--busy {
+				opacity: 0.7;
+			}
+		}
+
+		&__dot {
+			width: 8px;
+			height: 8px;
+			flex-shrink: 0;
+			border-radius: $radius-full;
+		}
+
+		&__icon {
+			flex-shrink: 0;
+			font-size: 16px;
+		}
+
+		&__label {
+			min-width: 0;
+			flex: 1;
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		&__check {
+			flex-shrink: 0;
+			font-size: 16px;
+			color: var(--color-brand);
+		}
+
+		&__clear {
+			margin-top: $space-2;
+			padding-top: $space-2;
+			border-top: 1px solid var(--color-border);
+		}
+
+		&__clear-label {
+			margin: 0;
+			padding: 0 $space-2 6px;
+			font-size: $fs-caption;
+			color: var(--color-text-muted);
+		}
+
+		&__chips {
+			display: flex;
+			flex-wrap: wrap;
+			gap: $space-1;
+			padding: 0 $space-1;
+		}
+
+		&__chip {
+			padding: $space-1 $space-2;
+			border: 1px solid var(--color-border);
+			border-radius: $radius-md;
+			background: transparent;
+			font-size: $fs-caption;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+			cursor: pointer;
+			transition:
+				background-color $duration-fast $ease-standard,
+				color $duration-fast $ease-standard,
+				border-color $duration-fast $ease-standard;
+
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+			}
+			&--active {
+				border-color: var(--color-brand);
+				background: var(--state-active-tint);
+				color: var(--color-brand);
+			}
+		}
+	}
+</style>

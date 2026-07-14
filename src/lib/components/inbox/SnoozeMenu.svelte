@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { Clock } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Button } from '$lib/components/ui/button';
 	import type { SnoozePreset } from '$lib/stores/inbox.svelte';
 
 	let {
@@ -27,10 +25,10 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
-			<Button {...props} variant="ghost" size="sm" {disabled} class="min-h-[36px] gap-1.5">
-				<Clock class="h-4 w-4" />
+			<button {...props} type="button" class="convo-actions__btn" {disabled}>
+				<i class="ri-time-line" aria-hidden="true"></i>
 				{isSnoozed ? 'Snoozed' : 'Snooze'}
-			</Button>
+			</button>
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="w-48">
@@ -39,10 +37,10 @@
 			<DropdownMenu.Separator />
 			{#each PRESETS as preset (preset.key)}
 				<DropdownMenu.Item onclick={() => void onSnooze(preset.key)}>
-					<div class="flex w-full items-center justify-between">
+					<div class="snooze-menu__row">
 						<span>{preset.label}</span>
 						{#if preset.hint}
-							<span class="text-xs text-muted-foreground">{preset.hint}</span>
+							<span class="snooze-menu__hint">{preset.hint}</span>
 						{/if}
 					</div>
 				</DropdownMenu.Item>

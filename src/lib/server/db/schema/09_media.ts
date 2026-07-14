@@ -23,7 +23,22 @@ export const mediaPurposeTagEnum = pgEnum('media_purpose_tag', [
 	'contact_avatar',
 	'org_signature',
 	'opportunity_attachment',
-	'quote_line_item_photo'
+	'quote_line_item_photo',
+	// Bound to a job (job_id) with the filled form field's id in `line_key`. Photos + a
+	// captured signature attached to a job_form_submission_field. Hidden from the Files tab.
+	'job_form_photo',
+	'job_form_signature',
+	// Bound to a job (job_id) with the visit's appointment id in `line_key`. Photos captured
+	// against a single visit when the crew completes it (S5 per-visit completion). Hidden from
+	// the Files tab — managed inline on the visit.
+	'job_visit_photo',
+	// Bound to a job (job_id, no line_key — one per job). The customer's drawn sign-off
+	// signature approving the completed work (S6 client sign-off). Hidden from the Files tab.
+	'job_signoff_signature',
+	// Bound to a quote (quote_id, no line_key — one per quote). The customer's drawn signature
+	// captured in person on the tech's device when they approve the quote ("close in the field").
+	// Referenced by quotes.acceptance_signature_media_id. Hidden from the Files tab.
+	'quote_signature'
 ]);
 
 export const media = pgTable(

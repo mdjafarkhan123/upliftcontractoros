@@ -1,7 +1,6 @@
 <script lang="ts">
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Download } from '@lucide/svelte';
 
 	let { quoteId }: { quoteId: string } = $props();
 
@@ -16,12 +15,12 @@
 	}
 </script>
 
-<JetEngineButton
+<Button
 	variant="outline"
-	label="Download PDF"
 	loadingLabel="Generating…"
 	successLabel="Ready"
 	onAction={download}
 >
-	{#snippet icon()}<Download class="h-4 w-4" />{/snippet}
-</JetEngineButton>
+	Download PDF
+	{#snippet icon()}<i class="ri-download-line" aria-hidden="true"></i>{/snippet}
+</Button>

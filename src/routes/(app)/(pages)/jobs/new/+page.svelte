@@ -3,41 +3,40 @@
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Select from '$lib/components/ui/select';
 	import { Switch } from '$lib/components/ui/switch';
-	import DateTimePicker from '$lib/components/ui/date-time-picker/DateTimePicker.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
 	import JobTagsEditor from '$lib/components/jobs/JobTagsEditor.svelte';
-	import { SUGGESTED_JOB_TYPES } from '$lib/jobs/jobMeta';
+	import JobTypePicker from '$lib/components/jobs/JobTypePicker.svelte';
+	import JobBillingEditor from '$lib/components/jobs/JobBillingEditor.svelte';
+	import JobRecurringBillingEditor from '$lib/components/jobs/JobRecurringBillingEditor.svelte';
+	import JobScheduleEditor from '$lib/components/jobs/JobScheduleEditor.svelte';
+	import JobProductsPricing from '$lib/components/jobs/JobProductsPricing.svelte';
+	import JobScopeNotes from '$lib/components/jobs/JobScopeNotes.svelte';
+	import JobCustomFieldsInput from '$lib/components/jobs/JobCustomFieldsInput.svelte';
+	import JobStatusBadge from '$lib/components/jobs/JobStatusBadge.svelte';
+	import RecurringScheduleModal from '$lib/components/jobs/RecurringScheduleModal.svelte';
+	import ContactPicker from '$lib/components/shared/ContactPicker.svelte';
+	import type { ContactHit } from '$lib/components/shared/contactPicker';
+	import { JobFormState, defaultNotifyChannel } from '$lib/jobs/jobForm.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { cn } from '$lib/utils/cn';
-	import { formatCurrency } from '$lib/utils/format';
-	import type { QuoteLineDraft } from '$lib/types/quotes';
-	import {
-		Briefcase,
-		Calendar,
-		Clock,
-		ExternalLink,
-		FileText,
-		Loader2,
-		Mail,
-		Phone,
-		Search,
-		Tag,
-		User,
-		X
-	} from '@lucide/svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const member = getMemberContext();
 	const canAssign = $derived(member().can_view_full_pipeline);
+
+	// Shared job-form state model — the same model the detail-page edit mode uses, so the two
+	// screens stay in lockstep. Page-specific concerns (contact search, prefill, POST) live below.
+	const form = new JobFormState();
+	// Jobber "date today, time empty": a new one-off job defaults its date to today with the
+	// times left blank (create-only — the edit page loads the job's real values instead).
+	{
+		const d = new Date();
+		form.scheduledStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+	}
 
 	// ── Prefill (from quote) ────────────────────────────────────────────────────
 	type LineDraftFromQuote = {
@@ -49,6 +48,7 @@
 		section_label: string | null;
 		unit_price: string;
 		unit_cost: string | null;
+		taxable: boolean;
 		source_catalog_item_id: string | null;
 		position: number;
 	};
@@ -77,92 +77,52 @@
 	let prefill = $state<PrefillData | null>(null);
 	let prefillLoading = $state(false);
 
-	// ── Contact search (manual creation) ───────────────────────────────────────
-	type ContactHit = { id: string; full_name: string; phone: string };
-	let contactQuery = $state('');
-	let contactResults = $state<ContactHit[]>([]);
+	// ── Contact selection (manual creation) ────────────────────────────────────
+	// The shared ContactPicker owns the search UI/state; we keep only the selection.
 	let selectedContact = $state<ContactHit | null>(null);
-	let contactSearching = $state(false);
-	let contactSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// ── Assignees ───────────────────────────────────────────────────────────────
-	let assignees = $state<{ id: string; full_name: string }[]>([]);
-	let assignedToId = $state('');
-	let notifyAssignee = $state(false);
-	const assignedToName = $derived(assignees.find((a) => a.id === assignedToId)?.full_name ?? '');
-
-	// ── Form fields ─────────────────────────────────────────────────────────────
-	let title = $state('');
-	let jobType = $state('');
-	let tags = $state<string[]>([]);
-	let scopeOfWork = $state('');
-	let visitNotes = $state('');
-	let status = $state<'scheduled' | 'in_progress' | 'completed'>('scheduled');
-	let anytime = $state(false);
-	let scheduledStart = $state('');
-	let scheduledEnd = $state('');
-
-	let addrLine1 = $state('');
-	let addrLine2 = $state('');
-	let addrCity = $state('');
-	let addrState = $state('');
-	let addrZip = $state('');
-
-	// ── Line items & pricing ─────────────────────────────────────────────────────
-	let lineItems = $state<QuoteLineDraft[]>([]);
-	let discountType = $state<'none' | 'fixed' | 'percent'>('none');
-	let discountValue = $state('');
-	let discountLabel = $state('');
-	let taxRatePct = $state(''); // percentage as typed (e.g. "8.25"); converted to rate on save
+	// ── Service address (sourced from the selected client) ─────────────────────
+	// The job's service address is never typed here for a manually-picked client —
+	// it's pulled from the contact's saved primary address (Jobber/Housecall pattern).
+	// Editing happens on the contact record, so the fields stay locked.
+	type AddressHit = {
+		address_line_1: string;
+		address_line_2: string | null;
+		city: string;
+		state: string;
+		zip: string;
+		is_primary: boolean;
+	};
+	let addressLoading = $state(false);
+	let addressOnFile = $state(true);
+	// Contact whose address backs the service-address block (manual pick or from-quote).
+	const addressContactId = $derived(
+		data.fromQuoteId ? (prefill?.contact_id ?? null) : (selectedContact?.id ?? null)
+	);
 
 	// ── UI state ────────────────────────────────────────────────────────────────
 	let errors = $state<Record<string, string>>({});
 	let globalError = $state('');
 	let saving = $state(false);
+	// Custom field values (S7) — bound from JobCustomFieldsInput; sent so the server can
+	// enforce the org's required-field gate. Empty when the org has defined no custom fields.
+	let customFieldValues = $state<import('$lib/types/jobs').JobCustomFieldValuePayload[]>([]);
 
 	// ── Derived ─────────────────────────────────────────────────────────────────
-	const scopeCharsLeft = $derived(10000 - scopeOfWork.length);
-
-	// Totals — mirror recalcJobTotals (discount before tax, clamps) for a live preview.
-	const subtotal = $derived(
-		lineItems.reduce((sum, li) => {
-			const q = Number(li.quantity);
-			const p = Number(li.unit_price);
-			if (!Number.isFinite(q) || !Number.isFinite(p)) return sum;
-			return sum + Math.round(q * p * 100) / 100;
-		}, 0)
+	const assignedToName = $derived(
+		form.assignees.find((a) => a.id === form.assignedToId)?.full_name ?? ''
 	);
-	const discountAmount = $derived.by(() => {
-		if (discountType === 'none') return 0;
-		const v = Number(discountValue);
-		if (!Number.isFinite(v) || v <= 0) return 0;
-		if (discountType === 'percent')
-			return Math.round(((subtotal * Math.min(v, 100)) / 100) * 100) / 100;
-		return Math.min(Math.max(v, 0), subtotal);
-	});
-	const taxRate = $derived(Number(taxRatePct) > 0 ? Number(taxRatePct) / 100 : 0);
-	const discountedBase = $derived(Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100));
-	const taxAmount = $derived(Math.round(discountedBase * taxRate * 100) / 100);
-	const total = $derived(Math.round((discountedBase + taxAmount) * 100) / 100);
 
-	const estimatedDuration = $derived.by(() => {
-		if (!scheduledStart || !scheduledEnd || anytime) return null;
-		const start = new Date(scheduledStart);
-		const end = new Date(scheduledEnd);
-		const diffMs = end.getTime() - start.getTime();
-		if (diffMs <= 0) return null;
-		const totalMins = Math.round(diffMs / 60000);
-		const hrs = Math.floor(totalMins / 60);
-		const mins = totalMins % 60;
-		if (hrs === 0) return `Est. ${mins} min`;
-		if (mins === 0) return `Est. ${hrs} hr${hrs > 1 ? 's' : ''}`;
-		return `Est. ${hrs} hr${hrs > 1 ? 's' : ''} ${mins} min`;
-	});
-
-	const mapsUrl = $derived.by(() => {
-		const parts = [addrLine1, addrCity, addrState, addrZip].filter(Boolean).join(', ');
-		if (!parts) return null;
-		return `https://maps.google.com/?q=${encodeURIComponent(parts)}`;
+	// The datetime this job will actually land on the calendar with — or null when it won't
+	// (Schedule later, or a recurring job without an anchor). Drives the status-badge preview and
+	// whether the client-notification picker is relevant. A one-off is "scheduled" whenever it has
+	// a date — timed OR "Anytime" (date with no clock time, Jobber's model). An Anytime date is
+	// anchored at noon so the Today/Upcoming read matches what we send to the server.
+	const previewStart = $derived.by(() => {
+		if (form.jobMode === 'recurring') return form.scheduledStart || null;
+		if (form.scheduleLater || !form.scheduledStart) return null;
+		if (form.scheduledStart.includes('T')) return form.scheduledStart;
+		return `${form.scheduledStart.split('T')[0]}T12:00:00`;
 	});
 
 	function initials(name: string): string {
@@ -174,47 +134,54 @@
 			.join('');
 	}
 
-	// ── Quick date shortcuts ────────────────────────────────────────────────────
-	function setDateQuick(offsetDays: number) {
-		const d = new Date();
-		d.setDate(d.getDate() + offsetDays);
-		const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-		const existingTime = scheduledStart?.split('T')[1] || '09:00';
-		scheduledStart = `${dateStr}T${existingTime}`;
-	}
-
-	// ── Contact search ──────────────────────────────────────────────────────────
-	function onContactInput(value: string) {
-		contactQuery = value;
-		if (contactSearchTimer) clearTimeout(contactSearchTimer);
-		if (value.trim().length < 2) {
-			contactResults = [];
-			return;
-		}
-		contactSearchTimer = setTimeout(async () => {
-			contactSearching = true;
-			try {
-				const res = await fetch(`/api/contacts?q=${encodeURIComponent(value.trim())}`);
-				if (!res.ok) return;
-				const body = (await res.json()) as { items: ContactHit[] };
-				contactResults = body.items.slice(0, 8);
-			} finally {
-				contactSearching = false;
-			}
-		}, 250);
-	}
-
-	function pickContact(c: ContactHit) {
-		selectedContact = c;
-		contactQuery = c.full_name;
-		contactResults = [];
+	// ── Contact selection (shared ContactPicker) ─────────────────────────────────
+	// On pick: default the notify channel from the client's reachable channels, clear any
+	// required-field error, and pull their saved address into the locked service-address block.
+	function onSelectContact(c: ContactHit) {
+		form.notifyChannel = defaultNotifyChannel(!!c.phone, !!c.email);
 		errors = { ...errors, contact: '' };
+		void loadContactAddress(c.id);
 	}
 
-	function clearContact() {
-		selectedContact = null;
-		contactQuery = '';
-		contactResults = [];
+	function onClearContact() {
+		form.notifyChannel = 'none';
+		// Drop the address that belonged to the previous client.
+		form.addrLine1 = '';
+		form.addrLine2 = '';
+		form.addrCity = '';
+		form.addrState = '';
+		form.addrZip = '';
+		addressOnFile = true;
+	}
+
+	// Pull the client's primary (or first) saved address into the locked service-address
+	// fields. No address on file → fields stay empty and we prompt to add one on the contact.
+	async function loadContactAddress(id: string) {
+		addressLoading = true;
+		addressOnFile = true;
+		try {
+			const res = await fetch(`/api/contacts/${id}/addresses`);
+			if (!res.ok) return;
+			const body = (await res.json()) as { data: AddressHit[] };
+			const list = body.data ?? [];
+			const primary = list.find((a) => a.is_primary) ?? list[0];
+			if (primary) {
+				form.addrLine1 = primary.address_line_1 ?? '';
+				form.addrLine2 = primary.address_line_2 ?? '';
+				form.addrCity = primary.city ?? '';
+				form.addrState = primary.state ?? '';
+				form.addrZip = primary.zip ?? '';
+			} else {
+				form.addrLine1 = '';
+				form.addrLine2 = '';
+				form.addrCity = '';
+				form.addrState = '';
+				form.addrZip = '';
+				addressOnFile = false;
+			}
+		} finally {
+			addressLoading = false;
+		}
 	}
 
 	// ── Save ────────────────────────────────────────────────────────────────────
@@ -227,12 +194,64 @@
 			errors = { ...errors, contact: 'Please select a contact.' };
 			return;
 		}
-		if (!title.trim()) {
+		if (!form.title.trim()) {
 			errors = { ...errors, title: 'Job title is required.' };
 			return;
 		}
-		if (scheduledEnd && scheduledStart && new Date(scheduledEnd) < new Date(scheduledStart)) {
+		// One-off job: only a date is required (it defaults to today). A time is optional — a date
+		// with no time is a valid "Anytime" visit (Jobber's model) that lands in the calendar's
+		// Anytime lane. Only "Schedule later" opts out of a date entirely.
+		if (form.jobMode === 'one_off' && !form.scheduleLater && !form.scheduledStart) {
+			errors = { ...errors, scheduledStart: 'Pick a date, or choose Schedule later.' };
+			return;
+		}
+		if (
+			!form.scheduleLater &&
+			form.scheduledEnd &&
+			form.scheduledStart &&
+			new Date(form.scheduledEnd) < new Date(form.scheduledStart)
+		) {
 			errors = { ...errors, scheduledEnd: 'End must be after start.' };
+			return;
+		}
+		if (form.jobMode === 'recurring') {
+			if (!form.recurConfigured) {
+				errors = { ...errors, recurrence: 'Set up the repeat rule first.' };
+				return;
+			}
+			if (!form.scheduledStart) {
+				errors = { ...errors, scheduledStart: 'Pick a start date for the recurring schedule.' };
+				return;
+			}
+			if (form.endType === 'on' && !form.endOn) {
+				errors = { ...errors, end_on: 'Set an end date.' };
+				return;
+			}
+			if (
+				form.endType === 'after' &&
+				(!Number(form.endAfterCount) || Number(form.endAfterCount) < 1)
+			) {
+				errors = { ...errors, end_after_count: 'Set how long the schedule runs.' };
+				return;
+			}
+			if (form.preview && form.preview.count === 0) {
+				errors = { ...errors, recurrence: 'This schedule produces no visits. Adjust the rule.' };
+				return;
+			}
+			if (
+				form.recurBillingEnabled &&
+				form.recurBillingType === 'fixed' &&
+				!(Number(form.fixedInvoiceAmount) > 0)
+			) {
+				errors = { ...errors, fixed_invoice_amount: 'Enter the fixed invoice amount.' };
+				return;
+			}
+		}
+
+		// One-off billing: the payment schedule can never bill more than the job total.
+		if (form.paymentOverAllocated) {
+			globalError =
+				'The payment schedule bills more than the job total. Lower an amount to continue.';
 			return;
 		}
 
@@ -240,35 +259,73 @@
 		try {
 			const payload: Record<string, unknown> = {
 				contact_id: contactId,
-				title: title.trim(),
-				status
+				title: form.title.trim()
 			};
 			if (prefill?.opportunity_id) payload.opportunity_id = prefill.opportunity_id;
-			if (assignedToId) payload.assigned_to = assignedToId;
-			if (jobType.trim()) payload.job_type = jobType.trim();
-			if (tags.length > 0) payload.tags = tags;
-			if (!anytime) {
-				if (scheduledStart) payload.scheduled_start = new Date(scheduledStart).toISOString();
-				if (scheduledEnd) payload.scheduled_end = new Date(scheduledEnd).toISOString();
-			}
-			if (scopeOfWork.trim()) payload.scope_of_work = scopeOfWork.trim();
-			if (visitNotes.trim()) payload.notes = visitNotes.trim();
-			if (addrLine1.trim()) payload.service_address_line_1 = addrLine1.trim();
-			if (addrLine2.trim()) payload.service_address_line_2 = addrLine2.trim();
-			if (addrCity.trim()) payload.service_address_city = addrCity.trim();
-			if (addrState.trim()) payload.service_address_state = addrState.trim();
-			if (addrZip.trim()) payload.service_address_zip = addrZip.trim();
+			if (form.assignedToId) payload.assigned_to = form.assignedToId;
+			if (form.jobType.trim()) payload.job_type = form.jobType.trim();
+			if (form.tags.length > 0) payload.tags = form.tags;
 
-			// Pricing
-			payload.tax_rate = taxRate;
-			if (discountType !== 'none') {
-				payload.discount_type = discountType;
-				payload.discount_value = Number(discountValue) || 0;
-				if (discountLabel.trim()) payload.discount_label = discountLabel.trim();
+			if (form.jobMode === 'recurring') {
+				// A recurring job is always scheduled — the anchor (start/end) drives every
+				// generated visit. anytime is carried inside the recurrence rule.
+				payload.scheduled_start = new Date(form.scheduledStart).toISOString();
+				if (form.scheduledEnd) payload.scheduled_end = new Date(form.scheduledEnd).toISOString();
+				payload.recurrence = form.buildRecurrence();
+				if (form.visitInstructions.trim())
+					payload.visit_instructions = form.visitInstructions.trim();
+				if (form.notifyChannel !== 'none') payload.notify_channel = form.notifyChannel;
+				// Recurring billing config (manual v1). Only sent when the contractor opts in.
+				if (form.recurBillingEnabled) {
+					payload.billing_type = form.recurBillingType;
+					payload.invoice_frequency = form.invoiceFrequency;
+					payload.fixed_invoice_amount =
+						form.recurBillingType === 'fixed' ? Number(form.fixedInvoiceAmount) || 0 : null;
+				}
+			} else if (form.scheduleLater) {
+				// Jobber "Schedule later": no date is sent; the server creates a single
+				// unscheduled placeholder visit the contractor dates later.
+				payload.schedule_later = true;
+			} else if (!form.anytime && form.scheduledStart.includes('T')) {
+				// Timed one-off: date + start time, optional end.
+				payload.scheduled_start = new Date(form.scheduledStart).toISOString();
+				if (form.scheduledEnd) payload.scheduled_end = new Date(form.scheduledEnd).toISOString();
+				// Only notify the client when a channel is selected (Not set = stay silent).
+				if (form.notifyChannel !== 'none') payload.notify_channel = form.notifyChannel;
+			} else if (form.scheduledStart) {
+				// Anytime one-off: a date with no clock time (Jobber "Anytime" visit) — either the
+				// contractor turned on "All day / Anytime", or simply left the time blank. Anchor the
+				// date at noon (DST-safe day bucket, same as the appointment form) and mark it all-day
+				// so the server creates a dated all-day visit in the calendar's Anytime lane.
+				const dateOnly = form.scheduledStart.split('T')[0];
+				payload.scheduled_start = new Date(`${dateOnly}T12:00:00`).toISOString();
+				payload.all_day = true;
+				if (form.notifyChannel !== 'none') payload.notify_channel = form.notifyChannel;
+			}
+			// Per-job message override — only sent when the contractor edited the wording for
+			// this job (otherwise the worker uses the org default template).
+			if (payload.notify_channel) {
+				const ov = form.buildNotifyOverrides();
+				if (ov.sms) payload.notify_sms_message = ov.sms;
+				if (ov.subject) payload.notify_email_subject = ov.subject;
+				if (ov.body) payload.notify_email_message = ov.body;
+			}
+			if (form.scopeOfWork.trim()) payload.scope_of_work = form.scopeOfWork.trim();
+			if (form.notes.trim()) payload.notes = form.notes.trim();
+			if (form.addrLine1.trim()) payload.service_address_line_1 = form.addrLine1.trim();
+			if (form.addrLine2.trim()) payload.service_address_line_2 = form.addrLine2.trim();
+			if (form.addrCity.trim()) payload.service_address_city = form.addrCity.trim();
+			if (form.addrState.trim()) payload.service_address_state = form.addrState.trim();
+			if (form.addrZip.trim()) payload.service_address_zip = form.addrZip.trim();
+
+			payload.tax_rate = form.taxRate;
+			if (form.discountType !== 'none') {
+				payload.discount_type = form.discountType;
+				payload.discount_value = Number(form.discountValue) || 0;
+				if (form.discountLabel.trim()) payload.discount_label = form.discountLabel.trim();
 			}
 
-			// Line items — drop blank rows; server coerces numeric strings + recomputes totals.
-			const lines = lineItems
+			const lines = form.lineItems
 				.filter((li) => li.description.trim())
 				.map((li, idx) => ({
 					line_key: li.line_key ?? null,
@@ -279,10 +336,32 @@
 					section_label: li.section_label?.trim() || null,
 					unit_price: li.unit_price,
 					unit_cost: li.unit_cost ?? null,
+					taxable: li.taxable ?? true,
 					source_catalog_item_id: li.source_catalog_item_id ?? null,
 					position: idx
 				}));
 			if (lines.length > 0) payload.line_items = lines;
+
+			// One-off billing: close reminder + optional payment schedule. Only applies to one-off
+			// jobs (recurring jobs use recurring billing, handled above). Only rows with a positive
+			// amount are sent; incomplete rows are dropped.
+			if (form.jobMode === 'one_off' && form.invoiceOnClose) payload.invoice_on_close = true;
+			if (form.jobMode === 'one_off' && form.splitEnabled) {
+				const ms = form.billingMilestones
+					.filter((m) => m.description.trim() && Number(m.amount_value) > 0)
+					.map((m) => ({
+						key: m.key ?? null,
+						description: m.description.trim(),
+						amount_type: form.splitBy,
+						amount_value: Number(m.amount_value),
+						due_date: m.due_date || null
+					}));
+				if (ms.length > 0) payload.payment_milestones = ms;
+			}
+
+			// Custom fields (S7): always send when the org has defined any, so the server can
+			// enforce the required-field gate (all-empty rows are ignored for storage).
+			if (customFieldValues.length > 0) payload.custom_field_values = customFieldValues;
 
 			const res = await fetch('/api/jobs', {
 				method: 'POST',
@@ -312,12 +391,16 @@
 	onMount(async () => {
 		const tasks: Promise<void>[] = [];
 
+		// Load the "job scheduled" confirmation template up front so the preview is ready by
+		// the time the contractor picks a schedule (no spinner in the common case).
+		tasks.push(form.loadNotifyTemplate());
+
 		if (canAssign) {
 			tasks.push(
 				fetch('/api/contacts/assignees').then(async (res) => {
 					if (!res.ok) return;
 					const a = (await res.json()) as { assignees: { id: string; full_name: string }[] };
-					assignees = a.assignees;
+					form.assignees = a.assignees;
 				})
 			);
 		}
@@ -333,21 +416,23 @@
 						}
 						const body = (await res.json()) as { data: PrefillData };
 						prefill = body.data;
-						title = prefill.title;
-						visitNotes = prefill.notes ?? '';
-						addrLine1 = prefill.service_address.line1 ?? '';
-						addrLine2 = prefill.service_address.line2 ?? '';
-						addrCity = prefill.service_address.city ?? '';
-						addrState = prefill.service_address.state ?? '';
-						addrZip = prefill.service_address.zip ?? '';
-						// Pricing snapshot
-						discountType = (prefill.discount_type as typeof discountType) ?? 'none';
-						discountValue = prefill.discount_value ?? '';
-						discountLabel = prefill.discount_label ?? '';
+						form.title = prefill.title;
+						form.notifyChannel = defaultNotifyChannel(
+							!!prefill.contact_phone,
+							!!prefill.contact_email
+						);
+						form.notes = prefill.notes ?? '';
+						form.addrLine1 = prefill.service_address.line1 ?? '';
+						form.addrLine2 = prefill.service_address.line2 ?? '';
+						form.addrCity = prefill.service_address.city ?? '';
+						form.addrState = prefill.service_address.state ?? '';
+						form.addrZip = prefill.service_address.zip ?? '';
+						form.discountType = (prefill.discount_type as typeof form.discountType) ?? 'none';
+						form.discountValue = prefill.discount_value ?? '';
+						form.discountLabel = prefill.discount_label ?? '';
 						const rate = Number(prefill.tax_rate);
-						taxRatePct = rate > 0 ? String(Math.round(rate * 10000) / 100) : '';
-						// Snapshot-copy the quote's lines into the editable job line editor.
-						lineItems = prefill.line_items.map((li) => ({
+						form.taxRatePct = rate > 0 ? String(Math.round(rate * 10000) / 100) : '';
+						form.lineItems = prefill.line_items.map((li) => ({
 							client_id: crypto.randomUUID(),
 							line_key: li.line_key,
 							description: li.description,
@@ -357,6 +442,7 @@
 							section_label: li.section_label,
 							unit_price: li.unit_price,
 							unit_cost: li.unit_cost,
+							taxable: li.taxable,
 							source_catalog_item_id: li.source_catalog_item_id
 						}));
 					})
@@ -377,258 +463,105 @@
 
 <PageWrapper title="New Job" back="/jobs">
 	{#snippet actions()}
-		<Button onclick={save} disabled={saving} class="hidden min-h-[44px] lg:inline-flex">
-			{#if saving}
-				<Loader2 class="mr-1.5 h-4 w-4 animate-spin" />
-				Creating…
-			{:else}
-				<Briefcase class="mr-1.5 h-4 w-4" />
-				Create Job
-			{/if}
+		<Button onclick={save} loading={saving} loadingLabel="Creating…">
+			<i class="ri-briefcase-line" aria-hidden="true"></i>
+			Create Job
 		</Button>
 	{/snippet}
 
-	<div class="grid gap-6 pb-28 lg:grid-cols-[1fr_320px] lg:pb-6">
-		<!-- ── LEFT COLUMN: Main content ────────────────────────────────────── -->
-		<div class="space-y-4">
+	<div class="job-layout">
+		<!-- ── LEFT COLUMN ───────────────────────────────────────────────────── -->
+		<div class="job-layout__main">
 			<!-- Job title -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="space-y-1.5">
-					<Label for="job-title">Job title <span class="text-destructive">*</span></Label>
-					<Input
+			<div class="job-section">
+				<div class="field">
+					<h3 id="job-title-heading" class="field__label--required">Job title</h3>
+					<input
 						id="job-title"
-						bind:value={title}
+						class="field__input"
+						bind:value={form.title}
 						placeholder="e.g. Fence repair, Lawn cleanup, HVAC tune-up"
-						class="h-11 text-base"
 					/>
 					{#if errors.title}
-						<p class="text-sm text-destructive">{errors.title}</p>
+						<p class="field__error">{errors.title}</p>
 					{/if}
 				</div>
 			</div>
 
 			<!-- Schedule -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="mb-4 flex items-center justify-between">
-					<div class="flex items-center gap-2">
-						<Calendar class="h-4 w-4 text-muted-foreground" />
-						<h3 class="text-sm font-semibold text-foreground">Schedule</h3>
-					</div>
-					<span class="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">One-off job</span>
-				</div>
+			<JobScheduleEditor
+				{form}
+				{errors}
+				notifyVisible={previewStart !== null}
+				showNotifyHint
+				showNotifyPreview
+				notifyContactName={data.fromQuoteId
+					? (prefill?.contact_name ?? '')
+					: (selectedContact?.full_name ?? '')}
+				contactSelected={data.fromQuoteId ? !!prefill : !!selectedContact}
+				contactHasPhone={data.fromQuoteId ? !!prefill?.contact_phone : !!selectedContact?.phone}
+				contactHasEmail={data.fromQuoteId ? !!prefill?.contact_email : !!selectedContact?.email}
+			/>
 
-				<div class="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-4 py-3">
-					<div>
-						<p class="text-sm font-medium text-foreground">All day / Anytime</p>
-						<p class="text-xs text-muted-foreground">No specific time window needed</p>
-					</div>
-					<Switch id="anytime-switch" bind:checked={anytime} />
-				</div>
-
-				{#if !anytime}
-					<div class="mt-4 space-y-2">
-						<p class="text-xs font-medium text-muted-foreground">Quick select</p>
-						<div class="flex flex-wrap gap-2">
-							{#each [{ label: 'Today', offset: 0 }, { label: 'Tomorrow', offset: 1 }, { label: 'In 2 days', offset: 2 }, { label: 'Next week', offset: 7 }] as s}
-								<button
-									type="button"
-									onclick={() => setDateQuick(s.offset)}
-									class="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-all duration-150 hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-95"
-								>
-									{s.label}
-								</button>
-							{/each}
-						</div>
-					</div>
-
-					<div class="mt-4 grid gap-3 sm:grid-cols-2">
-						<div class="space-y-1.5">
-							<Label>Start date & time</Label>
-							<DateTimePicker bind:value={scheduledStart} placeholder="Pick start" />
-						</div>
-						<div class="space-y-1.5">
-							<Label>End date & time</Label>
-							<DateTimePicker bind:value={scheduledEnd} placeholder="Pick end" />
-							{#if errors.scheduledEnd}
-								<p class="text-xs text-destructive">{errors.scheduledEnd}</p>
-							{/if}
-						</div>
-					</div>
-
-					{#if estimatedDuration}
-						<div class="mt-3 flex items-center gap-1.5 text-sm font-medium text-primary">
-							<Clock class="h-3.5 w-3.5" />
-							{estimatedDuration}
-						</div>
-					{/if}
-				{/if}
+			<!-- Status — auto-derived: no date = Pending, date set = Scheduled. Advances to In
+				 progress / Completed later via the job's Start / Complete actions. -->
+			<div class="job-new-status">
+				<span class="job-new-status__label">Status</span>
+				<JobStatusBadge status="scheduled" scheduledStart={previewStart} />
+				<span class="job-new-status__hint">
+					{previewStart
+						? 'Scheduled — on the calendar. Start it from the job when work begins.'
+						: form.scheduleLater
+							? 'No date yet — saved to the job’s Visits list as “To be scheduled”.'
+							: 'Pending until you add a date. Set a schedule above to put it on the calendar.'}
+				</span>
 			</div>
 
-			<!-- Line items & pricing -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="mb-4 flex items-center gap-2">
-					<Briefcase class="h-4 w-4 text-muted-foreground" />
-					<h3 class="text-sm font-semibold text-foreground">Products & Services</h3>
-				</div>
+			<!-- Products & Services -->
+			<JobProductsPricing {form} {errors} loading={!!(prefillLoading && data.fromQuoteId)} />
 
-				{#if prefillLoading && data.fromQuoteId}
-					<SkeletonLoader lines={3} />
-				{:else}
-					<LineItemEditor bind:lineItems enableCatalog enableOptional={false} />
+			<!-- Billing — recurring jobs bill on a schedule; one-off jobs use the payment schedule -->
+			{#if form.jobMode === 'recurring'}
+				<JobRecurringBillingEditor
+					bind:enabled={form.recurBillingEnabled}
+					bind:billingType={form.recurBillingType}
+					bind:invoiceFrequency={form.invoiceFrequency}
+					bind:fixedAmount={form.fixedInvoiceAmount}
+					preview={form.preview}
+					previewLoading={form.previewLoading}
+				/>
+			{:else}
+				<JobBillingEditor
+					bind:invoiceOnClose={form.invoiceOnClose}
+					bind:splitEnabled={form.splitEnabled}
+					bind:splitBy={form.splitBy}
+					bind:milestones={form.billingMilestones}
+					total={form.total}
+				/>
+			{/if}
 
-					<div class="grid gap-3 border-t border-border/50 pt-4 sm:grid-cols-2">
-						<div class="space-y-1.5">
-							<Label>Discount</Label>
-							<div class="flex gap-2">
-								<Select.Root bind:value={discountType}>
-									<Select.Trigger class="h-10 w-32 shrink-0">
-										<Select.Value />
-									</Select.Trigger>
-									<Select.Content>
-										<Select.Item value="none">None</Select.Item>
-										<Select.Item value="percent">Percent</Select.Item>
-										<Select.Item value="fixed">Fixed $</Select.Item>
-									</Select.Content>
-								</Select.Root>
-								{#if discountType !== 'none'}
-									<Input
-										type="number"
-										inputmode="decimal"
-										min="0"
-										step="0.01"
-										class="h-10"
-										placeholder={discountType === 'percent' ? '%' : '$'}
-										bind:value={discountValue}
-									/>
-								{/if}
-							</div>
-							{#if errors.discount_value}
-								<p class="text-xs text-destructive">{errors.discount_value}</p>
-							{/if}
-							{#if discountType !== 'none'}
-								<Input
-									bind:value={discountLabel}
-									placeholder="Discount label (e.g. Spring promo)"
-									class="h-9 text-sm"
-									maxlength={60}
-								/>
-							{/if}
-						</div>
-						<div class="space-y-1.5">
-							<Label for="tax-rate">Tax rate (%)</Label>
-							<Input
-								id="tax-rate"
-								type="number"
-								inputmode="decimal"
-								min="0"
-								step="0.01"
-								class="h-10"
-								placeholder="e.g. 8.25"
-								bind:value={taxRatePct}
-							/>
-						</div>
-					</div>
+			<!-- Scope of work + Internal notes -->
+			<JobScopeNotes {form} />
 
-					<div class="mt-4 rounded-lg border border-border/60 bg-muted/20 p-3">
-						<dl class="space-y-1.5 text-sm">
-							<div class="flex justify-between">
-								<dt class="text-muted-foreground">Subtotal</dt>
-								<dd class="tabular-nums">{formatCurrency(subtotal)}</dd>
-							</div>
-							{#if discountAmount > 0}
-								<div class="flex justify-between">
-									<dt class="text-emerald-600 dark:text-emerald-400">
-										{discountLabel.trim() || 'Discount'}{discountType === 'percent' && Number(discountValue) > 0 ? ` (${Number(discountValue)}%)` : ''}
-									</dt>
-									<dd class="tabular-nums text-emerald-600 dark:text-emerald-400">
-										−{formatCurrency(discountAmount)}
-									</dd>
-								</div>
-							{/if}
-							<div class="flex justify-between">
-								<dt class="text-muted-foreground">Tax ({(taxRate * 100).toFixed(2)}%)</dt>
-								<dd class="tabular-nums">{formatCurrency(taxAmount)}</dd>
-							</div>
-							<div class="flex justify-between border-t border-border pt-1.5 text-base font-semibold">
-								<dt>Total</dt>
-								<dd class="tabular-nums">{formatCurrency(total)}</dd>
-							</div>
-						</dl>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Scope of work -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="space-y-1.5">
-					<div class="flex items-center justify-between">
-						<Label for="scope-field">Scope of work</Label>
-						<span class={cn('text-xs tabular-nums', scopeCharsLeft < 500 ? 'text-destructive' : 'text-muted-foreground')}>
-							{scopeCharsLeft.toLocaleString()} left
-						</span>
-					</div>
-					<Textarea
-						id="scope-field"
-						bind:value={scopeOfWork}
-						rows={5}
-						placeholder="Crew-facing details — materials, process, access, anything the line items don't capture…"
-					/>
-				</div>
-			</div>
-
-			<!-- Visit instructions -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="space-y-1.5">
-					<Label for="notes-field">Visit instructions</Label>
-					<p class="text-xs text-muted-foreground">Internal — visible to your team only, not the client</p>
-					<Textarea
-						id="notes-field"
-						bind:value={visitNotes}
-						rows={3}
-						placeholder="Access code, parking notes, gate code, client preferences…"
-					/>
-				</div>
-			</div>
-
-			<!-- Status -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="space-y-1.5">
-					<Label>Status</Label>
-					<Select.Root bind:value={status}>
-						<Select.Trigger class="h-11 w-full">
-							<Select.Value />
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="scheduled">Scheduled</Select.Item>
-							<Select.Item value="in_progress">In progress</Select.Item>
-							<Select.Item value="completed">Completed</Select.Item>
-						</Select.Content>
-					</Select.Root>
-				</div>
-			</div>
+			<!-- Custom fields (Session 7) — org-defined extra fields; renders only when defined -->
+			<JobCustomFieldsInput bind:values={customFieldValues} {errors} />
 
 			{#if globalError}
-				<div class="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-					{globalError}
-				</div>
+				<div class="ui-alert ui-alert--destructive">{globalError}</div>
 			{/if}
 		</div>
 
-		<!-- ── RIGHT SIDEBAR ────────────────────────────────────────────────── -->
-		<div class="space-y-4 lg:sticky lg:top-[calc(var(--header-height)+1rem)] lg:self-start">
-			<!-- Provenance badge -->
+		<!-- ── RIGHT SIDEBAR ─────────────────────────────────────────────────── -->
+		<div class="job-layout__sidebar">
+			<!-- Provenance badge (from-quote flow) -->
 			{#if data.fromQuoteId}
 				{#if prefillLoading}
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<SkeletonLoader lines={2} />
-					</div>
+					<div class="job-section"><SkeletonLoader lines={2} /></div>
 				{:else if prefill}
-					<div
-						class="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"
-					>
-						<FileText class="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-						<p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-							From Quote <span class="font-semibold">{prefill.quote_number_display}</span>
+					<div class="job-provenance">
+						<i class="ri-file-text-line job-provenance__icon" aria-hidden="true"></i>
+						<p class="job-provenance__text">
+							From Quote <span class="job-provenance__num">{prefill.quote_number_display}</span>
 						</p>
 					</div>
 				{/if}
@@ -637,229 +570,238 @@
 			<!-- Client section -->
 			{#if data.fromQuoteId}
 				{#if prefillLoading}
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<SkeletonLoader lines={3} />
-					</div>
+					<div class="job-section"><SkeletonLoader lines={3} /></div>
 				{:else if prefill}
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<p
-							class="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground"
-						>
-							Client
-						</p>
-						<div class="flex items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/12 text-sm font-bold text-primary"
-							>
-								{initials(prefill.contact_name)}
-							</div>
-							<div class="min-w-0 space-y-1">
-								<p class="truncate font-semibold text-foreground">{prefill.contact_name}</p>
+					<div class="job-section">
+						<p class="job-eyebrow">Client</p>
+						<div class="job-new-client">
+							<div class="job-new-client__avatar">{initials(prefill.contact_name)}</div>
+							<div class="job-new-client__info">
+								<p class="job-new-client__name">{prefill.contact_name}</p>
 								{#if prefill.contact_phone}
-									<a
-										href="tel:{prefill.contact_phone}"
-										class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-									>
-										<Phone class="h-3.5 w-3.5 shrink-0" />
+									<a href="tel:{prefill.contact_phone}" class="job-new-client__row">
+										<i class="ri-phone-line" aria-hidden="true"></i>
 										{prefill.contact_phone}
 									</a>
 								{/if}
 								{#if prefill.contact_email}
-									<div class="flex min-w-0 items-center gap-1.5">
-										<Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-										<span class="truncate text-sm text-muted-foreground"
-											>{prefill.contact_email}</span
-										>
-									</div>
+									<p class="job-new-client__row">
+										<i class="ri-mail-line" aria-hidden="true"></i>
+										<span class="job-new-client__email">{prefill.contact_email}</span>
+									</p>
 								{/if}
 							</div>
 						</div>
 					</div>
 				{/if}
 			{:else}
-				<!-- Contact search for manual creation -->
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<p class="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-						Client <span class="text-destructive">*</span>
-					</p>
-					{#if selectedContact}
-						<div
-							class="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2"
-						>
-							<div class="min-w-0">
-								<p class="truncate text-sm font-medium">{selectedContact.full_name}</p>
-								{#if selectedContact.phone}
-									<p class="truncate text-xs text-muted-foreground">{selectedContact.phone}</p>
-								{/if}
-							</div>
-							<Button variant="ghost" size="sm" onclick={clearContact}>Change</Button>
-						</div>
-					{:else}
-						<div class="relative">
-							<Search
-								class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-							/>
-							<Input
-								placeholder="Search by name or phone"
-								value={contactQuery}
-								oninput={(e) => onContactInput((e.target as HTMLInputElement).value)}
-								class="h-11 pl-9"
-							/>
-							{#if contactResults.length > 0}
-								<ul
-									class="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-popover shadow-dropdown"
-								>
-									{#each contactResults as c (c.id)}
-										<li>
-											<button
-												type="button"
-												class="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-accent/60"
-												onclick={() => pickContact(c)}
-											>
-												<span class="text-sm font-medium">{c.full_name}</span>
-												{#if c.phone}
-													<span class="text-xs text-muted-foreground">{c.phone}</span>
-												{/if}
-											</button>
-										</li>
-									{/each}
-								</ul>
-							{:else if contactSearching}
-								<p class="mt-1.5 text-xs text-muted-foreground">Searching…</p>
-							{/if}
-						</div>
-					{/if}
+				<!-- Manual contact search -->
+				<div class="job-section">
+					<p class="job-eyebrow">Client <span class="job-eyebrow__req">*</span></p>
+					<ContactPicker
+						bind:selected={selectedContact}
+						placeholder="Select a client — search by name or phone"
+						invalid={!!errors.contact}
+						onSelect={onSelectContact}
+						onClear={onClearContact}
+					/>
 					{#if errors.contact}
-						<p class="mt-1.5 text-sm text-destructive">{errors.contact}</p>
+						<p class="field__error">{errors.contact}</p>
 					{/if}
 				</div>
 			{/if}
 
 			<!-- Service address -->
-			<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="mb-3 flex items-center justify-between">
-					<p class="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-						Service Address
-					</p>
-					{#if mapsUrl}
+			<div class="job-section">
+				<div class="job-addr-header">
+					<p class="job-eyebrow">Service Address</p>
+					{#if form.mapsUrl}
 						<a
-							href={mapsUrl}
+							href={form.mapsUrl}
 							target="_blank"
 							rel="noopener noreferrer"
-							class="flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80"
+							class="job-addr-maps-link"
 						>
-							<ExternalLink class="h-3 w-3" />
+							<i class="ri-external-link-line" aria-hidden="true"></i>
 							Open in Maps
 						</a>
 					{/if}
 				</div>
-				<div class="space-y-2">
-					<Input placeholder="Address line 1" bind:value={addrLine1} class="h-9 text-sm" />
-					<Input
-						placeholder="Address line 2 (optional)"
-						bind:value={addrLine2}
-						class="h-9 text-sm"
-					/>
-					<div class="grid grid-cols-2 gap-2">
-						<Input placeholder="City" bind:value={addrCity} class="h-9 text-sm" />
-						<Input placeholder="State" bind:value={addrState} class="h-9 text-sm" />
+				{#if data.fromQuoteId}
+					<!-- From a quote: the address is the quote's snapshot, editable here. -->
+					<div class="job-addr-fields">
+						<input class="field__input" placeholder="Address line 1" bind:value={form.addrLine1} />
+						<input
+							class="field__input"
+							placeholder="Address line 2 (optional)"
+							bind:value={form.addrLine2}
+						/>
+						<div class="job-addr-city-row">
+							<input class="field__input" placeholder="City" bind:value={form.addrCity} />
+							<input class="field__input" placeholder="State" bind:value={form.addrState} />
+						</div>
+						<input class="field__input" placeholder="ZIP code" bind:value={form.addrZip} />
 					</div>
-					<Input placeholder="ZIP code" bind:value={addrZip} class="h-9 text-sm" />
-				</div>
-				{#if prefillLoading && data.fromQuoteId}
-					<div class="mt-3">
-						<SkeletonLoader lines={2} />
+					{#if prefillLoading}
+						<div class="new-job__addr-skeleton"><SkeletonLoader lines={2} /></div>
+					{/if}
+				{:else if !addressContactId}
+					<!-- No client yet — address comes from the client's contact record. -->
+					<p class="job-addr-hint">
+						<i class="ri-information-line" aria-hidden="true"></i>
+						Select a client first — the service address is pulled from their contact record.
+					</p>
+				{:else if addressLoading}
+					<div class="new-job__addr-skeleton"><SkeletonLoader lines={2} /></div>
+				{:else}
+					<!-- Locked: address is owned by the contact. Edit it there, not here. -->
+					<div class="job-addr-fields">
+						<input
+							class="field__input"
+							placeholder="Address line 1"
+							value={form.addrLine1}
+							disabled
+						/>
+						<input
+							class="field__input"
+							placeholder="Address line 2 (optional)"
+							value={form.addrLine2}
+							disabled
+						/>
+						<div class="job-addr-city-row">
+							<input class="field__input" placeholder="City" value={form.addrCity} disabled />
+							<input class="field__input" placeholder="State" value={form.addrState} disabled />
+						</div>
+						<input class="field__input" placeholder="ZIP code" value={form.addrZip} disabled />
 					</div>
+					{#if addressOnFile}
+						<p class="job-addr-hint">
+							<i class="ri-lock-2-line" aria-hidden="true"></i>
+							Pulled from the client's contact.
+							<a href="/contacts/{addressContactId}">Edit in contact</a>.
+						</p>
+					{:else}
+						<p class="job-addr-hint job-addr-hint--warn">
+							<i class="ri-alert-line" aria-hidden="true"></i>
+							No address on file for this client.
+							<a href="/contacts/{addressContactId}">Add one on their contact</a>.
+						</p>
+					{/if}
 				{/if}
 			</div>
 
 			<!-- Job type & tags -->
-			<div class="space-y-4 rounded-xl border border-border/60 bg-card p-4 shadow-card">
-				<div class="space-y-2">
-					<Label>Job type</Label>
-					<div class="flex flex-wrap gap-1.5">
-						{#each SUGGESTED_JOB_TYPES as t (t)}
-							<button
-								type="button"
-								onclick={() => (jobType = jobType === t ? '' : t)}
-								aria-pressed={jobType === t}
-								class={cn(
-									'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors',
-									jobType === t
-										? 'border-primary bg-primary text-primary-foreground'
-										: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-								)}
-							>
-								{t}
-							</button>
-						{/each}
-					</div>
-					<Input bind:value={jobType} placeholder="Or type a custom job type" class="h-9 text-sm" />
+			<div class="job-section">
+				<div class="field">
+					<p class="field__label">Job type</p>
+					<JobTypePicker bind:value={form.jobType} />
 				</div>
-				<div class="space-y-2 border-t border-border/50 pt-4">
-					<Label class="flex items-center gap-1.5">
-						<Tag class="h-3.5 w-3.5 text-muted-foreground" /> Tags
-					</Label>
-					<JobTagsEditor bind:value={tags} />
+
+				<div class="job-section-divider"></div>
+
+				<div class="field">
+					<p class="field__label">
+						<i class="ri-price-tag-3-line" aria-hidden="true"></i> Tags
+					</p>
+					<JobTagsEditor bind:value={form.tags} />
 				</div>
 			</div>
 
 			<!-- Assigned technician -->
 			{#if canAssign}
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<Label class="mb-2 block">Assigned technician</Label>
-					{#if assignedToId && assignedToName}
-						<div class="space-y-3">
-							<div class="flex items-center gap-2">
-								<span
-									class="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1.5 text-sm font-medium text-primary"
-								>
-									<User class="h-3.5 w-3.5" />
-									{assignedToName}
-									<button
-										type="button"
-										onclick={() => { assignedToId = ''; notifyAssignee = false; }}
-										class="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-primary/20"
-										aria-label="Remove assignee"
-									>
-										<X class="h-3 w-3" />
-									</button>
-								</span>
+				<div class="job-section">
+					<div class="field">
+						<p class="field__label">Assigned technician</p>
+						{#if form.assignedToId && assignedToName}
+							<div class="job-assignee-section">
+								<div>
+									<span class="job-assignee-chip">
+										<i class="ri-user-line" aria-hidden="true"></i>
+										{assignedToName}
+										<button
+											type="button"
+											class="job-assignee-chip__remove"
+											onclick={() => {
+												form.assignedToId = '';
+												form.notifyAssignee = false;
+											}}
+											aria-label="Remove assignee"
+										>
+											<i class="ri-close-line" aria-hidden="true"></i>
+										</button>
+									</span>
+								</div>
+								<div class="job-toggle-row">
+									<div class="job-toggle-row__text">
+										<p class="job-toggle-row__title">Notify {assignedToName}</p>
+										<p class="job-toggle-row__hint">Send an alert when job is created</p>
+									</div>
+									<Switch id="notify-switch" bind:checked={form.notifyAssignee} />
+								</div>
 							</div>
-							<div class="flex items-center gap-2">
-								<Switch id="notify-switch" bind:checked={notifyAssignee} />
-								<Label for="notify-switch" class="cursor-pointer text-sm text-muted-foreground">
-									Notify {assignedToName} when job is created
-								</Label>
-							</div>
-						</div>
-					{:else}
-						<Select.Root bind:value={assignedToId}>
-							<Select.Trigger class="h-11 w-full">
-								<Select.Value placeholder="Select a team member" />
-							</Select.Trigger>
-							<Select.Content>
-								{#each assignees as a (a.id)}
-									<Select.Item value={a.id}>{a.full_name}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-					{/if}
+						{:else}
+							<Select.Root bind:value={form.assignedToId}>
+								<Select.Trigger>
+									<Select.Value placeholder="Select a team member" />
+								</Select.Trigger>
+								<Select.Content>
+									{#each form.assignees as a (a.id)}
+										<Select.Item value={a.id}>{a.full_name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						{/if}
+					</div>
 				</div>
 			{/if}
 		</div>
 	</div>
 </PageWrapper>
 
+<RecurringScheduleModal
+	bind:open={form.recurModalOpen}
+	value={form.recurShape}
+	onsave={form.onRecurSaved}
+/>
+
 <!-- Mobile sticky action bar -->
-<div
-	class="fixed inset-x-0 bottom-[var(--bottom-nav-height)] z-20 flex gap-3 border-t border-border/80 bg-background/95 px-4 py-3 backdrop-blur-sm lg:hidden"
->
-	<Button variant="outline" class="flex-1" onclick={() => goto('/jobs')} disabled={saving}>
+<div class="job-mobile-bar">
+	<button
+		type="button"
+		class="btn btn--outline btn--full"
+		onclick={() => goto('/jobs')}
+		disabled={saving}
+	>
 		Cancel
-	</Button>
-	<Button class="flex-1" onclick={save} disabled={saving}>
-		{#if saving}<Loader2 class="mr-1.5 h-4 w-4 animate-spin" />{/if}
-		{saving ? 'Creating…' : 'Create Job'}
+	</button>
+	<Button type="button" class="btn--full" loading={saving} loadingLabel="Creating…" onclick={save}>
+		Create Job
 	</Button>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.new-job__addr-skeleton {
+		margin-top: $space-3;
+	}
+
+	.job-new-status {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+
+		&__label {
+			font-size: $fs-body;
+			font-weight: 600;
+			color: var(--color-text-primary);
+		}
+
+		&__hint {
+			flex-basis: 100%;
+			font-size: $fs-body;
+			color: var(--color-text-muted);
+		}
+	}
+</style>

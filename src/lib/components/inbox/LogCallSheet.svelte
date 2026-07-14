@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { PhoneOutgoing, Voicemail, PhoneOff, CalendarPlus, Ban, Loader2 } from '@lucide/svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { cn } from '$lib/utils/cn';
 	import type { CallOutcome } from '$lib/stores/inbox.svelte';
 
 	let {
@@ -23,12 +21,12 @@
 		onDismiss: () => void;
 	} = $props();
 
-	const outcomes: { value: CallOutcome; label: string; icon: typeof PhoneOutgoing }[] = [
-		{ value: 'spoke', label: 'Spoke', icon: PhoneOutgoing },
-		{ value: 'voicemail', label: 'Left voicemail', icon: Voicemail },
-		{ value: 'no_answer', label: 'No answer', icon: PhoneOff },
-		{ value: 'follow_up_scheduled', label: 'Follow-up', icon: CalendarPlus },
-		{ value: 'wrong_number', label: 'Wrong number', icon: Ban }
+	const outcomes: { value: CallOutcome; label: string; icon: string }[] = [
+		{ value: 'spoke', label: 'Spoke', icon: 'ri-phone-line' },
+		{ value: 'voicemail', label: 'Left voicemail', icon: 'ri-voiceprint-line' },
+		{ value: 'no_answer', label: 'No answer', icon: 'ri-phone-lock-line' },
+		{ value: 'follow_up_scheduled', label: 'Follow-up', icon: 'ri-calendar-event-line' },
+		{ value: 'wrong_number', label: 'Wrong number', icon: 'ri-forbid-line' }
 	];
 
 	let outcome = $state<CallOutcome | null>(null);
@@ -69,30 +67,24 @@
 	title="Log this call?"
 	description={contactName ? `Add the call with ${contactName} to the timeline.` : undefined}
 >
-	<div class="space-y-4 pt-2">
-		<div class="grid grid-cols-2 gap-2">
+	<div class="log-call">
+		<div class="log-call__grid">
 			{#each outcomes as o (o.value)}
 				<button
 					type="button"
+					class="log-call__outcome"
+					class:log-call__outcome--active={outcome === o.value}
 					onclick={() => (outcome = o.value)}
-					class={cn(
-						'flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-						outcome === o.value
-							? 'border-primary bg-primary/10 text-primary'
-							: 'border-border bg-background text-foreground hover:bg-muted'
-					)}
 					aria-pressed={outcome === o.value}
 				>
-					<o.icon class="h-4 w-4 shrink-0" />
-					<span class="truncate">{o.label}</span>
+					<i class={o.icon} aria-hidden="true"></i>
+					<span>{o.label}</span>
 				</button>
 			{/each}
 		</div>
 
-		<div>
-			<label for="call-duration" class="mb-1 block text-xs font-medium text-muted-foreground">
-				Duration (minutes)
-			</label>
+		<div class="log-call__field">
+			<label for="call-duration" class="log-call__label"> Duration (minutes) </label>
 			<input
 				id="call-duration"
 				type="number"
@@ -100,35 +92,28 @@
 				min="0"
 				bind:value={durationMinutes}
 				placeholder="Optional"
-				class="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="log-call__input"
 			/>
 		</div>
 
-		<div>
-			<label for="call-note" class="mb-1 block text-xs font-medium text-muted-foreground">
-				Note
-			</label>
+		<div class="log-call__field">
+			<label for="call-note" class="log-call__label"> Note </label>
 			<textarea
 				id="call-note"
 				bind:value={note}
 				rows="2"
 				maxlength="2000"
 				placeholder="Optional — what was discussed"
-				class="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="log-call__textarea"
 			></textarea>
 		</div>
 
-		<div class="flex items-center gap-2 pt-1">
-			<Button variant="ghost" class="flex-1" onclick={handleDismiss} disabled={saving}>
+		<div class="log-call__actions">
+			<Button type="button" variant="ghost" loading={saving} onclick={handleDismiss}>
 				Didn't call
 			</Button>
-			<Button class="flex-1" onclick={handleLog} disabled={!outcome || saving}>
-				{#if saving}
-					<Loader2 class="mr-1.5 h-4 w-4 animate-spin" />
-					Logging…
-				{:else}
-					Log call
-				{/if}
+			<Button type="button" loading={saving} disabled={!outcome} onclick={handleLog}>
+				Log call
 			</Button>
 		</div>
 	</div>

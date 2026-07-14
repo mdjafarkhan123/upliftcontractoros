@@ -1,15 +1,18 @@
 <script lang="ts">
-	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { SvelteSet } from 'svelte/reactivity';
+	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import ListPageShell from '$lib/components/shared/ListPageShell.svelte';
+	import ListBulkBar, { type BulkAction } from '$lib/components/shared/ListBulkBar.svelte';
+	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import QuotesFilterTabs from '$lib/components/quotes/QuotesFilterTabs.svelte';
 	import QuoteStatsBar from '$lib/components/quotes/QuoteStatsBar.svelte';
 	import QuoteTable from '$lib/components/quotes/QuoteTable.svelte';
+	import QuoteFilterControl from '$lib/components/quotes/QuoteFilterControl.svelte';
 	import ListSearchBar from '$lib/components/shared/ListSearchBar.svelte';
+	import RecycleBinList from '$lib/components/shared/RecycleBinList.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import type { QuotesGroup, QuotesStatusChip, QuoteListItem as QuoteRow } from '$lib/types/quotes';
-	import { FileText, LayoutTemplate, Plus } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { getMemberContext } from '$lib/context/member';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -23,18 +26,42 @@
 
 	let group = $state<QuotesGroup>('all');
 	let statusChip = $state<QuotesStatusChip>('all');
+	// Recycle-bin view (Deleted tab) — swaps the table for the shared bin list.
+	const isDeletedView = $derived(statusChip === 'deleted');
 	let searchValue = $state('');
-	let search = $state('');
-	const filters = $derived({ group, status: statusChip, search });
+	let searchQuery = $state('');
+	// Advanced filter (QuoteFilterControl): salesperson + created-date range.
+	let issuedBy = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
+	const filters = $derived({
+		group,
+		status: statusChip,
+		search: searchQuery,
+		issuedBy: issuedBy || null,
+		dateFrom: dateFrom || null,
+		dateTo: dateTo || null
+	});
 
 	$effect(() => {
 		void quotesStore.load(filters);
 	});
 
-	// --- Row quick actions -------------------------------------------------
-	// Convert fires directly (it navigates to the new invoice). Send / resend /
-	// delete all go through one shared confirm dialog — send/resend reach a real
-	// client, delete cannot be undone, so each gets an explicit confirmation.
+	// Salesperson picker options — active team members (reuses the shared assignees
+	// endpoint). Only fetched for quote viewers; the filter hides when the list is empty.
+	let salespeople = $state<{ id: string; full_name: string }[]>([]);
+	let salespeopleLoaded = $state(false);
+	$effect(() => {
+		if (salespeopleLoaded) return;
+		salespeopleLoaded = true;
+		void fetch('/api/contacts/assignees').then(async (r) => {
+			if (!r.ok) return;
+			const a = (await r.json()) as { assignees: { id: string; full_name: string }[] };
+			salespeople = a.assignees;
+		});
+	});
+	const showSalesperson = $derived(salespeople.length > 0);
+
 	let actionBusyId = $state<string | null>(null);
 
 	async function convertToInvoice(quote: QuoteRow) {
@@ -82,7 +109,6 @@
 		}
 	}
 
-	// --- Offline mark accepted / declined ---------------------------------
 	let offlineAction = $state<{ mode: 'accepted' | 'declined'; quote: QuoteRow } | null>(null);
 	let offlineOpen = $state(false);
 
@@ -194,7 +220,6 @@
 		}
 	}
 
-	// The confirm dialog only renders once an action that needs it is requested.
 	let ConfirmDialog = $state<
 		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
 	>(null);
@@ -209,8 +234,6 @@
 	const nextCursor = $derived(quotesStore.nextCursor);
 	const status = $derived(quotesStore.status);
 	const errorMsg = $derived(quotesStore.error);
-	const showSkeleton = $derived(status === 'loading' && items.length === 0);
-	const showError = $derived(status === 'error' && items.length === 0);
 
 	let loadingMore = $state(false);
 	async function loadMore() {
@@ -219,77 +242,217 @@
 		await quotesStore.loadMore(filters);
 		loadingMore = false;
 	}
+
+	// ── Restore (recycle bin) ────────────────────────────────────────────────────
+	function handleRestored(id: string) {
+		quotesStore.remove(id);
+	}
+
+	// ── Bulk selection ───────────────────────────────────────────────────────────
+	let selectionMode = $state(false);
+	const selected = new SvelteSet<string>();
+	const selectedIds = $derived([...selected]);
+
+	function enterSelect() {
+		selectionMode = true;
+	}
+	function exitSelect() {
+		selectionMode = false;
+		selected.clear();
+	}
+	function toggleSelect(id: string) {
+		if (selected.has(id)) selected.delete(id);
+		else selected.add(id);
+	}
+	const allLoadedSelected = $derived(items.length > 0 && selected.size === items.length);
+	function toggleSelectAll() {
+		if (allLoadedSelected) selected.clear();
+		else for (const q of items) selected.add(q.id);
+	}
+
+	// Selection doesn't apply to the recycle bin — leave select mode on switch.
+	$effect(() => {
+		if (isDeletedView && selectionMode) exitSelect();
+	});
+
+	let bulkDeleteOpen = $state(false);
+	let bulkBusy = $state(false);
+	let BulkConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (!bulkDeleteOpen || BulkConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			BulkConfirmDialog = m.default;
+		});
+	});
+
+	const bulkActions = $derived<BulkAction[]>([
+		{
+			key: 'delete',
+			label: 'Delete',
+			icon: 'ri-delete-bin-line',
+			tone: 'danger',
+			onSelect: () => (bulkDeleteOpen = true)
+		}
+	]);
+
+	async function handleBulkDelete() {
+		if (bulkBusy || selectedIds.length === 0) return;
+		bulkBusy = true;
+		try {
+			const ids = selectedIds;
+			const res = await fetch('/api/quotes/bulk', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'delete', ids })
+			});
+			const b = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(b.error ?? 'Failed to delete quotes');
+				return;
+			}
+			// The endpoint skips accepted quotes (signed records) and returns only the
+			// ids it actually removed — drop just those from the list, warn on the rest.
+			const removed = (b.data?.ids as string[] | undefined) ?? ids;
+			for (const id of removed) quotesStore.remove(id);
+			const n = removed.length;
+			const skipped = ids.length - n;
+			if (n > 0) toast.success(`${n} quote${n === 1 ? '' : 's'} deleted`);
+			if (skipped > 0)
+				toast.info(`${skipped} accepted quote${skipped === 1 ? '' : 's'} couldn't be deleted`);
+			bulkDeleteOpen = false;
+			exitSelect();
+		} finally {
+			bulkBusy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Quotes</title></svelte:head>
 
 <PageWrapper title="Quotes" subtitle="Drafts, sent, viewed, accepted">
 	{#snippet actions()}
-		<Button variant="outline" onclick={() => goto('/quotes/templates')}>
-			<LayoutTemplate class="mr-1 h-4 w-4" />Templates
-		</Button>
-		<Button onclick={() => goto('/quotes/new')}>
-			<Plus class="mr-1 h-4 w-4" />New quote
-		</Button>
+		{#if selectionMode}
+			<Button type="button" variant="secondary" onclick={exitSelect}>Done</Button>
+		{:else}
+			{#if canDelete && !isDeletedView}
+				<Button type="button" variant="secondary" onclick={enterSelect}>
+					<i class="ri-checkbox-line" aria-hidden="true"></i> Select
+				</Button>
+			{/if}
+			<Button type="button" variant="secondary" onclick={() => goto('/quotes/templates')}>
+				<i class="ri-layout-grid-line" aria-hidden="true"></i>
+				Templates
+			</Button>
+			<Button type="button" onclick={() => goto('/quotes/new')}>
+				<i class="ri-add-line" aria-hidden="true"></i>
+				New quote
+			</Button>
+		{/if}
 	{/snippet}
 
-	<div class="space-y-4">
-		<QuoteStatsBar />
+	<ListPageShell
+		{status}
+		itemCount={items.length}
+		{errorMsg}
+		{nextCursor}
+		{loadingMore}
+		onLoadMore={loadMore}
+		skeletonLines={6}
+		skeletonHeight="56px"
+		skeletonLabel="Loading quotes"
+	>
+		{#snippet kpi()}
+			{#if !isDeletedView}
+				<QuoteStatsBar />
+			{/if}
+		{/snippet}
 
-		<ListSearchBar
-			bind:value={searchValue}
-			placeholder="Search quotes by number, title, or client"
-			onInput={(v) => (search = v)}
-		/>
+		{#snippet tabs()}
+			<QuotesFilterTabs bind:group bind:status={statusChip} />
+		{/snippet}
 
-		<QuotesFilterTabs bind:group bind:status={statusChip} />
+		{#snippet search()}
+			<ListSearchBar
+				bind:value={searchValue}
+				placeholder="Search quotes by number, title, or client"
+				onInput={(v) => (searchQuery = v)}
+			/>
+		{/snippet}
 
-		{#if showSkeleton}
-			<SkeletonLoader lines={6} height="84px" label="Loading quotes" />
-		{:else if showError}
-			<p class="text-sm text-destructive">{errorMsg}</p>
-		{:else if items.length === 0}
-			{#if search}
+		{#snippet filter()}
+			<QuoteFilterControl bind:issuedBy bind:dateFrom bind:dateTo {salespeople} {showSalesperson} />
+		{/snippet}
+
+		{#snippet empty()}
+			{#if isDeletedView}
 				<EmptyState
-					icon={FileText}
+					iconClass="ri-delete-bin-line"
+					title="Recycle bin is empty"
+					description="Deleted quotes appear here for 30 days, then are permanently removed. Restore one any time before then."
+				/>
+			{:else if searchQuery}
+				<EmptyState
+					iconClass="ri-file-text-line"
 					title="No quotes match your search"
-					description={`No quotes found for “${search}”. Try a quote number, title, or client name.`}
+					description={`No quotes found for "${searchQuery}". Try a quote number, title, or client name.`}
+				/>
+			{:else if issuedBy || dateFrom || dateTo}
+				<EmptyState
+					iconClass="ri-file-text-line"
+					title="No quotes match your filters"
+					description="Try a different salesperson or date range."
 				/>
 			{:else}
 				<EmptyState
-					icon={FileText}
+					iconClass="ri-file-text-line"
 					title="No quotes yet"
 					description="Quotes you create will appear here. Send one to a customer to get started."
 					actionLabel="New quote"
 					onAction={() => goto('/quotes/new')}
 				/>
 			{/if}
-		{:else}
-			<QuoteTable
-				{items}
-				{canEdit}
-				{canSend}
-				{canConvert}
-				canDuplicate={canCreate}
-				{canDelete}
-				onSend={requestSend}
-				onResend={requestResend}
-				onConvert={convertToInvoice}
-				onDuplicate={duplicate}
-				onMarkAccepted={requestMarkAccepted}
-				onMarkDeclined={requestMarkDeclined}
-				onDelete={requestDelete}
-			/>
+		{/snippet}
 
-			{#if nextCursor}
-				<div class="flex justify-center pt-2">
-					<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
-						{loadingMore ? 'Loading…' : 'Load more'}
-					</Button>
-				</div>
+		{#snippet content()}
+			{#if isDeletedView}
+				<RecycleBinList
+					items={items.map((q) => ({
+						id: q.id,
+						title: q.quote_number_display,
+						subtitle: q.contact_name,
+						deleted_at: q.deleted_at
+					}))}
+					noun="quote"
+					restoreEndpoint={(id) => `/api/quotes/${id}/restore`}
+					canRestore={canDelete}
+					onRestored={handleRestored}
+				/>
+			{:else}
+				<QuoteTable
+					{items}
+					{canEdit}
+					{canSend}
+					{canConvert}
+					canDuplicate={canCreate}
+					{canDelete}
+					selectable={selectionMode}
+					{selected}
+					onToggleSelect={toggleSelect}
+					onToggleAll={toggleSelectAll}
+					allSelected={allLoadedSelected}
+					onSend={requestSend}
+					onResend={requestResend}
+					onConvert={convertToInvoice}
+					onDuplicate={duplicate}
+					onMarkAccepted={requestMarkAccepted}
+					onMarkDeclined={requestMarkDeclined}
+					onDelete={requestDelete}
+				/>
 			{/if}
-		{/if}
-	</div>
+		{/snippet}
+	</ListPageShell>
 </PageWrapper>
 
 {#if offlineAction && OfflineDialog}
@@ -310,5 +473,26 @@
 		variant={confirmCopy.variant}
 		loading={confirmBusy}
 		onConfirm={handleConfirm}
+	/>
+{/if}
+
+{#if selectionMode && selectedIds.length > 0}
+	<ListBulkBar
+		count={selectedIds.length}
+		actions={bulkActions}
+		busy={bulkBusy}
+		onCancel={exitSelect}
+	/>
+{/if}
+
+{#if bulkDeleteOpen && BulkConfirmDialog}
+	<BulkConfirmDialog
+		bind:open={bulkDeleteOpen}
+		title="Delete {selectedIds.length} quote{selectedIds.length === 1 ? '' : 's'}?"
+		description="They move to the Recycle Bin — you can restore them within 30 days. Accepted quotes are signed records and will be skipped."
+		confirmLabel="Move to Recycle Bin"
+		variant="destructive"
+		loading={bulkBusy}
+		onConfirm={handleBulkDelete}
 	/>
 {/if}

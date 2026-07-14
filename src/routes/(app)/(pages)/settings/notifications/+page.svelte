@@ -1,32 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import type { Component } from 'svelte';
-	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import { Switch } from '$lib/components/ui/switch';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import { onMount } from 'svelte';
+	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import PhoneField from '$lib/components/shared/PhoneField.svelte';
+	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
+	import { getOrgContext } from '$lib/context/org';
+	import { Switch } from '$lib/components/ui/switch';
 	import * as Select from '$lib/components/ui/select';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { cn } from '$lib/utils/cn';
-	import {
-		Bell,
-		BellOff,
-		BellRing,
-		Smartphone,
-		ChevronDown,
-		CircleAlert,
-		Mail,
-		MessageSquare,
-		Vibrate,
-		Moon,
-		Timer,
-		Phone,
-		Info,
-		Check,
-		Compass
-	} from '@lucide/svelte';
 	import { PUBLIC_VAPID_KEY } from '$env/static/public';
 	import type { NotificationType } from '$lib/notifications/types';
 	import { sessionStore } from '$lib/stores/session.svelte';
@@ -76,6 +57,9 @@
 	let subscribing = $state(false);
 	let testingSend = $state(false);
 	let advancedOpen = $state(false);
+
+	const org = getOrgContext();
+	const orgCountry = $derived(org().country ?? 'US');
 
 	// Phone number editing (own alert number)
 	let phoneInput = $state('');
@@ -169,7 +153,9 @@
 		return `${hr} ${ampm}`;
 	}
 
-	const phoneDirty = $derived((phoneInput.trim() || null) !== (settings?.notification_phone ?? null));
+	const phoneDirty = $derived(
+		(phoneInput.trim() || null) !== (settings?.notification_phone ?? null)
+	);
 
 	// iOS Safari non-standalone detection
 	const isIosSafariNotInstalled = $derived.by(() => {
@@ -441,240 +427,199 @@
 	back="/settings"
 >
 	{#if loading}
-		<div class="flex flex-col gap-4">
-			<div class="h-32 w-full rounded-2xl overflow-hidden"><SkeletonLoader lines={3} /></div>
-			<div class="h-64 w-full rounded-2xl overflow-hidden"><SkeletonLoader lines={5} /></div>
-			<div class="h-48 w-full rounded-2xl overflow-hidden"><SkeletonLoader lines={4} /></div>
+		<div class="notif notif--skeletons">
+			<div class="notif__skeleton"><SkeletonLoader lines={3} /></div>
+			<div class="notif__skeleton"><SkeletonLoader lines={5} /></div>
+			<div class="notif__skeleton"><SkeletonLoader lines={4} /></div>
 		</div>
 	{:else}
-		<div class="flex flex-col gap-6 pb-10">
+		<div class="notif">
 			<!-- Section 0: My status -->
 			{#if settings}
-				<section class="flex flex-col gap-4">
-					<div class="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-						<div class="mb-4 flex items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-500/10"
-							>
-								<Compass class="h-5 w-5 text-violet-600 dark:text-violet-400" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-semibold text-foreground">My status</p>
-								<p class="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-									Sets how loudly alerts reach you right now. Also available from your avatar menu.
-								</p>
-							</div>
+				<section class="notif-card">
+					<div class="notif-card__head">
+						<div class="notif-tile notif-tile--violet">
+							<i class="ri-compass-3-line" aria-hidden="true"></i>
 						</div>
+						<div class="notif-card__head-text">
+							<p class="notif-card__title">My status</p>
+							<p class="notif-card__desc">
+								Sets how loudly alerts reach you right now. Also available from your avatar menu.
+							</p>
+						</div>
+					</div>
 
-						<div class="flex flex-col gap-1.5">
-							{#each MEMBER_STATUS_PRESETS as preset (preset.value)}
-								{@const Icon = preset.icon}
-								{@const active = currentStatus === preset.value}
+					<div class="notif-statuses">
+						{#each MEMBER_STATUS_PRESETS as preset (preset.value)}
+							{@const active = currentStatus === preset.value}
+							<button
+								type="button"
+								class="notif-statuses__item"
+								class:notif-statuses__item--active={active}
+								onclick={() => setStatus(preset.value)}
+								disabled={statusSaving !== null}
+								aria-pressed={active}
+							>
+								<span class="notif-statuses__dot" style="background:{preset.dotColor}"></span>
+								<i
+									class="notif-statuses__icon {preset.iconClass}"
+									style="color:{preset.textColor}"
+									aria-hidden="true"
+								></i>
+								<span class="notif-statuses__text">
+									<span class="notif-statuses__name">{preset.label}</span>
+									<span class="notif-statuses__desc">{preset.description}</span>
+								</span>
+								{#if active}
+									<i class="notif-statuses__check ri-check-line" aria-hidden="true"></i>
+								{/if}
+							</button>
+						{/each}
+					</div>
+
+					<div class="notif-clear">
+						<span class="notif-clear__label">Clear after</span>
+						<div class="notif-clear__chips">
+							{#each STATUS_CLEAR_OPTIONS as opt (opt.value)}
 								<button
 									type="button"
-									onclick={() => setStatus(preset.value)}
-									disabled={statusSaving !== null}
-									aria-pressed={active}
-									class={cn(
-										'flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
-										active
-											? 'border-primary/40 bg-primary/5'
-											: 'border-border/60 bg-card hover:bg-muted/30',
-										statusSaving !== null && 'opacity-70'
-									)}
+									class="notif-clear__chip"
+									class:notif-clear__chip--active={statusClearAfter === opt.value}
+									onclick={() => (statusClearAfter = opt.value)}
+									aria-pressed={statusClearAfter === opt.value}
 								>
-									<span class={cn('h-2.5 w-2.5 shrink-0 rounded-full', preset.dotClass)}></span>
-									<Icon class={cn('h-4 w-4 shrink-0', preset.textClass)} />
-									<span class="min-w-0 flex-1">
-										<span class="block text-sm font-medium text-foreground">{preset.label}</span>
-										<span class="block text-xs text-muted-foreground">{preset.description}</span>
-									</span>
-									{#if active}
-										<Check class="h-4 w-4 shrink-0 text-primary" />
-									{/if}
+									{opt.label}
 								</button>
 							{/each}
 						</div>
-
-						<div class="mt-4">
-							<Label class="text-xs text-muted-foreground">Clear after</Label>
-							<div class="mt-1.5 flex flex-wrap gap-2">
-								{#each STATUS_CLEAR_OPTIONS as opt (opt.value)}
-									<button
-										type="button"
-										onclick={() => (statusClearAfter = opt.value)}
-										aria-pressed={statusClearAfter === opt.value}
-										class={cn(
-											'min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
-											statusClearAfter === opt.value
-												? 'border-primary/40 bg-primary/10 text-primary'
-												: 'border-border/60 text-muted-foreground hover:bg-muted/30'
-										)}
-									>
-										{opt.label}
-									</button>
-								{/each}
-							</div>
-							<p class="mt-2 text-[11px] leading-relaxed text-muted-foreground/70">
-								Applies to the next status you pick. In office never expires.
-							</p>
-						</div>
+						<p class="notif-clear__note">
+							Applies to the next status you pick. In office never expires.
+						</p>
 					</div>
 				</section>
 			{/if}
 
 			<!-- Section A: This Phone (push) -->
-			<section class="flex flex-col gap-4">
-				<div class="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-					<div class="mb-4 flex items-start gap-3">
-						<div
-							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-500/10"
-						>
-							<Smartphone class="h-5 w-5 text-amber-600 dark:text-amber-400" />
-						</div>
-						<div class="flex-1 min-w-0">
-							<p class="text-sm font-semibold text-foreground">This phone</p>
-							<p class="text-xs text-muted-foreground leading-relaxed mt-0.5">
-								Buzz your phone the moment something important happens — even when the app is
-								closed.
+			<section class="notif-card">
+				<div class="notif-card__head">
+					<div class="notif-tile notif-tile--amber">
+						<i class="ri-smartphone-line" aria-hidden="true"></i>
+					</div>
+					<div class="notif-card__head-text">
+						<p class="notif-card__title">This phone</p>
+						<p class="notif-card__desc">
+							Buzz your phone the moment something important happens — even when the app is closed.
+						</p>
+					</div>
+					<div
+						class="notif-chip notif-chip--{pushStatus === 'subscribed'
+							? 'on'
+							: pushStatus === 'denied'
+								? 'blocked'
+								: pushStatus === 'unsupported'
+									? 'muted'
+									: 'off'}"
+					>
+						{#if pushStatus === 'subscribed'}
+							<i class="ri-notification-3-line" aria-hidden="true"></i>
+							Buzz is on
+						{:else if pushStatus === 'denied'}
+							<i class="ri-notification-off-line" aria-hidden="true"></i>
+							Buzz blocked
+						{:else if pushStatus === 'unsupported'}
+							<i class="ri-notification-off-line" aria-hidden="true"></i>
+							Not supported
+						{:else}
+							<i class="ri-notification-line" aria-hidden="true"></i>
+							Buzz is off
+						{/if}
+					</div>
+				</div>
+
+				{#if isIosSafariNotInstalled}
+					<div class="notif-msg notif-msg--info" style="margin-bottom: 1rem;">
+						<i class="ri-error-warning-line" aria-hidden="true"></i>
+						<p>
+							On iPhone, tap <strong>Share → Add to Home Screen</strong>, then open from your Home
+							Screen so buzz can reach you.
+						</p>
+					</div>
+				{/if}
+
+				<div class="notif-card__actions">
+					{#if pushStatus === 'subscribed'}
+						<Button variant="outline" class="btn--full" loading={testingSend} loadingLabel="Sending…" onclick={sendTestBuzz}>
+							<i class="ri-notification-3-line" aria-hidden="true"></i>
+							Send me a test buzz
+						</Button>
+					{:else if pushStatus === 'denied'}
+						<div class="notif-msg notif-msg--danger">
+							<p>
+								Buzz is blocked for this browser. Go to your browser settings and allow
+								notifications for this site, then reload.
 							</p>
 						</div>
-						<!-- Status chip -->
-						<div
-							class={cn(
-								'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium shrink-0',
-								pushStatus === 'subscribed'
-									? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-									: pushStatus === 'denied'
-										? 'bg-destructive/10 text-destructive'
-										: pushStatus === 'unsupported'
-											? 'bg-muted text-muted-foreground'
-											: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-500'
-							)}
-						>
-							{#if pushStatus === 'subscribed'}
-								<BellRing class="h-3 w-3" />
-								Buzz is on
-							{:else if pushStatus === 'denied'}
-								<BellOff class="h-3 w-3" />
-								Buzz blocked
-							{:else if pushStatus === 'unsupported'}
-								<BellOff class="h-3 w-3" />
-								Not supported
-							{:else}
-								<Bell class="h-3 w-3" />
-								Buzz is off
-							{/if}
-						</div>
-					</div>
-
-					<!-- iOS hint -->
-					{#if isIosSafariNotInstalled}
-						<div
-							class="mb-4 flex items-start gap-2 rounded-xl bg-blue-50 px-3.5 py-3 dark:bg-blue-500/10"
-						>
-							<CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-							<p class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-								On iPhone, tap <strong>Share → Add to Home Screen</strong>, then open from your Home
-								Screen so buzz can reach you.
+					{:else if pushStatus !== 'unsupported'}
+						<Button class="btn--full" loading={subscribing} loadingLabel="Setting up…" onclick={subscribeToPush}>
+							<i class="ri-notification-3-line" aria-hidden="true"></i>
+							Buzz this phone when it happens
+						</Button>
+					{:else}
+						<div class="notif-msg notif-msg--muted">
+							<p>
+								Your browser doesn't support push notifications. Try Chrome or Edge for buzz
+								support.
 							</p>
 						</div>
 					{/if}
-
-					<div class="flex flex-col gap-3">
-						{#if pushStatus === 'subscribed'}
-							<Button
-								variant="outline"
-								class="w-full min-h-[44px] gap-2"
-								onclick={sendTestBuzz}
-								disabled={testingSend}
-							>
-								<BellRing class="h-4 w-4" />
-								{testingSend ? 'Sending…' : 'Send me a test buzz'}
-							</Button>
-						{:else if pushStatus === 'denied'}
-							<div
-								class="rounded-xl bg-destructive/5 px-4 py-3 text-xs text-destructive leading-relaxed"
-							>
-								Buzz is blocked for this browser. Go to your browser settings and allow
-								notifications for this site, then reload.
-							</div>
-						{:else if pushStatus !== 'unsupported'}
-							<Button
-								class="w-full min-h-[44px] gap-2 bg-amber-500 hover:bg-amber-600 text-white"
-								onclick={subscribeToPush}
-								disabled={subscribing}
-							>
-								<BellRing class="h-4 w-4" />
-								{subscribing ? 'Setting up…' : 'Buzz this phone when it happens'}
-							</Button>
-						{:else}
-							<div
-								class="rounded-xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground leading-relaxed"
-							>
-								Your browser doesn't support push notifications. Try Chrome or Edge for buzz
-								support.
-							</div>
-						{/if}
-					</div>
-
-					<p class="mt-3 text-[11px] text-muted-foreground/70 leading-relaxed">
-						Sounds play when the app is open. When it's closed, your phone uses its normal
-						notification tone.
-					</p>
 				</div>
+
+				<p class="notif-card__hint">
+					Sounds play when the app is open. When it's closed, your phone uses its normal
+					notification tone.
+				</p>
 			</section>
 
 			<!-- Section B: Your mobile number (notification_phone) -->
-			<section class="flex flex-col gap-4">
-				<div class="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-					<div class="mb-4 flex items-start gap-3">
-						<div
-							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-500/10"
-						>
-							<Phone class="h-5 w-5 text-sky-600 dark:text-sky-400" />
-						</div>
-						<div class="flex-1 min-w-0">
-							<p class="text-sm font-semibold text-foreground">Your mobile number</p>
-							<p class="text-xs text-muted-foreground leading-relaxed mt-0.5">
-								Where we text you when an urgent alert needs your attention.
-							</p>
-						</div>
+			<section class="notif-card">
+				<div class="notif-card__head">
+					<div class="notif-tile notif-tile--sky">
+						<i class="ri-phone-line" aria-hidden="true"></i>
 					</div>
+					<div class="notif-card__head-text">
+						<p class="notif-card__title">Your mobile number</p>
+						<p class="notif-card__desc">
+							Where we text you when an urgent alert needs your attention.
+						</p>
+					</div>
+				</div>
 
-					<div class="flex flex-col gap-1.5">
-						<Label for="notif-phone" class="text-xs text-muted-foreground">Mobile number</Label>
-						<div class="flex gap-2">
-							<Input
-								id="notif-phone"
-								type="tel"
-								placeholder="+1 555 123 4567"
-								bind:value={phoneInput}
-								class="h-11 flex-1"
-								aria-invalid={!!phoneError}
-							/>
-							<Button
-								class="h-11 shrink-0"
-								onclick={savePhone}
-								disabled={phoneSaving || !phoneDirty}
-							>
-								{phoneSaving ? 'Saving…' : 'Save'}
-							</Button>
-						</div>
-						{#if phoneError}
-							<p class="text-xs text-destructive">{phoneError}</p>
-						{:else}
-							<p class="text-[11px] text-muted-foreground/70 leading-relaxed">
-								Include your country code. Leave blank to stop receiving text alerts.
-							</p>
-						{/if}
+				<div class="field">
+					<label class="field__label" for="notif-phone">Mobile number</label>
+					<div class="notif-phone">
+						<PhoneField
+							id="notif-phone"
+							bind:value={phoneInput}
+							defaultCountry={orgCountry}
+							invalid={!!phoneError}
+						/>
+						<Button disabled={!phoneDirty} loading={phoneSaving} loadingLabel="Saving…" onclick={savePhone}>
+							Save
+						</Button>
 					</div>
+					{#if phoneError}
+						<p class="field__error">{phoneError}</p>
+					{:else}
+						<p class="field__hint">
+							Include your country code. Leave blank to stop receiving text alerts.
+						</p>
+					{/if}
 				</div>
 			</section>
 
 			<!-- Gating notices for email / SMS channels -->
 			{#if emailGated || smsAdminGated || (anySmsEligible && !hasPhone)}
-				<div class="flex flex-col gap-2">
+				<div class="notif__gates">
 					{#if emailGated}
 						{@render gateNote('Email alerts are turned off for your account by an admin.')}
 					{/if}
@@ -688,20 +633,14 @@
 
 			<!-- Section C: Default preferences (4-channel matrix) -->
 			{#if visibleCritical.length > 0 || visibleHigh.length > 0}
-				<section class="flex flex-col gap-3">
-					<p class="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-						Default alerts
-					</p>
-					<div class="flex flex-col gap-1.5">
+				<section class="notif__group">
+					<p class="notif-eyebrow">Default alerts</p>
+					<div class="notif__matrices">
 						{#if visibleCritical.length > 0}
-							<div class="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
-								<div
-									class="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/20"
-								>
-									<span class="h-2 w-2 rounded-full bg-red-500 shrink-0"></span>
-									<p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-										Critical
-									</p>
+							<div class="notif-prefs">
+								<div class="notif-prefs__group-head">
+									<span class="notif-prefs__group-dot notif-prefs__group-dot--critical"></span>
+									<p class="notif-prefs__group-label">Critical</p>
 								</div>
 								{#each visibleCritical as pref, i (pref.type)}
 									{@render prefRow(pref, i < visibleCritical.length - 1)}
@@ -710,14 +649,10 @@
 						{/if}
 
 						{#if visibleHigh.length > 0}
-							<div class="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
-								<div
-									class="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/20"
-								>
-									<span class="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
-									<p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-										Wins
-									</p>
+							<div class="notif-prefs">
+								<div class="notif-prefs__group-head">
+									<span class="notif-prefs__group-dot notif-prefs__group-dot--wins"></span>
+									<p class="notif-prefs__group-label">Wins</p>
 								</div>
 								{#each visibleHigh as pref, i (pref.type)}
 									{@render prefRow(pref, i < visibleHigh.length - 1)}
@@ -730,26 +665,18 @@
 
 			<!-- Section D: Advanced matrix -->
 			{#if advancedPrefs.length > 0}
-				<section class="flex flex-col gap-3">
+				<section class="notif__group">
 					<button
-						class="flex w-full items-center justify-between px-1 py-0.5 group"
+						class="notif-advanced"
+						class:notif-advanced--open={advancedOpen}
 						onclick={() => (advancedOpen = !advancedOpen)}
 					>
-						<p
-							class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70 group-hover:text-muted-foreground transition-colors duration-150"
-						>
-							Advanced
-						</p>
-						<ChevronDown
-							class={cn(
-								'h-4 w-4 text-muted-foreground/50 transition-transform duration-200',
-								advancedOpen && 'rotate-180'
-							)}
-						/>
+						<p class="notif-eyebrow">Advanced</p>
+						<i class="notif-advanced__chevron ri-arrow-down-s-line" aria-hidden="true"></i>
 					</button>
 
 					{#if advancedOpen}
-						<div class="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+						<div class="notif-prefs">
 							{#each advancedPrefs as pref, i (pref.type)}
 								{@render prefRow(pref, i < advancedPrefs.length - 1)}
 							{/each}
@@ -760,20 +687,16 @@
 
 			<!-- Section E: Quiet hours -->
 			{#if settings}
-				<section class="flex flex-col gap-3">
-					<p class="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-						Timing
-					</p>
-					<div class="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-						<div class="flex items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10"
-							>
-								<Moon class="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+				<section class="notif__group">
+					<p class="notif-eyebrow">Timing</p>
+					<div class="notif-card">
+						<div class="notif-card__head" style="margin-bottom: 0;">
+							<div class="notif-tile notif-tile--indigo">
+								<i class="ri-moon-line" aria-hidden="true"></i>
 							</div>
-							<div class="flex-1 min-w-0">
-								<p class="text-sm font-semibold text-foreground">Quiet hours</p>
-								<p class="text-xs text-muted-foreground leading-relaxed mt-0.5">
+							<div class="notif-card__head-text">
+								<p class="notif-card__title">Quiet hours</p>
+								<p class="notif-card__desc">
 									Mute email and text alerts overnight. The most urgent alerts still break through.
 								</p>
 							</div>
@@ -785,14 +708,14 @@
 						</div>
 
 						{#if settings.personal_quiet_hours_enabled}
-							<div class="mt-4 grid grid-cols-2 gap-3">
-								<div class="flex flex-col gap-1.5">
-									<Label class="text-xs text-muted-foreground">From</Label>
+							<div class="notif-times">
+								<div class="field">
+									<span class="field__label">From</span>
 									<Select.Root
 										value={String(settings.personal_quiet_hours_start_hour ?? 22)}
 										onValueChange={(v) => setQuietHour('start', v)}
 									>
-										<Select.Trigger class="h-11 w-full">
+										<Select.Trigger>
 											{formatHour(settings.personal_quiet_hours_start_hour ?? 22)}
 										</Select.Trigger>
 										<Select.Content>
@@ -802,13 +725,13 @@
 										</Select.Content>
 									</Select.Root>
 								</div>
-								<div class="flex flex-col gap-1.5">
-									<Label class="text-xs text-muted-foreground">To</Label>
+								<div class="field">
+									<span class="field__label">To</span>
 									<Select.Root
 										value={String(settings.personal_quiet_hours_end_hour ?? 7)}
 										onValueChange={(v) => setQuietHour('end', v)}
 									>
-										<Select.Trigger class="h-11 w-full">
+										<Select.Trigger>
 											{formatHour(settings.personal_quiet_hours_end_hour ?? 7)}
 										</Select.Trigger>
 										<Select.Content>
@@ -823,26 +746,24 @@
 					</div>
 
 					<!-- Section F: Escalation -->
-					<div class="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-						<div class="flex items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-500/10"
-							>
-								<Timer class="h-5 w-5 text-rose-600 dark:text-rose-400" />
+					<div class="notif-card">
+						<div class="notif-card__head" style="margin-bottom: 0;">
+							<div class="notif-tile notif-tile--rose">
+								<i class="ri-timer-line" aria-hidden="true"></i>
 							</div>
-							<div class="flex-1 min-w-0">
-								<p class="text-sm font-semibold text-foreground">Escalation</p>
-								<p class="text-xs text-muted-foreground leading-relaxed mt-0.5">
+							<div class="notif-card__head-text">
+								<p class="notif-card__title">Escalation</p>
+								<p class="notif-card__desc">
 									If an urgent alert sits unread, we'll re-ping you louder after this long.
 								</p>
 							</div>
 						</div>
-						<div class="mt-4 max-w-[200px]">
+						<div class="notif-escalation">
 							<Select.Root
 								value={String(settings.escalation_minutes)}
 								onValueChange={(v) => setEscalation(v)}
 							>
-								<Select.Trigger class="h-11 w-full">
+								<Select.Trigger>
 									{settings.escalation_minutes} minutes
 								</Select.Trigger>
 								<Select.Content>
@@ -860,55 +781,49 @@
 </PageWrapper>
 
 {#snippet gateNote(text: string)}
-	<div class="flex items-start gap-2 rounded-xl bg-muted/40 px-3.5 py-2.5">
-		<Info class="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-		<p class="text-xs text-muted-foreground leading-relaxed">{text}</p>
+	<div class="settings-note">
+		<i class="settings-note__icon ri-information-line" aria-hidden="true"></i>
+		<p class="settings-note__text">{text}</p>
 	</div>
 {/snippet}
 
 {#snippet channelChip(
 	pref: PrefRow,
 	field: ChannelField,
-	Icon: Component,
+	icon: string,
 	label: string,
 	disabled: boolean
 )}
 	{@const on = pref[field]}
 	<button
 		type="button"
+		class="notif-channel"
+		class:notif-channel--on={on && !disabled}
 		{disabled}
 		onclick={() => updatePref(pref.type, field, !on)}
 		aria-pressed={on}
 		aria-label={`${label} for ${pref.label}`}
-		class={cn(
-			'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium min-h-[40px] transition-colors duration-150',
-			disabled
-				? 'border-border/40 bg-muted/20 text-muted-foreground/40 cursor-not-allowed'
-				: on
-					? 'border-primary/40 bg-primary/10 text-primary'
-					: 'border-border/60 bg-card text-muted-foreground hover:border-border hover:bg-muted/30'
-		)}
 	>
-		<Icon class="h-3.5 w-3.5" />
+		<i class={icon} aria-hidden="true"></i>
 		{label}
 	</button>
 {/snippet}
 
 {#snippet prefRow(pref: PrefRow, divider: boolean)}
-	<div class={cn('flex flex-col gap-2.5 px-4 py-3.5', divider && 'border-b border-border/40')}>
-		<div class="min-w-0">
-			<p class="text-sm font-medium text-foreground leading-snug">{pref.label}</p>
-			<p class="text-xs text-muted-foreground leading-snug mt-0.5">{pref.description}</p>
+	<div class="notif-pref" class:notif-pref--divided={divider}>
+		<div>
+			<p class="notif-pref__label">{pref.label}</p>
+			<p class="notif-pref__desc">{pref.description}</p>
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
-			{@render channelChip(pref, 'in_app_enabled', Bell, 'App', false)}
-			{@render channelChip(pref, 'push_enabled', Vibrate, 'Buzz', !pref.in_app_enabled)}
-			{@render channelChip(pref, 'email_enabled', Mail, 'Email', emailGated)}
+		<div class="notif-pref__chips">
+			{@render channelChip(pref, 'in_app_enabled', 'ri-notification-3-line', 'App', false)}
+			{@render channelChip(pref, 'push_enabled', 'ri-vibrate-line', 'Buzz', !pref.in_app_enabled)}
+			{@render channelChip(pref, 'email_enabled', 'ri-mail-line', 'Email', emailGated)}
 			{#if pref.sms_eligible}
 				{@render channelChip(
 					pref,
 					'sms_enabled',
-					MessageSquare,
+					'ri-message-2-line',
 					'Text',
 					smsAdminGated || !hasPhone
 				)}
@@ -916,3 +831,43 @@
 		</div>
 	</div>
 {/snippet}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.notif {
+		display: flex;
+		flex-direction: column;
+		gap: $space-6;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+		padding-bottom: $space-10;
+
+		&--skeletons {
+			gap: $space-4;
+		}
+
+		&__skeleton {
+			border-radius: $radius-xl;
+			overflow: hidden;
+		}
+
+		&__gates {
+			display: flex;
+			flex-direction: column;
+			gap: $space-2;
+		}
+
+		&__group {
+			display: flex;
+			flex-direction: column;
+			gap: $space-3;
+		}
+
+		&__matrices {
+			display: flex;
+			flex-direction: column;
+			gap: $space-2;
+		}
+	}
+</style>

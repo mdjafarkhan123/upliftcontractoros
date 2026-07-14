@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
-	import Calendar from '@lucide/svelte/icons/calendar';
-	import Clock from '@lucide/svelte/icons/clock';
 
 	type Confirmation = {
 		orgName: string;
@@ -51,54 +48,40 @@
 	<title>Booking confirmed</title>
 </svelte:head>
 
-<main
-	class="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-16 text-center"
->
-	<div
-		class="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 shadow-[0_20px_50px_-20px_hsl(var(--brand-primary)/0.6)]"
-	>
-		<CheckCircle2 class="h-8 w-8 text-primary" />
+<div class="book-success">
+	<div class="book-success__icon">
+		<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
 	</div>
 
-	<h1 class="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">You're booked</h1>
-	<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+	<h1 class="book-success__title">You're booked</h1>
+	<p class="book-success__lead">
 		{#if confirmation}
 			Your appointment is confirmed.<br />
-			<span class="text-foreground">{confirmation.orgName}</span> will be in touch shortly.
+			<span>{confirmation.orgName}</span> will be in touch shortly.
 		{:else}
 			Your appointment is confirmed. We'll be in touch shortly.
 		{/if}
 	</p>
 
 	{#if confirmation}
-		<div
-			class="mt-8 w-full rounded-2xl border border-border/60 bg-card p-5 text-left shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)]"
-		>
-			<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-				{confirmation.bookingTitle}
-			</p>
-			<div class="mt-3 space-y-2.5">
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"
-					>
-						<Calendar class="h-4 w-4" />
+		<div class="book-success__card">
+			<p class="book-success__eyebrow">{confirmation.bookingTitle}</p>
+			<div class="book-success__rows">
+				<div class="book-success__row">
+					<div class="book-success__row-icon">
+						<i class="ri-calendar-event-line" aria-hidden="true"></i>
 					</div>
-					<span class="text-sm font-medium text-foreground">{dateLabel}</span>
+					<span class="book-success__row-text">{dateLabel}</span>
 				</div>
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"
-					>
-						<Clock class="h-4 w-4" />
+				<div class="book-success__row">
+					<div class="book-success__row-icon">
+						<i class="ri-time-line" aria-hidden="true"></i>
 					</div>
-					<span class="text-sm font-medium text-foreground">{timeLabel}</span>
+					<span class="book-success__row-text">{timeLabel}</span>
 				</div>
 			</div>
 		</div>
 
-		<p class="mt-5 text-[11px] text-muted-foreground/60">
-			Times shown in {confirmation.timezone.replace(/_/g, ' ')}
-		</p>
+		<p class="book-success__tz">Times shown in {confirmation.timezone.replace(/_/g, ' ')}</p>
 	{/if}
-</main>
+</div>

@@ -75,6 +75,16 @@ const AUTOMATION_DEFAULTS = {
 	appointment_confirmation_email_subject: 'Your appointment with {org_name} is confirmed',
 	appointment_confirmation_email_message:
 		"Hi {contact_name},\n\nYour {appointment_type} with {org_name} is confirmed for {appointment_datetime}.\n\n{location_block}We've attached a calendar invite so you can add it to Google, Outlook, or Apple Calendar in one tap.\n\nNeed to reschedule or cancel? {manage_link}\n\nIf anything else comes up, just reply to this email and we'll sort it out.\n\nThanks,\n{org_name}",
+	job_scheduled_sms_message:
+		'Hi {contact_name}, your "{job_title}" with {org_name} is scheduled for {scheduled_datetime}. We\'ll see you then!',
+	job_scheduled_email_subject: 'Your "{job_title}" is scheduled',
+	job_scheduled_email_message:
+		'Hi {contact_name},\n\nThis confirms your "{job_title}" with {org_name} is scheduled for {scheduled_datetime}.\n\nIf you need to make a change, just reply to this email.\n\nThanks,\n{org_name}',
+	job_on_my_way_sms_message:
+		'Hi {contact_name}, this is {org_name} — we\'re on our way to you now for your "{job_title}". See you soon!',
+	job_on_my_way_email_subject: "We're on our way — {job_title}",
+	job_on_my_way_email_message:
+		'Hi {contact_name},\n\nJust a heads up that we\'re on our way to you now for your "{job_title}".\n\nSee you soon!\n\nThanks,\n{org_name}',
 	payment_receipt_message:
 		'Hi {contact_name}, we received your payment of {amount}. Thank you — we appreciate your business!',
 	payment_receipt_sms_message:

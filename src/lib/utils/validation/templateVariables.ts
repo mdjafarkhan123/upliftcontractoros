@@ -9,7 +9,9 @@ export const ALLOWED_TEMPLATE_VARIABLES = [
 	'appointment_type',
 	'location',
 	'location_block',
-	'manage_link'
+	'manage_link',
+	'job_title',
+	'scheduled_datetime'
 ] as const;
 export type AllowedTemplateVariable = (typeof ALLOWED_TEMPLATE_VARIABLES)[number];
 

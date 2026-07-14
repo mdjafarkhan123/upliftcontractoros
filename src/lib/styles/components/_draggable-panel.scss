@@ -1,0 +1,88 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// DRAGGABLE PANEL — shared free-floating popup shell (DraggablePanel.svelte).
+// Jobber-style movable bubble: fixed position, top drag bar, non-modal.
+// Consumers render their own content inside .drag-panel__body.
+// =============================================================================
+.drag-panel {
+	position: fixed;
+	z-index: $z-modal;
+	display: flex;
+	flex-direction: column;
+	width: fit-content;
+	min-width: 300px;
+	max-width: min(480px, calc(100vw - 24px));
+	max-height: calc(100vh - 24px);
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-xl);
+
+	&--dragging {
+		user-select: none;
+		cursor: grabbing;
+	}
+
+	// Top bar = drag handle. Grab anywhere on it to move the panel.
+	&__bar {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		flex-shrink: 0;
+		padding: $space-2 $space-2 $space-2 14px;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		cursor: grab;
+		touch-action: none;
+
+		.drag-panel--dragging & {
+			cursor: grabbing;
+		}
+	}
+
+	&__title {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__grip {
+		flex-shrink: 0;
+		display: inline-flex;
+		font-size: 18px;
+		line-height: 1;
+		color: var(--color-text-muted);
+	}
+
+	&__close {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 18px;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+	}
+
+	// Scroll region for consumer content.
+	&__body {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+	}
+}

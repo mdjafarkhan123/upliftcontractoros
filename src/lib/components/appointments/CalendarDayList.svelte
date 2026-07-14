@@ -1,76 +1,114 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import AppointmentStatusBadge from './AppointmentStatusBadge.svelte';
+	import AppointmentCard from './AppointmentCard.svelte';
 	import { addDays, dayKey, formatDayLabel, isSameDay } from '$lib/utils/calendar';
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
+	import type { EventListItem } from '$lib/types/events';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { prefetchOnIntent } from '$lib/actions/prefetch';
-	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+
+	let {
+		anchor,
+		days,
+		items,
+		events = []
+	}: {
+		anchor: Date;
+		days: number;
+		items: AppointmentListItem[];
+		// Non-billable calendar Events (Jobber `Event`) — rendered as neutral grey rows.
+		events?: EventListItem[];
+	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
-	let { anchor, days, items }: { anchor: Date; days: number; items: AppointmentListItem[] } =
-		$props();
-
 	const today = new Date();
 
+	// One unified row so visits and events share a day section and sort together.
+	type DayRow =
+		| { kind: 'appt'; id: string; all_day: boolean; start: string; item: AppointmentListItem }
+		| { kind: 'event'; id: string; all_day: boolean; start: string; event: EventListItem };
+
 	const buckets = $derived.by(() => {
-		const map = new SvelteMap<string, AppointmentListItem[]>();
+		const map = new SvelteMap<string, DayRow[]>();
 		for (let i = 0; i < days; i++) {
 			map.set(dayKey(addDays(anchor, i)), []);
 		}
 		for (const item of items) {
-			const k = dayKey(new Date(item.scheduled_start));
-			const list = map.get(k);
-			if (list) list.push(item);
+			map.get(dayKey(new Date(item.scheduled_start)))?.push({
+				kind: 'appt',
+				id: item.id,
+				all_day: item.all_day,
+				start: item.scheduled_start,
+				item
+			});
+		}
+		for (const ev of events) {
+			if (!ev.start_at) continue;
+			map.get(dayKey(new Date(ev.start_at)))?.push({
+				kind: 'event',
+				id: ev.id,
+				all_day: ev.all_day,
+				start: ev.start_at,
+				event: ev
+			});
 		}
 		return Array.from(map.entries()).map(([k, list]) => ({
 			key: k,
 			date: new Date(`${k}T00:00:00`),
-			items: list
+			// Timed first (by start), then Anytime/all-day (Jobber list order).
+			rows: [...list].sort((a, b) => {
+				if (a.all_day !== b.all_day) return a.all_day ? 1 : -1;
+				return a.start.localeCompare(b.start);
+			})
 		}));
 	});
+
+	const totalCount = $derived(items.length + events.length);
 </script>
 
-<div class="space-y-4">
+<div class="cal-daylist">
 	{#each buckets as bucket (bucket.key)}
 		<section>
 			<h3
 				class={[
-					'mb-2 text-sm font-semibold',
-					isSameDay(bucket.date, today) ? 'text-primary' : 'text-foreground'
-				].join(' ')}
+					'cal-daylist__heading',
+					isSameDay(bucket.date, today) && 'cal-daylist__heading--today'
+				]}
 			>
 				{formatDayLabel(bucket.date)}
 				{#if isSameDay(bucket.date, today)}
-					<span class="ml-1 text-xs font-normal text-muted-foreground">· Today</span>
+					<span class="cal-daylist__today-tag">· Today</span>
 				{/if}
 			</h3>
-			{#if bucket.items.length === 0}
-				<p
-					class="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-xs text-muted-foreground"
-				>
-					Nothing scheduled.
-				</p>
+			{#if bucket.rows.length === 0}
+				<p class="cal-daylist__empty">Nothing scheduled.</p>
 			{:else}
-				<ul class="space-y-2">
-					{#each bucket.items as item (item.id)}
+				<ul class="cal-daylist__items">
+					{#each bucket.rows as row (row.id)}
 						<li>
-							<a
-								href={`/appointments/${item.id}`}
-								use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(item.id)}
-								class="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40 active:bg-accent/60"
-							>
-								<div class="w-16 shrink-0 text-xs font-medium text-muted-foreground">
-									{formatTimeInOrgTz(item.scheduled_start, orgTz)}
+							{#if row.kind === 'appt'}
+								<AppointmentCard appointment={row.item} />
+							{:else}
+								{@const evt = row.event}
+								<div class="cal-daylist__event">
+									<span class="cal-daylist__event-time">
+										{evt.all_day || !evt.start_at
+											? 'All day'
+											: formatTimeInOrgTz(evt.start_at, orgTz)}
+									</span>
+									<div class="cal-daylist__event-body">
+										<span class="cal-daylist__event-title">{evt.title}</span>
+										<!-- Team block: show the assignee, never the (optional) customer. -->
+										{#if evt.assignee_name}
+											<span class="cal-daylist__event-sub">
+												<i class="ri-team-line" aria-hidden="true"></i>
+												{evt.assignee_name}
+											</span>
+										{/if}
+									</div>
 								</div>
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-sm font-semibold text-foreground">{item.title}</p>
-									<p class="truncate text-xs text-muted-foreground">{item.contact_name}</p>
-								</div>
-								<AppointmentStatusBadge status={item.status} />
-							</a>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -78,7 +116,7 @@
 		</section>
 	{/each}
 
-	{#if items.length === 0}
-		<EmptyState title="No appointments" description="Nothing in this range." />
+	{#if totalCount === 0}
+		<EmptyState title="Nothing scheduled" description="Nothing in this range." />
 	{/if}
 </div>

@@ -1,14 +1,4 @@
 <script lang="ts">
-	import {
-		CheckCircle2,
-		AlertCircle,
-		ExternalLink,
-		Copy,
-		ShieldCheck,
-		RefreshCw,
-		Beaker,
-		Globe2
-	} from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	let {
@@ -112,147 +102,125 @@
 	}
 </script>
 
-<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+<section class="stripe-card">
 	{#if isConnected}
 		<!-- Hero: connected state -->
-		<div
-			class="relative bg-gradient-to-br from-emerald-600 via-emerald-700 to-emerald-800 px-5 py-6 text-white"
-		>
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-10 w-10 items-center justify-center rounded-full bg-white/15"
-					>
-						<ShieldCheck class="h-5 w-5" />
+		<div class="stripe-card__hero">
+			<div class="stripe-card__hero-top">
+				<div class="stripe-card__hero-id">
+					<div class="stripe-card__hero-icon">
+						<i class="ri-shield-check-line" aria-hidden="true"></i>
 					</div>
 					<div>
-						<p class="text-xs font-medium uppercase tracking-wide text-white/70">Online payments</p>
-						<h3 class="text-lg font-semibold">{accountName ?? 'Your Stripe account'}</h3>
+						<p class="stripe-card__eyebrow">Online payments</p>
+						<h3 class="stripe-card__hero-name">{accountName ?? 'Your Stripe account'}</h3>
 						{#if accountEmail}
-							<p class="text-xs text-white/80">{accountEmail}</p>
+							<p class="stripe-card__hero-email">{accountEmail}</p>
 						{/if}
 					</div>
 				</div>
-				<div class="flex flex-col items-end gap-1.5">
-					<span
-						class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium"
-					>
-						<CheckCircle2 class="h-3.5 w-3.5" /> Connected
+				<div class="stripe-card__hero-badges">
+					<span class="stripe-card__badge">
+						<i class="ri-checkbox-circle-line" aria-hidden="true"></i> Connected
 					</span>
 					{#if livemode === true}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide"
-						>
-							<Globe2 class="h-3 w-3" /> Live mode
+						<span class="stripe-card__badge stripe-card__badge--mode">
+							<i class="ri-global-line" aria-hidden="true"></i> Live mode
 						</span>
 					{:else if livemode === false}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-amber-400/30 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-50"
-						>
-							<Beaker class="h-3 w-3" /> Test mode
+						<span class="stripe-card__badge stripe-card__badge--mode stripe-card__badge--test">
+							<i class="ri-flask-line" aria-hidden="true"></i> Test mode
 						</span>
 					{/if}
 				</div>
 			</div>
-			<p class="mt-4 max-w-xl text-xs text-white/80">
+			<p class="stripe-card__hero-note">
 				Payments go directly to your Stripe balance and on to your bank. You stay in full control —
 				disconnect or rotate your keys anytime.
 			</p>
 		</div>
 
 		<!-- Body: details + verify -->
-		<div class="flex flex-col gap-4 px-5 py-4">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div class="text-xs text-muted-foreground">
+		<div class="stripe-card__body">
+			<div class="stripe-card__meta-row">
+				<div class="stripe-card__meta">
 					{#if connectedLabel}Connected {connectedLabel}{/if}
-					{#if verifiedLabel}<span class="mx-2">·</span>Last checked {verifiedLabel}{/if}
+					{#if verifiedLabel}
+						· Last checked {verifiedLabel}{/if}
 				</div>
 				<button
 					type="button"
+					class="stripe-card__test-btn"
 					onclick={testConnection}
 					disabled={testing}
-					class="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium hover:bg-accent disabled:opacity-50"
 				>
-					<RefreshCw class={`h-3.5 w-3.5 ${testing ? 'animate-spin' : ''}`} />
+					<i class={testing ? 'ri-loader-4-line' : 'ri-refresh-line'} aria-hidden="true"></i>
 					{testing ? 'Checking…' : 'Test connection'}
 				</button>
 			</div>
 
-			<dl class="grid grid-cols-1 gap-3 rounded-xl bg-muted/40 p-3 text-sm md:grid-cols-2">
+			<dl class="stripe-card__dl">
 				<div>
-					<dt class="text-[11px] uppercase tracking-wide text-muted-foreground">Restricted key</dt>
-					<dd class="font-mono text-foreground">{restrictedKeyMasked ?? '—'}</dd>
+					<dt class="stripe-card__dt">Restricted key</dt>
+					<dd class="stripe-card__dd">{restrictedKeyMasked ?? '—'}</dd>
 				</div>
 				<div>
-					<dt class="text-[11px] uppercase tracking-wide text-muted-foreground">Publishable key</dt>
-					<dd class="font-mono text-foreground break-all">{publishableKey ?? '—'}</dd>
+					<dt class="stripe-card__dt">Publishable key</dt>
+					<dd class="stripe-card__dd">{publishableKey ?? '—'}</dd>
 				</div>
 				<div>
-					<dt class="text-[11px] uppercase tracking-wide text-muted-foreground">Webhook secret</dt>
-					<dd class="font-mono text-foreground">{webhookSecretMasked ?? '—'}</dd>
+					<dt class="stripe-card__dt">Webhook secret</dt>
+					<dd class="stripe-card__dd">{webhookSecretMasked ?? '—'}</dd>
 				</div>
 				<div>
-					<dt class="text-[11px] uppercase tracking-wide text-muted-foreground">
-						Stripe account ID
-					</dt>
-					<dd class="font-mono text-foreground">{accountId ?? '—'}</dd>
+					<dt class="stripe-card__dt">Stripe account ID</dt>
+					<dd class="stripe-card__dd">{accountId ?? '—'}</dd>
 				</div>
 			</dl>
 
-			<div class="rounded-xl border border-border bg-background p-3">
-				<p class="text-xs font-semibold text-foreground">Stripe webhook endpoint</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">
-					This is the address Stripe uses to tell us when a customer pays. It’s already set up in
+			<div class="stripe-card__webhook">
+				<p class="stripe-card__webhook-title">Stripe webhook endpoint</p>
+				<p class="stripe-card__webhook-desc">
+					This is the address Stripe uses to tell us when a customer pays. It's already set up in
 					your Stripe dashboard from your initial setup — no action needed now.
 				</p>
-				<div class="mt-2 flex items-center gap-2">
-					<code
-						class="flex-1 truncate rounded bg-muted/60 px-2 py-1.5 font-mono text-xs text-foreground"
-						>{webhookUrl}</code
-					>
-					<button
-						type="button"
-						onclick={copyWebhook}
-						class="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium hover:bg-accent"
-					>
-						<Copy class="h-3 w-3" /> Copy
+				<div class="stripe-card__webhook-row">
+					<code class="stripe-card__code">{webhookUrl}</code>
+					<button type="button" class="stripe-codebtn" onclick={copyWebhook}>
+						<i class="ri-file-copy-line" aria-hidden="true"></i> Copy
 					</button>
 					<a
+						class="stripe-codebtn"
 						href="https://dashboard.stripe.com/webhooks"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium hover:bg-accent"
 					>
-						<ExternalLink class="h-3 w-3" /> Open Stripe
+						<i class="ri-external-link-line" aria-hidden="true"></i> Open Stripe
 					</a>
 				</div>
 			</div>
 		</div>
 	{:else}
 		<!-- Not connected state -->
-		<div class="flex flex-col gap-3 px-5 py-6">
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600"
-					>
-						<AlertCircle class="h-5 w-5" />
+		<div class="stripe-card__prompt">
+			<div class="stripe-card__prompt-top">
+				<div class="stripe-card__prompt-id">
+					<div class="stripe-card__prompt-icon">
+						<i class="ri-error-warning-line" aria-hidden="true"></i>
 					</div>
 					<div>
-						<h3 class="text-base font-semibold text-foreground">Online payments not active yet</h3>
-						<p class="text-sm text-muted-foreground">
+						<h3 class="stripe-card__prompt-title">Online payments not active yet</h3>
+						<p class="stripe-card__prompt-desc">
 							Connect Stripe below to start collecting card payments on your invoices.
 						</p>
 					</div>
 				</div>
-				<span
-					class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600"
-				>
-					<AlertCircle class="h-3.5 w-3.5" /> Not connected
+				<span class="stripe-card__pill-warn">
+					<i class="ri-error-warning-line" aria-hidden="true"></i> Not connected
 				</span>
 			</div>
-			<p class="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-				<span class="font-semibold text-foreground">Your money stays yours.</span>
+			<p class="stripe-card__reassure">
+				<strong>Your money stays yours.</strong>
 				Payments go directly into your own Stripe balance and then to your bank. We never hold your funds
 				— we only help you collect them.
 			</p>

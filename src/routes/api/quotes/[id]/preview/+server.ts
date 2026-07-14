@@ -9,6 +9,7 @@ import {
 	orgMembers,
 	organizations,
 	quoteLineItems,
+	quotePackages,
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -52,7 +53,10 @@ export const GET: RequestHandler = async (event) => {
 			deposit_amount: quotes.deposit_amount,
 			deposit_paid_amount: quotes.deposit_paid_amount,
 			deposit_paid_at: quotes.deposit_paid_at,
+			accepted_package_id: quotes.accepted_package_id,
+			accepted_total: quotes.accepted_total,
 			notes: quotes.notes,
+			terms: quotes.terms,
 			expires_at: quotes.expires_at,
 			contact_name: contacts.full_name,
 			org_name: organizations.name,
@@ -95,6 +99,8 @@ export const GET: RequestHandler = async (event) => {
 			unit: quoteLineItems.unit,
 			section_label: quoteLineItems.section_label,
 			is_optional: quoteLineItems.is_optional,
+			taxable: quoteLineItems.taxable,
+			package_id: quoteLineItems.package_id,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
@@ -102,6 +108,22 @@ export const GET: RequestHandler = async (event) => {
 		.from(quoteLineItems)
 		.where(and(eq(quoteLineItems.quote_id, row.id), sql`${quoteLineItems.deleted_at} IS NULL`))
 		.orderBy(quoteLineItems.position);
+
+	// Good-Better-Best tiers (empty on a simple quote) — so the contractor preview matches
+	// the customer's side-by-side view exactly.
+	const packages = await db
+		.select({
+			id: quotePackages.id,
+			package_key: quotePackages.package_key,
+			name: quotePackages.name,
+			is_recommended: quotePackages.is_recommended,
+			position: quotePackages.position,
+			subtotal: quotePackages.subtotal,
+			total: quotePackages.total
+		})
+		.from(quotePackages)
+		.where(and(eq(quotePackages.quote_id, row.id), sql`${quotePackages.deleted_at} IS NULL`))
+		.orderBy(quotePackages.position);
 
 	// Per-line photos, grouped by line_key, each with a signed thumbnail + full-res URL.
 	const photoRows = await db
@@ -168,6 +190,7 @@ export const GET: RequestHandler = async (event) => {
 			deposit_paid_at: row.deposit_paid_at?.toISOString() ?? null,
 			deposit_payment_available: Boolean(row.org_stripe_key),
 			notes: row.notes,
+			terms: row.terms,
 			expires_at: row.expires_at?.toISOString() ?? null,
 			org_name: row.org_name,
 			org_logo_url: orgLogoUrl,
@@ -192,6 +215,9 @@ export const GET: RequestHandler = async (event) => {
 							zip: row.addr_zip!
 						}
 					: null,
+			packages,
+			accepted_package_id: row.accepted_package_id,
+			accepted_total: row.accepted_total,
 			line_items: lineItems
 		}
 	});

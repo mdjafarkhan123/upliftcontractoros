@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Upload, Trash2, Loader2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
@@ -160,61 +159,38 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3">
-	<div class="flex items-start gap-4">
-		<div
-			class="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40"
-		>
+<div class="logo-uploader">
+	<div class="logo-uploader__row">
+		<div class="logo-uploader__preview">
 			{#if displayUrl}
-				<img
-					src={displayUrl}
-					alt="Organization {noun}"
-					class="h-full w-full object-contain p-1.5"
-				/>
+				<img class="logo-uploader__img" src={displayUrl} alt="Organization {noun}" />
 			{:else}
-				<span class="text-[10px] uppercase tracking-wide text-muted-foreground">No {noun}</span>
+				<span class="logo-uploader__empty">No {noun}</span>
 			{/if}
 			{#if uploading}
-				<div class="absolute inset-0 flex items-center justify-center bg-background/70">
-					<Loader2 class="h-5 w-5 animate-spin text-primary" />
+				<div class="logo-uploader__spinner">
+					<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 				</div>
 			{/if}
 		</div>
 
-		<div class="flex flex-1 flex-col gap-2">
-			<div class="flex flex-wrap items-center gap-2">
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					onclick={pickFile}
-					disabled={busy}
-					class="min-h-[44px]"
-				>
-					<Upload class="mr-1.5 h-4 w-4" />
+		<div class="logo-uploader__main">
+			<div class="logo-uploader__actions">
+				<Button variant="secondary" size="sm" disabled={busy} onclick={pickFile}>
+					<i class="ri-upload-2-line" aria-hidden="true"></i>
 					{currentLogoUrl ? `Replace ${noun}` : `Upload ${noun}`}
 				</Button>
 				{#if currentLogoUrl && !uploading}
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onclick={remove}
-						disabled={busy}
-						class="min-h-[44px] text-destructive hover:text-destructive"
-					>
-						<Trash2 class="mr-1.5 h-4 w-4" />
-						{removing ? 'Removing…' : 'Remove'}
-					</Button>
+				<Button variant="ghost" size="sm" disabled={busy} loading={removing} loadingLabel="Removing…" onclick={remove}>
+					<i class="ri-delete-bin-line" aria-hidden="true"></i>
+					Remove
+				</Button>
 				{/if}
 			</div>
-			<p class="text-xs text-muted-foreground">{helpText}</p>
+			<p class="logo-uploader__help">{helpText}</p>
 			{#if uploading}
-				<div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-					<div
-						class="h-full bg-primary transition-[width] duration-150"
-						style:width="{progress}%"
-					></div>
+				<div class="logo-uploader__bar">
+					<div class="logo-uploader__fill" style:width="{progress}%"></div>
 				</div>
 			{/if}
 		</div>
@@ -224,7 +200,7 @@
 		bind:this={fileInput}
 		type="file"
 		accept="image/jpeg,image/png,image/webp"
-		class="hidden"
+		hidden
 		onchange={onFileChange}
 	/>
 </div>

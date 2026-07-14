@@ -28,6 +28,7 @@ export const GET: RequestHandler = async (event) => {
 			tax_rate: quotes.tax_rate,
 			internal_notes: quotes.internal_notes,
 			service_address_id: quotes.service_address_id,
+			accepted_package_id: quotes.accepted_package_id,
 			status: quotes.status
 		})
 		.from(quotes)
@@ -127,6 +128,7 @@ export const GET: RequestHandler = async (event) => {
 			section_label: quoteLineItems.section_label,
 			unit_price: quoteLineItems.unit_price,
 			unit_cost: quoteLineItems.unit_cost,
+			taxable: quoteLineItems.taxable,
 			source_catalog_item_id: quoteLineItems.source_catalog_item_id,
 			position: quoteLineItems.position
 		})
@@ -136,7 +138,12 @@ export const GET: RequestHandler = async (event) => {
 				eq(quoteLineItems.quote_id, quoteId),
 				eq(quoteLineItems.org_id, auth.orgId),
 				isNull(quoteLineItems.deleted_at),
-				or(eq(quoteLineItems.is_optional, false), eq(quoteLineItems.accepted_selected, true))
+				or(eq(quoteLineItems.is_optional, false), eq(quoteLineItems.accepted_selected, true)),
+				// Good-Better-Best: carry ONLY the accepted tier's lines into the job. Null on a
+				// simple quote → no extra filter.
+				quote.accepted_package_id
+					? eq(quoteLineItems.package_id, quote.accepted_package_id)
+					: undefined
 			)
 		)
 		.orderBy(asc(quoteLineItems.position));
@@ -167,6 +174,7 @@ export const GET: RequestHandler = async (event) => {
 				section_label: li.section_label,
 				unit_price: li.unit_price,
 				unit_cost: li.unit_cost,
+				taxable: li.taxable,
 				source_catalog_item_id: li.source_catalog_item_id,
 				position: li.position
 			}))

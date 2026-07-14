@@ -1,14 +1,9 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import QuoteDocumentView from '$lib/components/quotes/QuoteDocumentView.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import { Check, CreditCard, MessageSquare, PenLine, X } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import type { PublicQuoteView } from '$lib/types/quotes';
 	import { resolveBrandTheme } from '$lib/utils/brandColor';
@@ -63,6 +58,13 @@
 	let selectedOptional = $state<Record<string, boolean>>({});
 	const selectedOptionalIds = $derived(
 		Object.keys(selectedOptional).filter((k) => selectedOptional[k])
+	);
+	// Good-Better-Best: the tier the customer selected on a tiered quote (null on a simple
+	// quote). QuoteDocumentView pre-selects the recommended tier and writes back through the bind.
+	let selectedPackageId = $state<string | null>(null);
+	// Name of the accepted tier for the read-only confirmation view.
+	const acceptedPkgName = $derived(
+		data.quote?.packages?.find((p) => p.id === data.quote?.accepted_package_id)?.name ?? null
 	);
 
 	const owesDeposit = $derived(
@@ -119,7 +121,11 @@
 			const res = await fetch(`/q/${token}/accept`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ signer_name: name, selected_optional_ids: selectedOptionalIds })
+				body: JSON.stringify({
+					signer_name: name,
+					selected_optional_ids: selectedOptionalIds,
+					selected_package_id: selectedPackageId
+				})
 			});
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok) {
@@ -225,111 +231,95 @@
 </svelte:head>
 
 {#snippet brandHeader(quote: PublicQuoteView)}
-	<div class="flex items-center gap-3">
+	<div class="pub-quote__brand">
 		{#if quote.org_logo_url}
-			<img
-				src={quote.org_logo_url}
-				alt={quote.org_name}
-				class="h-12 w-auto max-w-[150px] shrink-0 object-contain"
-			/>
+			<img src={quote.org_logo_url} alt={quote.org_name} class="pub-quote__logo" />
 		{:else}
-			<div
-				class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold"
-				style="background-color: var(--brand); color: var(--brand-fg);"
-			>
-				{orgInitials}
-			</div>
+			<div class="pub-quote__brand-mark">{orgInitials}</div>
 		{/if}
-		<div class="min-w-0">
-			<p class="truncate text-base font-semibold leading-tight text-foreground">
-				{quote.org_name}
-			</p>
+		<div class="pub-quote__brand-text">
+			<p class="pub-quote__brand-name">{quote.org_name}</p>
 			{#if quote.org_tagline}
-				<p class="truncate text-xs text-muted-foreground">{quote.org_tagline}</p>
+				<p class="pub-quote__brand-tagline">{quote.org_tagline}</p>
 			{/if}
 		</div>
 	</div>
 {/snippet}
 
-<div
-	class="min-h-screen bg-background px-4 py-8 md:py-16"
-	style="--brand: {brand.accent}; --brand-fg: {brand.accentFg};"
->
-	<div class="mx-auto max-w-xl">
+<div class="pub-quote" style="--brand: {brand.accent}; --brand-fg: {brand.accentFg};">
+	<div class="pub-quote__shell">
 		{#if !data.quote}
-			<div class="rounded-2xl border border-border bg-card p-8 text-center">
-				<h1 class="text-lg font-semibold">Quote no longer available</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
+			<div class="pub-quote__card pub-quote__card--center">
+				<h1 class="pub-quote__title">Quote no longer available</h1>
+				<p class="pub-quote__muted">
 					This link is invalid or has expired. Please reach out to the sender for a new link.
 				</p>
 			</div>
 		{:else if action === 'accepted'}
-			<div class="space-y-4">
+			<div class="pub-quote__stack">
 				{@render brandHeader(data.quote)}
 				<!-- Accepted confirmation card -->
-				<div class="rounded-2xl border border-emerald-500/30 bg-card p-8 text-center">
-					<div
-						class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15"
-					>
-						<Check class="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+				<div class="pub-quote__card pub-quote__card--center pub-quote__card--accepted">
+					<div class="pub-quote__status-icon pub-quote__status-icon--success">
+						<i class="ri-check-line" aria-hidden="true"></i>
 					</div>
-					<h1 class="mt-4 text-xl font-bold tracking-tight">Quote accepted!</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
+					<h1 class="pub-quote__title pub-quote__title--lg">Quote accepted!</h1>
+					<p class="pub-quote__muted">
 						{data.quote.org_name} has been notified and will be in touch shortly.
 					</p>
+					{#if acceptedPkgName}
+						<div class="pub-quote__accepted-pkg">
+							<i class="ri-price-tag-3-line" aria-hidden="true"></i>
+							<span>You selected the <strong>{acceptedPkgName}</strong> package</span>
+						</div>
+					{/if}
 					{#if confirmedSignerName}
-						<div
-							class="mt-5 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3"
-						>
-							<PenLine class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-							<p class="text-sm text-emerald-800 dark:text-emerald-300">
-								Signed by <span class="font-semibold">{confirmedSignerName}</span>
-							</p>
+						<div class="pub-quote__signed">
+							<i class="ri-quill-pen-line" aria-hidden="true"></i>
+							<p>Signed by <span class="pub-quote__signed-name">{confirmedSignerName}</span></p>
 						</div>
 					{/if}
 				</div>
 
 				{#if owesDeposit && data.quote.deposit_amount}
-					<div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
-						<div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-							<CreditCard class="h-5 w-5" />
-							<p class="text-sm font-semibold">Deposit owed</p>
+					<div class="pub-quote__notice pub-quote__notice--warning">
+						<div class="pub-quote__notice-head">
+							<i class="ri-bank-card-line" aria-hidden="true"></i>
+							<p class="pub-quote__notice-title">Deposit owed</p>
 						</div>
-						<p class="mt-2 text-sm text-amber-800/90 dark:text-amber-200/80">
+						<p class="pub-quote__notice-text">
 							{data.quote.deposit_type === 'percent' && data.quote.deposit_percent
 								? `A ${Number(data.quote.deposit_percent).toFixed(0)}% deposit of`
 								: 'A deposit of'}
-							<span class="font-semibold">{formatCurrency(data.quote.deposit_amount)}</span> is requested
+							<span class="pub-quote__strong">{formatCurrency(data.quote.deposit_amount)}</span> is requested
 							to start. You can pay it now or later.
 						</p>
 						{#if data.quote.deposit_payment_available}
-							<JetEngineButton
-								class="mt-4 min-h-[52px] w-full text-base"
-								label="Pay deposit"
+							<Button
+								class="pub-quote__cta pub-quote__cta--block"
 								loadingLabel="Redirecting…"
 								successLabel="Redirecting"
-								state={busy === 'deposit' ? 'loading' : 'idle'}
+								loading={busy === 'deposit'}
 								disabled={busy !== null && busy !== 'deposit'}
 								onclick={payDeposit}
 							>
-								{#snippet icon()}<CreditCard class="h-5 w-5" />{/snippet}
-							</JetEngineButton>
+								Pay deposit
+								{#snippet icon()}<i class="ri-bank-card-line" aria-hidden="true"></i>{/snippet}
+							</Button>
 						{:else}
-							<p class="mt-3 text-xs text-amber-700/80 dark:text-amber-300/70">
+							<p class="pub-quote__notice-hint">
 								{data.quote.org_name} will contact you with payment instructions.
 							</p>
 						{/if}
-						{#if depositError}
-							<p class="mt-2 text-xs text-destructive">{depositError}</p>
-						{/if}
+						{#if depositError}<p class="pub-quote__error">{depositError}</p>{/if}
 					</div>
 				{:else if depositPaid && data.quote.deposit_amount}
-					<div class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-						<div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-							<Check class="h-5 w-5" />
-							<p class="text-sm font-semibold">Deposit received</p>
+					<div class="pub-quote__notice pub-quote__notice--success">
+						<div class="pub-quote__notice-head">
+							<i class="ri-check-line" aria-hidden="true"></i>
+							<p class="pub-quote__notice-title">Deposit received</p>
 						</div>
-						<p class="mt-2 text-sm text-emerald-800/90 dark:text-emerald-200/80">
+						<p class="pub-quote__notice-text">
 							{formatCurrency(data.quote.deposit_amount)} received{#if data.quote.deposit_paid_at}
 								&nbsp;on {new Date(data.quote.deposit_paid_at).toLocaleDateString('en-US')}{/if}.
 						</p>
@@ -337,194 +327,180 @@
 				{/if}
 			</div>
 		{:else if action === 'declined'}
-			<div class="space-y-4">
+			<div class="pub-quote__stack">
 				{@render brandHeader(data.quote)}
-				<div class="rounded-2xl border border-border bg-card p-8 text-center">
-					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
-					>
-						<X class="h-6 w-6" />
+				<div class="pub-quote__card pub-quote__card--center">
+					<div class="pub-quote__status-icon pub-quote__status-icon--muted">
+						<i class="ri-close-line" aria-hidden="true"></i>
 					</div>
-					<h1 class="mt-4 text-lg font-semibold">Quote declined</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
+					<h1 class="pub-quote__title">Quote declined</h1>
+					<p class="pub-quote__muted">
 						Thanks for letting us know. {data.quote.org_name} has been notified.
 					</p>
 				</div>
 			</div>
 		{:else if action === 'changes_requested'}
-			<div class="space-y-4">
+			<div class="pub-quote__stack">
 				{@render brandHeader(data.quote)}
-				<div class="rounded-2xl border border-border bg-card p-8 text-center">
-					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
-					>
-						<MessageSquare class="h-6 w-6" />
+				<div class="pub-quote__card pub-quote__card--center">
+					<div class="pub-quote__status-icon pub-quote__status-icon--amber">
+						<i class="ri-chat-1-line" aria-hidden="true"></i>
 					</div>
-					<h1 class="mt-4 text-lg font-semibold">Request received</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
+					<h1 class="pub-quote__title">Request received</h1>
+					<p class="pub-quote__muted">
 						Thanks! {data.quote.org_name} will review your request and send an updated quote shortly.
 					</p>
 				</div>
 			</div>
 		{:else}
-			<QuoteDocumentView quote={data.quote} bind:selectedOptional>
+			<QuoteDocumentView quote={data.quote} bind:selectedOptional bind:selectedPackageId>
 				{#snippet actions()}
 					{#if canTakeAction}
-						<div class="space-y-2">
+						<div class="pub-quote__actions">
 							{#if signingStep}
 								<!-- E-signature card -->
-								<div class="rounded-2xl border border-primary/25 bg-card p-5 shadow-sm">
-									<!-- Header -->
-									<div class="mb-4 flex items-center gap-3">
-										<div
-											class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10"
-										>
-											<PenLine class="h-4.5 w-4.5 text-primary" />
+								<div class="pub-quote__sign">
+									<div class="pub-quote__sign-head">
+										<div class="pub-quote__sign-icon">
+											<i class="ri-quill-pen-line" aria-hidden="true"></i>
 										</div>
 										<div>
-											<p class="text-sm font-semibold text-foreground">Sign to accept this quote</p>
-											<p class="text-xs text-muted-foreground">Your signature is legally binding</p>
+											<p class="pub-quote__sign-title">Sign to accept this quote</p>
+											<p class="pub-quote__sign-sub">Your signature is legally binding</p>
 										</div>
 									</div>
 
-									<div class="space-y-4">
-										<div class="space-y-1.5">
-											<Label for="signer-name" class="text-sm font-medium">
-												Full name <span class="text-destructive">*</span>
-											</Label>
-											<Input
+									<div class="pub-quote__sign-body">
+										<div class="field">
+											<label for="signer-name" class="field__label field__label--required">
+												Full name
+											</label>
+											<input
 												id="signer-name"
+												class="field__input"
 												bind:value={signerName}
 												placeholder="e.g. Jane Smith"
 												autocomplete="name"
 												disabled={busy === 'accept'}
-												class="h-11 text-base"
 												oninput={() => (signerNameError = null)}
 											/>
-											{#if signerNameError}
-												<p class="text-xs text-destructive">{signerNameError}</p>
-											{/if}
+											{#if signerNameError}<p class="field__error">{signerNameError}</p>{/if}
 										</div>
 
-										<p
-											class="rounded-lg bg-muted/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
-										>
-											By entering your name above and clicking <strong
-												class="font-medium text-foreground">"Sign & Accept"</strong
-											>, you confirm that you have read and agree to the terms and pricing in this
-											quote from
-											<span class="font-medium text-foreground">{data.quote?.org_name}</span>.
+										<p class="pub-quote__legal">
+											By entering your name above and clicking <strong>"Sign &amp; Accept"</strong>,
+											you confirm that you have read and agree to the terms and pricing in this
+											quote from <span class="pub-quote__legal-org">{data.quote?.org_name}</span>.
 										</p>
 
-										<div class="grid grid-cols-2 gap-2">
+										<div class="pub-quote__btn-row">
 											<Button
+												type="button"
 												variant="outline"
-												class="min-h-[44px]"
-												onclick={cancelSign}
 												disabled={busy === 'accept'}
+												onclick={cancelSign}
 											>
 												Cancel
 											</Button>
-											<JetEngineButton
-												class="bg-[color:var(--brand)] text-[color:var(--brand-fg)] hover:bg-[color:var(--brand)] hover:brightness-95"
-												label="Sign & Accept"
+											<Button
+												class="pub-quote__cta"
 												loadingLabel="Signing…"
 												successLabel="Signed!"
-												state={busy === 'accept' ? 'loading' : 'idle'}
+												loading={busy === 'accept'}
 												disabled={busy !== null && busy !== 'accept'}
 												onclick={submitAccept}
 											>
-												{#snippet icon()}<PenLine class="h-4 w-4" />{/snippet}
-											</JetEngineButton>
+												Sign & Accept
+												{#snippet icon()}<i class="ri-quill-pen-line" aria-hidden="true"
+													></i>{/snippet}
+											</Button>
 										</div>
 									</div>
 								</div>
 							{:else}
-								<JetEngineButton
-									class="min-h-[52px] w-full bg-[color:var(--brand)] text-base text-[color:var(--brand-fg)] shadow-card transition-all hover:bg-[color:var(--brand)] hover:brightness-95"
-									label="Accept quote"
+								<Button
+									class="pub-quote__cta pub-quote__cta--block pub-quote__cta--lg"
 									loadingLabel="Accepting…"
 									successLabel="Accepted"
-									state="idle"
 									disabled={busy !== null}
 									onclick={startAccept}
 								>
-									{#snippet icon()}<Check class="h-5 w-5" />{/snippet}
-								</JetEngineButton>
+									Accept quote
+									{#snippet icon()}<i class="ri-check-line" aria-hidden="true"></i>{/snippet}
+								</Button>
 							{/if}
 
 							{#if !signingStep}
 								<Button
+									type="button"
 									variant="outline"
-									class="min-h-[44px] w-full"
-									onclick={openChanges}
+									class="btn--full"
 									disabled={busy !== null}
+									onclick={openChanges}
 								>
-									<MessageSquare class="mr-2 h-4 w-4" />Request changes
+									<i class="ri-chat-1-line" aria-hidden="true"></i>Request changes
 								</Button>
 								{#if !confirmingDecline}
 									<Button
+										type="button"
 										variant="ghost"
-										class="min-h-[44px] w-full text-muted-foreground"
-										onclick={() => (confirmingDecline = true)}
+										class="btn--full pub-quote__decline-btn"
 										disabled={busy !== null}
+										onclick={() => (confirmingDecline = true)}
 									>
 										Decline
 									</Button>
 								{:else}
-									<div class="rounded-xl border border-border bg-card p-4 text-sm">
-										<p class="font-medium">Why are you declining?</p>
-										<div class="mt-3 space-y-2">
+									<div class="pub-quote__decline">
+										<p class="pub-quote__decline-prompt">Why are you declining?</p>
+										<div class="pub-quote__decline-reasons">
 											{#each declineReasons as r (r.value)}
-												<label
-													class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-												>
+												<label class="pub-quote__reason">
 													<input
 														type="radio"
 														name="decline-reason"
 														value={r.value}
 														bind:group={declineReason}
 														disabled={busy !== null}
-														class="h-4 w-4 accent-primary"
+														class="pub-quote__reason-radio"
 													/>
 													<span>{r.label}</span>
 												</label>
 											{/each}
 										</div>
 										{#if declineReason === 'other'}
-											<Textarea
+											<textarea
+												class="field__textarea pub-quote__decline-note"
 												rows={3}
 												maxlength={2000}
 												placeholder="Tell us a bit more (optional)"
 												bind:value={declineNote}
 												disabled={busy !== null}
-												class="mt-3"
-											/>
+											></textarea>
 										{/if}
-										{#if declineError}
-											<p class="mt-2 text-xs text-destructive">{declineError}</p>
-										{/if}
-										<div class="mt-3 grid grid-cols-2 gap-2">
+										{#if declineError}<p class="pub-quote__error">{declineError}</p>{/if}
+										<div class="pub-quote__btn-row">
 											<Button
+												type="button"
 												variant="outline"
-												class="min-h-[44px]"
+												disabled={busy !== null}
 												onclick={() => {
 													confirmingDecline = false;
 													declineError = null;
 												}}
-												disabled={busy !== null}
 											>
 												Cancel
 											</Button>
-											<JetEngineButton
+											<Button
 												variant="destructive"
-												label="Confirm decline"
 												loadingLabel="Declining…"
 												successLabel="Declined"
-												state={busy === 'decline' ? 'loading' : 'idle'}
+												loading={busy === 'decline'}
 												disabled={(busy !== null && busy !== 'decline') || !declineReason}
 												onclick={submitDecline}
-											/>
+											>
+												Confirm decline
+											</Button>
 										</div>
 									</div>
 								{/if}
@@ -538,58 +514,57 @@
 </div>
 
 {#snippet changesForm()}
-	<div class="space-y-3">
-		<p class="text-sm text-muted-foreground">
+	<div class="pub-quote__changes">
+		<p class="pub-quote__muted">
 			Tell {data.quote?.org_name ?? 'us'} what you'd like changed. They'll send an updated quote.
 		</p>
-		<Textarea
+		<textarea
+			class="field__textarea"
 			rows={5}
 			maxlength={2000}
 			placeholder="e.g. Can you remove the garage portion? Or phase this differently?"
 			bind:value={changesMessage}
 			disabled={busy === 'changes'}
-		/>
-		{#if changesError}
-			<p class="text-xs text-destructive">{changesError}</p>
-		{/if}
-		<div class="grid grid-cols-2 gap-2 pt-1">
+		></textarea>
+		{#if changesError}<p class="pub-quote__error">{changesError}</p>{/if}
+		<div class="pub-quote__btn-row">
 			<Button
+				type="button"
 				variant="outline"
-				class="min-h-[44px]"
-				onclick={() => (changesOpen = false)}
 				disabled={busy === 'changes'}
+				onclick={() => (changesOpen = false)}
 			>
 				Cancel
 			</Button>
-			<JetEngineButton
-				label="Send request"
+			<Button
 				loadingLabel="Sending…"
 				successLabel="Sent"
-				state={busy === 'changes' ? 'loading' : 'idle'}
+				loading={busy === 'changes'}
 				onclick={submitChanges}
 			>
-				{#snippet icon()}<MessageSquare class="h-4 w-4" />{/snippet}
-			</JetEngineButton>
+				Send request
+				{#snippet icon()}<i class="ri-chat-1-line" aria-hidden="true"></i>{/snippet}
+			</Button>
 		</div>
 	</div>
 {/snippet}
 
 {#if isDesktop}
 	<Dialog.Root bind:open={changesOpen}>
-		<Dialog.Content class="max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Request changes</Dialog.Title>
-			</Dialog.Header>
+		<Dialog.Content class="pub-quote-changes-dialog">
+			<div class="dialog-content__header">
+				<h2 class="dialog-content__title">Request changes</h2>
+			</div>
 			{@render changesForm()}
 		</Dialog.Content>
 	</Dialog.Root>
 {:else}
 	<Sheet.Root bind:open={changesOpen}>
-		<Sheet.Content side="bottom" class="pb-6">
+		<Sheet.Content side="bottom" class="pub-quote-changes-sheet">
 			<Sheet.Header>
 				<Sheet.Title>Request changes</Sheet.Title>
 			</Sheet.Header>
-			<div class="mt-3">
+			<div class="pub-quote__changes-wrap">
 				{@render changesForm()}
 			</div>
 		</Sheet.Content>

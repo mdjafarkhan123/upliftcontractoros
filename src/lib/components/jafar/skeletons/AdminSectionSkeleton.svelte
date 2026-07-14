@@ -4,28 +4,57 @@
 		bodyRows = 3,
 		grid = false
 	}: { titleWidth?: string; bodyRows?: number; grid?: boolean } = $props();
+
+	void titleWidth;
 </script>
 
-<section
-	class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
->
-	<header class="border-b border-slate-800/80 px-5 py-4">
-		<div class="h-4 {titleWidth} animate-pulse rounded bg-slate-800"></div>
-		<div class="mt-2 h-3 w-48 animate-pulse rounded bg-slate-800/70"></div>
+<section class="jafar-skel-section">
+	<header class="jafar-skel-section__head">
+		<div>
+			<div class="j-skel j-skel--h4" style="width: 8rem;"></div>
+			<div class="j-skel j-skel--h3 j-skel--dim" style="width: 12rem; margin-top: 0.5rem;"></div>
+		</div>
 	</header>
-	<div class="px-5 py-5">
+	<div class="skel-body">
 		{#if grid}
-			<div class="grid gap-3 sm:grid-cols-2">
+			<div class="skel-grid">
 				{#each Array(bodyRows) as _, i (i)}
-					<div class="h-12 animate-pulse rounded-lg bg-slate-800/60"></div>
+					<div class="skel-block"></div>
 				{/each}
 			</div>
 		{:else}
-			<div class="space-y-3">
+			<div class="skel-list">
 				{#each Array(bodyRows) as _, i (i)}
-					<div class="h-4 animate-pulse rounded bg-slate-800/60" style="width: {90 - i * 8}%"></div>
+					<div class="j-skel j-skel--h4 j-skel--dim" style="width: {90 - i * 8}%;"></div>
 				{/each}
 			</div>
 		{/if}
 	</div>
 </section>
+
+<style lang="scss">
+	.skel-body {
+		padding: 1.25rem;
+	}
+
+	.skel-grid {
+		display: grid;
+		gap: 0.75rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	.skel-block {
+		height: 3rem;
+		border-radius: 0.5rem;
+		background: rgba(30, 41, 59, 0.6);
+		animation: jafar-pulse 2s ease-in-out infinite;
+	}
+
+	.skel-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+</style>

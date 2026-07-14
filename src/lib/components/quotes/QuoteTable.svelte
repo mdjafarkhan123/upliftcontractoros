@@ -1,25 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { cn } from '$lib/utils/cn';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import type { QuoteListItem } from '$lib/types/quotes';
 	import QuoteStatusBadge from './QuoteStatusBadge.svelte';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import RowActionsMenu, { type RowAction } from '$lib/components/shared/RowActionsMenu.svelte';
+	import ListTable from '$lib/components/shared/ListTable.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import {
-		MoreHorizontal,
-		ExternalLink,
-		Download,
-		Pencil,
-		Send,
-		RefreshCw,
-		Receipt,
-		Copy,
-		CircleCheckBig,
-		CircleX,
-		Trash2
-	} from '@lucide/svelte';
 
 	let {
 		items,
@@ -28,6 +15,11 @@
 		canConvert = false,
 		canDuplicate = false,
 		canDelete = false,
+		selectable = false,
+		selected,
+		onToggleSelect,
+		onToggleAll,
+		allSelected = false,
 		onSend,
 		onResend,
 		onConvert,
@@ -42,6 +34,11 @@
 		canConvert?: boolean;
 		canDuplicate?: boolean;
 		canDelete?: boolean;
+		selectable?: boolean;
+		selected?: Set<string>;
+		onToggleSelect?: (id: string) => void;
+		onToggleAll?: () => void;
+		allSelected?: boolean;
 		onSend?: (quote: QuoteListItem) => void;
 		onResend?: (quote: QuoteListItem) => void;
 		onConvert?: (quote: QuoteListItem) => void;
@@ -61,9 +58,7 @@
 		return new Date(iso) < new Date();
 	}
 
-	function downloadPdf(quote: QuoteListItem, e: MouseEvent) {
-		e.preventDefault();
-		e.stopPropagation();
+	function downloadPdf(quote: QuoteListItem) {
 		const a = document.createElement('a');
 		a.href = `/api/quotes/${quote.id}/pdf`;
 		a.target = '_blank';
@@ -83,180 +78,150 @@
 			markable: quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'changes_requested'
 		};
 	}
+
+	function quoteActions(quote: QuoteListItem): RowAction[] {
+		const a = statusAllows(quote);
+		const actions: RowAction[] = [
+			{ key: 'open', label: 'Open quote', icon: 'ri-external-link-line', onSelect: () => goto(`/quotes/${quote.id}`) },
+			{ key: 'pdf', label: 'Download PDF', icon: 'ri-download-line', onSelect: () => downloadPdf(quote) }
+		];
+		if (canEdit && a.editable)
+			actions.push({ key: 'edit', label: 'Edit quote', icon: 'ri-pencil-line', onSelect: () => goto(`/quotes/${quote.id}`) });
+		if (canSend && a.sendable && onSend)
+			actions.push({ key: 'send', label: 'Send to client', icon: 'ri-send-plane-line', onSelect: () => onSend(quote) });
+		if (canSend && a.resendable && onResend)
+			actions.push({ key: 'resend', label: 'Resend to client', icon: 'ri-refresh-line', onSelect: () => onResend(quote) });
+		if (canEdit && a.markable && onMarkAccepted)
+			actions.push({ key: 'accept', label: 'Mark accepted', icon: 'ri-checkbox-circle-line', onSelect: () => onMarkAccepted(quote) });
+		if (canEdit && a.markable && onMarkDeclined)
+			actions.push({ key: 'decline', label: 'Mark declined', icon: 'ri-close-circle-line', onSelect: () => onMarkDeclined(quote) });
+		if (canConvert && a.convertible && onConvert)
+			actions.push({ key: 'convert', label: 'Convert to invoice', icon: 'ri-file-list-3-line', onSelect: () => onConvert(quote) });
+		if (canDuplicate && onDuplicate)
+			actions.push({ key: 'duplicate', label: 'Duplicate', icon: 'ri-file-copy-line', onSelect: () => onDuplicate(quote) });
+		if (canDelete && a.deletable && onDelete)
+			actions.push({ key: 'delete', label: 'Delete quote', icon: 'ri-delete-bin-line', destructive: true, onSelect: () => onDelete(quote) });
+		return actions;
+	}
 </script>
 
-<div class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-card">
-	<div class="overflow-x-auto">
-		<table class="w-full min-w-[640px] text-sm">
-			<thead>
-				<tr class="border-b border-border/60 bg-muted/30">
-					<th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-						Quote
-					</th>
-					<th class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell">
-						Client
-					</th>
-					<th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-						Status
-					</th>
-					<th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-						Total
-					</th>
-					<th class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell">
-						Sent
-					</th>
-					<th class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell">
-						Expires
-					</th>
-					<th class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground 2xl:table-cell">
-						Created
-					</th>
-					<th class="w-12 px-4 py-3"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-border/30">
-				{#each items as quote (quote.id)}
-					{@const a = statusAllows(quote)}
-					<tr
-						class="group cursor-pointer transition-colors hover:bg-muted/40"
-						use:prefetchOnIntent={() => quotesStore.prefetchDetail(quote.id)}
-						onclick={() => goto(`/quotes/${quote.id}`)}
+<ListTable ariaLabel="Quotes">
+	{#snippet head()}
+		{#if selectable}
+			<th class="list-table__th list-table__th--check">
+				<button
+					type="button"
+					onclick={onToggleAll}
+					aria-label="Select all quotes"
+					class="list-check"
+					class:list-check--on={allSelected}
+				>
+					{#if allSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+				</button>
+			</th>
+		{/if}
+		<th class="list-table__th">Quote</th>
+		<th class="list-table__th list-table__th--lg">Client</th>
+		<th class="list-table__th">Status</th>
+		<th class="list-table__th list-table__th--right">Total</th>
+		<th class="list-table__th list-table__th--xl">Sent</th>
+		<th class="list-table__th list-table__th--xl">Expires</th>
+		<th class="list-table__th list-table__th--xxl">Created</th>
+		<th class="list-table__th list-table__th--actions"></th>
+	{/snippet}
+
+	{#snippet body()}
+		{#each items as quote (quote.id)}
+			{@const isSelected = selected?.has(quote.id) ?? false}
+			<tr
+				class="list-table__row"
+				class:list-table__row--selected={isSelected}
+				use:prefetchOnIntent={() => {
+					if (!selectable) quotesStore.prefetchDetail(quote.id);
+				}}
+				onclick={selectable ? () => onToggleSelect?.(quote.id) : () => goto(`/quotes/${quote.id}`)}
+			>
+				{#if selectable}
+					<td class="list-table__td list-table__td--check">
+						<span class="list-check" class:list-check--on={isSelected}>
+							{#if isSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+						</span>
+					</td>
+				{/if}
+
+				<!-- Quote number + title -->
+				<td class="list-table__td">
+					<span class="quote-tbl__number">{quote.quote_number_display}</span>
+					{#if selectable}
+						<span class="quote-tbl__title">{quote.title}</span>
+					{:else}
+						<a
+							href="/quotes/{quote.id}"
+							onclick={(e) => e.stopPropagation()}
+							class="quote-tbl__title"
+						>
+							{quote.title}
+						</a>
+					{/if}
+					<span class="quote-tbl__client-inline">{quote.contact_name}</span>
+				</td>
+
+				<!-- Client — hidden on small screens -->
+				<td class="list-table__td list-table__td--lg">
+					<a
+						href="/contacts/{quote.contact_id}"
+						onclick={(e) => e.stopPropagation()}
+						class="quote-tbl__client-link"
 					>
-						<!-- Quote number + title -->
-						<td class="px-4 py-3.5">
-							<div class="min-w-0">
-								<span class="font-mono text-[11px] font-semibold text-muted-foreground">
-									{quote.quote_number_display}
-								</span>
-								<a
-									href="/quotes/{quote.id}"
-									onclick={(e) => e.stopPropagation()}
-									class="block truncate font-medium leading-snug text-foreground transition-colors hover:text-primary focus-visible:text-primary focus-visible:outline-none"
-								>
-									{quote.title}
-								</a>
-								<!-- Client shown inline on small screens -->
-								<p class="truncate text-[11px] text-muted-foreground lg:hidden">{quote.contact_name}</p>
-							</div>
-						</td>
+						{quote.contact_name}
+					</a>
+				</td>
 
-						<!-- Client -->
-						<td class="hidden px-4 py-3.5 lg:table-cell">
-							<a
-								href="/contacts/{quote.contact_id}"
-								onclick={(e) => e.stopPropagation()}
-								class="truncate text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none"
-							>
-								{quote.contact_name}
-							</a>
-						</td>
+				<!-- Status -->
+				<td class="list-table__td">
+					<QuoteStatusBadge status={quote.status} />
+				</td>
 
-						<!-- Status -->
-						<td class="px-4 py-3.5">
-							<QuoteStatusBadge status={quote.status} />
-						</td>
+				<!-- Total -->
+				<td class="list-table__td list-table__td--right">
+					<span class="quote-tbl__amount">{formatCurrency(quote.total)}</span>
+				</td>
 
-						<!-- Total -->
-						<td class="px-4 py-3.5 text-right">
-							<span class="tabular-nums font-semibold text-foreground">
-								{formatCurrency(quote.total)}
-							</span>
-						</td>
+				<!-- Sent -->
+				<td class="list-table__td list-table__td--xl">
+					{#if quote.sent_at}
+						<span class="quote-tbl__date">{fmtDate(quote.sent_at)}</span>
+					{:else}
+						<span class="quote-tbl__date quote-tbl__date--empty">Not sent</span>
+					{/if}
+				</td>
 
-						<!-- Sent -->
-						<td class="hidden whitespace-nowrap px-4 py-3.5 xl:table-cell">
-							{#if quote.sent_at}
-								<span class="text-muted-foreground">{fmtDate(quote.sent_at)}</span>
-							{:else}
-								<span class="italic text-muted-foreground/40">Not sent</span>
-							{/if}
-						</td>
+				<!-- Expires -->
+				<td class="list-table__td list-table__td--xl">
+					{#if quote.expires_at}
+						<span class="quote-tbl__date {isExpired(quote.expires_at) && quote.status !== 'accepted' ? 'quote-tbl__date--expired' : ''}">
+							{fmtDate(quote.expires_at)}
+						</span>
+					{:else}
+						<span class="quote-tbl__date quote-tbl__date--empty">No expiry</span>
+					{/if}
+				</td>
 
-						<!-- Expires -->
-						<td class="hidden whitespace-nowrap px-4 py-3.5 xl:table-cell">
-							{#if quote.expires_at}
-								<span class={cn('text-muted-foreground', isExpired(quote.expires_at) && quote.status !== 'accepted' && 'text-destructive')}>
-									{fmtDate(quote.expires_at)}
-								</span>
-							{:else}
-								<span class="italic text-muted-foreground/40">No expiry</span>
-							{/if}
-						</td>
+				<!-- Created -->
+				<td class="list-table__td list-table__td--xxl">
+					<span class="quote-tbl__date">{fmtDate(quote.created_at)}</span>
+				</td>
 
-						<!-- Created -->
-						<td class="hidden whitespace-nowrap px-4 py-3.5 2xl:table-cell">
-							<span class="text-muted-foreground">{fmtDate(quote.created_at)}</span>
-						</td>
-
-						<!-- Actions -->
-						<td class="w-12 px-2 py-3.5" onclick={(e) => e.stopPropagation()}>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger
-									class={cn(
-										'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-										'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
-									)}
-									aria-label="Actions for quote {quote.quote_number_display}"
-								>
-									<MoreHorizontal class="h-4 w-4" />
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end">
-									<DropdownMenu.Item onclick={() => goto(`/quotes/${quote.id}`)}>
-										<ExternalLink class="h-4 w-4" /> Open quote
-									</DropdownMenu.Item>
-									<DropdownMenu.Item onclick={(e) => downloadPdf(quote, e)}>
-										<Download class="h-4 w-4" /> Download PDF
-									</DropdownMenu.Item>
-									{#if canEdit && a.editable}
-										<DropdownMenu.Item onclick={() => goto(`/quotes/${quote.id}`)}>
-											<Pencil class="h-4 w-4" /> Edit quote
-										</DropdownMenu.Item>
-									{/if}
-									{#if canSend && a.sendable && onSend}
-										<DropdownMenu.Item onclick={() => onSend(quote)}>
-											<Send class="h-4 w-4" /> Send to client
-										</DropdownMenu.Item>
-									{/if}
-									{#if canSend && a.resendable && onResend}
-										<DropdownMenu.Item onclick={() => onResend(quote)}>
-											<RefreshCw class="h-4 w-4" /> Resend to client
-										</DropdownMenu.Item>
-									{/if}
-									{#if canEdit && a.markable && onMarkAccepted}
-										<DropdownMenu.Item onclick={() => onMarkAccepted(quote)}>
-											<CircleCheckBig class="h-4 w-4" /> Mark accepted
-										</DropdownMenu.Item>
-									{/if}
-									{#if canEdit && a.markable && onMarkDeclined}
-										<DropdownMenu.Item onclick={() => onMarkDeclined(quote)}>
-											<CircleX class="h-4 w-4" /> Mark declined
-										</DropdownMenu.Item>
-									{/if}
-									{#if canConvert && a.convertible && onConvert}
-										<DropdownMenu.Item onclick={() => onConvert(quote)}>
-											<Receipt class="h-4 w-4" /> Convert to invoice
-										</DropdownMenu.Item>
-									{/if}
-									{#if canDuplicate && onDuplicate}
-										<DropdownMenu.Item onclick={() => onDuplicate(quote)}>
-											<Copy class="h-4 w-4" /> Duplicate
-										</DropdownMenu.Item>
-									{/if}
-									{#if canDelete && a.deletable && onDelete}
-										<DropdownMenu.Separator />
-										<DropdownMenu.Item
-											class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-											onclick={() => onDelete(quote)}
-										>
-											<Trash2 class="h-4 w-4" /> Delete quote
-										</DropdownMenu.Item>
-									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-</div>
+				<!-- Actions -->
+				<td class="list-table__td list-table__td--actions" onclick={(e) => e.stopPropagation()}>
+					{#if !selectable}
+						<RowActionsMenu
+							actions={quoteActions(quote)}
+							label="Actions for quote {quote.quote_number_display}"
+						/>
+					{/if}
+				</td>
+			</tr>
+		{/each}
+	{/snippet}
+</ListTable>

@@ -7,13 +7,14 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice } from '$lib/server/invoices/permissions';
 import { generateToken } from '$lib/server/quotes/token';
 import { recalcInvoiceTotals } from '$lib/server/invoices/recalc';
+import { orgLateFeeSnapshot } from '$lib/server/invoices/lateFee';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
 
 // Create an invoice from a job (Jobber/Autopilot model: the invoice flows from the job's
 // committed work). Snapshots the job's line items into invoice_line_items — independent copies,
-// so editing the invoice never changes the job. Mirrors api/quotes/[id]/convert-to-invoice.
-// Note: invoices carry no discount column, so a job-level discount is not transferred (same as
-// the quote→invoice path); the invoice subtotal is the sum of line totals + the job's tax rate.
+// so editing the invoice never changes the job. Mirrors api/quotes/[id]/convert-to-invoice: it
+// carries the full line detail (unit, per-line taxable flag, cost, price-book link) plus the
+// job-level discount + notes so the invoice opens matching the job exactly.
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
@@ -30,8 +31,12 @@ export const POST: RequestHandler = async (event) => {
 			opportunity_id: string | null;
 			title: string;
 			tax_rate: string;
+			discount_type: string;
+			discount_value: string | null;
+			discount_label: string | null;
 		}>(sql`
-			SELECT id, org_id, contact_id, opportunity_id, title, tax_rate
+			SELECT id, org_id, contact_id, opportunity_id, title, tax_rate,
+			       discount_type, discount_value, discount_label
 			FROM jobs
 			WHERE id = ${jobId} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
@@ -55,7 +60,11 @@ export const POST: RequestHandler = async (event) => {
 				description: jobLineItems.description,
 				details: jobLineItems.details,
 				quantity: jobLineItems.quantity,
+				unit: jobLineItems.unit,
 				unit_price: jobLineItems.unit_price,
+				taxable: jobLineItems.taxable,
+				unit_cost: jobLineItems.unit_cost,
+				source_catalog_item_id: jobLineItems.source_catalog_item_id,
 				total: jobLineItems.total,
 				position: jobLineItems.position
 			})
@@ -89,6 +98,7 @@ export const POST: RequestHandler = async (event) => {
 			.where(eq(orgCounters.org_id, auth.orgId));
 
 		const rawToken = generateToken();
+		const lf = await orgLateFeeSnapshot(tx, auth.orgId);
 
 		const [inserted] = await tx
 			.insert(invoices)
@@ -102,6 +112,19 @@ export const POST: RequestHandler = async (event) => {
 				title: job.title,
 				status: 'draft',
 				tax_rate: job.tax_rate,
+				// Deliberately NOT copying the job's notes: a job's `notes` are the contractor's
+				// TEAM-ONLY internal notes, while an invoice's `notes` are printed on the customer's
+				// invoice. Copying would leak private notes to the customer, and invoices have no
+				// internal-notes field to route them to.
+				// Carry the job's discount so the invoice bills the same agreed price.
+				// recalcInvoiceTotals recomputes discount_amount from the snapshot lines (a fixed
+				// discount clamps to the new subtotal), identical to the quote→invoice path.
+				discount_type: job.discount_type,
+				discount_value: job.discount_value,
+				discount_label: job.discount_label,
+				late_fee_enabled: lf.late_fee_enabled,
+				late_fee_type: lf.late_fee_type,
+				late_fee_value: lf.late_fee_value,
 				public_token: rawToken
 			})
 			.returning();
@@ -115,7 +138,13 @@ export const POST: RequestHandler = async (event) => {
 					? `${li.description}\n${li.details.trim()}`
 					: li.description,
 				quantity: li.quantity,
+				unit: li.unit,
 				unit_price: li.unit_price,
+				// Carry the job line's tax flag so a labor line stays untaxed on the invoice.
+				taxable: li.taxable,
+				// Carry cost snapshot + catalog link for invoice-side margin visibility.
+				unit_cost: li.unit_cost,
+				source_catalog_item_id: li.source_catalog_item_id,
 				total: li.total,
 				position: li.position
 			}))

@@ -14,6 +14,13 @@ description: >
   /jafar super admin, org management, team member creation, or permission-related
   code. Even if you think you know the answer, consult this skill — the business
   rules contain non-obvious edge cases that Drizzle types cannot express.
+
+  ALSO use this skill for competitor/industry research: it ships a full plain-English
+  reference to how Jobber (the market-leading contractor CRM) models every domain
+  (references/jobber/jobber-00..07 — clients, requests, quotes, jobs/visits, invoices,
+  payments, automations, client hub, and the GraphQL API/webhooks). Load it whenever a
+  task asks "how does Jobber do X", or when designing/reworking a feature and you need
+  the proven industry pattern to match or beat (Rule 21, industry-first).
 ---
 
 # Contractor CRM — Business Rules & Architecture
@@ -62,6 +69,29 @@ Before writing code for a specific domain, read the relevant reference file in
 
 If the task spans multiple concerns (e.g. "record a payment" involves business rules
 for invoice status transitions AND automation for notification dispatch), read both.
+
+---
+
+## Jobber Competitor Reference (`references/jobber/`)
+
+Before designing or reworking a feature, check how **Jobber** (the market-leading contractor CRM)
+models it — so we knowingly **match or beat** the proven pattern (CLAUDE.md Rule 21, industry-first).
+These files are a plain-English reference built from Jobber's live GraphQL schema (`JobberJson.md`) +
+the Jobber Help Center / Developer Center (every behavior cited; unconfirmed items marked
+`(unverified)`). They describe **Jobber**, not our schema — read alongside our own `references/*.md`.
+
+| You want Jobber's model of...                                                              | Read this reference                                    |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Vocabulary, full lead→cash lifecycle, object map, **master status table**, API basics      | `references/jobber/jobber-00-overview-lifecycle.md`    |
+| Clients & Properties — customer/location model, tags, custom fields, client hub basics      | `references/jobber/jobber-01-clients-properties.md`    |
+| Requests & Leads — work requests, assessments, lead intake / online booking                 | `references/jobber/jobber-02-requests-leads.md`        |
+| Quotes — line items, good-better-best (option sets), deposits, approvals, financing          | `references/jobber/jobber-03-quotes.md`                |
+| Jobs, Visits & Scheduling — one-off vs recurring, recurrence, billing strategy, calendar     | `references/jobber/jobber-04-jobs-visits-scheduling.md`|
+| Invoices & Payments — statuses, batch invoicing, progress invoicing, Jobber Payments/tips    | `references/jobber/jobber-05-invoices-payments.md`     |
+| Automations & Client Hub — trigger/condition/action builder, self-serve client portal        | `references/jobber/jobber-06-automations-clienthub.md` |
+| **API model** — query/mutation catalog, pagination, `userErrors`, webhooks, rate limits      | `references/jobber/jobber-07-api-mutations.md`         |
+
+Start at `jobber-00` (index + lifecycle + master status table) when unsure which file you need.
 
 ---
 

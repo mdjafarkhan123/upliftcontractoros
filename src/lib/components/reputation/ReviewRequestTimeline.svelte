@@ -1,14 +1,4 @@
 <script lang="ts">
-	import {
-		Send,
-		MousePointerClick,
-		Star,
-		ExternalLink,
-		Bell,
-		Repeat,
-		Clock,
-		Award
-	} from '@lucide/svelte';
 	import { reviewEventsStore } from '$lib/stores/reputation.svelte';
 	import type { ReviewEventListItem, ReviewEventType } from '$lib/types/reputation';
 
@@ -22,24 +12,24 @@
 	const status = $derived(reviewEventsStore.getStatus(requestId));
 	const error = $derived(reviewEventsStore.getError(requestId));
 
-	function iconFor(type: ReviewEventType) {
+	function iconFor(type: ReviewEventType): string {
 		switch (type) {
 			case 'sent':
-				return Send;
+				return 'ri-send-plane-line';
 			case 'link_opened':
-				return MousePointerClick;
+				return 'ri-cursor-line';
 			case 'rating_submitted':
-				return Star;
+				return 'ri-star-line';
 			case 'redirected_to_google':
-				return ExternalLink;
+				return 'ri-external-link-line';
 			case 'reminder_sent':
-				return Bell;
+				return 'ri-notification-3-line';
 			case 'nudge_sent':
-				return Repeat;
+				return 'ri-repeat-line';
 			case 'expired':
-				return Clock;
+				return 'ri-time-line';
 			case 'attributed':
-				return Award;
+				return 'ri-award-line';
 		}
 	}
 
@@ -69,14 +59,14 @@
 	function toneFor(type: ReviewEventType): string {
 		switch (type) {
 			case 'attributed':
-				return 'text-emerald-600 dark:text-emerald-400';
+				return 'request-event__dot--success';
 			case 'expired':
-				return 'text-rose-600 dark:text-rose-400';
+				return 'request-event__dot--danger';
 			case 'nudge_sent':
 			case 'reminder_sent':
-				return 'text-amber-600 dark:text-amber-400';
+				return 'request-event__dot--warning';
 			default:
-				return 'text-muted-foreground';
+				return '';
 		}
 	}
 
@@ -93,37 +83,32 @@
 	}
 </script>
 
-<div class="mt-3 border-t border-border pt-3">
+<div class="request-timeline">
 	{#if status === 'loading' && events.length === 0}
-		<div class="space-y-2">
+		<div class="request-timeline__loading">
 			{#each [0, 1, 2] as i (i)}
-				<div class="flex items-center gap-2">
-					<div class="h-6 w-6 animate-pulse rounded-full bg-muted"></div>
-					<div class="h-3 flex-1 animate-pulse rounded bg-muted"></div>
+				<div class="request-timeline__loading-row">
+					<div class="request-timeline__loading-dot skeleton-shimmer"></div>
+					<div class="request-timeline__loading-bar skeleton-shimmer"></div>
 				</div>
 			{/each}
 		</div>
 	{:else if error && events.length === 0}
-		<p class="text-xs text-muted-foreground">Couldn't load timeline. {error}</p>
+		<p class="request-timeline__msg">Couldn't load timeline. {error}</p>
 	{:else if events.length === 0}
-		<p class="text-xs text-muted-foreground">No events recorded yet.</p>
+		<p class="request-timeline__msg">No events recorded yet.</p>
 	{:else}
-		<ol class="relative space-y-3">
+		<ol class="request-timeline__list">
 			<!-- vertical guide line -->
-			<span class="absolute left-[11px] top-1 bottom-1 w-px bg-border" aria-hidden="true"></span>
+			<span class="request-timeline__guide" aria-hidden="true"></span>
 			{#each events as e (e.id)}
-				{@const Icon = iconFor(e.type)}
-				<li class="relative flex items-start gap-3 pl-0">
-					<span
-						class="relative z-10 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-card {toneFor(
-							e.type
-						)}"
-					>
-						<Icon class="h-3 w-3" />
+				<li class="request-event">
+					<span class="request-event__dot {toneFor(e.type)}">
+						<i class={iconFor(e.type)} aria-hidden="true"></i>
 					</span>
-					<div class="min-w-0 flex-1 pt-0.5">
-						<p class="text-xs font-medium text-foreground">{labelFor(e)}</p>
-						<p class="text-[11px] text-muted-foreground tabular-nums" title={e.created_at}>
+					<div class="request-event__main">
+						<p class="request-event__label">{labelFor(e)}</p>
+						<p class="request-event__time" title={e.created_at}>
 							{relative(e.created_at)}
 						</p>
 					</div>

@@ -1,8 +1,5 @@
 <script lang="ts">
-	import { Beaker, Send, ExternalLink, Copy, CheckCircle2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	let { defaultEmail }: { defaultEmail: string } = $props();
@@ -57,78 +54,70 @@
 	}
 </script>
 
-<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-	<div class="flex items-start gap-3 border-b border-border bg-muted/30 px-5 py-4">
-		<div
-			class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600"
-		>
-			<Beaker class="h-4 w-4" />
+<section class="stripe-test">
+	<div class="stripe-test__head">
+		<div class="stripe-test__head-icon">
+			<i class="ri-flask-line" aria-hidden="true"></i>
 		</div>
 		<div>
-			<h3 class="text-base font-semibold text-foreground">Try the full payment flow</h3>
-			<p class="text-xs text-muted-foreground">
-				Send yourself a $1 test invoice. You’ll see it land in your inbox, open the payment page,
+			<h3 class="stripe-test__title">Try the full payment flow</h3>
+			<p class="stripe-test__sub">
+				Send yourself a $1 test invoice. You'll see it land in your inbox, open the payment page,
 				pay with a test card, and watch it mark itself as paid — all without touching real money.
 			</p>
 		</div>
 	</div>
 
-	<div class="flex flex-col gap-4 px-5 py-5">
-		<div class="flex flex-col gap-1.5">
-			<Label for="test-email">Send to</Label>
-			<Input
+	<div class="stripe-test__body">
+		<div class="field">
+			<label class="field__label" for="test-email">Send to</label>
+			<input
+				class="field__input"
 				id="test-email"
 				type="email"
 				placeholder="you@yourbusiness.com"
 				bind:value={email}
 				disabled={sending}
 			/>
-			<p class="text-[11px] text-muted-foreground">
-				Defaults to your own login email so you’ll receive the test invoice yourself.
+			<p class="field__hint">
+				Defaults to your own login email so you'll receive the test invoice yourself.
 			</p>
 		</div>
 
-		<div class="flex flex-wrap items-center gap-2">
-			<Button onclick={send} disabled={sending || !email}>
-				<Send class="mr-1.5 h-4 w-4" />
-				{sending ? 'Sending…' : 'Send $1 test invoice'}
+		<div class="stripe-test__actions">
+			<Button disabled={!email} loading={sending} loadingLabel="Sending…" onclick={send}>
+				<i class="ri-send-plane-line" aria-hidden="true"></i>
+				Send $1 test invoice
 			</Button>
-			<p class="text-xs text-muted-foreground">
-				Use Stripe test card <code class="font-mono">4242 4242 4242 4242</code>, any future expiry,
-				any CVC.
+			<p class="stripe-test__hint">
+				Use Stripe test card <code>4242 4242 4242 4242</code>, any future expiry, any CVC.
 			</p>
 		</div>
 
 		{#if result}
-			<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-				<div class="flex items-start gap-2">
-					<CheckCircle2 class="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
-					<div class="flex-1">
-						<p class="text-sm font-semibold text-foreground">
-							Test invoice {result.invoice_number_display} sent to {result.recipient_email}
-						</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Check your inbox, or open the customer payment page directly:
-						</p>
-						<div class="mt-2 flex flex-wrap items-center gap-2">
-							<a
-								href={result.public_url}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-500/40 bg-background px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/10"
-							>
-								<ExternalLink class="h-3.5 w-3.5" />
-								Open payment page
-							</a>
-							<button
-								type="button"
-								onclick={copyLink}
-								class="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium hover:bg-accent"
-							>
-								<Copy class="h-3.5 w-3.5" />
-								Copy link
-							</button>
-						</div>
+			<div class="stripe-test__result">
+				<i class="ri-checkbox-circle-line stripe-test__result-icon" aria-hidden="true"></i>
+				<div>
+					<p class="stripe-test__result-title">
+						Test invoice {result.invoice_number_display} sent to {result.recipient_email}
+					</p>
+					<p class="stripe-test__result-desc">
+						Check your inbox, or open the customer payment page directly:
+					</p>
+					<div class="stripe-test__result-actions">
+						<a
+							class="stripe-codebtn"
+							href={result.public_url}
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<i class="ri-external-link-line" aria-hidden="true"></i>
+							Open payment page
+						</a>
+						<button type="button" class="stripe-codebtn" onclick={copyLink}>
+							<i class="ri-file-copy-line" aria-hidden="true"></i>
+							Copy link
+						</button>
 					</div>
 				</div>
 			</div>

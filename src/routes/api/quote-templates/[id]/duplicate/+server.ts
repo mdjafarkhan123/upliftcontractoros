@@ -39,6 +39,7 @@ export const POST: RequestHandler = async (event) => {
 				unit: quoteTemplateLineItems.unit,
 				section_label: quoteTemplateLineItems.section_label,
 				is_optional: quoteTemplateLineItems.is_optional,
+				taxable: quoteTemplateLineItems.taxable,
 				unit_price: quoteTemplateLineItems.unit_price,
 				total: quoteTemplateLineItems.total,
 				position: quoteTemplateLineItems.position
@@ -74,6 +75,7 @@ export const POST: RequestHandler = async (event) => {
 					unit: li.unit,
 					section_label: li.section_label,
 					is_optional: li.is_optional,
+					taxable: li.taxable,
 					unit_price: li.unit_price,
 					total: li.total,
 					position: idx

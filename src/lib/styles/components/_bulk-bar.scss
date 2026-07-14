@@ -1,0 +1,115 @@
+@use '../tokens' as *;
+
+// -----------------------------------------------------------------------------
+// BULK ACTION BAR — the floating bottom bar shown while rows are selected.
+// Shared by every list page via `ListBulkBar.svelte` (Jobs/Quotes/…) and the
+// Contacts-specific `BulkActionBar.svelte` (which adds the assign/tag sheets).
+// Moved here from _contacts.scss once a second entity needed it (Styling Law:
+// a BEM class used by 2+ components lives in a global partial).
+// -----------------------------------------------------------------------------
+.bulk-bar {
+	position: fixed;
+	inset-inline: 0;
+	z-index: $z-overlay;
+	padding: 0 $space-3;
+	bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + #{$space-2});
+
+	@media (min-width: $bp-tablet) {
+		bottom: $space-6;
+	}
+
+	&__inner {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: fit-content;
+		margin: 0 auto;
+		padding: $space-2;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-lg);
+	}
+
+	&__cancel {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-lg;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.6rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__count {
+		flex-shrink: 0;
+		padding: 0 $space-1;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+	}
+	&__actions {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-1;
+	}
+	&__assign-list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		margin-top: $space-2;
+		padding-bottom: $space-2;
+	}
+	&__assign-item {
+		display: flex;
+		align-items: center;
+		min-height: 44px;
+		width: 100%;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		text-align: left;
+		cursor: pointer;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:disabled {
+			opacity: 0.5;
+		}
+		em {
+			font-style: italic;
+			color: var(--color-text-secondary);
+		}
+	}
+	&__assign-empty {
+		padding: $space-2 $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+	&__tag-body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		margin-top: $space-2;
+	}
+	&__tag-actions {
+		display: flex;
+		gap: $space-2;
+	}
+}

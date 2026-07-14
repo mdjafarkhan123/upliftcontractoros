@@ -1,0 +1,57 @@
+@use '../tokens' as *;
+
+// Linear progress bar
+.progress-bar {
+  height: 8px;
+  border-radius: $radius-full;
+  background: var(--color-bg-surface-sunk);
+  overflow: hidden;
+
+  &--sm { height: 4px; }
+  &--lg { height: 12px; }
+
+  &__fill {
+    height: 100%;
+    border-radius: $radius-full;
+    background: var(--color-brand);
+    transition: width $duration-slow $ease-standard;
+
+    &--success { background: var(--success-solid); }
+    &--warning { background: var(--warning-solid); }
+    &--danger  { background: var(--danger-solid);  }
+  }
+}
+
+// Capsule/pill bars — "S M T W T F S" weekly activity chart
+// Each bar is an independent rounded capsule, not a shared-baseline rectangle
+.capsule-bar {
+  width: 36px;
+  border-radius: $radius-full;
+  background: var(--color-bg-surface-sunk);
+  transition: background-color $duration-fast $ease-standard;
+
+  &--filled { background: var(--color-brand); }
+  &--peak   { background: var(--color-brand-strong); }
+}
+
+// Gauge (circular arc) — built as SVG; these classes drive the stroke tokens
+// Usage: <svg><circle class="gauge__track" /><circle class="gauge__arc" /></svg>
+// Set stroke-dasharray and stroke-dashoffset from JS/Svelte based on the %
+.gauge {
+  &__track {
+    stroke: var(--color-bg-surface-sunk);
+    fill: none;
+    stroke-linecap: round;
+  }
+
+  &__arc {
+    stroke: var(--color-brand);
+    fill: none;
+    stroke-linecap: round;
+    transition: stroke-dashoffset $duration-slow $ease-standard;
+
+    &--success { stroke: var(--success-solid); }
+    &--warning { stroke: var(--warning-solid); }
+    &--danger  { stroke: var(--danger-solid);  }
+  }
+}

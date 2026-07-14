@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, MessageSquare, Phone } from '@lucide/svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import Composer from '$lib/components/inbox/Composer.svelte';
@@ -152,82 +151,64 @@
 	<title>{headerName ? `New message — ${headerName}` : 'New message'} — Inbox</title>
 </svelte:head>
 
-<div
-	class="flex h-[calc(100dvh-72px-var(--bottom-nav-height)-env(safe-area-inset-bottom))] flex-col bg-muted/30 md:h-[calc(100dvh-104px)]"
->
+<div class="compose">
 	<!-- Header -->
-	<header
-		class="flex shrink-0 items-center gap-3 border-b border-border/50 bg-background px-3 py-3 sm:px-5"
-	>
-		<button
-			class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			onclick={() => goto('/inbox')}
-			aria-label="Back to inbox"
-		>
-			<ArrowLeft class="h-5 w-5" />
+	<header class="compose__header">
+		<button class="compose__icon-btn" onclick={() => goto('/inbox')} aria-label="Back to inbox">
+			<i class="ri-arrow-left-line" aria-hidden="true"></i>
 		</button>
-		<div class="flex min-w-0 flex-1 items-center gap-3">
-			<div
-				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-sm font-semibold text-primary ring-1 ring-primary/20"
-			>
+		<div class="compose__identity">
+			<div class="compose__avatar">
 				{#if contactInitials}
 					{contactInitials}
 				{:else}
-					<MessageSquare class="h-4 w-4" />
+					<i class="ri-message-2-line" aria-hidden="true"></i>
 				{/if}
 			</div>
-			<div class="min-w-0 flex-1">
-				<div class="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+			<div class="compose__identity-text">
+				<div class="compose__name">
 					{headerName || 'New message'}
 				</div>
 				{#if headerPhone}
-					<div class="truncate text-xs text-muted-foreground">{headerPhone}</div>
+					<div class="compose__phone">{headerPhone}</div>
 				{/if}
 			</div>
 		</div>
 		{#if headerPhone}
-			<a
-				href={`tel:${headerPhone}`}
-				class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				aria-label="Call contact"
-			>
-				<Phone class="h-5 w-5" />
+			<a href={`tel:${headerPhone}`} class="compose__icon-btn" aria-label="Call contact">
+				<i class="ri-phone-line" aria-hidden="true"></i>
 			</a>
 		{/if}
 	</header>
 
 	<!-- Body -->
-	<div class="flex min-h-0 flex-1 flex-col">
+	<div class="compose__body">
 		{#if loading}
-			<div class="flex-1 overflow-hidden p-4 md:p-6">
-				<div class="mx-auto max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-card">
+			<div class="compose__pad">
+				<div class="compose__skeleton-card">
 					<SkeletonLoader lines={4} label="Opening conversation" />
 				</div>
 			</div>
 		{:else if loadError}
-			<div class="flex-1 p-4 md:p-6">
-				<div
-					class="mx-auto max-w-3xl rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card"
-				>
+			<div class="compose__pad">
+				<div class="compose__error">
 					{loadError}
 				</div>
 			</div>
 		{:else}
-			<div class="flex flex-1 items-center justify-center p-4">
+			<div class="compose__empty">
 				<EmptyState
-					icon={MessageSquare}
+					iconClass="ri-message-2-line"
 					title="New message"
 					description={`Send a message to start the conversation with ${headerName || 'this contact'}.`}
 				/>
 			</div>
 
 			<!-- Composer -->
-			<div
-				class="shrink-0 border-t border-border/50 bg-background px-3 pb-3 pt-3 shadow-[0_-10px_30px_-20px_hsl(0_0%_0%/0.18)] sm:px-5"
-			>
-				<div class="mx-auto max-w-3xl">
+			<div class="compose__composer">
+				<div class="compose__composer-inner">
 					{#if optedOut && availableChannels.length === 1 && availableChannels[0] === 'sms'}
-						<div class="mb-2">
+						<div class="compose__optout">
 							<OptOutBanner />
 						</div>
 					{/if}
@@ -249,3 +230,176 @@
 		{/if}
 	</div>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.compose {
+		display: flex;
+		flex-direction: column;
+		height: calc(100dvh - 72px - var(--bottom-nav-height) - env(safe-area-inset-bottom));
+		background-color: var(--color-bg-app);
+
+		@media (min-width: $bp-mobile) {
+			height: calc(100dvh - 104px);
+		}
+
+		&__header {
+			display: flex;
+			flex-shrink: 0;
+			align-items: center;
+			gap: $space-3;
+			padding: $space-3;
+			background-color: var(--color-bg-surface);
+			border-bottom: 1px solid var(--color-border);
+
+			@media (min-width: $bp-mobile) {
+				padding: $space-3 $space-5;
+			}
+		}
+
+		&__icon-btn {
+			display: inline-flex;
+			flex-shrink: 0;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			border: none;
+			border-radius: $radius-full;
+			background: none;
+			color: var(--color-text-secondary);
+			cursor: pointer;
+			transition:
+				background-color $duration-fast $ease-standard,
+				color $duration-fast $ease-standard;
+
+			i {
+				font-size: 2rem;
+			}
+			&:hover {
+				background-color: var(--color-bg-surface-sunk);
+				color: var(--color-text-primary);
+			}
+			&:active {
+				transform: scale(0.95);
+			}
+		}
+
+		&__identity {
+			display: flex;
+			min-width: 0;
+			flex: 1 1 auto;
+			align-items: center;
+			gap: $space-3;
+		}
+
+		&__avatar {
+			display: flex;
+			flex-shrink: 0;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			border-radius: $radius-full;
+			font-size: $fs-body;
+			font-weight: $weight-semibold;
+			color: var(--color-brand);
+			background-color: var(--avatar-fallback-bg);
+
+			i {
+				font-size: 1.6rem;
+			}
+		}
+
+		&__identity-text {
+			min-width: 0;
+			flex: 1 1 auto;
+		}
+
+		&__name {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: $fs-lg;
+			font-weight: $weight-semibold;
+			letter-spacing: -0.01em;
+			color: var(--color-text-primary);
+		}
+
+		&__phone {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: $fs-body;
+			color: var(--color-text-secondary);
+		}
+
+		&__body {
+			display: flex;
+			min-height: 0;
+			flex: 1 1 auto;
+			flex-direction: column;
+		}
+
+		&__pad {
+			flex: 1 1 auto;
+			padding: $space-4;
+
+			@media (min-width: $bp-mobile) {
+				padding: $space-6;
+			}
+		}
+
+		&__skeleton-card {
+			max-width: 768px;
+			margin: 0 auto;
+			padding: $space-4;
+			border-radius: $radius-xl;
+			border: 1px solid var(--color-border);
+			background-color: var(--color-bg-surface);
+			box-shadow: var(--shadow-card);
+		}
+
+		&__error {
+			max-width: 768px;
+			margin: 0 auto;
+			padding: $space-4 $space-4 $space-5;
+			border-radius: $radius-xl;
+			border: 1px solid var(--danger-solid);
+			background-color: var(--danger-bg);
+			color: var(--danger-text);
+			font-size: $fs-body;
+			box-shadow: var(--shadow-card);
+		}
+
+		&__empty {
+			display: flex;
+			flex: 1 1 auto;
+			align-items: center;
+			justify-content: center;
+			padding: $space-4;
+		}
+
+		&__composer {
+			flex-shrink: 0;
+			padding: $space-3;
+			background-color: var(--color-bg-surface);
+			border-top: 1px solid var(--color-border);
+			box-shadow: 0 -10px 30px -20px rgba(13, 21, 15, 0.18);
+
+			@media (min-width: $bp-mobile) {
+				padding: $space-3 $space-5;
+			}
+		}
+
+		&__composer-inner {
+			max-width: 768px;
+			margin: 0 auto;
+		}
+
+		&__optout {
+			margin-bottom: $space-2;
+		}
+	}
+</style>

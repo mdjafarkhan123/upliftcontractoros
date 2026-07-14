@@ -1,17 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
 	import FollowUpPresetPopover from './FollowUpPresetPopover.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { getMemberContext } from '$lib/context/member';
 	import { toast } from '$lib/stores/toast.svelte';
-	import {
-		Phone,
-		MessageSquare,
-		FileText,
-		CalendarPlus,
-		StickyNote,
-		CheckCircle2
-	} from '@lucide/svelte';
 
 	let {
 		contactId,
@@ -89,53 +81,45 @@
 	}
 </script>
 
-<section
-	class="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden"
-	aria-label="Quick actions"
->
-	{#if phone}
-		<Button variant="outline" class="h-11 shrink-0 snap-start" href={`tel:${phone}`}>
-			<Phone class="h-4 w-4" /> Call
-		</Button>
-	{/if}
+<section class="contact-quick-actions" aria-label="Quick actions">
+		{#if phone}
+			<Button variant="secondary" href={`tel:${phone}`}>
+				<i class="ri-phone-line" aria-hidden="true"></i> Call
+			</Button>
+		{/if}
 
-	<Button
-		variant="outline"
-		class="h-11 shrink-0 snap-start"
-		disabled={opening}
-		onclick={openConversation}
-	>
-		<MessageSquare class="h-4 w-4" /> Message
-	</Button>
-
-	{#if canQuote}
-		<Button
-			variant="outline"
-			class="h-11 shrink-0 snap-start"
-			onclick={() => goto(`/quotes/new?contact_id=${contactId}`)}
-		>
-			<FileText class="h-4 w-4" /> Quote
+		<Button type="button" variant="secondary" disabled={opening} onclick={openConversation}>
+			<i class="ri-message-2-line" aria-hidden="true"></i> Message
 		</Button>
-	{/if}
 
-	{#if canAppt}
-		<Button
-			variant="outline"
-			class="h-11 shrink-0 snap-start"
-			onclick={() =>
-				goto(
-					`/appointments/new?contact_id=${contactId}&contact_name=${encodeURIComponent(contactName)}`
-				)}
-		>
-			<CalendarPlus class="h-4 w-4" /> Book
-		</Button>
-	{/if}
+		{#if canQuote}
+			<Button
+				type="button"
+				variant="secondary"
+				onclick={() => goto(`/quotes/new?contact_id=${contactId}`)}
+			>
+				<i class="ri-file-text-line" aria-hidden="true"></i> Quote
+			</Button>
+		{/if}
 
-	{#if canEdit}
-		<Button variant="outline" class="h-11 shrink-0 snap-start" onclick={onAddNote}>
-			<StickyNote class="h-4 w-4" /> Note
-		</Button>
-	{/if}
+		{#if canAppt}
+			<Button
+				type="button"
+				variant="secondary"
+				onclick={() =>
+					goto(
+						`/appointments/new?contact_id=${contactId}&contact_name=${encodeURIComponent(contactName)}`
+					)}
+			>
+				<i class="ri-calendar-event-line" aria-hidden="true"></i> Book
+			</Button>
+		{/if}
+
+		{#if canEdit}
+			<Button type="button" variant="secondary" onclick={onAddNote}>
+				<i class="ri-sticky-note-line" aria-hidden="true"></i> Note
+			</Button>
+		{/if}
 
 	{#if canEdit}
 		<FollowUpPresetPopover
@@ -146,9 +130,15 @@
 	{/if}
 
 	{#if canEdit && status === 'lead'}
-		<Button class="h-11 shrink-0 snap-start" disabled={converting} onclick={convertToCustomer}>
-			<CheckCircle2 class="h-4 w-4" />
-			{converting ? 'Converting…' : 'Convert'}
+		<Button
+			type="button"
+			variant="default"
+			loading={converting}
+			loadingLabel="Converting…"
+			onclick={convertToCustomer}
+		>
+			<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+			Convert
 		</Button>
 	{/if}
 </section>

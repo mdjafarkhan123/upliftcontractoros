@@ -1,10 +1,12 @@
 import { json, error } from '@sveltejs/kit';
+import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contactImports } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { analyzeCsv } from '$lib/server/contacts/csvImport';
+import { CANONICAL_FIELD_SET } from '$lib/contacts/csvHeaders';
 import { r2Upload } from '$lib/server/media/r2';
 import {
 	addJob,
@@ -14,6 +16,17 @@ import {
 
 const MAX_ROWS = 10_000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_COLUMNS = 200;
+
+// The explicit column mapping from the "Map columns" step: one entry per CSV column
+// (aligned by index), each a canonical field name or null/'' for "don't import".
+const columnMapSchema = z
+	.array(z.string().nullable())
+	.max(MAX_COLUMNS)
+	.transform((arr) => arr.map((v) => (v && v.trim() ? v.trim() : null)))
+	.refine((arr) => arr.every((v) => v === null || CANONICAL_FIELD_SET.has(v)), {
+		message: 'Column mapping references an unknown field.'
+	});
 
 // Background import: the request only validates + stores the raw CSV and queues
 // a job. The contactImportWorker (standalone) parses, normalizes, and inserts
@@ -43,10 +56,30 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'File too large. Maximum 10 MB.' }, { status: 400 });
 	}
 
+	// Optional explicit column mapping from the "Map columns" step. When absent the
+	// worker falls back to auto-detecting headers via HEADER_MAP.
+	let columnMap: (string | null)[] | null = null;
+	const columnMapRaw = formData.get('column_map');
+	if (typeof columnMapRaw === 'string' && columnMapRaw.trim()) {
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(columnMapRaw);
+		} catch {
+			return json({ error: 'Invalid column mapping.' }, { status: 400 });
+		}
+		const result = columnMapSchema.safeParse(parsed);
+		if (!result.success) {
+			return json({ error: result.error.issues[0]?.message ?? 'Invalid column mapping.' }, {
+				status: 400
+			});
+		}
+		columnMap = result.data;
+	}
+
 	const bytes = Buffer.from(await file.arrayBuffer());
 	const text = bytes.toString('utf-8');
 
-	const analysis = analyzeCsv(text);
+	const analysis = analyzeCsv(text, columnMap);
 	if (!analysis.ok) {
 		return json({ error: analysis.error }, { status: 400 });
 	}
@@ -70,6 +103,7 @@ export const POST: RequestHandler = async (event) => {
 			file_name: file.name || 'import.csv',
 			status: 'pending',
 			on_duplicate: onDuplicate,
+			column_map: columnMap,
 			total_rows: analysis.dataRowCount
 		})
 		.returning({ id: contactImports.id });

@@ -1,0 +1,1 @@
+ALTER TABLE "appointments" ADD COLUMN "all_day" boolean DEFAULT false NOT NULL;

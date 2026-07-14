@@ -3,13 +3,6 @@
 	import Calendar from '$lib/components/booking/Calendar.svelte';
 	import TimeSlots from '$lib/components/booking/TimeSlots.svelte';
 	import { formatInOrgTz } from '$lib/utils/formatInOrgTz';
-	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import Clock from '@lucide/svelte/icons/clock';
-	import MapPin from '@lucide/svelte/icons/map-pin';
-	import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
-	import XCircle from '@lucide/svelte/icons/x-circle';
-	import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
 
 	type View = {
 		org_name: string;
@@ -252,147 +245,112 @@
 	<title>Manage your appointment</title>
 </svelte:head>
 
-<main class="mx-auto w-full max-w-xl px-4 pb-16 pt-10 sm:pt-16">
+<main class="book-manage">
 	{#if loading}
-		<div class="space-y-4">
-			<div class="mx-auto h-5 w-40 animate-pulse rounded bg-muted/40"></div>
-			<div class="h-40 animate-pulse rounded-2xl bg-muted/20"></div>
+		<div class="book-manage__skeleton">
+			<div class="book-manage__skel-title"></div>
+			<div class="book-manage__skel-card"></div>
 		</div>
 	{:else if notFound || !view}
-		<section
-			class="mx-auto mt-12 max-w-md rounded-2xl border border-border/60 bg-card p-8 text-center shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)]"
-		>
-			<div
-				class="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted/40"
-			>
-				<AlertTriangle class="h-5 w-5 text-muted-foreground" />
+		<div class="book-manage__status">
+			<div class="book-manage__status-icon book-manage__status-icon--warning">
+				<i class="ri-error-warning-line" aria-hidden="true"></i>
 			</div>
-			<h1 class="text-lg font-semibold tracking-tight text-foreground">Link no longer works</h1>
-			<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+			<h1 class="book-manage__status-title">Link no longer works</h1>
+			<p class="book-manage__status-text">
 				This appointment link is invalid, expired, or has been updated. If you still need to make a
 				change, please contact the business directly.
 			</p>
-		</section>
+		</div>
 	{:else if mode === 'cancelled'}
-		<section
-			class="mx-auto mt-8 max-w-md rounded-2xl border border-border/60 bg-card p-8 text-center shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)]"
-		>
-			<div
-				class="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-			>
-				<XCircle class="h-6 w-6" />
+		<div class="book-manage__status">
+			<div class="book-manage__status-icon book-manage__status-icon--danger">
+				<i class="ri-close-circle-line" aria-hidden="true"></i>
 			</div>
-			<h1 class="text-lg font-semibold tracking-tight text-foreground">Appointment cancelled</h1>
-			<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-				Your {view.type.replaceAll('_', ' ')} with {view.org_name} has been cancelled. We've let the team
-				know.
+			<h1 class="book-manage__status-title">Appointment cancelled</h1>
+			<p class="book-manage__status-text">
+				Your {view.type.replaceAll('_', ' ')} with {view.org_name} has been cancelled. We've let the
+				team know.
 			</p>
-		</section>
+		</div>
 	{:else}
-		<header class="mb-8 text-center">
-			<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-				{view.org_name}
-			</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+		<header class="book-manage__header">
+			<p class="book-manage__org">{view.org_name}</p>
+			<h1 class="book-manage__title">
 				{mode === 'rescheduled' ? "You're all set" : 'Manage your appointment'}
 			</h1>
 			{#if view.contact_first_name}
-				<p class="mt-2 text-sm text-muted-foreground">
-					Hi {view.contact_first_name} — review the details below.
-				</p>
+				<p class="book-manage__lead">Hi {view.contact_first_name} — review the details below.</p>
 			{/if}
 		</header>
 
-		<section
-			class="overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[0_20px_60px_-30px_hsl(0_0%_0%/0.6)] sm:p-7"
-		>
+		<section class="book-manage__card">
 			{#if mode === 'view' || mode === 'rescheduled'}
 				{#if mode === 'rescheduled'}
-					<div
-						class="mb-5 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
-					>
-						<CheckCircle2 class="h-5 w-5 shrink-0 text-primary" />
-						<p class="text-sm font-medium text-foreground">Your new time is locked in.</p>
+					<div class="book-manage__success-bar">
+						<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+						<p>Your new time is locked in.</p>
 					</div>
 				{/if}
 
-				<div class="space-y-4">
-					<div class="flex items-start gap-3">
-						<div
-							class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
-						>
-							<CalendarIcon class="h-4 w-4" />
+				<div class="book-manage__meta">
+					<div class="book-manage__meta-row">
+						<div class="book-manage__meta-icon book-manage__meta-icon--brand">
+							<i class="ri-calendar-event-line" aria-hidden="true"></i>
 						</div>
-						<div class="min-w-0">
-							<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-								When
-							</p>
-							<p class="mt-0.5 text-sm font-medium text-foreground">{startLabel}</p>
+						<div>
+							<p class="book-manage__meta-label">When</p>
+							<p class="book-manage__meta-value">{startLabel}</p>
 						</div>
 					</div>
-					<div class="flex items-start gap-3">
-						<div
-							class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-muted/40 text-muted-foreground"
-						>
-							<Clock class="h-4 w-4" />
+					<div class="book-manage__meta-row">
+						<div class="book-manage__meta-icon">
+							<i class="ri-time-line" aria-hidden="true"></i>
 						</div>
-						<div class="min-w-0">
-							<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-								What
-							</p>
-							<p class="mt-0.5 text-sm font-medium text-foreground">
+						<div>
+							<p class="book-manage__meta-label">What</p>
+							<p class="book-manage__meta-value">
 								{view.title} ({view.type.replaceAll('_', ' ')})
 							</p>
 						</div>
 					</div>
 					{#if view.location}
-						<div class="flex items-start gap-3">
-							<div
-								class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-muted/40 text-muted-foreground"
-							>
-								<MapPin class="h-4 w-4" />
+						<div class="book-manage__meta-row">
+							<div class="book-manage__meta-icon">
+								<i class="ri-map-pin-line" aria-hidden="true"></i>
 							</div>
-							<div class="min-w-0">
-								<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-									Where
-								</p>
-								<p class="mt-0.5 text-sm font-medium text-foreground">{view.location}</p>
+							<div>
+								<p class="book-manage__meta-label">Where</p>
+								<p class="book-manage__meta-value">{view.location}</p>
 							</div>
 						</div>
 					{/if}
 				</div>
 
-				<div class="mt-7 grid gap-2 sm:grid-cols-2">
+				<div class="book-manage__actions">
 					{#if view.can_reschedule}
-						<button
-							type="button"
-							onclick={startReschedule}
-							class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-border/60 bg-muted px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-						>
+						<button type="button" onclick={startReschedule} class="book-manage__reschedule-btn">
 							Reschedule
 						</button>
 					{/if}
 					<button
 						type="button"
 						onclick={() => (mode = 'confirm_cancel')}
-						class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+						class="book-manage__cancel-btn"
 					>
 						Cancel appointment
 					</button>
 				</div>
 				{#if !view.can_reschedule}
-					<p class="mt-3 text-center text-xs text-muted-foreground">
+					<p class="book-manage__no-reschedule">
 						To reschedule, please contact {view.org_name} directly.
 					</p>
 				{/if}
 			{:else if mode === 'reschedule'}
-				<button
-					type="button"
-					onclick={backToView}
-					class="mb-5 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-				>
-					<ArrowLeft class="h-3.5 w-3.5" /> Back
+				<button type="button" onclick={backToView} class="book-manage__back">
+					<i class="ri-arrow-left-s-line" aria-hidden="true"></i> Back
 				</button>
+
 				{#if !selectedDate}
 					<Calendar
 						{month}
@@ -404,17 +362,13 @@
 						onChangeMonth={handleMonthChange}
 					/>
 				{:else}
-					<div class="mb-5 flex items-start gap-3">
-						<div
-							class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
-						>
-							<CalendarIcon class="h-4 w-4" />
+					<div class="book-manage__date-head">
+						<div class="book-manage__meta-icon book-manage__meta-icon--brand">
+							<i class="ri-calendar-event-line" aria-hidden="true"></i>
 						</div>
 						<div>
-							<h2 class="text-lg font-semibold tracking-tight text-foreground">
-								{selectedDateLabel}
-							</h2>
-							<p class="mt-0.5 text-xs text-muted-foreground">Choose a new time</p>
+							<h2 class="book-manage__date-title">{selectedDateLabel}</h2>
+							<p class="book-manage__date-hint">Choose a new time</p>
 						</div>
 					</div>
 					<TimeSlots
@@ -427,57 +381,47 @@
 					<button
 						type="button"
 						onclick={() => (selectedDate = null)}
-						class="mt-4 text-xs font-medium text-muted-foreground hover:text-foreground"
+						class="book-manage__day-link"
 					>
 						Pick a different day
 					</button>
 					{#if selectedSlot}
-						<div
-							class="mt-5 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
-						>
-							<CheckCircle2 class="h-5 w-5 shrink-0 text-primary" />
-							<div class="min-w-0">
-								<p class="text-[11px] font-medium uppercase tracking-wider text-primary/80">
-									Your new time
-								</p>
-								<p class="truncate text-sm font-medium text-foreground">{selectedSlotLabel}</p>
+						<div class="book-manage__slot-bar">
+							<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+							<div style="min-width:0">
+								<p class="book-manage__slot-eyebrow">Your new time</p>
+								<p class="book-manage__slot-time">{selectedSlotLabel}</p>
 							</div>
 						</div>
 						{#if errorMsg}
-							<p class="mt-3 text-xs text-destructive">{errorMsg}</p>
+							<p class="book-manage__error">{errorMsg}</p>
 						{/if}
 						<button
 							type="button"
 							disabled={submitting}
 							onclick={confirmReschedule}
-							class="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+							class="book-manage__confirm-btn"
 						>
 							{submitting ? 'Confirming…' : 'Confirm reschedule'}
 						</button>
 					{/if}
 				{/if}
 			{:else if mode === 'confirm_cancel'}
-				<div class="text-center">
-					<div
-						class="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-					>
-						<AlertTriangle class="h-6 w-6" />
+				<div class="book-manage__cancel-confirm">
+					<div class="book-manage__status-icon book-manage__status-icon--warning">
+						<i class="ri-error-warning-line" aria-hidden="true"></i>
 					</div>
-					<h2 class="text-lg font-semibold tracking-tight text-foreground">
-						Cancel this appointment?
-					</h2>
-					<p class="mt-2 text-sm text-muted-foreground">
-						{startLabel}
-					</p>
+					<h2 class="book-manage__cancel-title">Cancel this appointment?</h2>
+					<p class="book-manage__cancel-sub">{startLabel}</p>
 					{#if errorMsg}
-						<p class="mt-3 text-xs text-destructive">{errorMsg}</p>
+						<p class="book-manage__error">{errorMsg}</p>
 					{/if}
-					<div class="mt-6 grid gap-2 sm:grid-cols-2">
+					<div class="book-manage__cancel-actions">
 						<button
 							type="button"
 							onclick={backToView}
 							disabled={submitting}
-							class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-border/60 bg-card/40 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+							class="book-manage__keep-btn"
 						>
 							Keep appointment
 						</button>
@@ -485,7 +429,7 @@
 							type="button"
 							disabled={submitting}
 							onclick={confirmCancel}
-							class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+							class="book-manage__confirm-cancel-btn"
 						>
 							{submitting ? 'Cancelling…' : 'Yes, cancel'}
 						</button>
@@ -494,8 +438,6 @@
 			{/if}
 		</section>
 
-		<p class="mt-6 text-center text-[11px] text-muted-foreground/60">
-			Times shown in {view.org_timezone.replace(/_/g, ' ')}
-		</p>
+		<p class="book-manage__tz">Times shown in {view.org_timezone.replace(/_/g, ' ')}</p>
 	{/if}
 </main>

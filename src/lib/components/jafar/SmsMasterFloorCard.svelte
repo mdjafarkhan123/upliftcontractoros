@@ -104,114 +104,104 @@
 	onMount(load);
 </script>
 
-<section
-	class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
->
-	<header class="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+<section class="jafar-panel">
+	<header class="jafar-panel__head jafar-panel__head--between">
 		<div>
-			<h2 class="text-base font-semibold text-white">SMS Master Balance</h2>
-			<p class="mt-0.5 text-xs text-slate-500">
-				Platform-wide Twilio safety floor &amp; kill switch
-			</p>
+			<h2 class="jafar-panel__title">SMS Master Balance</h2>
+			<p class="jafar-panel__sub">Platform-wide Twilio safety floor &amp; kill switch</p>
 		</div>
 		<button
 			type="button"
 			onclick={() => doAction('refresh')}
 			disabled={busy !== null || status !== 'loaded'}
-			class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-3 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer"
+			class="jafar-btn"
 		>
 			{busy === 'refresh' ? 'Refreshing…' : 'Refresh balance'}
 		</button>
 	</header>
 
 	{#if status === 'loading'}
-		<div class="px-5 py-10 text-center text-sm text-slate-400">Loading SMS controls…</div>
+		<div class="sms-loading">Loading SMS controls…</div>
 	{:else if status === 'error'}
-		<div class="px-5 py-8 text-center">
-			<p class="text-sm font-semibold text-red-200">{loadError}</p>
-			<button
-				type="button"
-				onclick={load}
-				class="mt-3 inline-flex h-9 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 text-xs font-semibold text-red-100 hover:bg-red-500/20 transition-colors cursor-pointer"
-			>
+		<div class="sms-error">
+			<p class="sms-error__msg">{loadError}</p>
+			<button type="button" onclick={load} class="jafar-btn jafar-btn--danger sms-error__retry">
 				Retry
 			</button>
 		</div>
 	{:else if data}
-		<div class="space-y-5 px-5 py-5">
-			<!-- Paused / active status banner -->
-			{#if data.paused}
-				<div class="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
-					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<div>
-							<p class="text-sm font-semibold text-red-200">SMS sending is PAUSED</p>
-							<p class="mt-0.5 text-xs text-red-300/80">
-								{data.pausedReason ?? 'Outbound SMS is paused.'}
-								{#if data.pausedAt}<span class="text-red-300/60">
-										· {fmtWhen(data.pausedAt)}</span
-									>{/if}
-							</p>
-							<p class="mt-1 text-xs text-red-300/70">
-								{data.waitingCount} waiting · {data.delayedCount} delayed in queue — they resume on restart.
-							</p>
-						</div>
-						<button
-							type="button"
-							onclick={() => doAction('resume')}
-							disabled={busy !== null}
-							class="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 px-4 text-sm font-semibold text-white shadow-md shadow-emerald-900/40 hover:from-emerald-500 hover:to-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 transition-all cursor-pointer"
-						>
-							{busy === 'resume' ? 'Resuming…' : 'Resume SMS'}
-						</button>
-					</div>
-				</div>
-			{:else}
-				<div
-					class="flex flex-col gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-				>
-					<div>
-						<p class="text-sm font-semibold text-emerald-200">SMS sending is active</p>
-						<p class="mt-0.5 text-xs text-emerald-300/70">
+		<div class="jafar-panel__body">
+			<div
+				class="jafar-sms__status {data.paused
+					? 'jafar-sms__status--paused'
+					: 'jafar-sms__status--active'}"
+			>
+				<div>
+					{#if data.paused}
+						<p class="jafar-sms__paused-title">SMS sending is PAUSED</p>
+						<p class="jafar-sms__paused-text">
+							{data.pausedReason ?? 'Outbound SMS is paused.'}
+							{#if data.pausedAt}
+								<span>&nbsp;· {fmtWhen(data.pausedAt)}</span>
+							{/if}
+						</p>
+						<p class="jafar-sms__paused-note">
+							{data.waitingCount} waiting · {data.delayedCount} delayed in queue — they resume on
+							restart.
+						</p>
+					{:else}
+						<p class="jafar-sms__active-title">SMS sending is active</p>
+						<p class="jafar-sms__active-text">
 							{data.waitingCount} waiting · {data.delayedCount} delayed in queue
 						</p>
-					</div>
+					{/if}
+				</div>
+				{#if data.paused}
+					<button
+						type="button"
+						onclick={() => doAction('resume')}
+						disabled={busy !== null}
+						class="jafar-btn jafar-btn--emerald"
+					>
+						{busy === 'resume' ? 'Resuming…' : 'Resume SMS'}
+					</button>
+				{:else}
 					<button
 						type="button"
 						onclick={() => doAction('pause')}
 						disabled={busy !== null}
-						class="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 px-4 text-sm font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer"
+						class="jafar-btn"
 					>
 						{busy === 'pause' ? 'Pausing…' : 'Pause SMS'}
 					</button>
-				</div>
-			{/if}
+				{/if}
+			</div>
 
-			<!-- Balance + floor -->
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
-					<p class="text-xs font-medium text-slate-500">Master balance</p>
-					<p class="mt-1 text-xl font-bold text-white">{fmtMoney(data.balance)}</p>
-					<p class="mt-0.5 text-xs text-slate-500">Synced {fmtWhen(data.balanceAt)}</p>
+			<div class="jafar-sms__grid">
+				<div class="jafar-sms__stat">
+					<p class="jafar-sms__stat-label">Master balance</p>
+					<p class="jafar-sms__stat-val">{fmtMoney(data.balance)}</p>
+					<p class="jafar-sms__stat-sub">Synced {fmtWhen(data.balanceAt)}</p>
 				</div>
 
-				<div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
-					<label for="sms-floor" class="text-xs font-medium text-slate-500">
+				<div class="jafar-sms__stat">
+					<label for="sms-floor" class="jafar-sms__stat-label">
 						Safety floor ({ccy}) — 0 disables
 					</label>
-					<div class="mt-1 flex items-center gap-2">
+					<div class="jafar-sms__stat-row">
 						<input
 							id="sms-floor"
 							type="number"
 							min="0"
 							step="0.01"
 							bind:value={floorInput}
-							class="h-10 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white placeholder:text-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+							class="jafar-input"
 						/>
 						<button
 							type="button"
 							onclick={saveFloor}
 							disabled={busy !== null || floorInput === (data.floor.toString() ?? '')}
-							class="inline-flex h-10 shrink-0 items-center rounded-lg border border-slate-700 bg-slate-800/60 px-3 text-sm font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer"
+							class="jafar-btn"
 						>
 							{busy === 'floor' ? 'Saving…' : 'Save'}
 						</button>
@@ -220,8 +210,35 @@
 			</div>
 
 			{#if actionError}
-				<p class="text-xs font-semibold text-red-300">{actionError}</p>
+				<p class="jafar-sms__err">{actionError}</p>
 			{/if}
 		</div>
 	{/if}
 </section>
+
+<style lang="scss">
+	.sms-loading {
+		padding: 2.5rem 1.25rem;
+		text-align: center;
+		font-size: 0.875rem;
+		color: #64748b;
+	}
+
+	.sms-error {
+		padding: 2rem 1.25rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+
+		&__msg {
+			font-size: 0.875rem;
+			font-weight: 600;
+			color: #fecaca;
+		}
+
+		&__retry {
+			min-width: 6rem;
+		}
+	}
+</style>

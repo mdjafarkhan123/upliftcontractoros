@@ -74,6 +74,7 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 	let invoiceId: string | undefined;
 	let paymentIntentId: string | undefined;
 	let amountReceivedCents: number | undefined;
+	let tipCentsRaw: string | undefined;
 
 	if (evt.type === 'checkout.session.completed') {
 		const session = evt.data.object as Stripe.Checkout.Session;
@@ -83,16 +84,27 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 				? session.payment_intent
 				: session.payment_intent?.id;
 		amountReceivedCents = session.amount_total ?? undefined;
+		tipCentsRaw = session.metadata?.tip_cents;
 	} else if (evt.type === 'payment_intent.succeeded') {
 		const pi = evt.data.object as Stripe.PaymentIntent;
 		invoiceId = pi.metadata?.invoice_id;
 		paymentIntentId = pi.id;
 		amountReceivedCents = pi.amount_received;
+		tipCentsRaw = pi.metadata?.tip_cents;
 	}
 
 	if (!invoiceId || !paymentIntentId || amountReceivedCents === undefined) return false;
 
-	const amountStr = (amountReceivedCents / 100).toFixed(2);
+	// M7: the received total includes the tip. Split it back out so payments.amount holds ONLY
+	// the balance-applied portion (recalc uses it for amount_paid/amount_due) and tip_amount
+	// holds the tip. Clamp defensively so a malformed tip can't exceed the received total.
+	const parsedTip = Number.parseInt(tipCentsRaw ?? '0', 10);
+	const tipCents = Number.isFinite(parsedTip) && parsedTip > 0
+		? Math.min(parsedTip, amountReceivedCents)
+		: 0;
+	const balanceCents = amountReceivedCents - tipCents;
+	const amountStr = (balanceCents / 100).toFixed(2);
+	const tipStr = (tipCents / 100).toFixed(2);
 
 	return await db.transaction(async (tx) => {
 		const [existing] = await tx.execute<{
@@ -123,6 +135,7 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 				org_id: orgId,
 				invoice_id: invoiceId!,
 				amount: amountStr,
+				tip_amount: tipStr,
 				payment_method: 'stripe',
 				stripe_payment_intent_id: paymentIntentId!,
 				recorded_by: null

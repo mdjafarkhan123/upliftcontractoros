@@ -36,6 +36,11 @@ export type QuoteVersionLineItemView = {
 	unit: string | null;
 	section_label: string | null;
 	is_optional?: boolean;
+	// Per-line tax flag, frozen. Absent on older snapshots (treat as taxable).
+	taxable?: boolean;
+	// Good-Better-Best: the tier name this line belonged to at snapshot time. Null on a simple
+	// quote or an older snapshot taken before packages existed.
+	package_name?: string | null;
 	unit_price: string;
 	total: string;
 	position: number;
@@ -77,7 +82,8 @@ export type QuoteServiceAddress = {
 };
 
 export type QuotesGroup = 'all' | 'active' | 'closed';
-export type QuotesStatusChip = 'all' | QuoteStatus;
+// 'deleted' is the recycle-bin tab (deleted=1) — not a real quote status.
+export type QuotesStatusChip = 'all' | 'deleted' | QuoteStatus;
 
 // Org-wide quote performance summary shown above the quotes list (Stage 3.1).
 // All figures are org-scoped and independent of the active list filter.
@@ -98,6 +104,12 @@ export type QuotesFilters = {
 	group: QuotesGroup;
 	status: QuotesStatusChip;
 	search: string;
+	// Advanced filter (QuoteFilterControl). All optional/additive — absent = no narrowing.
+	// Salesperson = quotes.issued_by (the team member who owns the quote).
+	issuedBy?: string | null;
+	// Created-date range (inclusive), yyyy-mm-dd. Empty/null = open-ended.
+	dateFrom?: string | null;
+	dateTo?: string | null;
 };
 
 export type QuoteListItem = {
@@ -115,6 +127,8 @@ export type QuoteListItem = {
 	declined_at: string | null;
 	expires_at: string | null;
 	created_at: string;
+	// Set only in the recycle-bin view (deleted=1); null on active rows.
+	deleted_at: string | null;
 };
 
 // A photo attached to a single quote line item, with short-lived signed URLs.
@@ -125,11 +139,36 @@ export type QuoteLinePhoto = {
 	full_url: string;
 };
 
+// A Good-Better-Best package (tier) on a quote, as served to the browser. Empty list on a
+// simple quote. subtotal/total are the tier's own denormalized base figures.
+export type QuotePackageRow = {
+	id: string;
+	package_key: string;
+	name: string;
+	is_recommended: boolean;
+	position: number;
+	subtotal: string;
+	total: string;
+};
+
+// Editor-side draft of a package tier. client_id keys Svelte's #each; package_key is the
+// stable identity persisted to quote_packages.package_key that lines reference. `lines` holds
+// this tier's own line drafts — the builder binds each package's LineItemEditor to it.
+export type QuotePackageDraft = {
+	client_id: string;
+	package_key: string;
+	name: string;
+	is_recommended: boolean;
+	lines: QuoteLineDraft[];
+};
+
 export type QuoteLineItemRow = {
 	id: string;
 	// Stable per-line identity that survives the save's wipe-and-reinsert. Photos bind to it.
 	// Optional because template line items have no line_key column.
 	line_key?: string;
+	// Good-Better-Best: the package this line belongs to (null/absent on a simple quote).
+	package_id?: string | null;
 	// Per-line photos (signed URLs). Present on quote read paths; absent on templates.
 	photos?: QuoteLinePhoto[];
 	// Title (short name) of the line. Always present.
@@ -144,6 +183,8 @@ export type QuoteLineItemRow = {
 	// is only meaningful once the quote is accepted; false on required lines and unchosen add-ons.
 	is_optional?: boolean;
 	accepted_selected?: boolean;
+	// Per-line tax flag. Only taxable lines feed the tax base. Absent = taxable.
+	taxable?: boolean;
 	unit_price: string;
 	// Cost snapshot + catalog link. Present on quote line items; absent on template lines.
 	unit_cost?: string | null;
@@ -157,6 +198,9 @@ export type QuoteLineDraft = {
 	// Stable per-line identity persisted to quote_line_items.line_key, so per-line photos
 	// stay bound across saves. Generated once on the client when the line is created.
 	line_key?: string;
+	// Good-Better-Best: the package (tier) this draft line belongs to, referenced by the
+	// package's stable package_key. Undefined/null on a simple quote.
+	package_key?: string | null;
 	// Title (short name) of the line.
 	description: string;
 	// Optional longer description shown under the title.
@@ -167,6 +211,9 @@ export type QuoteLineDraft = {
 	section_label?: string | null;
 	// Optional add-on the customer can choose before accepting. Excluded from base total.
 	is_optional?: boolean;
+	// Per-line tax flag. Defaults true (taxable); prefilled from the catalog item's
+	// default_taxable when added from the price book.
+	taxable?: boolean;
 	unit_price: string;
 	// Carried through so a line added from the catalog keeps its cost snapshot + link
 	// across save/edit. Undefined for hand-typed lines.
@@ -182,6 +229,8 @@ export type CatalogItem = {
 	unit_price: string;
 	unit: string | null;
 	unit_cost: string | null;
+	// Default per-line tax flag applied when this item is added to a quote/invoice line.
+	default_taxable: boolean;
 	category: string | null;
 	image_url: string | null;
 	created_at: string;
@@ -217,6 +266,8 @@ export type QuoteDetail = {
 	accepted_total: string | null;
 	notes: string | null;
 	internal_notes: string | null;
+	// Customer-facing Terms & Conditions for this quote (snapshot of org default at create).
+	terms: string | null;
 	expires_at: string | null;
 	sent_at: string | null;
 	viewed_at: string | null;
@@ -224,6 +275,9 @@ export type QuoteDetail = {
 	declined_at: string | null;
 	acceptance_signature_name: string | null;
 	acceptance_signed_at: string | null;
+	// In-person "sign on this device": the media id of the customer's drawn signature image.
+	// Null on online / offline-marked acceptances. Its presence marks a "Signed in person" quote.
+	acceptance_signature_media_id: string | null;
 	created_at: string;
 	updated_at: string;
 	contact_id: string;
@@ -235,6 +289,8 @@ export type QuoteDetail = {
 	service_address_id: string | null;
 	service_address: QuoteServiceAddress | null;
 	view_count: number;
+	// Good-Better-Best tiers. Empty on a simple quote; 2–3 entries on a tiered quote.
+	packages: QuotePackageRow[];
 	line_items: QuoteLineItemRow[];
 	active_change_request: QuoteChangeRequestSummary | null;
 };
@@ -264,6 +320,8 @@ export type QuoteTemplateLineDraft = {
 	section_label?: string | null;
 	// Optional add-on flag carried from the template into a new quote.
 	is_optional?: boolean;
+	// Per-line tax flag carried from the template into a new quote. Defaults true.
+	taxable?: boolean;
 	unit_price: string;
 };
 
@@ -288,6 +346,7 @@ export type PublicQuoteView = {
 	deposit_paid_at: string | null;
 	deposit_payment_available: boolean;
 	notes: string | null;
+	terms: string | null;
 	expires_at: string | null;
 	status: QuoteStatus;
 	org_name: string;
@@ -304,5 +363,13 @@ export type PublicQuoteView = {
 	contact_name: string;
 	issued_by_name: string | null;
 	service_address: QuoteServiceAddress | null;
+	// Good-Better-Best tiers. Empty on a simple quote; 2–3 entries on a tiered quote. When
+	// non-empty each line's package_id says which tier it belongs to, and the customer picks
+	// exactly one tier before accepting.
+	packages: QuotePackageRow[];
+	// Set once the quote is accepted: the tier the customer chose + its frozen final total.
+	// Null on a simple quote or a tiered quote not yet accepted.
+	accepted_package_id: string | null;
+	accepted_total: string | null;
 	line_items: QuoteLineItemRow[];
 };

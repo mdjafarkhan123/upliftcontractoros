@@ -1,17 +1,15 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
-	import { BookOpen, Plus, Search, Pencil, Trash2, ImageIcon, MoreHorizontal } from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import CatalogItemSheet from '$lib/components/quotes/CatalogItemSheet.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { catalogStore } from '$lib/stores/catalog.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCurrency } from '$lib/utils/format';
-	import { cn } from '$lib/utils/cn';
 	import type { CatalogItem } from '$lib/types/quotes';
 
 	const member = getMemberContext();
@@ -81,49 +79,43 @@
 
 <svelte:head><title>Price Book — Settings</title></svelte:head>
 
-<PageWrapper title="Price Book" subtitle="Reusable products, services, and pricing" back="/settings">
+<PageWrapper
+	title="Price Book"
+	subtitle="Reusable products, services, and pricing"
+	back="/settings"
+>
 	{#snippet actions()}
 		{#if canCreate}
-			<Button class="gap-1.5" onclick={openCreate}>
-				<Plus class="h-4 w-4" />New item
+			<Button onclick={openCreate}>
+				<i class="ri-add-line" aria-hidden="true"></i>New item
 			</Button>
 		{/if}
 	{/snippet}
 
-	<div class="flex flex-col gap-4">
-		{#if catalogStore.status === 'loading' && catalogStore.items.length === 0}
-			<SkeletonLoader lines={5} height="56px" label="Loading price book" />
-		{:else if catalogStore.items.length === 0}
-			<EmptyState
-				icon={BookOpen}
-				title="Your price book is empty"
-				description="Add the products and services you sell most. They'll be one tap away when you build a quote — and you can save new ones straight from a quote too."
-				actionLabel={canCreate ? 'Add your first item' : undefined}
-				onAction={canCreate ? openCreate : undefined}
-			/>
-		{:else}
+	{#if catalogStore.status === 'loading' && catalogStore.items.length === 0}
+		<SkeletonLoader lines={5} height="56px" label="Loading price book" />
+	{:else if catalogStore.items.length === 0}
+		<EmptyState
+			iconClass="ri-book-open-line"
+			title="Your price book is empty"
+			description="Add the products and services you sell most. They'll be one tap away when you build a quote — and you can save new ones straight from a quote too."
+			actionLabel={canCreate ? 'Add your first item' : undefined}
+			onAction={canCreate ? openCreate : undefined}
+		/>
+	{:else}
+		<div class="pricebook">
 			<!-- Search + category filter -->
-			<div class="flex flex-col gap-3">
-				<div class="relative">
-					<Search
-						class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-					/>
-					<input
-						bind:value={query}
-						placeholder="Search your price book…"
-						class="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-					/>
+			<div class="pricebook__filters">
+				<div class="field__input-wrap pricebook__search">
+					<i class="ri-search-line field__icon" aria-hidden="true"></i>
+					<input class="field__input" bind:value={query} placeholder="Search your price book…" />
 				</div>
 				{#if catalogStore.categories.length > 0}
-					<div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+					<div class="pricebook__cats">
 						<button
 							type="button"
-							class={cn(
-								'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-								activeCategory === null
-									? 'border-primary/40 bg-primary/10 text-primary'
-									: 'border-border/60 bg-background text-muted-foreground hover:bg-muted'
-							)}
+							class="pricebook__cat"
+							class:pricebook__cat--active={activeCategory === null}
 							onclick={() => (activeCategory = null)}
 						>
 							All
@@ -131,12 +123,8 @@
 						{#each catalogStore.categories as cat (cat)}
 							<button
 								type="button"
-								class={cn(
-									'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-									activeCategory === cat
-										? 'border-primary/40 bg-primary/10 text-primary'
-										: 'border-border/60 bg-background text-muted-foreground hover:bg-muted'
-								)}
+								class="pricebook__cat"
+								class:pricebook__cat--active={activeCategory === cat}
 								onclick={() => (activeCategory = cat)}
 							>
 								{cat}
@@ -147,141 +135,107 @@
 			</div>
 
 			{#if filtered.length === 0}
-				<p class="px-1 py-8 text-center text-sm text-muted-foreground">
-					Nothing matches your search.
-				</p>
+				<p class="pricebook__none">Nothing matches your search.</p>
 			{:else}
-				<div class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-card">
-					<div class="overflow-x-auto">
-						<table class="w-full min-w-[560px] text-sm">
+				<div class="pricebook__table-wrap">
+					<div class="pricebook__scroll">
+						<table class="pricebook__table">
 							<thead>
-								<tr class="border-b border-border/60 bg-muted/30">
-									<th class="w-14 px-3 py-3"></th>
-									<th
-										class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-									>Item</th>
-									<th
-										class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:table-cell"
-									>Category</th>
-									<th
-										class="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell"
-									>Unit</th>
-									<th
-										class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-									>Price</th>
-									<th
-										class="hidden px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:table-cell"
-									>Cost</th>
+								<tr>
+									<th class="pricebook__th pricebook__th--thumb"></th>
+									<th class="pricebook__th">Item</th>
+									<th class="pricebook__th pricebook__th--category">Category</th>
+									<th class="pricebook__th pricebook__th--unit">Unit</th>
+									<th class="pricebook__th pricebook__th--num">Price</th>
+									<th class="pricebook__th pricebook__th--num pricebook__th--cost">Cost</th>
 									{#if canManage}
-										<th class="w-12 px-2 py-3"></th>
+										<th class="pricebook__th pricebook__th--actions"></th>
 									{/if}
 								</tr>
 							</thead>
-							<tbody class="divide-y divide-border/30">
+							<tbody>
 								{#each filtered as item (item.id)}
-									<tr
-										class="group cursor-pointer transition-colors hover:bg-muted/40"
-										onclick={() => openEdit(item)}
-									>
+									<tr class="pricebook__row" onclick={() => openEdit(item)}>
 										<!-- Thumbnail -->
-										<td class="w-14 px-3 py-3">
+										<td class="pricebook__cell pricebook__cell--thumb">
 											{#if item.image_url}
-												<img
-													src={item.image_url}
-													alt={item.name}
-													class="h-10 w-10 rounded-lg border border-border/50 object-cover shadow-sm"
-												/>
+												<img class="pricebook__thumb" src={item.image_url} alt={item.name} />
 											{:else}
-												<div
-													class="flex h-10 w-10 items-center justify-center rounded-lg border border-border/40 bg-muted/50"
-												>
-													<ImageIcon class="h-4 w-4 text-muted-foreground/40" />
+												<div class="pricebook__thumb pricebook__thumb--empty">
+													<i class="ri-image-line" aria-hidden="true"></i>
 												</div>
 											{/if}
 										</td>
 
 										<!-- Name + description -->
-										<td class="px-4 py-3.5">
-											<p class="truncate font-medium leading-snug text-foreground">{item.name}</p>
+										<td class="pricebook__cell">
+											<p class="pricebook__name">{item.name}</p>
 											{#if item.description}
-												<p class="mt-0.5 max-w-xs truncate text-[11px] text-muted-foreground">
-													{item.description}
-												</p>
+												<p class="pricebook__item-desc">{item.description}</p>
 											{/if}
 										</td>
 
 										<!-- Category -->
-										<td class="hidden px-4 py-3.5 md:table-cell">
+										<td class="pricebook__cell pricebook__cell--category">
 											{#if item.category}
-												<span
-													class="inline-flex items-center rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-												>
-													{item.category}
-												</span>
+												<span class="pricebook__cat-tag">{item.category}</span>
 											{:else}
-												<span class="text-xs text-muted-foreground/30">—</span>
+												<span class="pricebook__muted">—</span>
 											{/if}
 										</td>
 
 										<!-- Unit -->
-										<td class="hidden px-4 py-3.5 lg:table-cell">
+										<td class="pricebook__cell pricebook__cell--unit">
 											{#if item.unit}
-												<span class="text-sm text-muted-foreground">per {item.unit}</span>
+												<span class="pricebook__unit">per {item.unit}</span>
 											{:else}
-												<span class="text-xs text-muted-foreground/30">—</span>
+												<span class="pricebook__muted">—</span>
 											{/if}
 										</td>
 
 										<!-- Price -->
-										<td class="px-4 py-3.5 text-right">
-											<span class="font-mono text-sm font-semibold tabular-nums text-foreground">
-												{formatCurrency(Number(item.unit_price))}
-											</span>
+										<td class="pricebook__cell pricebook__cell--num">
+											<span class="pricebook__price">{formatCurrency(Number(item.unit_price))}</span
+											>
 										</td>
 
 										<!-- Cost (private) -->
-										<td class="hidden px-4 py-3.5 text-right xl:table-cell">
+										<td class="pricebook__cell pricebook__cell--num pricebook__cell--cost">
 											{#if item.unit_cost}
-												<span
-													class="font-mono text-sm tabular-nums text-muted-foreground"
+												<span class="pricebook__cost">{formatCurrency(Number(item.unit_cost))}</span
 												>
-													{formatCurrency(Number(item.unit_cost))}
-												</span>
 											{:else}
-												<span class="text-xs text-muted-foreground/30">—</span>
+												<span class="pricebook__muted">—</span>
 											{/if}
 										</td>
 
 										<!-- Actions -->
 										{#if canManage}
 											<td
-												class="w-12 px-2 py-3.5"
+												class="pricebook__cell pricebook__cell--actions"
 												onclick={(e) => e.stopPropagation()}
 											>
 												<DropdownMenu.Root>
 													<DropdownMenu.Trigger
-														class={cn(
-															'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-															'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
-														)}
+														class="pricebook__menu-btn"
 														aria-label="Actions for {item.name}"
 													>
-														<MoreHorizontal class="h-4 w-4" />
+														<i class="ri-more-2-fill" aria-hidden="true"></i>
 													</DropdownMenu.Trigger>
 													<DropdownMenu.Content align="end">
 														<DropdownMenu.Item onclick={() => openEdit(item)}>
-															<Pencil class="h-4 w-4" />
+															<i class="ri-pencil-line" aria-hidden="true"></i>
 															Edit item
 														</DropdownMenu.Item>
 														<DropdownMenu.Separator />
 														<DropdownMenu.Item
-															class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+															variant="destructive"
 															onclick={() => {
 																deleteTarget = item;
 																deleteOpen = true;
 															}}
 														>
-															<Trash2 class="h-4 w-4" />
+															<i class="ri-delete-bin-line" aria-hidden="true"></i>
 															Archive item
 														</DropdownMenu.Item>
 													</DropdownMenu.Content>
@@ -295,8 +249,8 @@
 					</div>
 				</div>
 			{/if}
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	<CatalogItemSheet bind:open={sheetOpen} item={editTarget} />
 

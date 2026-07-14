@@ -1,29 +1,14 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import {
-		MailCheck,
-		Clock,
-		TriangleAlert,
-		Loader2,
-		Send,
-		Plus,
-		Pencil,
-		Trash2,
-		X,
-		Check,
-		Inbox,
-		ArrowRight
-	} from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { cn } from '$lib/utils/cn';
 
 	type EmailIdentity = {
 		from_name: string;
@@ -96,30 +81,10 @@
 	});
 
 	const STATUS_META = {
-		verified: {
-			label: 'Email ready',
-			icon: MailCheck,
-			class:
-				'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-		},
-		verifying: {
-			label: 'Verifying',
-			icon: Loader2,
-			class:
-				'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
-		},
-		pending: {
-			label: 'Setup pending',
-			icon: Clock,
-			class:
-				'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-		},
-		failed: {
-			label: 'Verification failed',
-			icon: TriangleAlert,
-			class:
-				'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
-		}
+		verified: { label: 'Email ready', icon: 'ri-mail-check-line', tone: 'success' },
+		verifying: { label: 'Verifying', icon: 'ri-loader-4-line', tone: 'info' },
+		pending: { label: 'Setup pending', icon: 'ri-time-line', tone: 'warning' },
+		failed: { label: 'Verification failed', icon: 'ri-error-warning-line', tone: 'danger' }
 	} as const;
 
 	onMount(() => {
@@ -327,68 +292,53 @@
 	{:else}
 		{@const status = data.domain?.status}
 		{@const meta = status ? STATUS_META[status] : null}
-		<div class="flex flex-col gap-6">
+		<div class="email-page">
 			<!-- Receive emails (forwarding) — links to the dedicated setup screen -->
-			<a
-				href="/settings/email/forwarding"
-				class="group flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-border hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-			>
-				<div
-					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
-				>
-					<Inbox class="h-5 w-5" />
-				</div>
-				<div class="min-w-0 flex-1">
-					<h3 class="text-sm font-semibold text-foreground">Receive emails</h3>
-					<p class="text-xs text-muted-foreground">
+			<a href="/settings/email/forwarding" class="email-forward-link">
+				<span class="email-forward-link__icon">
+					<i class="ri-inbox-line" aria-hidden="true"></i>
+				</span>
+				<div class="email-forward-link__body">
+					<h3 class="email-forward-link__title">Receive emails</h3>
+					<p class="email-forward-link__desc">
 						Forward your inbox into the CRM so customer replies land in one place.
 					</p>
 				</div>
-				<ArrowRight
-					class="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5"
-				/>
+				<i class="ri-arrow-right-line email-forward-link__arrow" aria-hidden="true"></i>
 			</a>
 
 			<!-- Sending domain status -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
-				<div class="flex items-start justify-between gap-3">
-					<div class="min-w-0">
-						<h3 class="text-sm font-semibold text-foreground">Sending domain</h3>
-						<p class="text-xs text-muted-foreground">
+			<section class="email-section">
+				<div class="email-section__head">
+					<div>
+						<h3 class="email-section__title">Sending domain</h3>
+						<p class="email-section__desc">
 							Customer emails are sent from your own branded domain.
 						</p>
 					</div>
 					{#if meta}
-						<span
-							class={cn(
-								'shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-								meta.class
-							)}
-						>
-							<meta.icon class={cn('h-3 w-3', status === 'verifying' && 'animate-spin')} />
+						<span class="email-pill email-pill--{meta.tone}">
+							<i class="{meta.icon}{status === 'verifying' ? ' email-spin' : ''}" aria-hidden="true"
+							></i>
 							{meta.label}
 						</span>
 					{/if}
 				</div>
 
 				{#if data.domain}
-					<div class="rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
-						<p class="font-mono text-sm text-foreground">{data.domain.sending_domain}</p>
+					<div class="email-mono">
+						<p>{data.domain.sending_domain}</p>
 					</div>
 					{#if status !== 'verified'}
-						<p class="text-xs text-muted-foreground">
+						<p class="email-section__desc">
 							Your domain is still being set up. Emails will start sending from this address once
 							verification completes.
 						</p>
 					{/if}
 				{:else}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-500/20 dark:bg-amber-500/10"
-					>
-						<Clock class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-						<p class="text-xs text-amber-800 dark:text-amber-300">
+					<div class="email-note email-note--warning">
+						<i class="ri-time-line" aria-hidden="true"></i>
+						<p>
 							Your branded email domain hasn't been set up yet. You can still choose your address
 							below — it will take effect once your domain is ready.
 						</p>
@@ -397,21 +347,19 @@
 			</section>
 
 			<!-- Editable local-part -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
+			<section class="email-section">
 				<div>
-					<h3 class="text-sm font-semibold text-foreground">From address</h3>
-					<p class="text-xs text-muted-foreground">
+					<h3 class="email-section__title">From address</h3>
+					<p class="email-section__desc">
 						The part before the @ in your sending address. Customers see this on every email.
 					</p>
 				</div>
 
-				<div class="flex flex-col gap-1.5">
-					<Label for="email_sender_local"
-						>Address name <span class="text-destructive">*</span></Label
+				<div class="field">
+					<Label for="email_sender_local" class="field__label field__label--required"
+						>Address name</Label
 					>
-					<div class="flex items-stretch">
+					<div class="email-addr">
 						<Input
 							id="email_sender_local"
 							bind:value={localInput}
@@ -420,60 +368,51 @@
 							autocorrect="off"
 							spellcheck={false}
 							aria-invalid={validationError ? 'true' : undefined}
-							class="rounded-r-none font-mono"
+							class="email-addr__input"
 						/>
-						<span
-							class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-input bg-muted px-3 font-mono text-sm text-muted-foreground"
-						>
+						<span class="email-addr__suffix">
 							@{data.domain?.sending_domain ?? 'your-domain.com'}
 						</span>
 					</div>
 					{#if validationError}
-						<p class="text-xs text-destructive">{validationError}</p>
+						<p class="field__error">{validationError}</p>
 					{:else}
-						<p class="text-xs text-muted-foreground">
+						<p class="email-preview">
 							Emails will be sent as
-							<span class="font-medium text-foreground">{data.from_name}</span>
-							<span class="font-mono text-foreground">&lt;{previewAddress}&gt;</span>
+							<strong>{data.from_name}</strong>
+							<code>&lt;{previewAddress}&gt;</code>
 						</p>
 					{/if}
 				</div>
 
-				<footer class="flex items-center justify-end gap-2 border-t border-border pt-4">
-					<Button
-						variant="outline"
-						type="button"
-						disabled={saving || !dirty}
-						onclick={() => (localInput = originalLocal)}
-					>
+				<footer class="email-section__footer">
+					<Button variant="secondary" disabled={saving || !dirty} onclick={() => (localInput = originalLocal)}>
 						Reset
 					</Button>
-					<Button type="button" disabled={saving || !dirty || !valid} onclick={() => void save()}>
-						{saving ? 'Saving…' : 'Save changes'}
+					<Button disabled={!dirty || !valid} loading={saving} loadingLabel="Saving…" onclick={() => void save()}>
+						Save changes
 					</Button>
 				</footer>
 			</section>
 
 			<!-- Additional from-addresses (Stage 4a) — self-service, on the verified domain -->
 			{#if data.domain}
-				<section
-					class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-				>
+				<section class="email-section">
 					<div>
-						<h3 class="text-sm font-semibold text-foreground">Additional addresses</h3>
-						<p class="text-xs text-muted-foreground">
+						<h3 class="email-section__title">Additional addresses</h3>
+						<p class="email-section__desc">
 							Extra sending addresses on your domain (e.g. sales, support). You'll be able to pick
 							one when composing an email.
 						</p>
 					</div>
 
 					{#if data.addresses.length > 0}
-						<ul class="flex flex-col gap-2">
+						<ul class="email-addrs">
 							{#each data.addresses as addr (addr.id)}
-								<li class="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+								<li class="email-addr-row">
 									{#if editingId === addr.id}
-										<div class="flex flex-col gap-2">
-											<div class="flex items-stretch">
+										<div class="email-addr-row__edit">
+											<div class="email-addr">
 												<Input
 													bind:value={editLocal}
 													maxlength={64}
@@ -481,11 +420,9 @@
 													autocorrect="off"
 													spellcheck={false}
 													aria-invalid={editError ? 'true' : undefined}
-													class="rounded-r-none font-mono"
+													class="email-addr__input"
 												/>
-												<span
-													class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-input bg-muted px-3 font-mono text-sm text-muted-foreground"
-												>
+												<span class="email-addr__suffix">
 													@{data.domain.sending_domain}
 												</span>
 											</div>
@@ -495,60 +432,47 @@
 												placeholder="Label (optional), e.g. Sales"
 											/>
 											{#if editError}
-												<p class="text-xs text-destructive">{editError}</p>
+												<p class="field__error">{editError}</p>
 											{/if}
-											<div class="flex items-center justify-end gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													type="button"
-													disabled={savingEdit}
-													onclick={cancelEdit}
-												>
-													<X class="h-4 w-4" />
+											<div class="email-addr-row__edit-actions">
+												<Button variant="secondary" size="sm" disabled={savingEdit} onclick={cancelEdit}>
+													<i class="ri-close-line" aria-hidden="true"></i>
 													Cancel
 												</Button>
-												<Button
-													size="sm"
-													type="button"
-													disabled={savingEdit || !editLocalValid}
-													onclick={() => void saveEdit(addr.id)}
-												>
-													<Check class="h-4 w-4" />
-													{savingEdit ? 'Saving…' : 'Save'}
+												<Button size="sm" disabled={!editLocalValid} loading={savingEdit} loadingLabel="Saving…" onclick={() => void saveEdit(addr.id)}>
+													<i class="ri-check-line" aria-hidden="true"></i>
+													Save
 												</Button>
 											</div>
 										</div>
 									{:else}
-										<div class="flex items-center justify-between gap-3">
-											<div class="min-w-0">
-												<p class="truncate font-mono text-sm text-foreground">
+										<div class="email-addr-row__view">
+											<div class="email-addr-row__main">
+												<p class="email-addr-row__email">
 													{addr.local_part}@{data.domain.sending_domain}
 												</p>
 												{#if addr.label}
-													<p class="truncate text-xs text-muted-foreground">{addr.label}</p>
+													<p class="email-addr-row__label">{addr.label}</p>
 												{/if}
 											</div>
-											<div class="flex shrink-0 items-center gap-1">
-												<Button
-													variant="ghost"
-													size="icon"
+											<div class="email-addr-row__actions">
+												<button
+													class="email-iconbtn"
 													type="button"
 													aria-label="Edit address"
 													onclick={() => startEdit(addr)}
 												>
-													<Pencil class="h-4 w-4" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
+													<i class="ri-pencil-line" aria-hidden="true"></i>
+												</button>
+												<button
+													class="email-iconbtn email-iconbtn--danger"
 													type="button"
 													aria-label="Remove address"
 													disabled={deletingId === addr.id}
 													onclick={() => void deleteAddress(addr.id)}
 												>
-													<Trash2 class="h-4 w-4 text-destructive" />
-												</Button>
+													<i class="ri-delete-bin-line" aria-hidden="true"></i>
+												</button>
 											</div>
 										</div>
 									{/if}
@@ -556,12 +480,12 @@
 							{/each}
 						</ul>
 					{:else}
-						<p class="text-xs text-muted-foreground">No extra addresses yet.</p>
+						<p class="email-section__desc">No extra addresses yet.</p>
 					{/if}
 
 					<!-- Add a new address -->
-					<div class="flex flex-col gap-2 border-t border-border pt-4">
-						<div class="flex items-stretch">
+					<div class="email-addnew">
+						<div class="email-addr">
 							<Input
 								bind:value={newLocal}
 								maxlength={64}
@@ -572,11 +496,9 @@
 								aria-invalid={addError || (newLocal.trim() !== '' && !newLocalValid)
 									? 'true'
 									: undefined}
-								class="rounded-r-none font-mono"
+								class="email-addr__input"
 							/>
-							<span
-								class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-input bg-muted px-3 font-mono text-sm text-muted-foreground"
-							>
+							<span class="email-addr__suffix">
 								@{data.domain.sending_domain}
 							</span>
 						</div>
@@ -586,16 +508,16 @@
 							placeholder="Label (optional), e.g. Sales"
 						/>
 						{#if addError}
-							<p class="text-xs text-destructive">{addError}</p>
+							<p class="field__error">{addError}</p>
 						{:else if newLocal.trim() !== '' && !newLocalValid}
-							<p class="text-xs text-destructive">
+							<p class="field__error">
 								Lowercase letters, numbers and hyphens only — no leading or trailing hyphen.
 							</p>
 						{/if}
-						<div class="flex items-center justify-end">
-							<Button type="button" disabled={!canAdd} onclick={() => void addAddress()}>
-								<Plus class="h-4 w-4" />
-								{adding ? 'Adding…' : 'Add address'}
+						<div class="email-addnew__actions">
+							<Button disabled={!canAdd} loading={adding} loadingLabel="Adding…" onclick={() => void addAddress()}>
+								<i class="ri-add-line" aria-hidden="true"></i>
+								Add address
 							</Button>
 						</div>
 					</div>
@@ -603,14 +525,12 @@
 			{/if}
 
 			<!-- Request a domain setup / change (PO handles DNS) -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
+			<section class="email-section">
 				<div>
-					<h3 class="text-sm font-semibold text-foreground">
+					<h3 class="email-section__title">
 						{data.domain ? 'Request a domain change' : 'Request your branded domain'}
 					</h3>
-					<p class="text-xs text-muted-foreground">
+					<p class="email-section__desc">
 						{data.domain
 							? 'Want to send from a different domain (e.g. your apex domain)? Send us a request and we’ll set it up.'
 							: 'Tell us the domain you want to send customer emails from. We handle the DNS setup for you.'}
@@ -618,18 +538,18 @@
 				</div>
 
 				{#if data.has_open_request}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 dark:border-sky-500/20 dark:bg-sky-500/10"
-					>
-						<Clock class="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
-						<p class="text-xs text-sky-800 dark:text-sky-300">
+					<div class="email-note email-note--info">
+						<i class="ri-time-line" aria-hidden="true"></i>
+						<p>
 							Your request is in our queue. We’ll be in touch shortly — you can submit another once
 							this one is resolved.
 						</p>
 					</div>
 				{:else}
-					<div class="flex flex-col gap-1.5">
-						<Label for="req_domain">Desired domain <span class="text-destructive">*</span></Label>
+					<div class="field">
+						<Label for="req_domain" class="field__label field__label--required"
+							>Desired domain</Label
+						>
 						<Input
 							id="req_domain"
 							bind:value={reqDomain}
@@ -640,18 +560,18 @@
 							aria-invalid={reqErrors.desired_domain || (reqDomain.trim() !== '' && !reqDomainValid)
 								? 'true'
 								: undefined}
-							class="font-mono"
+							class="email-input-mono"
 						/>
 						{#if reqErrors.desired_domain}
-							<p class="text-xs text-destructive">{reqErrors.desired_domain}</p>
+							<p class="field__error">{reqErrors.desired_domain}</p>
 						{:else if reqDomain.trim() !== '' && !reqDomainValid}
-							<p class="text-xs text-destructive">Enter a valid domain, e.g. yourcompany.com.</p>
+							<p class="field__error">Enter a valid domain, e.g. yourcompany.com.</p>
 						{/if}
 					</div>
 
-					<div class="flex flex-col gap-1.5">
-						<Label for="req_local"
-							>Preferred address name <span class="text-muted-foreground">(optional)</span></Label
+					<div class="field">
+						<Label for="req_local" class="field__label"
+							>Preferred address name <span class="field__hint">(optional)</span></Label
 						>
 						<Input
 							id="req_local"
@@ -662,23 +582,23 @@
 							autocorrect="off"
 							spellcheck={false}
 							aria-invalid={reqErrors.desired_local_part || !reqLocalValid ? 'true' : undefined}
-							class="font-mono"
+							class="email-input-mono"
 						/>
 						{#if reqErrors.desired_local_part}
-							<p class="text-xs text-destructive">{reqErrors.desired_local_part}</p>
+							<p class="field__error">{reqErrors.desired_local_part}</p>
 						{:else if !reqLocalValid}
-							<p class="text-xs text-destructive">
+							<p class="field__error">
 								Lowercase letters, numbers and hyphens only — no leading or trailing hyphen.
 							</p>
 						{:else}
-							<p class="text-xs text-muted-foreground">
-								The part before the @. Leave blank to let us choose.
-							</p>
+							<p class="field__hint">The part before the @. Leave blank to let us choose.</p>
 						{/if}
 					</div>
 
-					<div class="flex flex-col gap-1.5">
-						<Label for="req_note">Note <span class="text-muted-foreground">(optional)</span></Label>
+					<div class="field">
+						<Label for="req_note" class="field__label"
+							>Note <span class="field__hint">(optional)</span></Label
+						>
 						<Textarea
 							id="req_note"
 							bind:value={reqNote}
@@ -688,10 +608,10 @@
 						/>
 					</div>
 
-					<footer class="flex items-center justify-end border-t border-border pt-4">
-						<Button type="button" disabled={!canSubmitRequest} onclick={() => void submitRequest()}>
-							<Send class="h-4 w-4" />
-							{submitting ? 'Sending…' : 'Send request'}
+					<footer class="email-section__footer">
+						<Button disabled={!canSubmitRequest} loading={submitting} loadingLabel="Sending…" onclick={() => void submitRequest()}>
+							<i class="ri-send-plane-line" aria-hidden="true"></i>
+							Send request
 						</Button>
 					</footer>
 				{/if}

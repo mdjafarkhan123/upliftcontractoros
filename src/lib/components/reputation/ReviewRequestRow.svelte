@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { ReviewRequestListItem } from '$lib/types/reputation';
 	import { Badge } from '$lib/components/ui/badge';
-	import { ChevronDown } from '@lucide/svelte';
 	import StarRating from './StarRating.svelte';
 	import ReviewRequestRowActions from './ReviewRequestRowActions.svelte';
 	import ReviewRequestTimeline from './ReviewRequestTimeline.svelte';
@@ -53,35 +52,32 @@
 	const dateLabel = $derived(new Date(primaryDate).toLocaleDateString());
 </script>
 
-<article class="rounded-xl border border-border bg-card p-4 shadow-sm">
-	<div class="flex items-start justify-between gap-3">
-		<div class="min-w-0">
+<article class="request-row">
+	<div class="request-row__head">
+		<div class="request-row__id">
 			<a
 				href="/jobs/{request.job_id}"
 				use:prefetchOnIntent={() => jobDetailStore.prefetch(request.job_id)}
-				class="block truncate text-sm font-semibold text-foreground hover:text-primary hover:underline focus-visible:text-primary focus-visible:underline focus-visible:outline-none"
+				class="request-row__job"
 			>
 				{request.job_title ?? 'Untitled job'}
 			</a>
-			<a
-				href="/contacts/{request.contact_id}"
-				class="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none"
-			>
+			<a href="/contacts/{request.contact_id}" class="request-row__contact">
 				{request.contact_name}
 			</a>
 		</div>
-		<div class="flex shrink-0 items-center gap-1">
+		<div class="request-row__actions">
 			<Badge variant={statusVariant}>{statusLabel}</Badge>
 			<ReviewRequestRowActions {request} {displayStatus} />
 		</div>
 	</div>
 
 	{#if request.submitted_rating !== null}
-		<div class="mt-3"><StarRating score={request.submitted_rating} size="md" /></div>
+		<div class="request-row__rating"><StarRating score={request.submitted_rating} size="md" /></div>
 	{/if}
 
-	<div class="mt-3 flex items-center justify-between gap-3">
-		<p class="text-xs text-muted-foreground">
+	<div class="request-row__foot">
+		<p class="request-row__meta">
 			{request.sent_by_automation ? 'Automated' : 'Manual'} · {dateLabel}
 			{#if displayStatus === 'likely_reviewed' && request.confidence_score !== null}
 				· Confidence {Math.round(request.confidence_score * 100)}%
@@ -92,12 +88,14 @@
 			onclick={() => (expanded = !expanded)}
 			aria-expanded={expanded}
 			aria-label={expanded ? 'Hide timeline' : 'Show timeline'}
-			class="inline-flex h-8 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+			class="request-row__toggle"
 		>
 			<span>{expanded ? 'Hide' : 'Timeline'}</span>
-			<ChevronDown
-				class="h-3.5 w-3.5 transition-transform duration-200 {expanded ? 'rotate-180' : ''}"
-			/>
+			<i
+				class="ri-arrow-down-s-line request-row__chevron"
+				class:request-row__chevron--open={expanded}
+				aria-hidden="true"
+			></i>
 		</button>
 	</div>
 

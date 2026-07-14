@@ -1,11 +1,9 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
-	import { Search, X } from '@lucide/svelte';
 
 	type ContactHit = { id: string; full_name: string; phone: string };
 	type Assignee = { id: string; full_name: string };
@@ -120,63 +118,61 @@
 			<Sheet.Title>New opportunity</Sheet.Title>
 		</Sheet.Header>
 
-		<form class="mt-4 space-y-4" onsubmit={submit}>
-			<div class="space-y-1.5">
-				<Label for="opp-contact">Contact <span class="text-destructive">*</span></Label>
+		<form class="opp-sheet" onsubmit={submit}>
+			<div>
+				<Label for="opp-contact">Contact <span style="color: var(--danger-solid)">*</span></Label>
 				{#if selectedContact}
-					<div
-						class="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2"
-					>
-						<div class="min-w-0">
-							<div class="truncate text-sm font-medium">{selectedContact.full_name}</div>
-							<div class="truncate text-xs text-muted-foreground">{selectedContact.phone}</div>
+					<div class="opp-sheet__selected-contact">
+						<div class="opp-sheet__selected-info">
+							<div class="opp-sheet__selected-name">{selectedContact.full_name}</div>
+							<div class="opp-sheet__selected-phone">{selectedContact.phone}</div>
 						</div>
 						<button
 							type="button"
-							class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+							class="opp-sheet__clear-btn"
 							aria-label="Clear contact"
 							onclick={() => {
 								selectedContact = null;
 								search = '';
 							}}
 						>
-							<X class="h-4 w-4" />
+							<i class="ri-close-line" aria-hidden="true"></i>
 						</button>
 					</div>
 				{:else}
-					<div class="relative">
-						<Search
-							class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-						/>
+					<div class="opp-sheet__search-wrap">
+						<span class="opp-sheet__search-icon">
+							<i class="ri-search-line" aria-hidden="true"></i>
+						</span>
 						<Input
 							id="opp-contact"
-							class="pl-9"
+							style="padding-left: 36px;"
 							placeholder="Search by name or phone"
 							bind:value={search}
 							autocomplete="off"
 						/>
 					</div>
 					{#if search.trim().length >= 2}
-						<div class="rounded-lg border border-border bg-card">
+						<div class="opp-sheet__hits">
 							{#if searching}
-								<div class="px-3 py-3 text-sm text-muted-foreground">Searching…</div>
+								<div class="opp-sheet__hits-msg">Searching…</div>
 							{:else if hits.length === 0}
-								<div class="px-3 py-3 text-sm text-muted-foreground">No contacts found.</div>
+								<div class="opp-sheet__hits-msg">No contacts found.</div>
 							{:else}
-								<ul>
+								<ul style="list-style:none; padding:0; margin:0;">
 									{#each hits as h (h.id)}
 										<li>
 											<button
 												type="button"
-												class="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-accent"
+												class="opp-sheet__hit-btn"
 												onclick={() => {
 													selectedContact = h;
 													search = '';
 													hits = [];
 												}}
 											>
-												<span class="truncate text-sm font-medium">{h.full_name}</span>
-												<span class="ml-3 truncate text-xs text-muted-foreground">{h.phone}</span>
+												<span class="opp-sheet__hit-name">{h.full_name}</span>
+												<span class="opp-sheet__hit-phone">{h.phone}</span>
 											</button>
 										</li>
 									{/each}
@@ -187,8 +183,8 @@
 				{/if}
 			</div>
 
-			<div class="space-y-1.5">
-				<Label for="opp-title">Title <span class="text-destructive">*</span></Label>
+			<div>
+				<Label for="opp-title">Title <span style="color: var(--danger-solid)">*</span></Label>
 				<Input
 					id="opp-title"
 					bind:value={title}
@@ -197,18 +193,18 @@
 				/>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="space-y-1.5">
+			<div class="opp-sheet__grid-2">
+				<div>
 					<Label for="opp-value">Estimated value</Label>
 					<Input id="opp-value" bind:value type="text" inputmode="decimal" placeholder="0.00" />
 				</div>
-				<div class="space-y-1.5">
+				<div>
 					<Label for="opp-expected-close">Expected close</Label>
 					<Input id="opp-expected-close" type="date" bind:value={expectedCloseDate} />
 				</div>
 			</div>
 
-			<div class="space-y-1.5">
+			<div>
 				<Label for="opp-assignee">Assign to</Label>
 				<Select.Root bind:value={assignedTo}>
 					<Select.Trigger class="h-11 w-full">
@@ -224,27 +220,28 @@
 			</div>
 
 			{#if errorMsg}
-				<p class="text-sm text-destructive">{errorMsg}</p>
+				<p class="opp-sheet__error">{errorMsg}</p>
 			{/if}
 
-			<div class="flex gap-2 pt-2">
+			<div class="opp-sheet__actions">
 				<Button
 					type="button"
 					variant="outline"
-					class="flex-1"
+					style="flex:1;"
 					onclick={close}
 					disabled={submitting}
 				>
 					Cancel
 				</Button>
-				<JetEngineButton
+				<Button
 					type="submit"
-					class="flex-1"
-					label="Create"
+					style="flex:1;"
 					loadingLabel="Creating…"
 					successLabel="Created"
-					state={submitting ? 'loading' : 'idle'}
-				/>
+					loading={submitting}
+				>
+					Create
+				</Button>
 			</div>
 		</form>
 	</Sheet.Content>

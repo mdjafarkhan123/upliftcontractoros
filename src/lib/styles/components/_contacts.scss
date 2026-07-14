@@ -1,0 +1,2946 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// S4 SHARED COMPONENTS (S4.2–S4.4) — timeline, notes, addresses, banner,
+// tag editor, merge/delete dialogs, follow-up popover, contact form.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TIMELINE TAB
+// -----------------------------------------------------------------------------
+.popover__content.contact-filter__panel {
+	width: fit-content;
+}
+.timeline {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__search-wrap {
+		position: relative;
+	}
+	&__search-icon {
+		position: absolute;
+		left: $space-3;
+		top: 50%;
+		transform: translateY(-50%);
+		pointer-events: none;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+	}
+	&__search-clear {
+		position: absolute;
+		right: $space-2;
+		top: 50%;
+		transform: translateY(-50%);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+	&__search-input {
+		width: 100%;
+		height: 40px;
+		padding: 0 $space-10 0 calc(#{$space-3} + 1.5rem + #{$space-2});
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__filters {
+		display: flex;
+		gap: $space-2;
+		overflow-x: auto;
+		padding-bottom: $space-1;
+		scrollbar-width: none;
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+	&__filter-chip {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+		height: 30px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.3);
+			color: var(--color-text-primary);
+		}
+		&--active {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+		&--clear {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__list {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__day-sep {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: $space-1 0;
+		span {
+			padding: 2px $space-3;
+			border-radius: $radius-full;
+			background: var(--color-bg-surface-sunk);
+			font-size: 11px;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+			box-shadow: 0 0 0 1px var(--color-border);
+		}
+	}
+
+	// Activity entry card (typed event)
+	&__entry {
+		border-radius: $radius-lg;
+		border-top: 1px solid var(--color-border);
+		border-right: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-4;
+		box-shadow: var(--shadow-xs);
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+
+		&--clickable {
+			cursor: pointer;
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+				box-shadow: var(--shadow-md);
+			}
+		}
+		&--neutral {
+			border-left-color: rgba(34, 125, 83, 0.3);
+		}
+		&--positive {
+			border-left-color: #22c55e;
+		}
+		&--attention {
+			border-left-color: #f59e0b;
+		}
+		&--negative {
+			border-left-color: var(--danger-solid);
+		}
+
+		&-inner {
+			display: flex;
+			align-items: flex-start;
+			gap: $space-3;
+		}
+	}
+
+	&__entry-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--neutral {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+		}
+		&--positive {
+			background: rgba(34, 197, 94, 0.12);
+			color: #16a34a;
+		}
+		&--attention {
+			background: rgba(245, 158, 11, 0.12);
+			color: #d97706;
+		}
+		&--negative {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__entry-body {
+		min-width: 0;
+		flex: 1;
+	}
+	&__entry-desc {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+	&__entry-meta {
+		margin-top: $space-1;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__entry-delete {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__load-more {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+}
+
+// Dark mode tone adjustments
+@mixin timeline-dark {
+	.timeline__entry-icon--positive {
+		color: #4ade80;
+	}
+	.timeline__entry-icon--attention {
+		color: #fcd34d;
+	}
+}
+:root[data-theme='dark'] {
+	@include timeline-dark;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		@include timeline-dark;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// NOTES TAB
+// -----------------------------------------------------------------------------
+.contact-notes {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__list {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__card {
+		padding: $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+	}
+
+	&__card-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__content {
+		flex: 1;
+		min-width: 0;
+		white-space: pre-wrap;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		word-break: break-word;
+	}
+
+	&__meta {
+		margin-top: $space-2;
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__delete {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__composer {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__composer-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ADDRESSES TAB
+// -----------------------------------------------------------------------------
+.contact-address-item {
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-xs);
+
+	&__inner {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__badge-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		flex-wrap: wrap;
+	}
+
+	&__primary-flag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--success-text);
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__line {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		&--city {
+			color: var(--color-text-secondary);
+		}
+	}
+
+	&__actions {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&--danger:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SMS OPT-OUT BANNER
+// -----------------------------------------------------------------------------
+.sms-opt-out-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border: 1px solid rgba(217, 119, 6, 0.3);
+	border-radius: $radius-lg;
+	background: rgba(245, 158, 11, 0.08);
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 2px;
+		font-size: 1.5rem;
+		color: #d97706;
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: #92400e;
+	}
+
+	&__desc {
+		font-size: $fs-body;
+		color: #78350f;
+	}
+
+	&__meta {
+		display: block;
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: #a16207;
+	}
+}
+
+@mixin sms-opt-out-dark {
+	.sms-opt-out-banner__title {
+		color: #fcd34d;
+	}
+	.sms-opt-out-banner__desc {
+		color: #fde68a;
+	}
+	.sms-opt-out-banner__meta {
+		color: #fef3c7;
+	}
+}
+:root[data-theme='dark'] {
+	@include sms-opt-out-dark;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		@include sms-opt-out-dark;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CONTACT TAG EDITOR
+// -----------------------------------------------------------------------------
+.contact-tag-editor {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__group {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		height: 32px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.3);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			border-color: var(--color-brand-strong);
+			background: var(--color-brand-strong);
+			color: var(--color-text-on-brand);
+		}
+		&--danger {
+			border-color: rgba(225, 29, 72, 0.3);
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+		&--danger#{&}--active {
+			border-color: var(--danger-solid);
+			background: var(--danger-solid);
+			color: #fff;
+		}
+	}
+
+	&__custom-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 32px;
+		padding: 0 $space-1 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__custom-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.1rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__custom-row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+	}
+	&__custom-wrap {
+		flex: 1;
+	}
+
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MERGE CONTACT DIALOG
+// -----------------------------------------------------------------------------
+.contact-merge {
+	&__step {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__back {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		border: none;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		cursor: pointer;
+		padding: 0;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__results {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__result-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		width: 100%;
+		min-height: 44px;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		transition: background-color $duration-fast $ease-standard;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		span {
+			display: block;
+		}
+		&-name {
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+		&-phone {
+			font-size: $fs-caption;
+			color: var(--color-text-secondary);
+		}
+	}
+
+	&__empty {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__options {
+		display: grid;
+		gap: $space-2;
+	}
+
+	&__option-btn {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: $space-3 $space-4;
+		border: 2px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+		&:hover {
+			border-color: var(--color-brand);
+		}
+		&--selected {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.04);
+		}
+	}
+
+	&__option-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	&__option-phone {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__badge {
+		flex-shrink: 0;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: 11px;
+		font-weight: $weight-semibold;
+		&--keep {
+			background: var(--color-brand-strong);
+			color: var(--color-text-on-brand);
+		}
+		&--archive {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__warn {
+		display: flex;
+		gap: $space-2;
+		padding: $space-3;
+		border: 1px solid rgba(217, 119, 6, 0.35);
+		border-radius: $radius-lg;
+		background: rgba(245, 158, 11, 0.07);
+		font-size: $fs-body;
+		color: #92400e;
+
+		i {
+			flex-shrink: 0;
+			margin-top: 2px;
+			font-size: 1.4rem;
+			color: #d97706;
+		}
+		p + p {
+			margin-top: $space-1;
+		}
+	}
+}
+
+@mixin contact-merge-dark {
+	.contact-merge__warn {
+		color: #fde68a;
+	}
+	.contact-merge__warn i {
+		color: #fcd34d;
+	}
+}
+:root[data-theme='dark'] {
+	@include contact-merge-dark;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		@include contact-merge-dark;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DELETE CONTACT DIALOG
+// -----------------------------------------------------------------------------
+.contact-delete {
+	&__icon-wrap {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: $radius-full;
+		background: var(--danger-bg);
+		flex-shrink: 0;
+		i {
+			font-size: 1.8rem;
+			color: var(--danger-text);
+		}
+	}
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+	&__head-body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+	&__title {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__desc {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__links-warn {
+		padding: $space-3;
+		border: 1px solid rgba(225, 29, 72, 0.25);
+		border-radius: $radius-lg;
+		background: var(--danger-bg);
+	}
+	&__links-title {
+		margin-bottom: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--danger-text);
+	}
+	&__links-list {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+	&__links-item {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-caption;
+		color: var(--danger-text);
+		i {
+			font-size: 1.3rem;
+			flex-shrink: 0;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// FOLLOW-UP POPOVER PANEL (surface for Bits-UI Popover.Content)
+// Adds to the existing .follow-up-popover block in _pipeline.scss
+// -----------------------------------------------------------------------------
+.follow-up-popover__panel {
+	width: 288px;
+	padding: $space-4;
+	background: var(--color-bg-surface);
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	box-shadow: var(--shadow-lg);
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	z-index: $z-overlay;
+}
+
+// -----------------------------------------------------------------------------
+// ADDRESS FORM (used in BottomSheet / dialog editors)
+// -----------------------------------------------------------------------------
+.address-form {
+	display: grid;
+	gap: $space-3;
+	grid-template-columns: 1fr;
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	&__span-2 {
+		@media (min-width: $bp-mobile) {
+			grid-column: 1 / -1;
+		}
+	}
+
+	&__state-zip {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+	}
+
+	&__primary-check {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		@media (min-width: $bp-mobile) {
+			grid-column: 1 / -1;
+		}
+		input[type='checkbox'] {
+			width: 16px;
+			height: 16px;
+			border-radius: $radius-sm;
+			accent-color: var(--color-brand);
+			cursor: pointer;
+		}
+	}
+}
+
+// Toggle (Switch) — used in edit page
+.toggle {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	width: 44px;
+	height: 24px;
+	flex-shrink: 0;
+	padding: 2px;
+	border: none;
+	border-radius: $radius-full;
+	background: var(--color-bg-surface-sunk);
+	cursor: pointer;
+	transition: background-color $duration-fast $ease-standard;
+	box-shadow: inset 0 0 0 1px var(--color-border-strong);
+
+	&[aria-checked='true'] {
+		background: var(--color-brand-strong);
+		box-shadow: none;
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	&__thumb {
+		display: block;
+		width: 20px;
+		height: 20px;
+		border-radius: $radius-full;
+		background: #fff;
+		box-shadow: var(--shadow-sm);
+		transform: translateX(0);
+		transition: transform $duration-fast $ease-standard;
+
+		[aria-checked='true'] > & {
+			transform: translateX(20px);
+		}
+	}
+}
+
+// =============================================================================
+// CONTACTS — shared visual language for the contact detail view and the
+// reusable contact widgets (avatar, temperature chip, KPI strip, quick
+// actions, detail header). Page-only layout (the detail sidebar grid) stays
+// scoped in the contact pages themselves.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// AVATAR — status-tinted initials or photo, sized via inline width/height.
+// -----------------------------------------------------------------------------
+.contact-avatar {
+	flex-shrink: 0;
+	border-radius: $radius-full;
+
+	&--img {
+		object-fit: cover;
+		box-shadow: 0 0 0 2px var(--color-border);
+	}
+
+	&--lead,
+	&--customer,
+	&--archived {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: $weight-semibold;
+		line-height: 1;
+	}
+
+	&--lead {
+		background: rgba(34, 125, 83, 0.1);
+		color: var(--color-brand);
+		box-shadow: 0 0 0 2px rgba(34, 125, 83, 0.2);
+	}
+	&--customer {
+		background: var(--success-bg);
+		color: var(--success-text);
+		box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+	}
+	&--archived {
+		background: var(--warning-bg);
+		color: var(--warning-text);
+		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TEMPERATURE CHIP — hot / warm / cold lead-priority pill.
+// -----------------------------------------------------------------------------
+.temp-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	height: 22px;
+	padding: 0 $space-2;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	white-space: nowrap;
+
+	&__dot {
+		width: 6px;
+		height: 6px;
+		border-radius: $radius-full;
+	}
+
+	&--hot {
+		background: rgba(249, 115, 22, 0.12);
+		color: #c2410c;
+		.temp-chip__dot {
+			background: #f97316;
+		}
+	}
+	&--warm {
+		background: rgba(245, 158, 11, 0.12);
+		color: #b45309;
+		.temp-chip__dot {
+			background: #f59e0b;
+		}
+	}
+	&--cold {
+		background: rgba(14, 165, 233, 0.12);
+		color: #0369a1;
+		.temp-chip__dot {
+			background: #0ea5e9;
+		}
+	}
+}
+
+@mixin temp-chip-dark {
+	.temp-chip--hot {
+		color: #fdba74;
+	}
+	.temp-chip--warm {
+		color: #fcd34d;
+	}
+	.temp-chip--cold {
+		color: #7dd3fc;
+	}
+}
+
+:root[data-theme='dark'] {
+	@include temp-chip-dark;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		@include temp-chip-dark;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DETAIL HEADER — back bar, identity block, contact pills.
+// -----------------------------------------------------------------------------
+.contact-header {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__back {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		height: 36px;
+		padding: 0 $space-2;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+
+	// The ONE page-wide Save/Cancel bar, shown in the topbar while any field edits.
+	&__savebar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+
+	&__savebar-error {
+		flex-basis: 100%;
+		text-align: right;
+		margin: 0;
+	}
+
+	&__action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.7rem;
+		}
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		&--danger {
+			color: var(--danger-text);
+			&:hover:not(:disabled) {
+				background: var(--danger-bg);
+				color: var(--danger-solid);
+			}
+		}
+	}
+
+	&__identity {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-4;
+	}
+
+	&__identity-body {
+		min-width: 0;
+		flex: 1;
+		padding-top: 2px;
+	}
+
+	&__name-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__name {
+		font: $weight-bold #{$fs-h2}/#{$lh-h2} $font-display;
+		color: var(--color-text-primary);
+		letter-spacing: -0.01em;
+	}
+
+	// The name pencil is the shared <EditPencil fade /> primitive; reveal it when
+	// hovering the name row (rule lives here because the reveal is parent-driven).
+	&__name-row:hover .edit-pencil--fade {
+		opacity: 1;
+	}
+
+	&__name-edit {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+	}
+
+	&__name-input {
+		flex: 1;
+		min-width: 12rem;
+		max-width: 24rem;
+		font-weight: $weight-semibold;
+	}
+
+	&__name-error {
+		flex-basis: 100%;
+	}
+
+	&__spin {
+		display: inline-block;
+		animation: contact-header-spin 0.7s linear infinite;
+	}
+
+	&__company {
+		margin-top: 2px;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__meta {
+		margin-top: $space-2;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__meta-strong {
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__meta-faint {
+		color: var(--color-text-muted);
+	}
+	&__meta-unassigned {
+		font-style: italic;
+		color: var(--color-text-secondary);
+	}
+
+	&__ref {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		color: var(--color-brand);
+		text-decoration: none;
+		&:hover {
+			text-decoration: underline;
+		}
+		i {
+			font-size: 1.5rem;
+		}
+	}
+
+	&__source {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	// Flag chips (Do Not Contact, Due)
+	&__flag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 22px;
+		padding: 0 $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+
+		i {
+			font-size: 1.3rem;
+		}
+
+		&--dnc {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+		&--due {
+			background: rgba(249, 115, 22, 0.12);
+			color: #c2410c;
+		}
+	}
+
+	&__pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__pill {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		min-height: 40px;
+		max-width: 100%;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-text-secondary);
+			flex-shrink: 0;
+		}
+
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.3);
+			background: var(--color-bg-surface-sunk);
+			box-shadow: var(--shadow-sm);
+		}
+
+		&-label {
+			color: var(--color-text-muted);
+			font-size: $fs-body;
+		}
+		&-email {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		&--empty {
+			border-style: dashed;
+			color: var(--color-text-muted);
+			cursor: default;
+			&:hover {
+				border-color: var(--color-border);
+				background: var(--color-bg-surface);
+				box-shadow: none;
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// KPI STRIP — 5 metric tiles; horizontal scroll on mobile, grid on desktop.
+// -----------------------------------------------------------------------------
+.contact-kpis {
+	display: flex;
+	gap: $space-3;
+	overflow-x: auto;
+	padding-bottom: $space-1;
+	scrollbar-width: none;
+	scroll-snap-type: x mandatory;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	@media (min-width: $bp-mobile) {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		overflow: visible;
+		padding-bottom: 0;
+	}
+
+	&__tile {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		min-width: 130px;
+		flex-shrink: 0;
+		scroll-snap-align: start;
+		padding: $space-3;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		text-decoration: none;
+		transition: box-shadow $duration-fast $ease-standard;
+
+		@media (min-width: $bp-mobile) {
+			min-width: 0;
+		}
+
+		&--link:hover {
+			box-shadow: var(--shadow-md);
+		}
+	}
+
+	&__top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: $radius-sm;
+		flex-shrink: 0;
+		i {
+			font-size: 1.5rem;
+		}
+
+		&--brand {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+		&--amber {
+			background: rgba(245, 158, 11, 0.12);
+			color: #d97706;
+		}
+		&--blue {
+			background: rgba(59, 130, 246, 0.12);
+			color: #2563eb;
+		}
+		&--muted {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+		}
+		&--warn {
+			background: rgba(249, 115, 22, 0.12);
+			color: #ea580c;
+		}
+	}
+
+	&__value {
+		font-size: $fs-lg;
+		font-weight: $weight-bold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+
+		&--brand {
+			color: var(--success-text);
+		}
+		&--amber {
+			color: #b45309;
+		}
+		&--blue {
+			color: #1d4ed8;
+		}
+		&--warn {
+			color: #c2410c;
+		}
+		&--muted {
+			color: var(--color-text-muted);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TABS — bits-ui Tabs styled as a segmented control. Global because bits-ui
+// renders the triggers outside the page component's style scope.
+// -----------------------------------------------------------------------------
+.contact-tabs {
+	&__list {
+		display: inline-flex;
+		width: 100%;
+		height: 44px;
+		align-items: center;
+		gap: $space-1;
+		overflow-x: auto;
+		padding: $space-1;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+		box-shadow: var(--shadow-xs);
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	&__trigger {
+		display: inline-flex;
+		flex: 1;
+		min-height: 36px;
+		align-items: center;
+		justify-content: center;
+		white-space: nowrap;
+		padding: $space-1 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+
+		&[data-state='active'] {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+
+		&--mobile {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+	}
+
+	&__content {
+		margin-top: $space-4;
+		&:focus-visible {
+			outline: none;
+		}
+	}
+}
+
+// =============================================================================
+// CONTACTS LIST VIEW (S4.0) — shared widgets for the contacts index page:
+// tag chips, KPI strip, status tabs, search, filter panel, data table,
+// mobile list card, bulk-action bar, recycle bin, and the import modal.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TAG CHIP — small rounded tag pill (table, list card, filter panel).
+// -----------------------------------------------------------------------------
+.tag-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px $space-2;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-full;
+	background: var(--color-bg-surface-sunk);
+	color: var(--color-text-secondary);
+	font-size: $fs-caption;
+	font-weight: $weight-medium;
+	white-space: nowrap;
+
+	&--destructive {
+		border-color: rgba(225, 29, 72, 0.3);
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SELECT CHECKBOX — shared between table rows and mobile cards.
+// -----------------------------------------------------------------------------
+.contact-check {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: 2px solid var(--color-border-strong);
+	border-radius: $radius-sm;
+	background: var(--color-bg-surface);
+	color: transparent;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	i {
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+
+	&--on {
+		border-color: var(--color-brand-strong);
+		background: var(--color-brand-strong);
+		color: var(--color-text-on-brand);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ROW MENU TRIGGER — the "…" action button on rows/cards.
+// -----------------------------------------------------------------------------
+.contact-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: none;
+	border-radius: $radius-md;
+	background: transparent;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition:
+		background-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	i {
+		font-size: 1.5rem;
+	}
+
+	&:hover {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-primary);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// STATUS TABS — underline-style tab bar (All / Leads / Customers / …).
+// -----------------------------------------------------------------------------
+// Contact status tabs now render via the shared <ListTabs> component
+// ($lib/components/shared/ListTabs.svelte) — the old .contact-status-tabs
+// styles moved there so every entity shares one tab bar.
+
+// -----------------------------------------------------------------------------
+// SEARCH BAR — icon + input.
+// -----------------------------------------------------------------------------
+.contact-search {
+	position: relative;
+
+	&__icon {
+		position: absolute;
+		left: $space-3;
+		top: 50%;
+		transform: translateY(-50%);
+		pointer-events: none;
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+	}
+
+	&__input {
+		width: 100%;
+		height: 40px;
+		padding: 0 $space-3 0 calc(#{$space-3} + 1.5rem + #{$space-2});
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// FILTER PANEL — body shared by the desktop popover and mobile sheet.
+// -----------------------------------------------------------------------------
+.contact-filter {
+	&__panel {
+		max-width: 450px;
+		width: fit-content;
+		padding: 0;
+		overflow: hidden;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-lg);
+	}
+
+	&__count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border-radius: $radius-full;
+		background: var(--color-brand-strong);
+		color: var(--color-text-on-brand);
+		font-size: 10px;
+		font-weight: $weight-semibold;
+	}
+
+	&__section {
+		padding: $space-4;
+		border-bottom: 1px solid var(--color-border);
+		&:last-of-type {
+			border-bottom: none;
+		}
+	}
+
+	&__heading {
+		margin-bottom: $space-3;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+
+	&__scope {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__scope-option {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&--active {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+		}
+	}
+
+	&__radio {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		border: 2px solid var(--color-border-strong);
+		border-radius: $radius-full;
+
+		.contact-filter__scope-option--active & {
+			border-color: var(--color-brand);
+		}
+		span {
+			width: 6px;
+			height: 6px;
+			border-radius: $radius-full;
+			background: var(--color-brand);
+		}
+	}
+
+	&__scope-desc {
+		margin-left: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		height: 32px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		span.contact-filter__chip-dot {
+			width: 6px;
+			height: 6px;
+			border-radius: $radius-full;
+		}
+
+		&--active {
+			border-color: var(--color-brand-strong);
+			background: var(--color-brand-strong);
+			color: var(--color-text-on-brand);
+			.contact-filter__chip-dot {
+				background: var(--color-text-on-brand);
+			}
+		}
+
+		&--danger {
+			border-color: rgba(225, 29, 72, 0.3);
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+		&--danger.contact-filter__chip--active {
+			border-color: var(--danger-solid);
+			background: var(--danger-solid);
+			color: #fff;
+		}
+	}
+
+	&__clear {
+		padding: $space-3 $space-4;
+		border: none;
+		border-top: 1px solid var(--color-border);
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__sheet-grip {
+		width: 48px;
+		height: 6px;
+		margin: $space-3 auto 0;
+		border-radius: $radius-full;
+		background: var(--color-border-strong);
+	}
+
+	&__sheet-title {
+		padding: $space-4 $space-6 $space-2;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// FOLLOW-UP BANNER — "showing overdue follow-ups" notice.
+// -----------------------------------------------------------------------------
+.followup-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-2;
+	padding: $space-2 $space-3;
+	border: 1px solid rgba(249, 115, 22, 0.25);
+	border-radius: $radius-md;
+	background: rgba(249, 115, 22, 0.08);
+
+	&__text {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: #9a3412;
+		i {
+			font-size: 1.5rem;
+		}
+	}
+
+	&__clear {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 28px;
+		padding: 0 $space-2;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: #c2410c;
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			background: rgba(249, 115, 22, 0.16);
+		}
+	}
+}
+
+:root[data-theme='dark'] .followup-banner {
+	&__text {
+		color: #fdba74;
+	}
+	&__clear {
+		color: #fdba74;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// DATA TABLE — desktop contacts table.
+// -----------------------------------------------------------------------------
+// ContactTable now renders through the shared ListTable shell (`.list-table`),
+// which owns all chrome. Only contact-specific cell CONTENT classes live here.
+.contact-table {
+	&__contact {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+	&__contact-body {
+		min-width: 0;
+	}
+
+	&__name {
+		display: block;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		&:hover {
+			color: var(--color-brand);
+		}
+	}
+
+	&__company {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+
+	&__optout {
+		margin-top: 1px;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--warning-text);
+	}
+
+	&__muted {
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+	}
+	&__email {
+		display: block;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	&__dash {
+		color: var(--color-text-muted);
+	}
+	&__never {
+		font-style: italic;
+		color: var(--color-text-muted);
+	}
+	&__tags {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-1;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// LIST CARD — mobile contact card.
+// -----------------------------------------------------------------------------
+.contact-card {
+	display: block;
+	width: 100%;
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-align: left;
+	text-decoration: none;
+	color: inherit;
+	font: inherit;
+	transition:
+		border-color $duration-fast $ease-standard,
+		box-shadow $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: rgba(34, 125, 83, 0.3);
+		box-shadow: var(--shadow-md);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+	&--selected {
+		border-color: var(--color-brand);
+		background: rgba(34, 125, 83, 0.05);
+	}
+
+	&__inner {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+
+	&__check-avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		border: 2px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		color: transparent;
+		i {
+			font-size: 1.4rem;
+		}
+		&--on {
+			border-color: var(--color-brand-strong);
+			background: var(--color-brand-strong);
+			color: var(--color-text-on-brand);
+		}
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+	&__top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+	&__identity {
+		min-width: 0;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__company,
+	&__contactline,
+	&__email {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-text-secondary);
+	}
+	&__company {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+	}
+	&__contactline {
+		font-size: $fs-body;
+	}
+	&__email {
+		font-size: $fs-caption;
+	}
+
+	&__badges {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		flex-shrink: 0;
+	}
+	&__badge-col {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-1;
+	}
+
+	&__meta {
+		margin-top: $space-2;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		span.contact-card__meta-italic {
+			font-style: italic;
+		}
+		span.contact-card__meta-optout {
+			font-weight: $weight-medium;
+			color: var(--warning-text);
+		}
+	}
+
+	&__tag-row {
+		margin-top: $space-2;
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-1;
+	}
+
+	&__quick {
+		margin-top: $space-3;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+	&__quick-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		height: 32px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-decoration: none;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.3);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// BULK ACTION BAR — floating selection toolbar.
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// BULK ACTION BAR — moved to the shared components/_bulk-bar.scss partial once
+// Jobs/Quotes also needed it (rendered via ListBulkBar + Contacts BulkActionBar).
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// RECYCLE BIN — deleted contacts list now uses the shared `.recycle-bin`
+// styles in components/_recycle-bin.scss (rendered via RecycleBinList).
+// -----------------------------------------------------------------------------
+// IMPORT MODAL — CSV import wizard body.
+// -----------------------------------------------------------------------------
+.contact-import {
+	&__dialog {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr) auto;
+		width: calc(100% - #{$space-8});
+		max-width: 800px;
+		max-height: 88vh;
+		z-index: $z-modal;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xl);
+		overflow: hidden;
+
+		&[data-state='open'] {
+			animation: dialog-in $duration-base $ease-standard;
+		}
+		&[data-state='closed'] {
+			animation: dialog-out $duration-fast $ease-standard;
+		}
+	}
+
+	&__header {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding: $space-6 $space-6 $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+	&__titles {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+	&__desc {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+	&__scroll {
+		min-height: 0;
+		overflow-y: auto;
+		padding: $space-4 $space-6;
+	}
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-3;
+		padding: $space-4 $space-6;
+		border-top: 1px solid var(--color-border);
+	}
+	&__file-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	&__preview {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__steps {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding-top: $space-1;
+	}
+	&__step {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+	&__step-num {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+		font-size: 11px;
+		font-weight: $weight-semibold;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		i {
+			font-size: 1.1rem;
+		}
+		&--done {
+			background: var(--color-brand-strong);
+			color: var(--color-text-on-brand);
+		}
+		&--active {
+			background: rgba(34, 125, 83, 0.1);
+			color: var(--color-brand);
+			box-shadow: 0 0 0 1px rgba(34, 125, 83, 0.3);
+		}
+	}
+	&__step-label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		&--active {
+			color: var(--color-text-primary);
+		}
+	}
+	&__step-line {
+		width: 24px;
+		height: 1px;
+		background: var(--color-border);
+		@media (min-width: $bp-mobile) {
+			width: 32px;
+		}
+	}
+
+	&__dropzone {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: $space-4;
+		padding: $space-8 $space-6;
+		text-align: center;
+		border: 2px dashed var(--color-border-strong);
+		border-radius: $radius-xl;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
+		&:hover {
+			border-color: rgba(34, 125, 83, 0.4);
+			background: var(--color-bg-surface-sunk);
+		}
+		&--drag {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.05);
+			box-shadow: 0 0 0 4px rgba(34, 125, 83, 0.1);
+		}
+	}
+	&__drop-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 56px;
+		height: 56px;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		i {
+			font-size: 2.2rem;
+		}
+		.contact-import__dropzone--drag & {
+			background: rgba(34, 125, 83, 0.15);
+			color: var(--color-brand);
+		}
+	}
+	&__drop-title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__drop-hint {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__template-row {
+		margin-top: $space-3;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+	&__link {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		border: none;
+		background: transparent;
+		color: var(--color-brand);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+	&__template-cols {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__stack {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__alert {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border-radius: $radius-lg;
+		border: 1px solid;
+		i {
+			margin-top: 2px;
+			flex-shrink: 0;
+			font-size: 1.5rem;
+		}
+		&--danger {
+			border-color: rgba(225, 29, 72, 0.3);
+			background: var(--danger-bg);
+		}
+		&--warn {
+			border-color: rgba(245, 158, 11, 0.3);
+			background: var(--warning-bg);
+		}
+		&--success {
+			border-color: rgba(34, 197, 94, 0.3);
+			background: var(--success-bg);
+		}
+	}
+	&__alert-icon-danger {
+		color: var(--danger-solid);
+	}
+	&__alert-icon-warn {
+		color: var(--warning-solid);
+	}
+	&__alert-icon-success {
+		color: var(--success-solid);
+	}
+	&__alert-body {
+		min-width: 0;
+	}
+	&__alert-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+	}
+	&__alert-text {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__file {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+	}
+	&__file-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		background: rgba(34, 125, 83, 0.1);
+		color: var(--color-brand);
+		i {
+			font-size: 1.6rem;
+		}
+	}
+	&__file-body {
+		min-width: 0;
+		flex: 1;
+	}
+	&__file-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__file-size {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+	&__file-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		i {
+			font-size: 1.5rem;
+		}
+		&:hover {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__preview-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	&__preview-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+	&__preview-hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+	&__preview-table-wrap {
+		min-width: 0;
+		max-height: 16rem;
+		overflow: auto;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+	}
+	&__preview-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: $fs-caption;
+		th {
+			position: sticky;
+			top: 0;
+			z-index: 1;
+			padding: $space-2 $space-3;
+			text-align: left;
+			white-space: nowrap;
+			border-bottom: 1px solid var(--color-border);
+			background: var(--color-bg-surface-sunk);
+			font-weight: $weight-medium;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--color-text-secondary);
+		}
+		td {
+			max-width: 180px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			padding: $space-2 $space-3;
+			border-bottom: 1px solid var(--color-border);
+			color: var(--color-text-primary);
+		}
+		tr:nth-child(even) td {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__mapping {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+	}
+	&__mapping-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-1 $space-2;
+	}
+	&__mapping-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		&--warn {
+			color: #d97706;
+		}
+	}
+	&__mapping-pill {
+		display: inline-flex;
+		align-items: center;
+		padding: 1px $space-2;
+		border-radius: $radius-sm;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		background: rgba(34, 125, 83, 0.1);
+		color: var(--color-brand);
+		&--warn {
+			background: var(--warning-bg);
+			color: var(--warning-text);
+		}
+	}
+	&__mapping-note {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	// --- "Map columns" step ---------------------------------------------------
+	&__map-lead {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		em {
+			font-style: normal;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+	}
+	&__maplist {
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		overflow: hidden;
+	}
+	&__maplist-head {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+		padding: $space-2 $space-3;
+		background: var(--color-bg-surface-sunk);
+		border-bottom: 1px solid var(--color-border);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+	&__maprow {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+		align-items: center;
+		padding: $space-2 $space-3;
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+	&__maprow-src {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	&__maprow-name {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	&__maprow-sample {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	&__maprow-field {
+		min-width: 0;
+	}
+	&__map-hint {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-3;
+		border-radius: $radius-lg;
+		background: var(--warning-bg);
+		font-size: $fs-body;
+		color: var(--warning-text);
+		i {
+			flex-shrink: 0;
+			font-size: 1.1rem;
+		}
+		strong {
+			font-weight: $weight-semibold;
+		}
+		&--ok {
+			background: rgba(34, 125, 83, 0.08);
+			color: var(--color-brand);
+		}
+	}
+
+	&__field-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+	&__dup-grid {
+		margin-top: $space-2;
+		display: grid;
+		gap: $space-2;
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	&__dup-option {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&--active {
+			border-color: var(--color-brand);
+			background: rgba(34, 125, 83, 0.05);
+			box-shadow: 0 0 0 1px rgba(34, 125, 83, 0.3);
+		}
+	}
+	&__dup-radio {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-top: 2px;
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		border: 2px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		.contact-import__dup-option--active & {
+			border-color: var(--color-brand);
+		}
+		span {
+			width: 8px;
+			height: 8px;
+			border-radius: $radius-full;
+			background: var(--color-brand);
+		}
+	}
+	&__dup-title {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__dup-desc {
+		display: block;
+		margin-top: 1px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-4;
+		padding: $space-8 0;
+	}
+	&__spinner {
+		width: 40px;
+		height: 40px;
+		border: 4px solid var(--color-border);
+		border-top-color: var(--color-brand);
+		border-radius: $radius-full;
+		animation: contact-spin 0.7s linear infinite;
+	}
+	&__loading-text {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__progress {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+		padding: $space-2 0;
+	}
+	&__progress-head {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+	}
+	&__progress-title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+	&__progress-sub {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+	&__progress-pct {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+	&__progress-working {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+	&__bar {
+		height: 10px;
+		width: 100%;
+		overflow: hidden;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+	}
+	&__bar-fill {
+		height: 100%;
+		border-radius: $radius-full;
+		background: var(--color-brand-strong);
+		transition: width $duration-base $ease-standard;
+	}
+
+	&__note {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-3;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		i {
+			margin-top: 2px;
+			flex-shrink: 0;
+			font-size: 1.3rem;
+		}
+	}
+
+	&__stats {
+		display: grid;
+		gap: $space-2;
+		grid-template-columns: repeat(3, 1fr);
+		&--4 {
+			@media (min-width: $bp-mobile) {
+				grid-template-columns: repeat(4, 1fr);
+			}
+		}
+	}
+	&__stat {
+		padding: $space-3;
+		text-align: center;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		&--danger {
+			border-color: rgba(225, 29, 72, 0.3);
+			background: var(--danger-bg);
+		}
+	}
+	&__stat-value {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+		&--danger {
+			color: var(--danger-text);
+		}
+	}
+	&__stat-label {
+		margin-top: 1px;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	&__result-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		i {
+			font-size: 1.8rem;
+		}
+	}
+	&__flag {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+}
+
+@keyframes contact-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUICK ACTIONS — row of outline action buttons; scrolls on mobile.
+// -----------------------------------------------------------------------------
+.contact-quick-actions {
+	display: flex;
+	gap: $space-2;
+	margin: 0 (-$space-1);
+	padding: 0 $space-1 $space-1;
+	overflow-x: auto;
+	scrollbar-width: none;
+	scroll-snap-type: x mandatory;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	@media (min-width: $bp-mobile) {
+		flex-wrap: wrap;
+		overflow: visible;
+	}
+
+	> * {
+		scroll-snap-align: start;
+		flex-shrink: 0;
+	}
+}
+
+@keyframes contact-header-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

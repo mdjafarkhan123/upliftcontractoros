@@ -1,24 +1,16 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { getFeatureFlagsContext } from '$lib/context/featureFlags';
 	import { getOrgContext } from '$lib/context/org';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { countryName, isSmsSupportedCountry, smsCountrySupport } from '$lib/utils/countries';
-	import {
-		MessageCircle,
-		CreditCard,
-		MessageSquare,
-		Loader2,
-		AlertTriangle,
-		Check
-	} from '@lucide/svelte';
 
 	type MessengerStatus = {
 		is_connected: boolean;
@@ -130,10 +122,6 @@
 	let messagingUseCase = $state('');
 	let businessNumber = $state('');
 
-	const carrierInputClass =
-		'flex h-11 w-full rounded-xl border border-border bg-background px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60';
-	const carrierLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-muted-foreground';
-
 	function openCarrierForm() {
 		// Seed from current org values (empty for a skipped org).
 		legalBusinessName = o.legal_business_name ?? '';
@@ -156,7 +144,12 @@
 		// Country drives the payload; the server re-derives it from the org.
 		const payload =
 			o.country === 'US'
-				? { legal_business_name: legalBusinessName, ein, website, messaging_use_case: messagingUseCase }
+				? {
+						legal_business_name: legalBusinessName,
+						ein,
+						website,
+						messaging_use_case: messagingUseCase
+					}
 				: { legal_business_name: legalBusinessName, business_number: businessNumber };
 
 		try {
@@ -322,35 +315,23 @@
 	{#if loading}
 		<SkeletonLoader lines={2} label="Loading integrations" height="104px" />
 	{:else}
-		<div class="flex flex-col gap-4">
+		<div class="integrations">
 			<!-- Messenger -->
-			<div
-				class="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-			>
-				<div class="flex items-start gap-4">
-					<div
-						class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
-					>
-						<MessageCircle class="h-6 w-6" />
-					</div>
-					<div class="min-w-0">
-						<div class="flex flex-wrap items-center gap-2">
-							<h3 class="text-base font-semibold text-foreground">Messenger</h3>
+			<section class="integration">
+				<div class="integration__main">
+					<span class="integration__icon integration__icon--indigo" aria-hidden="true">
+						<i class="ri-messenger-line"></i>
+					</span>
+					<div class="integration__body">
+						<div class="integration__head">
+							<h3 class="integration__title">Messenger</h3>
 							{#if !flags.feature_messenger}
-								<span
-									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-								>
-									Not on your plan
-								</span>
+								<span class="integration__status integration__status--muted">Not on your plan</span>
 							{:else if messenger?.is_connected}
-								<span
-									class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-								>
-									Connected
-								</span>
+								<span class="integration__status integration__status--ok">Connected</span>
 							{/if}
 						</div>
-						<p class="mt-0.5 text-sm text-muted-foreground">
+						<p class="integration__desc">
 							{#if flags.feature_messenger && messenger?.is_connected}
 								{messenger.page_name ?? 'Facebook Page'}{messenger.connected_at
 									? ` · since ${formatDate(messenger.connected_at)}`
@@ -360,121 +341,87 @@
 							{/if}
 						</p>
 					</div>
-				</div>
-				{#if flags.feature_messenger}
-					<div class="shrink-0">
-						{#if messenger?.is_connected}
-							<Button
-								variant="destructive"
-								disabled={disconnecting}
-								onclick={disconnectMessenger}
-							>
-								{disconnecting ? 'Disconnecting…' : 'Disconnect'}
-							</Button>
-						{:else}
-							<Button onclick={connectMessenger}>Connect Facebook Page</Button>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			<!-- Payments -->
-			<div
-				class="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-			>
-				<div class="flex items-start gap-4">
-					<div
-						class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-					>
-						<CreditCard class="h-6 w-6" />
-					</div>
-					<div class="min-w-0">
-						<div class="flex flex-wrap items-center gap-2">
-							<h3 class="text-base font-semibold text-foreground">Payments</h3>
-							{#if !flags.feature_stripe_payments}
-								<span
-									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-								>
-									Not on your plan
-								</span>
-							{:else if stripe?.is_connected}
-								<span
-									class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-								>
-									Connected
-								</span>
+					{#if flags.feature_messenger}
+						<div class="integration__action">
+							{#if messenger?.is_connected}
+								<Button variant="danger-outline" loading={disconnecting} loadingLabel="Disconnecting…" onclick={disconnectMessenger}>
+									Disconnect
+								</Button>
+							{:else}
+								<Button onclick={connectMessenger}>
+									Connect Facebook Page
+								</Button>
 							{/if}
 						</div>
-						<p class="mt-0.5 text-sm text-muted-foreground">
-							Accept card payments on your invoices via Stripe.
-						</p>
-					</div>
+					{/if}
 				</div>
-				{#if flags.feature_stripe_payments}
-					<div class="shrink-0">
-						<Button variant="outline" onclick={() => goto('/settings/stripe')}>
-							{stripe?.is_connected ? 'Manage' : 'Set up'}
-						</Button>
+			</section>
+
+			<!-- Payments -->
+			<section class="integration">
+				<div class="integration__main">
+					<span class="integration__icon integration__icon--blue" aria-hidden="true">
+						<i class="ri-bank-card-line"></i>
+					</span>
+					<div class="integration__body">
+						<div class="integration__head">
+							<h3 class="integration__title">Payments</h3>
+							{#if !flags.feature_stripe_payments}
+								<span class="integration__status integration__status--muted">Not on your plan</span>
+							{:else if stripe?.is_connected}
+								<span class="integration__status integration__status--ok">Connected</span>
+							{/if}
+						</div>
+						<p class="integration__desc">Accept card payments on your invoices via Stripe.</p>
 					</div>
-				{/if}
-			</div>
+					{#if flags.feature_stripe_payments}
+						<div class="integration__action">
+							<Button variant="outline" onclick={() => goto('/settings/stripe')}>
+								{stripe?.is_connected ? 'Manage' : 'Set up'}
+							</Button>
+						</div>
+					{/if}
+				</div>
+			</section>
 
 			<!-- SMS / Phone -->
-			<div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
-				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-					<div class="flex items-start gap-4">
-						<div
-							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-						>
-							<MessageSquare class="h-6 w-6" />
+			<section class="integration">
+				<div class="integration__main">
+					<span class="integration__icon integration__icon--emerald" aria-hidden="true">
+						<i class="ri-chat-3-line"></i>
+					</span>
+					<div class="integration__body">
+						<div class="integration__head">
+							<h3 class="integration__title">SMS &amp; Phone</h3>
+							{#if smsState === 'active'}
+								<span class="integration__status integration__status--ok">Active</span>
+							{:else if smsState === 'pending'}
+								<span class="integration__status integration__status--pending"
+									>Pending approval</span
+								>
+							{:else if smsState === 'disabled'}
+								<span class="integration__status integration__status--muted">Disabled</span>
+							{:else if smsState === 'unsupported'}
+								<span class="integration__status integration__status--muted">Unavailable</span>
+							{/if}
 						</div>
-						<div class="min-w-0">
-							<div class="flex flex-wrap items-center gap-2">
-								<h3 class="text-base font-semibold text-foreground">SMS &amp; Phone</h3>
-								{#if smsState === 'active'}
-									<span
-										class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-									>
-										Active
-									</span>
-								{:else if smsState === 'pending'}
-									<span
-										class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
-									>
-										Pending approval
-									</span>
-								{:else if smsState === 'disabled'}
-									<span
-										class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-									>
-										Disabled
-									</span>
-								{:else if smsState === 'unsupported'}
-									<span
-										class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-									>
-										Unavailable
-									</span>
-								{/if}
-							</div>
-							<p class="mt-0.5 text-sm text-muted-foreground">
-								{#if smsState === 'disabled'}
-									SMS is currently disabled. Contact your account manager.
-								{:else if smsState === 'unsupported'}
-									SMS is not available in your region yet.
-								{:else if smsState === 'no_number'}
-									Set up a business number to send and receive texts and calls.
-								{:else if smsState === 'pending'}
-									{o.twilio_phone_number} · Active for calls and incoming texts. Outbound SMS unlocks
-									after carrier approval (5–10 business days).
-								{:else}
-									{o.twilio_phone_number} · Texting and calling are fully active.
-								{/if}
-							</p>
-						</div>
+						<p class="integration__desc">
+							{#if smsState === 'disabled'}
+								SMS is currently disabled. Contact your account manager.
+							{:else if smsState === 'unsupported'}
+								SMS is not available in your region yet.
+							{:else if smsState === 'no_number'}
+								Set up a business number to send and receive texts and calls.
+							{:else if smsState === 'pending'}
+								{o.twilio_phone_number} · Active for calls and incoming texts. Outbound SMS unlocks after
+								carrier approval (5–10 business days).
+							{:else}
+								{o.twilio_phone_number} · Texting and calling are fully active.
+							{/if}
+						</p>
 					</div>
 					{#if smsState === 'no_number'}
-						<div class="shrink-0">
+						<div class="integration__action">
 							<Button onclick={() => (showSetup = !showSetup)}>
 								{showSetup ? 'Cancel' : 'Set up business number'}
 							</Button>
@@ -483,210 +430,183 @@
 				</div>
 
 				{#if smsState === 'no_number' && showSetup}
-					<div class="mt-5 space-y-5 border-t border-border pt-5">
-						<form class="flex items-end gap-3" onsubmit={searchNumbers}>
-							<div class="flex-1 space-y-1.5">
-								<label for="sms_postal_code" class="text-sm font-medium text-foreground">
-									ZIP / Postal code
-								</label>
-								<input
-									id="sms_postal_code"
-									type="text"
-									inputmode="text"
-									autocomplete="postal-code"
-									placeholder="78701"
-									bind:value={postalCode}
-									disabled={searching || purchasing}
-									class="flex h-11 w-full rounded-xl border border-border bg-background px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
-								/>
+					<div class="integration__expand">
+						<form class="num-setup" onsubmit={searchNumbers}>
+							<div class="num-setup__search">
+								<div class="field num-setup__field">
+									<label class="field__label" for="sms_postal_code">ZIP / Postal code</label>
+									<input
+										id="sms_postal_code"
+										class="field__input"
+										type="text"
+										inputmode="text"
+										autocomplete="postal-code"
+										placeholder="78701"
+										bind:value={postalCode}
+										disabled={searching || purchasing}
+									/>
+								</div>
+							<Button type="submit" variant="outline" disabled={postalCode.trim().length < 2} loading={searching || purchasing} loadingLabel="Searching…">Search</Button>
 							</div>
-							<Button
-								type="submit"
-								variant="outline"
-								disabled={searching || purchasing || postalCode.trim().length < 2}
-							>
-								{#if searching}
-									<Loader2 class="h-4 w-4 animate-spin" />
-									Searching…
-								{:else}
-									Search
-								{/if}
-							</Button>
-						</form>
 
-						{#if postalError}
-							<p class="text-xs text-destructive">{postalError}</p>
-						{/if}
-						{#if phoneError}
-							<p class="text-sm text-destructive">{phoneError}</p>
-						{/if}
+							{#if postalError}
+								<p class="num-setup__error">{postalError}</p>
+							{/if}
+							{#if phoneError}
+								<p class="num-setup__error">{phoneError}</p>
+							{/if}
 
-						{#if searched && numbers.length === 0}
-							<p class="text-sm text-muted-foreground">
-								No numbers available for that area. Try a different ZIP / postal code.
-							</p>
-						{:else if numbers.length > 0}
-							<fieldset class="space-y-2">
-								<legend class="sr-only">Available numbers</legend>
-								{#each numbers as num (num.phoneNumber)}
-									<label
-										class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-all duration-150 {selectedNumber ===
-										num.phoneNumber
-											? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-											: 'border-border hover:bg-muted/40'}"
-									>
-										<input
-											type="radio"
-											name="sms_phone_number"
-											value={num.phoneNumber}
-											bind:group={selectedNumber}
-											disabled={purchasing}
-											class="h-4 w-4 accent-primary"
-										/>
-										<span class="flex-1">
-											<span class="block text-sm font-semibold text-foreground">
-												{num.friendlyName}
+							{#if searched && numbers.length === 0}
+								<p class="num-setup__empty">
+									No numbers available for that area. Try a different ZIP / postal code.
+								</p>
+							{:else if numbers.length > 0}
+								<fieldset class="num-setup__list">
+									<legend class="sr-only">Available numbers</legend>
+									{#each numbers as num (num.phoneNumber)}
+										<label
+											class="num-setup__opt"
+											class:num-setup__opt--selected={selectedNumber === num.phoneNumber}
+										>
+											<input
+												type="radio"
+												name="sms_phone_number"
+												value={num.phoneNumber}
+												bind:group={selectedNumber}
+												disabled={purchasing}
+											/>
+											<span class="num-setup__opt-main">
+												<span class="num-setup__opt-number">{num.friendlyName}</span>
+												{#if num.locality || num.region}
+													<span class="num-setup__opt-loc">
+														{[num.locality, num.region].filter(Boolean).join(', ')}
+													</span>
+												{/if}
 											</span>
-											{#if num.locality || num.region}
-												<span class="block text-xs text-muted-foreground">
-													{[num.locality, num.region].filter(Boolean).join(', ')}
-												</span>
-											{/if}
-										</span>
-									</label>
-								{/each}
-								<Button class="mt-1 w-full" onclick={purchaseNumber} disabled={purchasing || !selectedNumber}>
-									{#if purchasing}
-										<Loader2 class="h-4 w-4 animate-spin" />
-										Setting up your number…
-									{:else}
+										</label>
+									{/each}
+									<Button class="btn--full" disabled={!selectedNumber} loading={purchasing} loadingLabel="Setting up your number…" onclick={purchaseNumber}>
 										Get this number
-									{/if}
-								</Button>
-							</fieldset>
-						{/if}
-						<p class="text-[11px] leading-relaxed text-muted-foreground/70">
-							One number per organization{o.country ? ` · ${countryName(o.country) ?? o.country}` : ''}.
-						</p>
+									</Button>
+								</fieldset>
+							{/if}
+							<p class="num-setup__hint">
+								One number per organization{o.country
+									? ` · ${countryName(o.country) ?? o.country}`
+									: ''}.
+							</p>
+						</form>
 					</div>
 				{/if}
 
 				{#if showCarrierSection}
-					<div class="mt-5 border-t border-border pt-5">
+					<div class="integration__expand">
 						{#if !carrierComplete && !carrierEditing}
 							<!-- Skipped state — carrier details never submitted. -->
-							<div
-								class="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10"
-							>
-								<div class="flex items-start gap-3">
-									<AlertTriangle
-										class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
-									/>
-									<div class="min-w-0">
-										<p class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-											Finish carrier registration
-										</p>
-										<p class="mt-0.5 text-sm text-amber-800/90 dark:text-amber-200/80">
+							<div class="carrier-prompt">
+								<div class="carrier-prompt__row">
+									<i class="ri-error-warning-line carrier-prompt__icon" aria-hidden="true"></i>
+									<div>
+										<p class="carrier-prompt__title">Finish carrier registration</p>
+										<p class="carrier-prompt__text">
 											Outbound texting stays off until you submit your business details for
 											{o.country === 'CA' ? 'CWTA' : '10DLC'} registration.
 										</p>
 									</div>
 								</div>
 								<div>
-									<Button onclick={openCarrierForm}>Complete carrier registration</Button>
+									<Button onclick={openCarrierForm}>
+										Complete carrier registration
+									</Button>
 								</div>
 							</div>
 						{:else if carrierComplete && !carrierEditing}
 							<!-- Submitted — details on file, awaiting carrier approval. -->
-							<div class="space-y-4">
-								<div class="flex items-center justify-between gap-3">
-									<div class="flex items-center gap-2">
-										<Check class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-										<span class="text-sm font-medium text-foreground">
-											Carrier details submitted — under review
-										</span>
-									</div>
-									<Button variant="outline" onclick={openCarrierForm}>Edit details</Button>
+							<div class="carrier-summary">
+								<div class="carrier-summary__head">
+									<span class="carrier-summary__status">
+										<i class="ri-check-line" aria-hidden="true"></i>
+										Carrier details submitted — under review
+									</span>
+									<Button variant="outline" size="sm" onclick={openCarrierForm}>
+										Edit details
+									</Button>
 								</div>
-								<dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+								<dl class="carrier-summary__grid">
 									<div>
-										<dt class={carrierLabelClass}>
+										<dt class="carrier-summary__dt">
 											{o.country === 'CA' ? 'Business name' : 'Legal business name'}
 										</dt>
-										<dd class="mt-0.5 text-sm text-foreground">{o.legal_business_name}</dd>
+										<dd class="carrier-summary__dd">{o.legal_business_name}</dd>
 									</div>
 									{#if o.country === 'US'}
 										<div>
-											<dt class={carrierLabelClass}>EIN</dt>
-											<dd class="mt-0.5 text-sm text-foreground">{o.ein}</dd>
+											<dt class="carrier-summary__dt">EIN</dt>
+											<dd class="carrier-summary__dd">{o.ein}</dd>
 										</div>
 										<div>
-											<dt class={carrierLabelClass}>Website</dt>
-											<dd class="mt-0.5 break-words text-sm text-foreground">{o.website}</dd>
+											<dt class="carrier-summary__dt">Website</dt>
+											<dd class="carrier-summary__dd">{o.website}</dd>
 										</div>
-										<div class="sm:col-span-2">
-											<dt class={carrierLabelClass}>Messaging use case</dt>
-											<dd class="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
-												{o.messaging_use_case}
-											</dd>
+										<div class="carrier-summary__full">
+											<dt class="carrier-summary__dt">Messaging use case</dt>
+											<dd class="carrier-summary__dd">{o.messaging_use_case}</dd>
 										</div>
 									{:else}
 										<div>
-											<dt class={carrierLabelClass}>Business Number</dt>
-											<dd class="mt-0.5 text-sm text-foreground">{o.business_number}</dd>
+											<dt class="carrier-summary__dt">Business Number</dt>
+											<dd class="carrier-summary__dd">{o.business_number}</dd>
 										</div>
 									{/if}
 								</dl>
 							</div>
 						{:else}
 							<!-- Editing — country-aware form, mirrors the onboarding carrier step. -->
-							<form class="space-y-4" onsubmit={submitCarrier}>
-								<div class="space-y-1.5">
-									<label for="carrier_legal_name" class={carrierLabelClass}>
+							<form class="carrier-form" onsubmit={submitCarrier}>
+								<div class="field">
+									<label class="field__label field__label--required" for="carrier_legal_name">
 										{o.country === 'CA' ? 'Business name' : 'Legal business name'}
-										<span class="text-destructive">*</span>
 									</label>
 									<input
 										id="carrier_legal_name"
+										class="field__input"
 										type="text"
 										autocomplete="organization"
 										placeholder="As registered with the government"
 										required
 										bind:value={legalBusinessName}
 										disabled={carrierSubmitting}
-										class={carrierInputClass}
 									/>
 									{#if carrierFieldErrors.legal_business_name}
-										<p class="text-xs text-destructive">{carrierFieldErrors.legal_business_name}</p>
+										<p class="field__error">{carrierFieldErrors.legal_business_name}</p>
 									{/if}
 								</div>
 
 								{#if o.country === 'US'}
-									<div class="space-y-1.5">
-										<label for="carrier_ein" class={carrierLabelClass}>
-											EIN <span class="text-destructive">*</span>
-										</label>
+									<div class="field">
+										<label class="field__label field__label--required" for="carrier_ein">EIN</label>
 										<input
 											id="carrier_ein"
+											class="field__input"
 											type="text"
 											inputmode="numeric"
 											placeholder="12-3456789"
 											required
 											bind:value={ein}
 											disabled={carrierSubmitting}
-											class={carrierInputClass}
 										/>
 										{#if carrierFieldErrors.ein}
-											<p class="text-xs text-destructive">{carrierFieldErrors.ein}</p>
+											<p class="field__error">{carrierFieldErrors.ein}</p>
 										{/if}
 									</div>
 
-									<div class="space-y-1.5">
-										<label for="carrier_website" class={carrierLabelClass}>
-											Website <span class="text-destructive">*</span>
+									<div class="field">
+										<label class="field__label field__label--required" for="carrier_website">
+											Website
 										</label>
 										<input
 											id="carrier_website"
+											class="field__input"
 											type="text"
 											inputmode="url"
 											autocomplete="url"
@@ -694,70 +614,62 @@
 											required
 											bind:value={website}
 											disabled={carrierSubmitting}
-											class={carrierInputClass}
 										/>
 										{#if carrierFieldErrors.website}
-											<p class="text-xs text-destructive">{carrierFieldErrors.website}</p>
+											<p class="field__error">{carrierFieldErrors.website}</p>
 										{/if}
 									</div>
 
-									<div class="space-y-1.5">
-										<label for="carrier_use_case" class={carrierLabelClass}>
-											Messaging use case <span class="text-destructive">*</span>
+									<div class="field">
+										<label class="field__label field__label--required" for="carrier_use_case">
+											Messaging use case
 										</label>
 										<textarea
 											id="carrier_use_case"
+											class="field__textarea"
 											rows={3}
 											placeholder="How will you use texting? e.g. appointment reminders, quote follow-ups, and replies to customer enquiries."
 											required
 											bind:value={messagingUseCase}
 											disabled={carrierSubmitting}
-											class="{carrierInputClass} h-auto py-2.5"
 										></textarea>
 										{#if carrierFieldErrors.messaging_use_case}
-											<p class="text-xs text-destructive">{carrierFieldErrors.messaging_use_case}</p>
+											<p class="field__error">{carrierFieldErrors.messaging_use_case}</p>
 										{/if}
 									</div>
 								{:else}
-									<div class="space-y-1.5">
-										<label for="carrier_business_number" class={carrierLabelClass}>
-											Business Number <span class="text-destructive">*</span>
+									<div class="field">
+										<label
+											class="field__label field__label--required"
+											for="carrier_business_number"
+										>
+											Business Number
 										</label>
 										<input
 											id="carrier_business_number"
+											class="field__input"
 											type="text"
 											inputmode="numeric"
 											placeholder="9-digit CRA Business Number"
 											required
 											bind:value={businessNumber}
 											disabled={carrierSubmitting}
-											class={carrierInputClass}
 										/>
 										{#if carrierFieldErrors.business_number}
-											<p class="text-xs text-destructive">{carrierFieldErrors.business_number}</p>
+											<p class="field__error">{carrierFieldErrors.business_number}</p>
 										{/if}
 									</div>
 								{/if}
 
 								{#if carrierError}
-									<p class="text-sm text-destructive">{carrierError}</p>
+									<p class="num-setup__error">{carrierError}</p>
 								{/if}
 
-								<div class="flex flex-wrap gap-3">
-									<Button type="submit" disabled={carrierSubmitting}>
-										{#if carrierSubmitting}
-											<Loader2 class="h-4 w-4 animate-spin" />
-											Submitting…
-										{:else}
-											Submit for review
-										{/if}
+								<div class="carrier-form__actions">
+									<Button type="submit" loading={carrierSubmitting} loadingLabel="Submitting…">
+										Submit for review
 									</Button>
-									<Button
-										type="button"
-										variant="outline"
-										disabled={carrierSubmitting}
-										onclick={() => (carrierEditing = false)}
-									>
+									<Button variant="outline" disabled={carrierSubmitting} onclick={() => (carrierEditing = false)}>
 										Cancel
 									</Button>
 								</div>
@@ -765,7 +677,7 @@
 						{/if}
 					</div>
 				{/if}
-			</div>
+			</section>
 		</div>
 	{/if}
 </PageWrapper>

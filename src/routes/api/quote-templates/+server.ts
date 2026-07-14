@@ -86,6 +86,7 @@ export const POST: RequestHandler = async (event) => {
 					unit: li.unit?.trim() || null,
 					section_label: li.section_label?.trim() || null,
 					is_optional: li.is_optional ?? false,
+					taxable: li.taxable ?? true,
 					unit_price: String(li.unit_price),
 					total: computeLineTotal(li.quantity, li.unit_price),
 					position: li.position ?? idx

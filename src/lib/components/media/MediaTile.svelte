@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import { Trash2, Loader2, RotateCcw, Image as ImageIcon } from '@lucide/svelte';
 	import type { LocalMediaItem } from './types';
 
 	let {
@@ -70,14 +68,17 @@
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
+
+	// Before/After corner chip so photos are identifiable at a glance on the "All" tab.
+	const tagLabel = $derived(
+		item.purpose_tag === 'before' ? 'Before' : item.purpose_tag === 'after' ? 'After' : null
+	);
 </script>
 
 <div
-	class={cn(
-		'group relative aspect-square overflow-hidden rounded-lg bg-muted transition-all duration-150',
-		item.status === 'done' && 'cursor-pointer',
-		item.status === 'uploading' && 'cursor-wait'
-	)}
+	class="media-tile"
+	class:media-tile--clickable={item.status === 'done'}
+	class:media-tile--uploading={item.status === 'uploading'}
 	role="button"
 	tabindex={item.status === 'done' ? 0 : -1}
 	aria-label={item.original_filename ?? 'Photo'}
@@ -93,68 +94,68 @@
 		<img
 			src={item.thumbnailUrl ?? item.previewUrl}
 			alt={item.original_filename ?? 'Photo'}
-			class="h-full w-full object-cover transition-transform duration-150 group-hover:scale-105"
+			class="media-tile__img"
 			loading="lazy"
 		/>
 	{:else}
-		<div class="flex h-full w-full items-center justify-center">
-			<ImageIcon class="h-8 w-8 text-muted-foreground" />
+		<div class="media-tile__placeholder">
+			<i class="ri-image-line" aria-hidden="true"></i>
 		</div>
+	{/if}
+
+	<!-- Before/After tag chip -->
+	{#if tagLabel && item.status === 'done'}
+		<span
+			class="media-tile__badge"
+			class:media-tile__badge--before={item.purpose_tag === 'before'}
+			class:media-tile__badge--after={item.purpose_tag === 'after'}
+		>
+			{tagLabel}
+		</span>
 	{/if}
 
 	<!-- Upload progress overlay -->
 	{#if item.status === 'uploading'}
-		<div class="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-			<Loader2 class="h-6 w-6 animate-spin text-white" />
+		<div class="media-tile__overlay media-tile__overlay--uploading">
+			<i class="ri-loader-4-line animate-spin media-tile__spinner" aria-hidden="true"></i>
 			{#if item.progress !== undefined}
-				<div class="mt-2 h-1 w-3/4 overflow-hidden rounded-full bg-white/30">
-					<div
-						class="h-full rounded-full bg-white transition-all duration-150"
-						style:width="{item.progress}%"
-					></div>
+				<div class="media-tile__progress">
+					<div class="media-tile__progress-bar" style:width="{item.progress}%"></div>
 				</div>
-				<span class="mt-1 text-xs font-medium text-white">{Math.round(item.progress)}%</span>
+				<span class="media-tile__pct">{Math.round(item.progress)}%</span>
 			{/if}
 		</div>
 	{/if}
 
 	<!-- Error state overlay -->
 	{#if item.status === 'error'}
-		<div class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 p-2">
-			<span class="text-center text-xs text-white">{item.errorMsg ?? 'Upload failed'}</span>
+		<div class="media-tile__overlay media-tile__overlay--error">
+			<span class="media-tile__error-msg">{item.errorMsg ?? 'Upload failed'}</span>
 			<button
-				class="flex items-center gap-1 rounded bg-white/20 px-2 py-1 text-xs font-medium text-white hover:bg-white/30"
+				class="media-tile__retry"
 				onclick={(e) => {
 					e.stopPropagation();
 					item.retry?.();
 				}}
 			>
-				<RotateCcw class="h-3 w-3" /> Retry
+				<i class="ri-restart-line" aria-hidden="true"></i> Retry
 			</button>
 		</div>
 	{/if}
 
 	<!-- Mobile long-press delete indicator -->
 	{#if showDeleteBtn && canDelete}
-		<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-			<button
-				class="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-destructive p-2 text-white shadow-lg"
-				onclick={handleDeleteClick}
-				aria-label="Delete photo"
-			>
-				<Trash2 class="h-5 w-5" />
+		<div class="media-tile__overlay media-tile__overlay--delete">
+			<button class="media-tile__delete-mobile" onclick={handleDeleteClick} aria-label="Delete photo">
+				<i class="ri-delete-bin-line" aria-hidden="true"></i>
 			</button>
 		</div>
 	{/if}
 
 	<!-- Desktop delete button (hover only) -->
 	{#if !isCoarsePointer && canDelete && item.status === 'done'}
-		<button
-			class="absolute right-1.5 top-1.5 hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 p-1.5 text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100 md:flex"
-			onclick={handleDeleteClick}
-			aria-label="Delete photo"
-		>
-			<Trash2 class="h-4 w-4" />
+		<button class="media-tile__delete-desktop" onclick={handleDeleteClick} aria-label="Delete photo">
+			<i class="ri-delete-bin-line" aria-hidden="true"></i>
 		</button>
 	{/if}
 </div>

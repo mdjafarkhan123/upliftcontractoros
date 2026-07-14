@@ -2,21 +2,17 @@
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import Badge from '$lib/components/shared/Badge.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import PhoneField from '$lib/components/shared/PhoneField.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { getMemberContext } from '$lib/context/member';
+	import { getOrgContext } from '$lib/context/org';
 	import { teamStore } from '$lib/stores/team.svelte';
 	import { teamDetailStore } from '$lib/stores/teamDetail.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { PERMISSION_GROUPS } from '$lib/team/permissions-config';
 	import type { PermissionValues } from '$lib/team/permissions-config';
 	import type { OrgMember } from '$lib/types';
-	import { AlertTriangle, Info } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -45,9 +41,13 @@
 	let notificationPhone = $state('');
 	let smsNotificationsAllowed = $state(false);
 	let emailNotificationsAllowed = $state(true);
+	let hourlyCostRate = $state('');
 	let phoneError = $state<string | null>(null);
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
+
+	const org = getOrgContext();
+	const orgCountry = $derived(org().country ?? 'US');
 
 	// Seed the editable name/permissions once per member, when the record first
 	// arrives. We don't re-sync on later changes so in-progress edits survive.
@@ -60,6 +60,7 @@
 			notificationPhone = t.notification_phone ?? '';
 			smsNotificationsAllowed = t.sms_notifications_allowed;
 			emailNotificationsAllowed = t.email_notifications_allowed;
+			hourlyCostRate = t.hourly_cost_rate ?? '';
 			const vals = {} as PermissionValues;
 			for (const group of PERMISSION_GROUPS) {
 				for (const p of group.permissions) {
@@ -104,10 +105,10 @@
 	const isTargetAdmin = $derived(target?.role === 'admin');
 	const canEdit = $derived(member().can_edit_team_members && !isSelf && !isTargetAdmin);
 	const canDeactivate = $derived(member().can_delete_team_members && !isSelf);
+	// Hourly cost rate (job-costing labor input) is private financial data — same gate as
+	// job/quote cost, on top of the general edit-team-member gate.
+	const canEditCostRate = $derived(canEdit && member().can_view_revenue);
 
-	const roleVariant = $derived(
-		target?.role === 'admin' ? 'info' : target?.role === 'manager' ? 'warning' : 'default'
-	);
 	const roleLabel = $derived(
 		target?.role === 'admin' ? 'Admin' : target?.role === 'manager' ? 'Manager' : 'Member'
 	);
@@ -123,14 +124,6 @@
 			: ''
 	);
 
-	const avatarColor = $derived(
-		target?.role === 'admin'
-			? 'bg-primary/10 text-primary ring-primary/15'
-			: target?.role === 'manager'
-				? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20'
-				: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20'
-	);
-
 	async function savePermissions() {
 		if (!canEdit || !target) return;
 		saving = true;
@@ -142,6 +135,9 @@
 		payload.notification_phone = notificationPhone.trim() || null;
 		payload.sms_notifications_allowed = smsNotificationsAllowed;
 		payload.email_notifications_allowed = emailNotificationsAllowed;
+		if (canEditCostRate) {
+			payload.hourly_cost_rate = hourlyCostRate.trim() || null;
+		}
 		for (const group of PERMISSION_GROUPS) {
 			for (const p of group.permissions) {
 				payload[p.key] = permissions[p.key];
@@ -163,6 +159,7 @@
 			const updated = body.data as OrgMember;
 			teamDetailStore.set(id, updated);
 			fullName = updated.full_name;
+			hourlyCostRate = updated.hourly_cost_rate ?? '';
 			teamStore.update({
 				id: updated.id,
 				full_name: updated.full_name,
@@ -251,74 +248,66 @@
 
 <PageWrapper title={target?.full_name ?? 'Team member'} back="/settings/team">
 	{#if loadingCold}
-		<SkeletonLoader lines={8} label="Loading team member" />
+		<div class="settings-form">
+			<SkeletonLoader lines={8} label="Loading team member" />
+		</div>
 	{:else if loadError && !target}
-		<div
-			class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-		>
-			{loadError}
+		<div class="settings-form">
+			<div class="settings-note settings-note--error">
+				<i class="settings-note__icon ri-error-warning-line" aria-hidden="true"></i>
+				<p class="settings-note__text">{loadError}</p>
+			</div>
 		</div>
 	{:else if target}
-		<div class="space-y-4">
+		<div class="settings-form">
 			<!-- Profile hero card -->
-			<div class="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
-				<div class="flex items-center gap-4">
-					<div
-						class={cn(
-							'flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold ring-2',
-							avatarColor
-						)}
-					>
-						{initials}
-					</div>
-					<div class="min-w-0 flex-1">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="text-base font-semibold text-foreground">{target.full_name}</span>
-							<Badge label={roleLabel} variant={roleVariant} />
-							{#if !target.is_active}
-								<Badge label="Inactive" variant="danger" />
-							{/if}
+			<div class="settings-card">
+				<div class="settings-card__body">
+					<div class="settings-identity">
+						<div class="member-avatar member-avatar--lg member-avatar--{target.role}">
+							<div class="member-avatar__disc">{initials}</div>
 						</div>
-						<p class="mt-0.5 text-sm text-muted-foreground">{target.email}</p>
+						<div class="settings-identity__info">
+							<div class="member-card__name-row">
+								<span class="settings-identity__name">{target.full_name}</span>
+								<span class="role-pill role-pill--{target.role}">{roleLabel}</span>
+								{#if !target.is_active}
+									<span class="role-pill role-pill--inactive">Inactive</span>
+								{/if}
+							</div>
+							<p class="settings-identity__email">{target.email}</p>
+						</div>
 					</div>
 				</div>
 			</div>
 
 			<!-- Role/access notice -->
 			{#if isTargetAdmin}
-				<div
-					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
-				>
-					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground">
+				<div class="settings-note">
+					<i class="settings-note__icon ri-information-line" aria-hidden="true"></i>
+					<p class="settings-note__text">
 						Admin permissions cannot be edited. Admins always have full access.
 					</p>
 				</div>
 			{:else if isSelf}
-				<div
-					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
-				>
-					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground">You cannot edit your own permissions.</p>
+				<div class="settings-note">
+					<i class="settings-note__icon ri-information-line" aria-hidden="true"></i>
+					<p class="settings-note__text">You cannot edit your own permissions.</p>
 				</div>
 			{:else if canEdit && target.role === 'manager'}
-				<div
-					class="flex items-start gap-3 rounded-xl border border-[hsl(var(--status-warning))]/40 bg-[hsl(var(--status-warning))]/10 px-4 py-3.5"
-				>
-					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--status-warning))]" />
+				<div class="settings-note settings-note--warning">
+					<i class="settings-note__icon ri-alert-line" aria-hidden="true"></i>
 					<div>
-						<p class="text-sm font-medium text-foreground">Editing Manager permissions</p>
-						<p class="text-sm text-muted-foreground">
+						<p class="settings-note__title">Editing Manager permissions</p>
+						<p class="settings-note__text">
 							Changes apply immediately on their next action — no re-login required.
 						</p>
 					</div>
 				</div>
 			{:else if canEdit}
-				<div
-					class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3.5"
-				>
-					<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground">
+				<div class="settings-note">
+					<i class="settings-note__icon ri-information-line" aria-hidden="true"></i>
+					<p class="settings-note__text">
 						Permission changes apply immediately on their next action — no re-login required.
 					</p>
 				</div>
@@ -326,67 +315,82 @@
 
 			<!-- Basic info card -->
 			{#if canEdit}
-				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-					<div class="border-b border-border/60 px-5 py-3.5">
-						<p class="text-sm font-semibold text-foreground">Basic Information</p>
-					</div>
-					<div class="px-5 py-5">
-						<div class="space-y-1.5">
-							<Label for="full_name">Full name</Label>
-							<Input id="full_name" bind:value={fullName} maxlength={200} />
+				<div class="settings-card">
+					<div class="settings-card__header">
+						<div class="settings-card__head-text">
+							<p class="settings-card__title">Basic Information</p>
 						</div>
+					</div>
+					<div class="settings-card__body">
+						<div class="field">
+							<label class="field__label" for="full_name">Full name</label>
+							<input id="full_name" class="field__input" bind:value={fullName} maxlength={200} />
+						</div>
+						{#if canEditCostRate}
+							<div class="field">
+								<label class="field__label" for="hourly_cost_rate">Hourly cost rate</label>
+								<input
+									id="hourly_cost_rate"
+									class="field__input"
+									type="number"
+									min="0"
+									step="0.01"
+									placeholder="0.00"
+									bind:value={hourlyCostRate}
+								/>
+								<p class="field__hint">
+									What this member costs the business per hour. Feeds job costing's labor cost once
+									they log time — leave blank if unknown.
+								</p>
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}
 
 			<!-- Notifications card -->
 			{#if canEdit}
-				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-					<div class="border-b border-border/60 px-5 py-3.5">
-						<p class="text-sm font-semibold text-foreground">Notifications</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							Where this member gets internal alerts, and which channels they're allowed.
-						</p>
+				<div class="settings-card">
+					<div class="settings-card__header">
+						<div class="settings-card__head-text">
+							<p class="settings-card__title">Notifications</p>
+							<p class="settings-card__desc">
+								Where this member gets internal alerts, and which channels they're allowed.
+							</p>
+						</div>
 					</div>
-					<div class="px-5 py-5 space-y-4">
-						<div class="space-y-1.5">
-							<Label for="notification_phone">Notification phone</Label>
-							<Input
+					<div class="settings-card__body">
+						<div class="field">
+							<label class="field__label" for="notification_phone">Notification phone</label>
+							<PhoneField
 								id="notification_phone"
-								type="tel"
 								bind:value={notificationPhone}
-								placeholder="+1 555-123-4567"
-								autocomplete="off"
+								defaultCountry={orgCountry}
+								invalid={!!phoneError}
 							/>
 							{#if phoneError}
-								<p class="text-xs text-destructive">{phoneError}</p>
+								<p class="field__error">{phoneError}</p>
 							{:else}
-								<p class="text-xs text-muted-foreground">
+								<p class="field__hint">
 									Include the country code. Used only for SMS alerts to this member.
 								</p>
 							{/if}
 						</div>
 
-						<div class="flex min-h-[52px] items-center justify-between gap-4">
-							<div class="flex-1 min-w-0">
-								<span class="block text-sm font-medium text-foreground leading-tight">
-									Allow SMS notifications
-								</span>
-								<p class="mt-0.5 text-xs text-muted-foreground">
+						<div class="settings-toggle">
+							<div class="settings-toggle__text">
+								<span class="settings-toggle__label">Allow SMS notifications</span>
+								<p class="settings-toggle__desc">
 									Text-message alerts use SMS credits. Off by default.
 								</p>
 							</div>
 							<Switch bind:checked={smsNotificationsAllowed} />
 						</div>
 
-						<div class="flex min-h-[52px] items-center justify-between gap-4">
-							<div class="flex-1 min-w-0">
-								<span class="block text-sm font-medium text-foreground leading-tight">
-									Allow email notifications
-								</span>
-								<p class="mt-0.5 text-xs text-muted-foreground">
-									Email alerts are free. On by default.
-								</p>
+						<div class="settings-toggle">
+							<div class="settings-toggle__text">
+								<span class="settings-toggle__label">Allow email notifications</span>
+								<p class="settings-toggle__desc">Email alerts are free. On by default.</p>
 							</div>
 							<Switch bind:checked={emailNotificationsAllowed} />
 						</div>
@@ -395,16 +399,18 @@
 			{/if}
 
 			<!-- Permissions card -->
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Permissions</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">
-						{canEdit
-							? 'Toggle individual permissions for this member.'
-							: "This member's current access level."}
-					</p>
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Permissions</p>
+						<p class="settings-card__desc">
+							{canEdit
+								? 'Toggle individual permissions for this member.'
+								: "This member's current access level."}
+						</p>
+					</div>
 				</div>
-				<div class="px-5 py-5">
+				<div class="settings-card__body">
 					{#if PermissionEditor}
 						<PermissionEditor bind:permissions readonly={!canEdit} />
 					{:else}
@@ -414,38 +420,32 @@
 			</div>
 
 			{#if saveError}
-				<div
-					class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-				>
-					{saveError}
+				<div class="settings-note settings-note--error">
+					<i class="settings-note__icon ri-error-warning-line" aria-hidden="true"></i>
+					<p class="settings-note__text">{saveError}</p>
 				</div>
 			{/if}
 
-			<!-- Action footer card -->
-			<div
-				class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm"
-			>
-				<div>
+			<!-- Action footer -->
+			<div class="team-actions">
+				<div class="team-actions__group">
 					{#if canDeactivate && target.is_active}
-						<Button
-							variant="outline"
-							onclick={openDeactivateDialog}
-							class="text-destructive hover:text-destructive hover:border-destructive/50"
-						>
+						<Button variant="danger-outline" onclick={openDeactivateDialog}>
 							Deactivate member
 						</Button>
 					{/if}
 				</div>
-				<div class="flex gap-2">
-					<Button variant="outline" onclick={() => goto('/settings/team')}>Back</Button>
+				<div class="team-actions__group">
+					<Button variant="secondary" onclick={() => goto('/settings/team')}>Back</Button>
 					{#if canEdit}
-						<JetEngineButton
-							label="Save changes"
+						<Button
 							loadingLabel="Saving…"
 							successLabel="Saved"
-							state={saving ? 'loading' : 'idle'}
+							loading={saving}
 							onAction={savePermissions}
-						/>
+						>
+							Save changes
+						</Button>
 					{/if}
 				</div>
 			</div>

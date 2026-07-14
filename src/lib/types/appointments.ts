@@ -1,5 +1,5 @@
 export type AppointmentType = 'estimate' | 'job_start' | 'follow_up' | 'inspection' | 'other';
-export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'scheduled' | 'unscheduled' | 'completed' | 'cancelled' | 'no_show';
 export type AppointmentView = 'list' | 'calendar';
 export type CalendarRange = 'day' | 'week' | 'month';
 
@@ -9,6 +9,10 @@ export type AppointmentListItem = {
 	id: string;
 	contact_id: string;
 	contact_name: string;
+	// Present so the drag-reschedule confirm popover can offer the right notify
+	// channels (SMS needs a phone, email needs an address).
+	contact_phone: string | null;
+	contact_email: string | null;
 	job_id: string | null;
 	assigned_to: string | null;
 	assignee_name: string | null;
@@ -16,6 +20,9 @@ export type AppointmentListItem = {
 	type: AppointmentType;
 	status: AppointmentStatus;
 	title: string;
+	// "Anytime" visit: has a date but no clock time. Rendered in the calendar's top
+	// Anytime lane; scheduled_end is null for these.
+	all_day: boolean;
 	scheduled_start: string;
 	scheduled_end: string | null;
 	location: string | null;
@@ -40,7 +47,9 @@ export type AppointmentDetail = {
 	type: AppointmentType;
 	status: AppointmentStatus;
 	title: string;
-	scheduled_start: string;
+	all_day: boolean;
+	// NULL for an unscheduled "Schedule later" visit that has no date yet.
+	scheduled_start: string | null;
 	scheduled_end: string | null;
 	location: string | null;
 	notes: string | null;
@@ -56,6 +65,15 @@ export type AppointmentDetail = {
 	customer_email: string | null;
 	customer_notes: string | null;
 	booking_referrer: string | null;
+	// Side-effect echo (write-through): present ONLY on a PATCH that moved this visit and thereby
+	// re-pinned its parent one-off job's schedule in the same transaction. The client keeps a
+	// SEPARATE jobs cache, so it uses this to patch the job's row/detail (and its Today/Upcoming
+	// badge) without a refetch. Absent on GET and when no job was repinned (event / recurring job).
+	affected_job?: {
+		id: string;
+		scheduled_start: string | null;
+		scheduled_end: string | null;
+	} | null;
 };
 
 export type AppointmentsFilters = {

@@ -24,13 +24,10 @@
 	} = $props();
 </script>
 
-<div class="space-y-1.5 {className}">
-	<div class="flex items-center justify-between">
-		<label
-			for={id}
-			class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-		>
-			{label}{#if required}<span class="ml-0.5 text-destructive">*</span>{/if}
+<div class="field {className}">
+	<div class="auth-field__label-row">
+		<label for={id} class="field__label" class:field__label--required={required}>
+			{label}
 		</label>
 		{#if trailing}{@render trailing()}{/if}
 	</div>
@@ -43,6 +40,17 @@
 		{autocomplete}
 		{required}
 		{minlength}
-		class="flex h-11 w-full rounded-xl border border-border/70 bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-all duration-150 focus:border-primary/60 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+		class="field__input"
 	/>
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.auth-field__label-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: $space-2;
+	}
+</style>

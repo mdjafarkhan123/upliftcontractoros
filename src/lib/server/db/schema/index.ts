@@ -68,8 +68,45 @@ export type {
 } from './03_pipeline';
 
 // Domain 4 — Jobs
-export { jobStatusEnum, jobs } from './04_jobs';
-export type { Job, NewJob } from './04_jobs';
+export {
+	jobStatusEnum,
+	jobExpenseCategoryEnum,
+	jobs,
+	jobExpenses,
+	jobTimeEntries,
+	jobTasks,
+	jobFormFieldTypeEnum,
+	jobFormTemplates,
+	jobFormFields,
+	jobFormSubmissionStatusEnum,
+	jobFormSubmissions,
+	jobFormSubmissionFields,
+	jobCustomFieldTypeEnum,
+	jobCustomFields,
+	jobCustomFieldValues
+} from './04_jobs';
+export type {
+	Job,
+	NewJob,
+	JobExpense,
+	NewJobExpense,
+	JobTimeEntry,
+	NewJobTimeEntry,
+	JobTask,
+	NewJobTask,
+	JobFormTemplate,
+	NewJobFormTemplate,
+	JobFormField,
+	NewJobFormField,
+	JobFormSubmission,
+	NewJobFormSubmission,
+	JobFormSubmissionField,
+	NewJobFormSubmissionField,
+	JobCustomField,
+	NewJobCustomField,
+	JobCustomFieldValue,
+	NewJobCustomFieldValue
+} from './04_jobs';
 
 // Domain 5 — Communication
 export {
@@ -98,6 +135,7 @@ export {
 	paymentMethodEnum,
 	quotes,
 	quoteLineItems,
+	quotePackages,
 	jobLineItems,
 	catalogItems,
 	quoteVersions,
@@ -108,13 +146,16 @@ export {
 	invoices,
 	invoiceLineItems,
 	invoiceViews,
-	payments
+	payments,
+	jobPaymentMilestones
 } from './06_revenue';
 export type {
 	Quote,
 	NewQuote,
 	QuoteLineItem,
 	NewQuoteLineItem,
+	QuotePackage,
+	NewQuotePackage,
 	JobLineItem,
 	NewJobLineItem,
 	CatalogItem,
@@ -137,7 +178,9 @@ export type {
 	InvoiceView,
 	NewInvoiceView,
 	Payment,
-	NewPayment
+	NewPayment,
+	JobPaymentMilestone,
+	NewJobPaymentMilestone
 } from './06_revenue';
 
 // Domain 7 — Appointments
@@ -146,13 +189,19 @@ export {
 	appointmentStatusEnum,
 	bookingSourceEnum,
 	appointments,
-	appointmentAssignees
+	appointmentAssignees,
+	calendarEvents,
+	calendarEventAssignees
 } from './07_appointments';
 export type {
 	Appointment,
 	NewAppointment,
 	AppointmentAssignee,
-	NewAppointmentAssignee
+	NewAppointmentAssignee,
+	CalendarEvent,
+	NewCalendarEvent,
+	CalendarEventAssignee,
+	NewCalendarEventAssignee
 } from './07_appointments';
 
 // Domain 8 — Reputation

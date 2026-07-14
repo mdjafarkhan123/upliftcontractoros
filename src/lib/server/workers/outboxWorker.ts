@@ -138,7 +138,12 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'invoice.sent':
 			return [{ queue: 'automation', jobName: 'invoice_dispatch' }];
 		case 'job.completed':
-			return [{ queue: 'automation', jobName: 'review.send' }];
+			// Customer review request + (conditionally, inside the handler) the contractor's
+			// "remind me to invoice" nudge when the job has invoice_on_close set.
+			return [
+				{ queue: 'automation', jobName: 'review.send' },
+				{ queue: 'notification', jobName: 'job.completed' }
+			];
 		case 'review_request.sent':
 			// Pre-schedule both the unengaged reminder (72h) and the absolute
 			// expiry (14d). Each handler re-reads the row at fire time and
@@ -177,6 +182,12 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			// return marks the outbox row processed without enqueueing anything
 			// and suppresses the "no route" warning.
 			return [];
+		case 'invoice.reminders_toggled':
+			// Per-invoice reminders switch flipped on an already-sent invoice
+			// (the /reminders endpoint). The worker re-enrolls (on) or stops (off)
+			// the invoice's dunning sequence. Drafts don't emit this — their flag is
+			// read fresh at invoice.sent.
+			return [{ queue: 'automation', jobName: 'invoice_reminders_toggle' }];
 		case 'appointment.created':
 		case 'appointment.booked':
 			// Confirmation fires immediately (gated to booking_link inside the
@@ -188,8 +199,15 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 				{ queue: 'automation', jobName: 'appointment_confirmation' },
 				{ queue: 'automation', jobName: 'pipeline_auto_advance' }
 			];
+		case 'job.scheduled':
+			// Client-facing "your job is booked" confirmation over the chosen channel(s).
+			return [{ queue: 'automation', jobName: 'job_scheduled_confirmation' }];
 		case 'appointment.rescheduled':
 			return [{ queue: 'automation', jobName: 'appointment_reschedule' }];
+		case 'appointment.reschedule_confirmation':
+			// Client-facing "your appointment moved to…" over the chosen channel(s).
+			// Only emitted by the PATCH handler when the contractor opted to notify.
+			return [{ queue: 'automation', jobName: 'appointment_reschedule_confirmation' }];
 		case 'appointment.cancelled':
 			return [{ queue: 'automation', jobName: 'appointment_cancel_reminders' }];
 		case 'appointment.completed':

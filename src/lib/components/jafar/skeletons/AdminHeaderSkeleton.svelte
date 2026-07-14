@@ -2,14 +2,24 @@
 	let { withPill = true }: { withPill?: boolean } = $props();
 </script>
 
-<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-	<div class="min-w-0 space-y-2">
-		<div class="flex flex-wrap items-center gap-3">
-			<div class="h-8 w-56 animate-pulse rounded bg-slate-800"></div>
+<div class="jafar-skel-hd">
+	<div class="jafar-skel-hd__circle"></div>
+	<div class="jafar-skel-hd__lines">
+		<div class="skel-title-row">
+			<div class="j-skel j-skel--h6" style="width: 14rem;"></div>
 			{#if withPill}
-				<div class="h-5 w-20 animate-pulse rounded-full bg-slate-800/70"></div>
+				<div class="j-skel j-skel--h5 j-skel--dim" style="width: 5rem; border-radius: 9999px;"></div>
 			{/if}
 		</div>
-		<div class="h-3 w-72 animate-pulse rounded bg-slate-800/60"></div>
+		<div class="j-skel j-skel--h3 j-skel--dim" style="width: 18rem;"></div>
 	</div>
 </div>
+
+<style lang="scss">
+	.skel-title-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+	}
+</style>

@@ -7,3 +7,9 @@
 <PopoverPrimitive.Root bind:open {...rest}>
 	{@render children?.()}
 </PopoverPrimitive.Root>
+
+<style lang="scss">
+	.popover__content {
+		width: unset;
+	}
+</style>

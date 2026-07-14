@@ -7,17 +7,24 @@
 	import MediaTile from './MediaTile.svelte';
 	import MediaLightbox from './MediaLightbox.svelte';
 	import MediaUploader from './MediaUploader.svelte';
+	import MediaCompare from './MediaCompare.svelte';
+	import BeforeAfterShareDialog from './BeforeAfterShareDialog.svelte';
 	import type { LocalMediaItem } from './types';
-	import { ImageIcon } from '@lucide/svelte';
 
 	let {
 		jobId,
 		canUpload = false,
-		canDelete = false
+		canDelete = false,
+		contactId = '',
+		contactName = '',
+		canSendMessages = false
 	}: {
 		jobId: string;
 		canUpload?: boolean;
 		canDelete?: boolean;
+		contactId?: string;
+		contactName?: string;
+		canSendMessages?: boolean;
 	} = $props();
 
 	type FilterTag = 'all' | 'before' | 'after' | 'job_photo';
@@ -29,6 +36,28 @@
 	let deleteTarget = $state<string | null>(null);
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
+	let shareOpen = $state(false);
+	let compareOpen = $state(false);
+
+	// Eligible photos for a branded Before/After share — needs at least one of each.
+	const beforeIds = $derived(
+		items
+			.filter((it) => it.status === 'done' && it.id && it.purpose_tag === 'before')
+			.map((it) => it.id!)
+	);
+	const afterIds = $derived(
+		items
+			.filter((it) => it.status === 'done' && it.id && it.purpose_tag === 'after')
+			.map((it) => it.id!)
+	);
+	const canShare = $derived(beforeIds.length > 0 && afterIds.length > 0);
+
+	// All persisted photos, regardless of the active filter tab — the source for
+	// the on-screen Before/After compare overlay. Compare needs at least one of each.
+	const donePhotos = $derived(
+		items.filter((it) => it.status === 'done' && it.media_type !== 'pdf')
+	);
+	const canCompare = $derived(beforeIds.length > 0 && afterIds.length > 0);
 
 	const photoItems = $derived(
 		items.filter(
@@ -42,6 +71,46 @@
 	);
 
 	const lightboxItems = $derived(photoItems.filter((it) => it.status === 'done'));
+
+	// The tab you're standing on becomes the destination for new uploads:
+	// Before → 'before', After → 'after', All → 'job_photo' (General).
+	const uploadTag = $derived(filter === 'before' || filter === 'after' ? filter : 'job_photo');
+	const uploadLabel = $derived(
+		filter === 'before'
+			? 'Add Before photos'
+			: filter === 'after'
+				? 'Add After photos'
+				: 'Add photos'
+	);
+
+	async function retag(localId: string, tag: 'before' | 'after' | 'job_photo') {
+		const item = items.find((it) => it.localId === localId);
+		if (!item?.id || item.purpose_tag === tag) return;
+
+		const prev = item.purpose_tag;
+		// Optimistic
+		items = items.map((it) => (it.localId === localId ? { ...it, purpose_tag: tag } : it));
+		// If the photo no longer matches the active filter, close the lightbox so the
+		// index can't point at a stale slot.
+		if (filter !== 'all' && tag !== filter) lightboxIndex = -1;
+
+		try {
+			const res = await fetch(`/api/media/${item.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ purpose_tag: tag })
+			});
+			if (!res.ok) {
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				toast.error(body.error ?? 'Failed to update tag');
+				// Roll back
+				items = items.map((it) => (it.localId === localId ? { ...it, purpose_tag: prev } : it));
+			}
+		} catch {
+			toast.error('Failed to update tag');
+			items = items.map((it) => (it.localId === localId ? { ...it, purpose_tag: prev } : it));
+		}
+	}
 
 	async function load() {
 		loading = true;
@@ -151,40 +220,51 @@
 	];
 </script>
 
-<section class="rounded-lg border border-border/60 bg-card p-4 shadow-card">
-	<div class="mb-3 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
-		<div class="flex items-center gap-1.5">
-			<ImageIcon class="h-4 w-4 text-muted-foreground" />
-			<h2 class="text-sm font-semibold text-foreground">Photos</h2>
+<section class="media-panel">
+	<div class="media-panel__header media-panel__header--bordered">
+		<div class="media-panel__heading">
+			<i class="ri-image-line media-panel__icon" aria-hidden="true"></i>
+			<h2 class="media-panel__title">Photos</h2>
 			{#if !loading}
-				<span class="text-xs text-muted-foreground"
-					>({items.filter((i) => i.status !== 'error').length})</span
-				>
+				<span class="media-panel__count">({items.filter((i) => i.status !== 'error').length})</span>
 			{/if}
 		</div>
 
-		{#if canUpload}
-			<MediaUploader
-				purposeTag="job_photo"
-				parentFk={{ job_id: jobId }}
-				{onOptimisticAdd}
-				{onOptimisticRemove}
-				{onUploaded}
-			/>
+		{#if canCompare || canUpload}
+			<div class="media-panel__actions">
+				{#if canCompare}
+					<button type="button" class="media-panel__share" onclick={() => (compareOpen = true)}>
+						<i class="ri-contrast-drop-line" aria-hidden="true"></i>
+						Compare
+					</button>
+				{/if}
+				{#if canUpload}
+					{#if canShare}
+						<button type="button" class="media-panel__share" onclick={() => (shareOpen = true)}>
+							<i class="ri-magic-line" aria-hidden="true"></i>
+							Share Before/After
+						</button>
+					{/if}
+					<MediaUploader
+						purposeTag={uploadTag}
+						label={uploadLabel}
+						parentFk={{ job_id: jobId }}
+						{onOptimisticAdd}
+						{onOptimisticRemove}
+						{onUploaded}
+					/>
+				{/if}
+			</div>
 		{/if}
 	</div>
 
 	<!-- Before/After filter -->
-	<div class="mb-3 inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
+	<div class="media-gallery__filter">
 		{#each FILTER_TABS as tab (tab.key)}
 			<button
 				onclick={() => (filter = tab.key)}
-				class={[
-					'min-h-8 rounded-md px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-					filter === tab.key
-						? 'bg-background text-foreground shadow-sm'
-						: 'text-muted-foreground hover:text-foreground'
-				].join(' ')}
+				class="media-gallery__filter-btn"
+				class:media-gallery__filter-btn--active={filter === tab.key}
 			>
 				{tab.label}
 			</button>
@@ -192,9 +272,9 @@
 	</div>
 
 	{#if loading}
-		<div class="grid grid-cols-2 gap-2">
+		<div class="media-gallery__grid">
 			{#each [0, 1, 2, 3] as i (i)}
-				<div class="skeleton-shimmer aspect-square rounded-lg bg-muted"></div>
+				<div class="skeleton-shimmer media-gallery__skeleton"></div>
 			{/each}
 		</div>
 	{:else if photoItems.length === 0}
@@ -203,7 +283,7 @@
 			description={canUpload ? 'Tap "Add photos" to upload' : 'No photos have been uploaded.'}
 		/>
 	{:else}
-		<div class="grid grid-cols-2 gap-2">
+		<div class="media-gallery__grid">
 			{#each photoItems as item (item.localId)}
 				{@const tileItem = (() => {
 					if (item.status === 'done' && !item.thumbnailUrl) {
@@ -226,6 +306,19 @@
 	items={lightboxItems}
 	bind:activeIndex={lightboxIndex}
 	onClose={() => (lightboxIndex = -1)}
+	canRetag={canUpload}
+	onRetag={retag}
+/>
+
+<MediaCompare items={donePhotos} bind:open={compareOpen} onClose={() => (compareOpen = false)} />
+
+<BeforeAfterShareDialog
+	bind:open={shareOpen}
+	{beforeIds}
+	{afterIds}
+	{contactId}
+	{contactName}
+	canSend={canSendMessages}
 />
 
 <ConfirmDialog

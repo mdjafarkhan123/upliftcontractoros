@@ -41,16 +41,7 @@
 	}
 
 	function statusClasses(s: string): string {
-		switch (s) {
-			case 'active':
-				return 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30';
-			case 'suspended':
-				return 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30';
-			case 'pending_deletion':
-				return 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30';
-			default:
-				return 'bg-slate-700/40 text-slate-300 ring-1 ring-slate-600/40';
-		}
+		return `jafar-badge jafar-badge--${s}`;
 	}
 </script>
 
@@ -58,91 +49,52 @@
 	<title>Jafar Dashboard</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<!-- Header (always instant) -->
-	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+<div class="jafar-dash">
+	<div class="jafar-dash__hd">
 		<div>
-			<h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Dashboard</h1>
-			<p class="mt-1 text-sm text-slate-400">
+			<h1 class="jafar-dash__title">Dashboard</h1>
+			<p class="jafar-dash__sub">
 				Manage organizations and monitor platform events.
 				{#if status === 'revalidating'}
-					<span class="ml-1 inline-flex items-center gap-1 text-xs text-slate-500">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="10"
-							height="10"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class="animate-spin"
-							aria-hidden="true"
-						>
-							<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-						</svg>
+					<span class="jafar-dash__refresh">
+						<i class="ri-loader-4-line" aria-hidden="true"></i>
 						Refreshing
 					</span>
 				{/if}
 			</p>
 		</div>
-		<a
-			href="/jafar/orgs/new"
-			class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-red-500 to-red-600 px-4 text-sm font-semibold text-white shadow-md shadow-red-900/40 hover:from-red-500 hover:to-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 transition-all"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.4"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<line x1="12" y1="5" x2="12" y2="19" />
-				<line x1="5" y1="12" x2="19" y2="12" />
-			</svg>
+		<a href="/jafar/orgs/new" class="jafar-btn jafar-btn--red">
+			<i class="ri-add-line" aria-hidden="true"></i>
 			Create organization
 		</a>
 	</div>
 
-	<!-- SMS master-balance safety floor & kill switch (platform-wide) -->
 	<SmsMasterFloorCard />
-
-	<!-- Platform system email sending domain (PO-managed, outbound-only) -->
 	<PlatformEmailDomainPanel />
 
 	{#if showSkeleton}
 		<AdminTableSkeleton columns={6} rows={6} title="Loading organizations" />
 		<AdminTableSkeleton columns={6} rows={3} title="Loading dead letters" />
 	{:else if showError}
-		<div
-			role="alert"
-			class="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-6 text-center"
-		>
-			<p class="text-sm font-semibold text-red-200">Failed to load dashboard</p>
-			<p class="mt-1 text-xs text-red-300/80">{fetchError ?? 'Unknown error.'}</p>
+		<div role="alert" class="jafar-alert jafar-alert--error jafar-alert--center">
+			<p class="jafar-alert__title">Failed to load dashboard</p>
+			<p class="jafar-alert__text">{fetchError ?? 'Unknown error.'}</p>
 			<button
 				type="button"
 				onclick={() => jafarDashboardStore.refresh()}
-				class="mt-4 inline-flex h-9 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 text-xs font-semibold text-red-100 hover:border-red-400/60 hover:bg-red-500/20 transition-colors cursor-pointer"
+				class="jafar-btn"
+				style="margin-top: 0.5rem;"
 			>
 				Retry
 			</button>
 		</div>
 	{:else}
 		<!-- Organizations -->
-		<section
-			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-		>
-			<header class="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+		<section class="jafar-panel">
+			<header class="jafar-panel__head">
 				<div>
-					<h2 class="text-base font-semibold text-white">Organizations</h2>
-					<p class="mt-0.5 text-xs text-slate-500">
+					<h2 class="jafar-panel__title">Organizations</h2>
+					<p class="jafar-panel__sub">
 						{orgs.length}
 						{orgs.length === 1 ? 'organization' : 'organizations'}
 					</p>
@@ -150,70 +102,60 @@
 			</header>
 
 			{#if orgs.length === 0}
-				<div class="px-5 py-12 text-center">
-					<p class="text-sm text-slate-400">No organizations yet.</p>
-					<p class="mt-1 text-xs text-slate-500">Create your first organization to get started.</p>
+				<div class="jafar-panel__body jafar-dash__empty">
+					<p>No organizations yet.</p>
+					<p>Create your first organization to get started.</p>
 				</div>
 			{:else}
-				<div class="overflow-x-auto">
-					<table class="w-full text-sm">
-						<thead
-							class="bg-slate-950/60 text-[11px] font-semibold uppercase tracking-wider text-slate-400"
-						>
+				<div class="jafar-dash__scroll">
+					<table class="jafar-tbl">
+						<thead>
 							<tr>
-								<th class="px-5 py-3 text-left">Name</th>
-								<th class="px-5 py-3 text-left">Status</th>
-								<th class="px-5 py-3 text-left">Trade</th>
-								<th class="px-5 py-3 text-left">Setup</th>
-								<th class="px-5 py-3 text-left">Created</th>
-								<th class="px-5 py-3 text-right"></th>
+								<th>Name</th>
+								<th>Status</th>
+								<th>Trade</th>
+								<th>Setup</th>
+								<th>Created</th>
+								<th></th>
 							</tr>
 						</thead>
-						<tbody class="divide-y divide-slate-800/70">
+						<tbody>
 							{#each orgs as org (org.id)}
-								<tr class="hover:bg-slate-800/30 transition-colors">
-									<td class="px-5 py-3.5">
-										<div class="font-medium text-white">{org.name}</div>
-										<div class="text-xs text-slate-500">{org.slug}</div>
+								<tr>
+									<td>
+										<div class="jafar-tbl__name">{org.name}</div>
+										<div class="jafar-tbl__sub">{org.slug}</div>
 									</td>
-									<td class="px-5 py-3.5">
-										<span
-											class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize {statusClasses(
-												org.status
-											)}"
-										>
+									<td>
+										<span class={statusClasses(org.status)}>
 											{org.status.replace('_', ' ')}
 										</span>
 									</td>
-									<td class="px-5 py-3.5 text-slate-300">{org.trade_type}</td>
-									<td class="px-5 py-3.5">
+									<td>{org.trade_type}</td>
+									<td>
 										{#if org.is_setup_complete}
-											<span class="text-emerald-400 text-xs font-medium">Complete</span>
+											<span class="jafar-dash__ok">Complete</span>
 										{:else}
-											<span class="text-slate-500 text-xs">Pending</span>
+											<span class="jafar-dash__muted">Pending</span>
 										{/if}
 									</td>
-									<td class="px-5 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+									<td class="jafar-tbl__mono">
 										{new Date(org.created_at).toLocaleDateString()}
 									</td>
-									<td class="px-5 py-3.5 text-right">
-										<div class="inline-flex items-center gap-2">
+									<td>
+										<div class="jafar-tbl__actions">
 											<a
 												href="{resolveRoute('/jafar/orgs/[id]', { id: org.id })}?tab=details"
 												data-sveltekit-preload-code="viewport"
 												data-sveltekit-preload-data="hover"
-												class="inline-flex h-8 items-center rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
-											>
-												View Details
-											</a>
+												class="jafar-btn jafar-btn--sm"
+											>View Details</a>
 											<a
 												href={resolveRoute('/jafar/orgs/[id]', { id: org.id })}
 												data-sveltekit-preload-code="viewport"
 												data-sveltekit-preload-data="hover"
-												class="inline-flex h-8 items-center rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-colors"
-											>
-												Open
-											</a>
+												class="jafar-btn jafar-btn--sm"
+											>Open</a>
 										</div>
 									</td>
 								</tr>
@@ -225,89 +167,69 @@
 		</section>
 
 		<!-- Dead Letters -->
-		<section
-			class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-		>
-			<header class="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+		<section class="jafar-panel">
+			<header class="jafar-panel__head jafar-panel__head--between">
 				<div>
-					<h2 class="text-base font-semibold text-white">Dead letters</h2>
-					<p class="mt-0.5 text-xs text-slate-500">Failed events requiring manual review.</p>
+					<h2 class="jafar-panel__title">Dead letters</h2>
+					<p class="jafar-panel__sub">Failed events requiring manual review.</p>
 				</div>
 				{#if deadLetters.length > 0}
-					<span
-						class="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-300 ring-1 ring-red-500/30"
-					>
-						{deadLetters.length} pending
-					</span>
+					<span class="jafar-badge jafar-badge--red">{deadLetters.length} pending</span>
 				{/if}
 			</header>
 
 			{#if actionError}
-				<div
-					class="border-b border-red-500/30 bg-red-500/10 px-5 py-3 text-sm text-red-300"
-					role="alert"
-				>
-					{actionError}
-				</div>
+				<div role="alert" class="jafar-dash__action-err">{actionError}</div>
 			{/if}
 
 			{#if deadLetters.length === 0}
-				<div class="px-5 py-12 text-center">
-					<p class="text-sm text-slate-400">No dead-lettered events.</p>
-					<p class="mt-1 text-xs text-slate-500">The outbox worker is healthy.</p>
+				<div class="jafar-panel__body jafar-dash__empty">
+					<p>No dead-lettered events.</p>
+					<p>The outbox worker is healthy.</p>
 				</div>
 			{:else}
-				<div class="overflow-x-auto">
-					<table class="w-full text-sm">
-						<thead
-							class="bg-slate-950/60 text-[11px] font-semibold uppercase tracking-wider text-slate-400"
-						>
+				<div class="jafar-dash__scroll">
+					<table class="jafar-tbl">
+						<thead>
 							<tr>
-								<th class="px-5 py-3 text-left">Org</th>
-								<th class="px-5 py-3 text-left">Event</th>
-								<th class="px-5 py-3 text-left">Error</th>
-								<th class="px-5 py-3 text-left">Attempts</th>
-								<th class="px-5 py-3 text-left">Failed at</th>
-								<th class="px-5 py-3 text-right"></th>
+								<th>Org</th>
+								<th>Event</th>
+								<th>Error</th>
+								<th>Attempts</th>
+								<th>Failed at</th>
+								<th></th>
 							</tr>
 						</thead>
-						<tbody class="divide-y divide-slate-800/70">
+						<tbody>
 							{#each deadLetters as event (event.id)}
-								<tr class="hover:bg-slate-800/30 transition-colors">
-									<td class="px-5 py-3.5 font-mono text-xs text-slate-400">
+								<tr>
+									<td class="jafar-tbl__mono">
 										{event.org_id ? event.org_id.slice(0, 8) + '…' : 'platform'}
 									</td>
-									<td class="px-5 py-3.5 text-slate-300">{event.event_type}</td>
-									<td
-										class="px-5 py-3.5 text-xs text-slate-400 max-w-xs truncate"
-										title={event.last_error ?? ''}
-									>
+									<td>{event.event_type}</td>
+									<td class="jafar-dash__error-cell" title={event.last_error ?? ''}>
 										{event.last_error ?? '—'}
 									</td>
-									<td class="px-5 py-3.5 text-slate-300">{event.attempts}</td>
-									<td class="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">
+									<td>{event.attempts}</td>
+									<td class="jafar-tbl__mono">
 										{event.dead_lettered_at
 											? new Date(event.dead_lettered_at).toLocaleString()
 											: '—'}
 									</td>
-									<td class="px-5 py-3.5 text-right">
-										<div class="inline-flex items-center gap-2">
+									<td>
+										<div class="jafar-tbl__actions">
 											<button
 												type="button"
 												disabled={busyEventId === event.id}
 												onclick={() => postEventAction(event.id, 'retry')}
-												class="inline-flex h-8 items-center rounded-lg bg-slate-800 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-											>
-												Retry
-											</button>
+												class="jafar-btn jafar-btn--sm"
+											>Retry</button>
 											<button
 												type="button"
 												disabled={busyEventId === event.id}
 												onclick={() => postEventAction(event.id, 'dismiss')}
-												class="inline-flex h-8 items-center rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-400 hover:border-slate-600 hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-											>
-												Dismiss
-											</button>
+												class="jafar-btn jafar-btn--sm jafar-btn--ghost"
+											>Dismiss</button>
 										</div>
 									</td>
 								</tr>
@@ -319,9 +241,86 @@
 		</section>
 
 		{#if fetchError && hasCache}
-			<p class="text-xs text-amber-400/80" role="status">
+			<p class="jafar-dash__cache-warn" role="status">
 				{fetchError} Showing cached data.
 			</p>
 		{/if}
 	{/if}
 </div>
+
+<style lang="scss">
+	.jafar-dash {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+
+		&__hd {
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+			@media (min-width: 640px) {
+				flex-direction: row;
+				align-items: center;
+				justify-content: space-between;
+			}
+		}
+
+		&__title {
+			font-size: 1.5rem;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+			color: #fff;
+			@media (min-width: 640px) { font-size: 1.875rem; }
+		}
+
+		&__sub {
+			margin-top: 0.25rem;
+			font-size: 0.875rem;
+			color: #94a3b8;
+		}
+
+		&__refresh {
+			margin-left: 0.25rem;
+			display: inline-flex;
+			align-items: center;
+			gap: 0.25rem;
+			font-size: 0.75rem;
+			color: #64748b;
+			i { animation: jafar-spin 0.7s linear infinite; font-size: 0.625rem; }
+		}
+
+		&__scroll { overflow-x: auto; }
+
+		&__empty {
+			padding: 3rem 1.25rem;
+			text-align: center;
+			p:first-child { font-size: 0.875rem; color: #94a3b8; }
+			p + p { margin-top: 0.25rem; font-size: 0.75rem; color: #64748b; }
+		}
+
+		&__ok    { font-size: 0.75rem; font-weight: 500; color: #34d399; }
+		&__muted { font-size: 0.75rem; color: #64748b; }
+
+		&__action-err {
+			border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+			background: rgba(239, 68, 68, 0.1);
+			padding: 0.75rem 1.25rem;
+			font-size: 0.875rem;
+			color: #fca5a5;
+		}
+
+		&__error-cell {
+			font-size: 0.75rem;
+			color: #94a3b8;
+			max-width: 20rem;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		&__cache-warn {
+			font-size: 0.75rem;
+			color: rgba(251, 191, 36, 0.8);
+		}
+	}
+</style>

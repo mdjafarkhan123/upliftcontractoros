@@ -1,32 +1,121 @@
 <script lang="ts">
-	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import ListPageShell from '$lib/components/shared/ListPageShell.svelte';
+	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import InvoicesFilterTabs from '$lib/components/invoices/InvoicesFilterTabs.svelte';
+	import InvoiceStatsBar from '$lib/components/invoices/InvoiceStatsBar.svelte';
+	import InvoiceTable from '$lib/components/invoices/InvoiceTable.svelte';
 	import InvoiceListItem from '$lib/components/invoices/InvoiceListItem.svelte';
 	import ListSearchBar from '$lib/components/shared/ListSearchBar.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
-	import type { InvoicesGroup, InvoicesStatusChip } from '$lib/types/invoices';
-	import { Receipt, Plus } from '@lucide/svelte';
+	import { invoiceStatsStore } from '$lib/stores/invoiceStats.svelte';
+	import type { InvoicesGroup, InvoicesStatusChip, InvoiceListItem as InvoiceRow } from '$lib/types/invoices';
 	import { goto } from '$app/navigation';
+	import { getMemberContext } from '$lib/context/member';
+	import { toast } from '$lib/stores/toast.svelte';
+
+	const member = getMemberContext();
+	const canEdit = $derived(member().can_create_invoices);
+	const canSend = $derived(member().can_send_invoices);
+	const canCancel = $derived(member().can_delete_invoices);
 
 	let group = $state<InvoicesGroup>('all');
 	let statusChip = $state<InvoicesStatusChip>('all');
 	let searchValue = $state('');
-	let search = $state('');
-	const filters = $derived({ group, status: statusChip, search });
+	let searchQuery = $state('');
+	const filters = $derived({ group, status: statusChip, search: searchQuery });
 
 	$effect(() => {
 		void invoicesStore.load(filters);
+	});
+
+	// ── Send + Cancel — one lazy ConfirmDialog, mirroring the Quotes page ─────────
+	let confirmAction = $state<{ kind: 'send' | 'cancel'; invoice: InvoiceRow } | null>(null);
+	let confirmOpen = $state(false);
+	let confirmBusy = $state(false);
+
+	const confirmCopy = $derived.by(() => {
+		if (!confirmAction) return null;
+		const { kind, invoice } = confirmAction;
+		if (kind === 'send') {
+			return {
+				title: `Send ${invoice.invoice_number_display}?`,
+				description: `${invoice.contact_name} will receive this invoice and can pay it online.`,
+				confirmLabel: 'Send to client',
+				variant: 'default' as const
+			};
+		}
+		return {
+			title: `Cancel ${invoice.invoice_number_display}?`,
+			description: `This invoice for ${invoice.contact_name} will be voided. You can't collect payment on a cancelled invoice.`,
+			confirmLabel: 'Cancel invoice',
+			variant: 'destructive' as const
+		};
+	});
+
+	function requestSend(invoice: InvoiceRow) {
+		confirmAction = { kind: 'send', invoice };
+		confirmOpen = true;
+	}
+	function requestCancel(invoice: InvoiceRow) {
+		confirmAction = { kind: 'cancel', invoice };
+		confirmOpen = true;
+	}
+
+	async function handleConfirm() {
+		if (!confirmAction || confirmBusy) return;
+		confirmBusy = true;
+		const { kind, invoice } = confirmAction;
+		try {
+			if (kind === 'send') {
+				const res = await fetch(`/api/invoices/${invoice.id}/send`, { method: 'POST' });
+				const body = await res.json().catch(() => ({}));
+				if (!res.ok) {
+					toast.error(body.error ?? 'Failed to send invoice');
+					return;
+				}
+				invoicesStore.update({
+					id: invoice.id,
+					status: 'sent',
+					sent_at: body.data?.sent_at ?? new Date().toISOString()
+				});
+				void invoiceStatsStore.load(true);
+				toast.success(`${invoice.invoice_number_display} sent to ${invoice.contact_name}`);
+				confirmOpen = false;
+				return;
+			}
+			const res = await fetch(`/api/invoices/${invoice.id}/cancel`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Failed to cancel invoice');
+				return;
+			}
+			invoicesStore.update({ id: invoice.id, status: 'cancelled' });
+			void invoiceStatsStore.load(true);
+			toast.success(`${invoice.invoice_number_display} cancelled`);
+			confirmOpen = false;
+		} catch {
+			toast.error('Network error');
+		} finally {
+			confirmBusy = false;
+		}
+	}
+
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (!confirmOpen || ConfirmDialog) return;
+		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
+			ConfirmDialog = m.default;
+		});
 	});
 
 	const items = $derived(invoicesStore.items);
 	const nextCursor = $derived(invoicesStore.nextCursor);
 	const status = $derived(invoicesStore.status);
 	const errorMsg = $derived(invoicesStore.error);
-	const showSkeleton = $derived(status === 'loading' && items.length === 0);
-	const showError = $derived(status === 'error' && items.length === 0);
 
 	let loadingMore = $state(false);
 	async function loadMore() {
@@ -41,54 +130,113 @@
 
 <PageWrapper title="Invoices" subtitle="Sent, paid, and outstanding">
 	{#snippet actions()}
-		<Button onclick={() => goto('/invoices/new')}>
-			<Plus class="mr-1 h-4 w-4" />New invoice
+		<Button type="button" onclick={() => goto('/invoices/new')}>
+			<i class="ri-add-line" aria-hidden="true"></i>
+			New invoice
 		</Button>
 	{/snippet}
 
-	<div class="space-y-4">
-		<ListSearchBar
-			bind:value={searchValue}
-			placeholder="Search invoices by number, title, or client"
-			onInput={(v) => (search = v)}
-		/>
+	<ListPageShell
+		{status}
+		itemCount={items.length}
+		{errorMsg}
+		{nextCursor}
+		{loadingMore}
+		onLoadMore={loadMore}
+		skeletonLines={6}
+		skeletonHeight="56px"
+		skeletonLabel="Loading invoices"
+	>
+		{#snippet kpi()}
+			<InvoiceStatsBar />
+		{/snippet}
 
-		<InvoicesFilterTabs bind:group bind:status={statusChip} />
+		{#snippet tabs()}
+			<InvoicesFilterTabs bind:group bind:status={statusChip} />
+		{/snippet}
 
-		{#if showSkeleton}
-			<SkeletonLoader lines={6} height="84px" label="Loading invoices" />
-		{:else if showError}
-			<p class="text-sm text-destructive">{errorMsg}</p>
-		{:else if items.length === 0}
-			{#if search}
+		{#snippet search()}
+			<ListSearchBar
+				bind:value={searchValue}
+				placeholder="Search invoices by number, title, or client"
+				onInput={(v) => (searchQuery = v)}
+			/>
+		{/snippet}
+
+		{#snippet empty()}
+			{#if searchQuery}
 				<EmptyState
-					icon={Receipt}
+					iconClass="ri-receipt-line"
 					title="No invoices match your search"
-					description={`No invoices found for “${search}”. Try an invoice number, title, or client name.`}
+					description={`No invoices found for "${searchQuery}". Try an invoice number, title, or client name.`}
 				/>
 			{:else}
 				<EmptyState
-					icon={Receipt}
+					iconClass="ri-receipt-line"
 					title="No invoices yet"
 					description="Invoices you create will appear here. Send one to a customer to start collecting payment."
 					actionLabel="New invoice"
 					onAction={() => goto('/invoices/new')}
 				/>
 			{/if}
-		{:else}
-			<ul class="grid gap-3">
+		{/snippet}
+
+		{#snippet content()}
+			<!-- Desktop: table -->
+			<div class="invoices-page__table">
+				<InvoiceTable
+					{items}
+					{canEdit}
+					{canSend}
+					{canCancel}
+					onSend={requestSend}
+					onCancel={requestCancel}
+				/>
+			</div>
+
+			<!-- Mobile: cards -->
+			<ul class="invoices-page__cards">
 				{#each items as invoice (invoice.id)}
 					<li><InvoiceListItem {invoice} /></li>
 				{/each}
 			</ul>
-
-			{#if nextCursor}
-				<div class="flex justify-center pt-2">
-					<Button variant="outline" disabled={loadingMore} onclick={loadMore}>
-						{loadingMore ? 'Loading…' : 'Load more'}
-					</Button>
-				</div>
-			{/if}
-		{/if}
-	</div>
+		{/snippet}
+	</ListPageShell>
 </PageWrapper>
+
+{#if confirmAction && confirmCopy && ConfirmDialog}
+	<ConfirmDialog
+		bind:open={confirmOpen}
+		title={confirmCopy.title}
+		description={confirmCopy.description}
+		confirmLabel={confirmCopy.confirmLabel}
+		variant={confirmCopy.variant}
+		loading={confirmBusy}
+		onConfirm={handleConfirm}
+	/>
+{/if}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	// Toolbar / search / load-more / skeleton now live in <ListPageShell>. Only the
+	// invoices-specific desktop-table vs mobile-card switch remains here.
+	.invoices-page {
+		&__table {
+			display: none;
+			@media (min-width: $bp-tablet) {
+				display: block;
+			}
+		}
+		&__cards {
+			display: grid;
+			gap: $space-3;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+	}
+</style>

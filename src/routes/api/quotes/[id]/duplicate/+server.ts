@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { orgCounters, quoteLineItems, quotes } from '$lib/server/db/schema';
+import { orgCounters, quoteLineItems, quotePackages, quotes } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateQuote } from '$lib/server/quotes/permissions';
 import { recalcQuoteTotals } from '$lib/server/quotes/recalc';
@@ -40,11 +40,13 @@ export const POST: RequestHandler = async (event) => {
 
 		const sourceLines = await tx
 			.select({
+				package_id: quoteLineItems.package_id,
 				description: quoteLineItems.description,
 				quantity: quoteLineItems.quantity,
 				unit: quoteLineItems.unit,
 				section_label: quoteLineItems.section_label,
 				is_optional: quoteLineItems.is_optional,
+				taxable: quoteLineItems.taxable,
 				unit_price: quoteLineItems.unit_price,
 				unit_cost: quoteLineItems.unit_cost,
 				source_catalog_item_id: quoteLineItems.source_catalog_item_id,
@@ -60,6 +62,27 @@ export const POST: RequestHandler = async (event) => {
 				)
 			)
 			.orderBy(asc(quoteLineItems.position));
+
+		// Good-Better-Best: copy the source tiers too. Carry each source package_key onto the
+		// copy (it has no unique constraint) so we can remap each copied line's package_id from
+		// the original package id → new package id. Empty on a simple quote.
+		const sourcePackages = await tx
+			.select({
+				id: quotePackages.id,
+				package_key: quotePackages.package_key,
+				name: quotePackages.name,
+				is_recommended: quotePackages.is_recommended,
+				position: quotePackages.position
+			})
+			.from(quotePackages)
+			.where(
+				and(
+					eq(quotePackages.quote_id, sourceId),
+					eq(quotePackages.org_id, auth.orgId),
+					isNull(quotePackages.deleted_at)
+				)
+			)
+			.orderBy(asc(quotePackages.position));
 
 		// Allocate the next quote number (same self-healing pattern as the create route).
 		await tx.execute(sql`
@@ -101,16 +124,42 @@ export const POST: RequestHandler = async (event) => {
 			})
 			.returning();
 
+		// Insert copied packages first, then map original package id → new package id (via the
+		// carried package_key) so each copied line re-points at the copy's own tier.
+		const newPackageIdByOrigId = new Map<string, string>();
+		if (sourcePackages.length > 0) {
+			const insertedPkgs = await tx
+				.insert(quotePackages)
+				.values(
+					sourcePackages.map((p, idx) => ({
+						org_id: auth.orgId,
+						quote_id: inserted.id,
+						package_key: p.package_key,
+						name: p.name,
+						is_recommended: p.is_recommended,
+						position: p.position ?? idx
+					}))
+				)
+				.returning({ id: quotePackages.id, package_key: quotePackages.package_key });
+			const newIdByKey = new Map(insertedPkgs.map((pk) => [pk.package_key, pk.id]));
+			for (const p of sourcePackages) {
+				const newId = newIdByKey.get(p.package_key);
+				if (newId) newPackageIdByOrigId.set(p.id, newId);
+			}
+		}
+
 		if (sourceLines.length > 0) {
 			await tx.insert(quoteLineItems).values(
 				sourceLines.map((li, idx) => ({
 					org_id: auth.orgId,
 					quote_id: inserted.id,
+					package_id: li.package_id ? (newPackageIdByOrigId.get(li.package_id) ?? null) : null,
 					description: li.description,
 					quantity: li.quantity,
 					unit: li.unit,
 					section_label: li.section_label,
 					is_optional: li.is_optional,
+					taxable: li.taxable,
 					unit_price: li.unit_price,
 					unit_cost: li.unit_cost,
 					source_catalog_item_id: li.source_catalog_item_id,

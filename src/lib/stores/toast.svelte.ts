@@ -1,6 +1,10 @@
 export type ToastVariant = 'success' | 'error' | 'info';
 
-export type ToastAction = { label: string; href: string };
+// A toast can carry ONE action: either a link (navigation) or a click callback
+// (e.g. "Undo" — revert an optimistic change). `icon` overrides the default glyph.
+export type ToastAction =
+	| { label: string; href: string; icon?: string }
+	| { label: string; onClick: () => void; icon?: string };
 
 export type Toast = {
 	id: string;

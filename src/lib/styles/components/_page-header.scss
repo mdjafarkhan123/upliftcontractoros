@@ -1,0 +1,110 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// PAGE HEADER — Sticky page title bar that stays visible while scrolling content.
+// Sticks to top of viewport on all breakpoints.
+// =============================================================================
+
+.page-header {
+	position: sticky;
+	top: 0;
+	z-index: $z-sticky;
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin: 0 (-$space-4) $space-5;
+	padding: 0 $space-4 $space-4;
+	min-height: 56px;
+	background: var(--color-bg-app);
+	border-bottom: 1px solid var(--color-border);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+
+	@media (min-width: $bp-tablet) {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin: 0 (-$space-6) $space-6;
+		padding: 0 $space-6 $space-3 $space-6;
+		min-height: 64px;
+	}
+
+	&__lead {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-width: 0;
+	}
+
+	&__back {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		cursor: pointer;
+		box-shadow: var(--shadow-sm);
+		transition:
+			transform $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard;
+
+		i {
+			font-size: 18px;
+		}
+
+		&:hover {
+			transform: translateX(-2px);
+			border-color: var(--color-brand);
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__titles {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		min-width: 0;
+	}
+
+	&__title {
+		margin: 0;
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		line-height: 1.2;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+
+		@media (min-width: $bp-tablet) {
+			font-size: $fs-h2;
+		}
+	}
+
+	&__subtitle {
+		margin: 0;
+		max-width: 768px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		flex-shrink: 0;
+	}
+}

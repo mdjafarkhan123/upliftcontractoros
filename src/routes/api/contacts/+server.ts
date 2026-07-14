@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, ne, isNull, isNotNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { contacts, outboxEvents, orgMembers } from '$lib/server/db/schema';
+import { contacts, contactAddresses, outboxEvents, orgMembers } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { toE164, isReleasedPhone, PhoneInvalidError } from '$lib/utils/phone';
 import { createContactSchema } from '$lib/server/contacts/schemas';
@@ -295,6 +295,10 @@ export const POST: RequestHandler = async (event) => {
 				? 'referral'
 				: (input.lead_source ?? 'manual');
 
+			// Created directly as a customer stamps the first-conversion timestamp,
+			// mirroring the lead → customer PATCH transition.
+			const status = input.status ?? 'lead';
+
 			const [inserted] = await tx
 				.insert(contacts)
 				.values({
@@ -306,6 +310,8 @@ export const POST: RequestHandler = async (event) => {
 					// Label only meaningful when there is an alt number.
 					alt_phone_label: altE164 ? (input.alt_phone_label ?? null) : null,
 					email: input.email ?? null,
+					status,
+					converted_at: status === 'customer' ? new Date() : null,
 					lead_source: effectiveLeadSource,
 					lead_temperature: input.lead_temperature ?? null,
 					assigned_to: input.assigned_to ?? null,
@@ -314,6 +320,22 @@ export const POST: RequestHandler = async (event) => {
 					tags: input.tags ?? []
 				})
 				.returning();
+
+			// Optional service address captured on the create form — inserted in the
+			// same transaction and always primary (it's the contact's first address).
+			if (input.address) {
+				await tx.insert(contactAddresses).values({
+					org_id: auth.orgId,
+					contact_id: inserted.id,
+					label: input.address.label,
+					address_line_1: input.address.address_line_1,
+					address_line_2: input.address.address_line_2 ?? null,
+					city: input.address.city,
+					state: input.address.state,
+					zip: input.address.zip,
+					is_primary: true
+				});
+			}
 
 			await tx.insert(outboxEvents).values({
 				org_id: auth.orgId,

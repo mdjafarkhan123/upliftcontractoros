@@ -1,21 +1,23 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
-	import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { untrack } from 'svelte';
 	import * as Popover from '$lib/components/ui/popover';
-	import { cn } from '$lib/utils/cn';
 
 	let {
 		value = $bindable(''),
 		placeholder = 'Pick a date',
 		disabled = false,
 		min = '',
-		class: className
+		class: className,
+		onValueChange
 	}: {
 		value?: string;
 		placeholder?: string;
 		disabled?: boolean;
 		min?: string;
 		class?: string;
+		// Fired after the value changes (pick or clear). Useful when the caller keeps the
+		// date in a composed field and can't use `bind:value` (e.g. date + separate time).
+		onValueChange?: (value: string) => void;
 	} = $props();
 
 	const MONTH_NAMES = [
@@ -115,6 +117,7 @@
 
 	function pickDate(dateStr: string) {
 		value = dateStr;
+		onValueChange?.(dateStr);
 		open = false;
 	}
 
@@ -137,16 +140,11 @@
 				{...props}
 				type="button"
 				{disabled}
-				class={cn(
-					'flex h-11 w-full items-center gap-2.5 rounded-md border border-input bg-background px-3 text-sm transition-all duration-150',
-					'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-					disabled && 'cursor-not-allowed opacity-50',
-					!value && 'text-muted-foreground',
-					className
-				)}
+				class="cal-pick__trigger {className ?? ''}"
+				class:cal-pick__trigger--empty={!value}
 			>
-				<CalendarIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
-				<span class="flex-1 text-left">{displayLabel || placeholder}</span>
+				<i class="ri-calendar-line" aria-hidden="true"></i>
+				<span>{displayLabel || placeholder}</span>
 			</button>
 		{/snippet}
 	</Popover.Trigger>
@@ -156,44 +154,34 @@
 		side="bottom"
 		sideOffset={8}
 		collisionPadding={12}
-		class="w-auto max-w-[calc(100vw-32px)] overflow-hidden p-0 shadow-[var(--shadow-dropdown)]"
+		class="cal-pick__popover"
 	>
-		<div class="flex flex-col p-4">
+		<div class="cal-pick">
 			<!-- Month navigation -->
-			<div class="mb-3 flex items-center justify-between gap-2">
+			<div class="cal-pick__nav">
 				<button
 					type="button"
+					class="cal-pick__nav-btn"
 					onclick={prevMonth}
-					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
+					aria-label="Previous month"
 				>
-					<ChevronLeft class="h-3.5 w-3.5" />
+					<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 				</button>
-				<span class="min-w-[138px] text-center text-sm font-semibold text-foreground">
-					{MONTH_NAMES[viewMonth]}
-					{viewYear}
-				</span>
-				<button
-					type="button"
-					onclick={nextMonth}
-					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-				>
-					<ChevronRight class="h-3.5 w-3.5" />
+				<span class="cal-pick__month-label">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+				<button type="button" class="cal-pick__nav-btn" onclick={nextMonth} aria-label="Next month">
+					<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 				</button>
 			</div>
 
 			<!-- Day-of-week headers -->
-			<div class="mb-1 grid grid-cols-7">
+			<div class="cal-pick__day-headers">
 				{#each DAY_HEADERS as hdr}
-					<div
-						class="flex h-8 w-9 items-center justify-center text-[11px] font-medium tracking-wide text-muted-foreground"
-					>
-						{hdr}
-					</div>
+					<div class="cal-pick__day-hdr">{hdr}</div>
 				{/each}
 			</div>
 
 			<!-- Days grid -->
-			<div class="grid grid-cols-7">
+			<div class="cal-pick__days">
 				{#each calendarDays as cell (cell.dateStr)}
 					{@const isSelected = cell.dateStr === value}
 					{@const isToday = cell.dateStr === todayStr}
@@ -201,19 +189,14 @@
 						type="button"
 						onclick={() => pickDate(cell.dateStr)}
 						disabled={cell.disabled}
-						class={cn(
-							'relative flex h-9 w-9 items-center justify-center rounded-full text-sm transition-all duration-150',
-							cell.disabled && 'pointer-events-none text-muted-foreground/25',
-							!cell.disabled && !isSelected && 'text-foreground hover:bg-muted',
-							isSelected && 'bg-primary text-primary-foreground font-medium hover:bg-primary/90',
-							isToday && !isSelected && 'font-semibold'
-						)}
+						class="cal-pick__day"
+						class:cal-pick__day--muted={cell.disabled}
+						class:cal-pick__day--today={isToday && !isSelected}
+						class:cal-pick__day--selected={isSelected}
 					>
 						{cell.day}
 						{#if isToday && !isSelected}
-							<span
-								class="absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-primary"
-							></span>
+							<span class="cal-pick__today-dot"></span>
 						{/if}
 					</button>
 				{/each}
@@ -223,11 +206,12 @@
 			{#if value}
 				<button
 					type="button"
+					class="cal-pick__clear"
 					onclick={() => {
 						value = '';
+						onValueChange?.('');
 						open = false;
 					}}
-					class="mt-2 flex h-8 w-full items-center justify-center rounded-md text-xs text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
 				>
 					Clear date
 				</button>

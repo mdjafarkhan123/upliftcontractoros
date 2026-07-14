@@ -57,7 +57,8 @@ interface AssertAndIncrementUsageArgs {
 	/**
 	 * Signed delta. Positive consumes quota; negative releases (storage delete,
 	 * workflow delete/disable). Negative values never throw on the limit; the
-	 * DB CHECK (value >= 0) protects against underflow.
+	 * stored value is floored at 0 via GREATEST so a release can never push the
+	 * counter below zero (which the DB CHECK (value >= 0) would otherwise reject).
 	 */
 	increment: number;
 }
@@ -71,8 +72,8 @@ interface AssertAndIncrementUsageArgs {
  *  - Throws `UsageLimitExceededError` (HTTP 403 by convention) if the new
  *    value exceeds the limit AND the increment is positive. The throw rolls
  *    back the surrounding tx, so the counter does not move.
- *  - Negative increments are always allowed; underflow is guarded by the DB
- *    CHECK constraint.
+ *  - Negative increments are always allowed; the stored value is floored at 0
+ *    (GREATEST) so it can never underflow past the DB CHECK (value >= 0).
  */
 export async function assertAndIncrementUsage(
 	tx: DrizzleTx,
@@ -90,10 +91,10 @@ export async function assertAndIncrementUsage(
 
 	const rows = await tx.execute<{ value: string | number }>(sql`
 		INSERT INTO org_usage (org_id, period_start_date, metric, value, last_incremented_at)
-		VALUES (${orgId}, ${periodExpr}, ${metric}, ${increment}, now())
+		VALUES (${orgId}, ${periodExpr}, ${metric}, GREATEST(0, ${increment}::bigint), now())
 		ON CONFLICT (org_id, period_start_date, metric)
 		DO UPDATE SET
-			value = org_usage.value + EXCLUDED.value,
+			value = GREATEST(0, org_usage.value + ${increment}::bigint),
 			last_incremented_at = now()
 		RETURNING value
 	`);

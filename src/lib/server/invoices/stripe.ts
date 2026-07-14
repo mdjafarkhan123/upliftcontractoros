@@ -22,7 +22,18 @@ export async function createCheckoutSession(args: {
 	lineItems: CheckoutLineInput[];
 	successUrl: string;
 	cancelUrl: string;
+	// Tip portion of this checkout (M7), in cents. Carried through metadata so the webhook
+	// can split the received total into balance (payments.amount) vs tip (payments.tip_amount).
+	// The caller adds the actual tip line to lineItems; here we only record the amount. Default 0.
+	tipCents?: number;
 }): Promise<Stripe.Checkout.Session> {
+	const metadata = {
+		kind: 'invoice_payment',
+		invoice_id: args.invoiceId,
+		org_id: args.orgId,
+		invoice_number_display: args.invoiceNumberDisplay,
+		tip_cents: String(args.tipCents ?? 0)
+	};
 	return args.stripe.checkout.sessions.create({
 		mode: 'payment',
 		customer_email: args.customerEmail ?? undefined,
@@ -36,20 +47,8 @@ export async function createCheckoutSession(args: {
 		})),
 		success_url: args.successUrl,
 		cancel_url: args.cancelUrl,
-		payment_intent_data: {
-			metadata: {
-				kind: 'invoice_payment',
-				invoice_id: args.invoiceId,
-				org_id: args.orgId,
-				invoice_number_display: args.invoiceNumberDisplay
-			}
-		},
-		metadata: {
-			kind: 'invoice_payment',
-			invoice_id: args.invoiceId,
-			org_id: args.orgId,
-			invoice_number_display: args.invoiceNumberDisplay
-		}
+		payment_intent_data: { metadata },
+		metadata
 	});
 }
 

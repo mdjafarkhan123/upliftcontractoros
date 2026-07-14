@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { Dialog as DialogPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils/cn';
 
 	let {
-		class: className,
+		class: className = '',
 		ref = $bindable(null),
 		children,
 		...rest
@@ -12,7 +11,7 @@
 
 <DialogPrimitive.Title
 	bind:ref
-	class={cn('text-lg font-semibold tracking-tight text-foreground', className)}
+	class={['dialog-sheet__title', className].filter(Boolean).join(' ')}
 	{...rest}
 >
 	{@render children?.()}

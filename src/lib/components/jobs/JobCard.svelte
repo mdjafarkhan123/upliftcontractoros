@@ -1,43 +1,124 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import JobStatusBadge from './JobStatusBadge.svelte';
-	import { formatDateTime } from '$lib/utils/format';
+	import JobBillingBadge from './JobBillingBadge.svelte';
+	import { formatCurrency, formatDateTime } from '$lib/utils/format';
 	import type { JobListItem } from '$lib/types/jobs';
-	import { Calendar, User } from '@lucide/svelte';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
-	let { job }: { job: JobListItem } = $props();
+	let {
+		job,
+		canDelete = false,
+		onDuplicate,
+		onDeleteRequest
+	}: {
+		job: JobListItem;
+		canDelete?: boolean;
+		onDuplicate?: (id: string) => void;
+		onDeleteRequest?: (id: string, title: string) => void;
+	} = $props();
+
+	const addr = $derived(
+		(() => {
+			const cityState = [job.service_address_city, job.service_address_state]
+				.filter(Boolean)
+				.join(', ');
+			const parts = [job.service_address_line_1, cityState].filter(Boolean);
+			return parts.length > 0 ? parts.join(' · ') : null;
+		})()
+	);
 </script>
 
 <a
 	href={`/jobs/${job.id}`}
 	use:prefetchOnIntent={() => jobDetailStore.prefetch(job.id)}
-	class="group block rounded-xl border border-border/70 bg-card p-4 shadow-card transition-all duration-150 ease-out hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10"
+	class="job-card"
 >
-	<div class="flex items-start justify-between gap-3">
-		<div class="min-w-0 flex-1">
-			<p class="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
-				{job.contact_name}
-			</p>
-			<h3 class="mt-0.5 truncate text-base font-semibold text-foreground">{job.title}</h3>
+	<div class="job-card__top">
+		<div class="job-card__identity">
+			<p class="job-card__contact">{job.contact_name}</p>
+			<h3 class="job-card__title">
+				{job.title}
+				{#if job.is_recurring}
+					<span class="job-card__recurring">
+						<i class="ri-repeat-line" aria-hidden="true"></i>
+						Recurring
+					</span>
+				{/if}
+			</h3>
 		</div>
-		<JobStatusBadge status={job.status} />
+		<div class="job-card__top-right">
+			<JobStatusBadge status={job.status} scheduledStart={job.scheduled_start} />
+			<div onclick={(e) => e.stopPropagation()} role="none">
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger class="contact-menu-trigger" aria-label="Actions for {job.title}">
+						<i class="ri-more-2-fill" aria-hidden="true"></i>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Item onclick={() => goto(`/jobs/${job.id}`)}>
+							<i class="ri-pencil-line" aria-hidden="true"></i>
+							Edit job
+						</DropdownMenu.Item>
+						{#if onDuplicate}
+							<DropdownMenu.Item onclick={() => onDuplicate(job.id)}>
+								<i class="ri-file-copy-line" aria-hidden="true"></i>
+								Duplicate
+							</DropdownMenu.Item>
+						{/if}
+						{#if canDelete && onDeleteRequest}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Item
+								variant="destructive"
+								onclick={() => onDeleteRequest(job.id, job.title)}
+							>
+								<i class="ri-delete-bin-line" aria-hidden="true"></i>
+								Delete job
+							</DropdownMenu.Item>
+						{/if}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
+		</div>
 	</div>
 
-	<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-		<span class="inline-flex items-center gap-1">
-			<User class="h-3.5 w-3.5 text-muted-foreground/70" />
+	<div class="job-card__meta">
+		<span class="job-card__meta-item">
+			<i class="ri-user-line" aria-hidden="true"></i>
 			{#if job.assignee_name}
 				{job.assignee_name}
 			{:else}
-				<span class="italic">Unassigned</span>
+				<em>Unassigned</em>
 			{/if}
 		</span>
 		{#if job.scheduled_start}
-			<span class="inline-flex items-center gap-1">
-				<Calendar class="h-3.5 w-3.5 text-muted-foreground/70" />
+			<span class="job-card__meta-item">
+				<i class="ri-calendar-line" aria-hidden="true"></i>
 				{formatDateTime(job.scheduled_start)}
 			</span>
+		{:else}
+			<span class="job-card__meta-item">
+				<i class="ri-calendar-line" aria-hidden="true"></i>
+				<em>Unscheduled</em>
+			</span>
 		{/if}
+		{#if addr}
+			<span class="job-card__meta-item">
+				<i class="ri-map-pin-line" aria-hidden="true"></i>
+				{addr}
+			</span>
+		{/if}
+	</div>
+
+	<JobBillingBadge
+		status={job.status}
+		billing={job.billing}
+		total={job.total}
+		class="job-card__billing"
+	/>
+
+	<div class="job-card__foot">
+		<span class="job-card__total">{formatCurrency(job.total)}</span>
 	</div>
 </a>

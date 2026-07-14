@@ -4,8 +4,6 @@
 	import { onMount } from 'svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft } from '@lucide/svelte';
 	import AppointmentForm from '$lib/components/appointments/AppointmentForm.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { getMemberContext } from '$lib/context/member';
@@ -26,6 +24,8 @@
 	});
 	const initialStart = $derived(page.url.searchParams.get('start'));
 	const initialEnd = $derived(page.url.searchParams.get('end'));
+	// Anytime create (from the calendar's Anytime lane): open with the toggle on.
+	const initialAllDay = $derived(page.url.searchParams.get('all_day') === '1');
 
 	let assignees = $state<{ id: string; full_name: string }[]>([]);
 
@@ -68,29 +68,25 @@
 
 <svelte:head><title>New appointment</title></svelte:head>
 
-<PageWrapper>
-	<Button variant="ghost" href="/appointments" class="mb-4">
-		<ArrowLeft class="h-4 w-4" /> Back to appointments
-	</Button>
-
+<PageWrapper title="New appointment" back="/appointments">
 	{#if !canCreate}
 		<EmptyState title="No access" description="You don't have permission to create appointments." />
 	{:else}
-		<header class="mb-4">
-			<h1 class="text-xl font-semibold text-foreground">New appointment</h1>
-			<p class="text-sm text-muted-foreground">Schedule an estimate, job start, or follow-up.</p>
-		</header>
+		<div class="appt-new">
+			<p class="appt-new__intro">Schedule an estimate, job start, or follow-up.</p>
 
-		<AppointmentForm
-			mode="create"
-			{assignees}
-			{canEditAssignee}
-			{initialContact}
-			{initialJob}
-			{initialStart}
-			{initialEnd}
-			onCancel={() => goto('/appointments')}
-			onSubmit={handleSubmit}
-		/>
+			<AppointmentForm
+				mode="create"
+				{assignees}
+				{canEditAssignee}
+				{initialContact}
+				{initialJob}
+				{initialStart}
+				{initialEnd}
+				{initialAllDay}
+				onCancel={() => goto('/appointments')}
+				onSubmit={handleSubmit}
+			/>
+		</div>
 	{/if}
 </PageWrapper>

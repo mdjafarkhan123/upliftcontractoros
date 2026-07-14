@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
@@ -7,7 +8,6 @@
 	import AutomationCardShell from '$lib/components/settings/automation/AutomationCardShell.svelte';
 	import { CARD_VISUALS } from '$lib/components/settings/automation/cardVisuals';
 	import UnsavedChangesGuard from '$lib/components/settings/UnsavedChangesGuard.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
@@ -16,8 +16,6 @@
 	import { getMemberContext } from '$lib/context/member';
 	import { getFeatureFlagsContext } from '$lib/context/featureFlags';
 	import { validateTemplateVariables } from '$lib/utils/validation/templateVariables';
-	import { MessageSquare } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 	import {
 		AUTOMATION_CARDS,
 		type AutomationCardDef,
@@ -56,6 +54,14 @@
 		appointment_confirmation_sms_message: string;
 		appointment_confirmation_email_subject: string;
 		appointment_confirmation_email_message: string;
+		job_scheduled_confirmation_enabled: boolean;
+		job_scheduled_sms_message: string;
+		job_scheduled_email_subject: string;
+		job_scheduled_email_message: string;
+		job_on_my_way_enabled: boolean;
+		job_on_my_way_sms_message: string;
+		job_on_my_way_email_subject: string;
+		job_on_my_way_email_message: string;
 		payment_receipt_enabled: boolean;
 		payment_receipt_message: string;
 		payment_receipt_sms_enabled: boolean;
@@ -73,6 +79,14 @@
 		'appointment_confirmation_sms_message',
 		'appointment_confirmation_email_subject',
 		'appointment_confirmation_email_message',
+		'job_scheduled_confirmation_enabled',
+		'job_scheduled_sms_message',
+		'job_scheduled_email_subject',
+		'job_scheduled_email_message',
+		'job_on_my_way_enabled',
+		'job_on_my_way_sms_message',
+		'job_on_my_way_email_subject',
+		'job_on_my_way_email_message',
 		'payment_receipt_enabled',
 		'payment_receipt_message',
 		'payment_receipt_sms_enabled',
@@ -101,7 +115,9 @@
 	}
 
 	let flatDirty = $derived(
-		flatOriginal !== null && flatForm !== null && JSON.stringify(flatOriginal) !== JSON.stringify(flatForm)
+		flatOriginal !== null &&
+			flatForm !== null &&
+			JSON.stringify(flatOriginal) !== JSON.stringify(flatForm)
 	);
 
 	const CATEGORIES: CardCategory[] = ['Inbound', 'Follow-ups', 'Appointments'];
@@ -151,7 +167,9 @@
 		try {
 			const res = await fetch('/api/settings/sms-credit');
 			if (!res.ok) return;
-			const body = (await res.json()) as { data?: { balance: string; monthly_included_credit: string } };
+			const body = (await res.json()) as {
+				data?: { balance: string; monthly_included_credit: string };
+			};
 			if (body.data) smsCredit = body.data;
 		} catch {
 			// Non-critical.
@@ -171,6 +189,14 @@
 			appointment_confirmation_sms_message: String(d.appointment_confirmation_sms_message),
 			appointment_confirmation_email_subject: String(d.appointment_confirmation_email_subject),
 			appointment_confirmation_email_message: String(d.appointment_confirmation_email_message),
+			job_scheduled_confirmation_enabled: Boolean(d.job_scheduled_confirmation_enabled),
+			job_scheduled_sms_message: String(d.job_scheduled_sms_message),
+			job_scheduled_email_subject: String(d.job_scheduled_email_subject),
+			job_scheduled_email_message: String(d.job_scheduled_email_message),
+			job_on_my_way_enabled: Boolean(d.job_on_my_way_enabled),
+			job_on_my_way_sms_message: String(d.job_on_my_way_sms_message),
+			job_on_my_way_email_subject: String(d.job_on_my_way_email_subject),
+			job_on_my_way_email_message: String(d.job_on_my_way_email_message),
 			payment_receipt_enabled: Boolean(d.payment_receipt_enabled),
 			payment_receipt_message: String(d.payment_receipt_message),
 			payment_receipt_sms_enabled: Boolean(d.payment_receipt_sms_enabled),
@@ -195,7 +221,10 @@
 				toast.error(flatBody.error ?? 'Failed to load automation settings');
 			}
 
-			const seqBody = (await seqRes.json()) as { data?: { sequences: ApiSequence[] }; error?: string };
+			const seqBody = (await seqRes.json()) as {
+				data?: { sequences: ApiSequence[] };
+				error?: string;
+			};
 			if (seqRes.ok && seqBody.data) {
 				const map: Record<string, ApiSequence> = {};
 				for (const s of seqBody.data.sequences) map[s.key] = s;
@@ -220,6 +249,12 @@
 			'appointment_confirmation_sms_message',
 			'appointment_confirmation_email_subject',
 			'appointment_confirmation_email_message',
+			'job_scheduled_sms_message',
+			'job_scheduled_email_subject',
+			'job_scheduled_email_message',
+			'job_on_my_way_sms_message',
+			'job_on_my_way_email_subject',
+			'job_on_my_way_email_message',
 			'payment_receipt_message',
 			'payment_receipt_sms_message'
 		];
@@ -230,10 +265,16 @@
 				if (!r.ok) errs[k] = `Unknown variable(s): ${r.unknown.map((u) => `{${u}}`).join(', ')}.`;
 			}
 		}
-		if (typeof f.review_funnel_message === 'string' && !f.review_funnel_message.includes('{review_link}')) {
+		if (
+			typeof f.review_funnel_message === 'string' &&
+			!f.review_funnel_message.includes('{review_link}')
+		) {
 			errs.review_funnel_message = 'Must include {review_link}.';
 		}
-		if (typeof f.review_funnel_reminder_message === 'string' && !f.review_funnel_reminder_message.includes('{review_link}')) {
+		if (
+			typeof f.review_funnel_reminder_message === 'string' &&
+			!f.review_funnel_reminder_message.includes('{review_link}')
+		) {
 			errs.review_funnel_reminder_message = 'Must include {review_link}.';
 		}
 		return errs;
@@ -302,49 +343,49 @@
 <UnsavedChangesGuard dirty={flatDirty} />
 
 <PageWrapper title="Automation" subtitle="Auto-replies, follow-ups, reminders" back="/settings">
-	<div class="mx-auto w-full max-w-5xl">
+	<div class="automation-page">
 		{#if smsCredit}
 			{@const balance = Number(smsCredit.balance)}
 			{@const allowance = Number(smsCredit.monthly_included_credit)}
 			{@const low = allowance > 0 && balance < allowance * 0.2}
-			<div class="mb-5 flex items-center gap-3.5 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-card md:px-5">
-				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-					<MessageSquare class="h-5 w-5" />
+			<div class="auto-sms">
+				<span class="auto-tile auto-tile--violet auto-sms__tile">
+					<i class="ri-message-2-line" aria-hidden="true"></i>
+				</span>
+				<div class="auto-sms__body">
+					<p class="auto-sms__title">SMS Credit</p>
+					<p class="auto-sms__sub">Texts sent by your automations draw from this balance.</p>
 				</div>
-				<div class="min-w-0 flex-1">
-					<p class="text-sm font-semibold text-foreground">SMS Credit</p>
-					<p class="text-xs text-muted-foreground">Texts sent by your automations draw from this balance.</p>
-				</div>
-				<div class="shrink-0 text-right">
-					<p class={cn('text-sm font-semibold tabular-nums', low ? 'text-destructive' : 'text-foreground')}>
+				<div class="auto-sms__right">
+					<p class="auto-sms__amount" class:auto-sms__amount--low={low}>
 						${balance.toFixed(2)}
-						<span class="font-normal text-muted-foreground">/ ${allowance.toFixed(2)}</span>
+						<span class="auto-sms__allowance">/ ${allowance.toFixed(2)}</span>
 					</p>
-					{#if low}<p class="text-[11px] font-medium text-destructive">Low — contact support to top up</p>{/if}
+					{#if low}<p class="auto-sms__warn">Low — contact support to top up</p>{/if}
 				</div>
 			</div>
 		{/if}
 
 		{#if !flags.feature_automation_engine}
-			<div class="mb-5 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
-				<p class="font-semibold text-foreground">Automation isn’t enabled for your plan</p>
-				<p class="mt-1">Contact your agency to enable automation. You can still see the available controls below.</p>
+			<div class="auto-notice">
+				<p class="auto-notice__title">Automation isn’t enabled for your plan</p>
+				<p class="auto-notice__text">
+					Contact your agency to enable automation. You can still see the available controls below.
+				</p>
 			</div>
 		{/if}
 
 		{#if loading}
-			<div class="flex flex-col gap-3">
-				<SkeletonLoader lines={8} label="Loading automation settings" height="84px" />
-			</div>
+			<SkeletonLoader lines={8} label="Loading automation settings" height="84px" />
 		{:else}
-			<div class="flex flex-col gap-9">
+			<div class="automation-page__sections">
 				<!-- Engine-backed automations -->
 				{#each CATEGORIES as cat (cat)}
-					<section class="flex flex-col gap-3">
-						<h2 class="px-0.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">{cat}</h2>
-						<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+					<section class="auto-section">
+						<h2 class="auto-section__title">{cat}</h2>
+						<div class="auto-grid">
 							{#each cardsIn(cat) as card (card.key)}
-								<div class={cn(expandedKey === card.key && 'lg:col-span-2')}>
+								<div class="auto-grid__cell" class:auto-grid__cell--wide={expandedKey === card.key}>
 									<SequenceCard
 										{card}
 										sequence={sequenceFor(card)}
@@ -361,20 +402,21 @@
 
 				<!-- Flat (non-sequence) cards -->
 				{#if flatForm}
-					<section class="flex flex-col gap-3">
-						<h2 class="px-0.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-							Confirmations, reviews & receipts
-						</h2>
+					<section class="auto-section">
+						<h2 class="auto-section__title">Confirmations, reviews &amp; receipts</h2>
 						<form
-							class="contents"
+							class="auto-section__form"
 							onsubmit={(e) => {
 								e.preventDefault();
 								void saveFlat();
 							}}
 						>
-							<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+							<div class="auto-grid">
 								<!-- Booking confirmation -->
-								<div class={cn(expandedKey === 'appointment_confirmation' && 'lg:col-span-2')}>
+								<div
+									class="auto-grid__cell"
+									class:auto-grid__cell--wide={expandedKey === 'appointment_confirmation'}
+								>
 									<AutomationCardShell
 										icon={CARD_VISUALS.appointment_confirmation.icon}
 										accent={CARD_VISUALS.appointment_confirmation.accent}
@@ -387,34 +429,202 @@
 										expanded={expandedKey === 'appointment_confirmation'}
 										onToggle={() => toggleExpand('appointment_confirmation')}
 									>
-										<div class="flex flex-col gap-3">
-											<div class="flex flex-col gap-1.5">
-												<Label for="ac_sms">SMS message <span class="text-destructive">*</span></Label>
-												<Textarea id="ac_sms" bind:value={flatForm.appointment_confirmation_sms_message} maxlength={500} />
-												<p class="text-xs text-muted-foreground">
+										<div class="auto-fields">
+											<div class="field">
+												<Label for="ac_sms" class="field__label field__label--required"
+													>SMS message</Label
+												>
+												<Textarea
+													id="ac_sms"
+													bind:value={flatForm.appointment_confirmation_sms_message}
+													maxlength={500}
+												/>
+												<p class="field__hint">
 													Variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>,
-													<code>{'{appointment_datetime}'}</code>, <code>{'{appointment_date}'}</code>,
-													<code>{'{appointment_time}'}</code>, <code>{'{appointment_type}'}</code>, <code>{'{location}'}</code>.
+													<code>{'{appointment_datetime}'}</code>,
+													<code>{'{appointment_date}'}</code>,
+													<code>{'{appointment_time}'}</code>, <code>{'{appointment_type}'}</code>,
+													<code>{'{location}'}</code>.
 												</p>
-												{#if flatErrors.appointment_confirmation_sms_message}<p class="text-xs text-destructive">{flatErrors.appointment_confirmation_sms_message}</p>{/if}
+												{#if flatErrors.appointment_confirmation_sms_message}<p
+														class="field__error"
+													>
+														{flatErrors.appointment_confirmation_sms_message}
+													</p>{/if}
 											</div>
-											<div class="flex flex-col gap-1.5">
-												<Label for="ac_subject">Email subject <span class="text-destructive">*</span></Label>
-												<Input id="ac_subject" bind:value={flatForm.appointment_confirmation_email_subject} maxlength={200} />
-												{#if flatErrors.appointment_confirmation_email_subject}<p class="text-xs text-destructive">{flatErrors.appointment_confirmation_email_subject}</p>{/if}
+											<div class="field">
+												<Label for="ac_subject" class="field__label field__label--required"
+													>Email subject</Label
+												>
+												<Input
+													id="ac_subject"
+													bind:value={flatForm.appointment_confirmation_email_subject}
+													maxlength={200}
+												/>
+												{#if flatErrors.appointment_confirmation_email_subject}<p
+														class="field__error"
+													>
+														{flatErrors.appointment_confirmation_email_subject}
+													</p>{/if}
 											</div>
-											<div class="flex flex-col gap-1.5">
-												<Label for="ac_email">Email body <span class="text-destructive">*</span></Label>
-												<Textarea id="ac_email" bind:value={flatForm.appointment_confirmation_email_message} maxlength={2000} rows={8} />
-												<p class="text-xs text-muted-foreground">Same variables as the SMS, plus <code>{'{location_block}'}</code>.</p>
-												{#if flatErrors.appointment_confirmation_email_message}<p class="text-xs text-destructive">{flatErrors.appointment_confirmation_email_message}</p>{/if}
+											<div class="field">
+												<Label for="ac_email" class="field__label field__label--required"
+													>Email body</Label
+												>
+												<Textarea
+													id="ac_email"
+													bind:value={flatForm.appointment_confirmation_email_message}
+													maxlength={2000}
+													rows={8}
+												/>
+												<p class="field__hint">
+													Same variables as the SMS, plus <code>{'{location_block}'}</code>.
+												</p>
+												{#if flatErrors.appointment_confirmation_email_message}<p
+														class="field__error"
+													>
+														{flatErrors.appointment_confirmation_email_message}
+													</p>{/if}
+											</div>
+										</div>
+									</AutomationCardShell>
+								</div>
+
+								<!-- Job scheduled confirmation -->
+								<div
+									class="auto-grid__cell"
+									class:auto-grid__cell--wide={expandedKey === 'job_scheduled_confirmation'}
+								>
+									<AutomationCardShell
+										icon={CARD_VISUALS.job_scheduled_confirmation.icon}
+										accent={CARD_VISUALS.job_scheduled_confirmation.accent}
+										title="Job scheduled confirmation"
+										description="Text and email the customer when you schedule their job, if you pick a notify channel on the job."
+										meta={`${flatForm.job_scheduled_confirmation_enabled ? 'Active' : 'Off'} · Text + Email`}
+										bind:enabled={flatForm.job_scheduled_confirmation_enabled}
+										expanded={expandedKey === 'job_scheduled_confirmation'}
+										onToggle={() => toggleExpand('job_scheduled_confirmation')}
+									>
+										<div class="auto-fields">
+											<div class="field">
+												<Label for="js_sms" class="field__label field__label--required"
+													>SMS message</Label
+												>
+												<Textarea
+													id="js_sms"
+													bind:value={flatForm.job_scheduled_sms_message}
+													maxlength={500}
+												/>
+												<p class="field__hint">
+													Variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>,
+													<code>{'{job_title}'}</code>, <code>{'{scheduled_datetime}'}</code>.
+												</p>
+												{#if flatErrors.job_scheduled_sms_message}<p class="field__error">
+														{flatErrors.job_scheduled_sms_message}
+													</p>{/if}
+											</div>
+											<div class="field">
+												<Label for="js_subject" class="field__label field__label--required"
+													>Email subject</Label
+												>
+												<Input
+													id="js_subject"
+													bind:value={flatForm.job_scheduled_email_subject}
+													maxlength={200}
+												/>
+												{#if flatErrors.job_scheduled_email_subject}<p class="field__error">
+														{flatErrors.job_scheduled_email_subject}
+													</p>{/if}
+											</div>
+											<div class="field">
+												<Label for="js_email" class="field__label field__label--required"
+													>Email body</Label
+												>
+												<Textarea
+													id="js_email"
+													bind:value={flatForm.job_scheduled_email_message}
+													maxlength={2000}
+													rows={8}
+												/>
+												<p class="field__hint">Same variables as the SMS.</p>
+												{#if flatErrors.job_scheduled_email_message}<p class="field__error">
+														{flatErrors.job_scheduled_email_message}
+													</p>{/if}
+											</div>
+										</div>
+									</AutomationCardShell>
+								</div>
+
+								<!-- Job "on my way" -->
+								<div
+									class="auto-grid__cell"
+									class:auto-grid__cell--wide={expandedKey === 'job_on_my_way'}
+								>
+									<AutomationCardShell
+										icon={CARD_VISUALS.job_on_my_way.icon}
+										accent={CARD_VISUALS.job_on_my_way.accent}
+										title="On my way"
+										description="Lets your team tap “On my way” on a job to text or email the customer that you're heading over."
+										meta={`${flatForm.job_on_my_way_enabled ? 'Active' : 'Off'} · Text + Email`}
+										bind:enabled={flatForm.job_on_my_way_enabled}
+										expanded={expandedKey === 'job_on_my_way'}
+										onToggle={() => toggleExpand('job_on_my_way')}
+									>
+										<div class="auto-fields">
+											<div class="field">
+												<Label for="omw_sms" class="field__label field__label--required"
+													>SMS message</Label
+												>
+												<Textarea
+													id="omw_sms"
+													bind:value={flatForm.job_on_my_way_sms_message}
+													maxlength={500}
+												/>
+												<p class="field__hint">
+													Variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>,
+													<code>{'{job_title}'}</code>.
+												</p>
+												{#if flatErrors.job_on_my_way_sms_message}<p class="field__error">
+														{flatErrors.job_on_my_way_sms_message}
+													</p>{/if}
+											</div>
+											<div class="field">
+												<Label for="omw_subject" class="field__label field__label--required"
+													>Email subject</Label
+												>
+												<Input
+													id="omw_subject"
+													bind:value={flatForm.job_on_my_way_email_subject}
+													maxlength={200}
+												/>
+												{#if flatErrors.job_on_my_way_email_subject}<p class="field__error">
+														{flatErrors.job_on_my_way_email_subject}
+													</p>{/if}
+											</div>
+											<div class="field">
+												<Label for="omw_email" class="field__label field__label--required"
+													>Email body</Label
+												>
+												<Textarea
+													id="omw_email"
+													bind:value={flatForm.job_on_my_way_email_message}
+													maxlength={2000}
+													rows={8}
+												/>
+												<p class="field__hint">Same variables as the SMS.</p>
+												{#if flatErrors.job_on_my_way_email_message}<p class="field__error">
+														{flatErrors.job_on_my_way_email_message}
+													</p>{/if}
 											</div>
 										</div>
 									</AutomationCardShell>
 								</div>
 
 								<!-- Review funnel -->
-								<div class={cn(expandedKey === 'review_funnel' && 'lg:col-span-2')}>
+								<div
+									class="auto-grid__cell"
+									class:auto-grid__cell--wide={expandedKey === 'review_funnel'}
+								>
 									<AutomationCardShell
 										icon={CARD_VISUALS.review_funnel.icon}
 										accent={CARD_VISUALS.review_funnel.accent}
@@ -429,36 +639,80 @@
 										expanded={expandedKey === 'review_funnel'}
 										onToggle={() => toggleExpand('review_funnel')}
 									>
-										<div class="flex flex-col gap-3">
-											<div class="flex flex-col gap-1.5">
-												<Label for="rf_d">Delay (hours) <span class="text-destructive">*</span></Label>
-												<Input id="rf_d" type="number" min={0} max={720} class="sm:max-w-[160px]" bind:value={flatForm.review_funnel_delay_hours} />
+										<div class="auto-fields">
+											<div class="field">
+												<Label for="rf_d" class="field__label field__label--required"
+													>Delay (hours)</Label
+												>
+												<Input
+													id="rf_d"
+													type="number"
+													min={0}
+													max={720}
+													class="auto-fields__narrow"
+													bind:value={flatForm.review_funnel_delay_hours}
+												/>
 											</div>
-											<div class="flex flex-col gap-1.5">
-												<Label for="rf_link">Google review link</Label>
-												<Input id="rf_link" type="url" placeholder="https://g.page/r/…" bind:value={flatForm.google_review_link} />
-												{#if flatErrors.google_review_link}<p class="text-xs text-destructive">{flatErrors.google_review_link}</p>{/if}
+											<div class="field">
+												<Label for="rf_link" class="field__label">Google review link</Label>
+												<Input
+													id="rf_link"
+													type="url"
+													placeholder="https://g.page/r/…"
+													bind:value={flatForm.google_review_link}
+												/>
+												{#if flatErrors.google_review_link}<p class="field__error">
+														{flatErrors.google_review_link}
+													</p>{/if}
 											</div>
-											<div class="flex flex-col gap-1.5">
-												<Label for="rf_msg">Message <span class="text-destructive">*</span></Label>
-												<Textarea id="rf_msg" bind:value={flatForm.review_funnel_message} maxlength={500} />
-												<p class="text-xs text-muted-foreground">Must include <code class="rounded bg-muted px-1 py-0.5 text-[11px]">{'{review_link}'}</code>.</p>
-												{#if flatErrors.review_funnel_message}<p class="text-xs text-destructive">{flatErrors.review_funnel_message}</p>{/if}
+											<div class="field">
+												<Label for="rf_msg" class="field__label field__label--required"
+													>Message</Label
+												>
+												<Textarea
+													id="rf_msg"
+													bind:value={flatForm.review_funnel_message}
+													maxlength={500}
+												/>
+												<p class="field__hint">
+													Must include <code class="auto-fields__code">{'{review_link}'}</code>.
+												</p>
+												{#if flatErrors.review_funnel_message}<p class="field__error">
+														{flatErrors.review_funnel_message}
+													</p>{/if}
 											</div>
-											<div class="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
-												<div class="flex items-start justify-between gap-3">
-													<div class="min-w-0">
-														<p class="text-sm font-medium text-foreground">Send a 72-hour reminder</p>
-														<p class="text-xs text-muted-foreground">If the customer hasn't responded after 3 days, send one short nudge with the same link.</p>
+											<div class="auto-subcard">
+												<div class="auto-subcard__row">
+													<div class="auto-subcard__text">
+														<p class="auto-subcard__title">Send a 72-hour reminder</p>
+														<p class="auto-subcard__desc">
+															If the customer hasn't responded after 3 days, send one short nudge
+															with the same link.
+														</p>
 													</div>
-													<Switch bind:checked={flatForm.review_funnel_reminder_enabled} aria-label="Toggle 72-hour review reminder" />
+													<Switch
+														bind:checked={flatForm.review_funnel_reminder_enabled}
+														aria-label="Toggle 72-hour review reminder"
+													/>
 												</div>
 												{#if flatForm.review_funnel_reminder_enabled}
-													<div class="flex flex-col gap-1.5">
-														<Label for="rf_reminder_msg">Reminder message <span class="text-destructive">*</span></Label>
-														<Textarea id="rf_reminder_msg" bind:value={flatForm.review_funnel_reminder_message} maxlength={500} />
-														<p class="text-xs text-muted-foreground">Keep it short. Must include <code class="rounded bg-muted px-1 py-0.5 text-[11px]">{'{review_link}'}</code>.</p>
-														{#if flatErrors.review_funnel_reminder_message}<p class="text-xs text-destructive">{flatErrors.review_funnel_reminder_message}</p>{/if}
+													<div class="field">
+														<Label for="rf_reminder_msg" class="field__label field__label--required"
+															>Reminder message</Label
+														>
+														<Textarea
+															id="rf_reminder_msg"
+															bind:value={flatForm.review_funnel_reminder_message}
+															maxlength={500}
+														/>
+														<p class="field__hint">
+															Keep it short. Must include <code class="auto-fields__code"
+																>{'{review_link}'}</code
+															>.
+														</p>
+														{#if flatErrors.review_funnel_reminder_message}<p class="field__error">
+																{flatErrors.review_funnel_reminder_message}
+															</p>{/if}
 													</div>
 												{/if}
 											</div>
@@ -467,7 +721,10 @@
 								</div>
 
 								<!-- Payment receipt -->
-								<div class={cn(expandedKey === 'payment_receipt' && 'lg:col-span-2')}>
+								<div
+									class="auto-grid__cell"
+									class:auto-grid__cell--wide={expandedKey === 'payment_receipt'}
+								>
 									<AutomationCardShell
 										icon={CARD_VISUALS.payment_receipt.icon}
 										accent={CARD_VISUALS.payment_receipt.accent}
@@ -480,28 +737,62 @@
 										expanded={expandedKey === 'payment_receipt'}
 										onToggle={() => toggleExpand('payment_receipt')}
 									>
-										<div class="flex flex-col gap-3">
-											<div class="flex flex-col gap-1.5">
-												<Label for="pr_msg">Email receipt message <span class="text-destructive">*</span></Label>
-												<Textarea id="pr_msg" bind:value={flatForm.payment_receipt_message} maxlength={500} />
-												<p class="text-xs text-muted-foreground">Allowed variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>, <code>{'{amount}'}</code></p>
-												{#if flatErrors.payment_receipt_message}<p class="text-xs text-destructive">{flatErrors.payment_receipt_message}</p>{/if}
+										<div class="auto-fields">
+											<div class="field">
+												<Label for="pr_msg" class="field__label field__label--required"
+													>Email receipt message</Label
+												>
+												<Textarea
+													id="pr_msg"
+													bind:value={flatForm.payment_receipt_message}
+													maxlength={500}
+												/>
+												<p class="field__hint">
+													Allowed variables: <code>{'{contact_name}'}</code>,
+													<code>{'{org_name}'}</code>, <code>{'{amount}'}</code>
+												</p>
+												{#if flatErrors.payment_receipt_message}<p class="field__error">
+														{flatErrors.payment_receipt_message}
+													</p>{/if}
 											</div>
-											<div class="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3" class:opacity-60={!flags.payment_receipt_sms_allowed}>
-												<div class="flex items-start justify-between gap-3">
-													<div class="min-w-0">
-														<p class="text-sm font-medium text-foreground">Also send as SMS</p>
-														<p class="text-xs text-muted-foreground">Text the receipt to customers without an email on file, or to everyone.</p>
-														{#if !flags.payment_receipt_sms_allowed}<p class="mt-1 text-xs text-muted-foreground">SMS receipts aren't included in your plan — upgrade to enable</p>{/if}
+											<div
+												class="auto-subcard"
+												class:auto-subcard--muted={!flags.payment_receipt_sms_allowed}
+											>
+												<div class="auto-subcard__row">
+													<div class="auto-subcard__text">
+														<p class="auto-subcard__title">Also send as SMS</p>
+														<p class="auto-subcard__desc">
+															Text the receipt to customers without an email on file, or to
+															everyone.
+														</p>
+														{#if !flags.payment_receipt_sms_allowed}<p class="auto-subcard__note">
+																SMS receipts aren't included in your plan — upgrade to enable
+															</p>{/if}
 													</div>
-													<Switch bind:checked={flatForm.payment_receipt_sms_enabled} disabled={!flags.payment_receipt_sms_allowed} aria-label="Toggle SMS payment receipts" />
+													<Switch
+														bind:checked={flatForm.payment_receipt_sms_enabled}
+														disabled={!flags.payment_receipt_sms_allowed}
+														aria-label="Toggle SMS payment receipts"
+													/>
 												</div>
 												{#if flatForm.payment_receipt_sms_enabled && flags.payment_receipt_sms_allowed}
-													<div class="flex flex-col gap-1.5">
-														<Label for="pr_sms_msg">SMS receipt message <span class="text-destructive">*</span></Label>
-														<Textarea id="pr_sms_msg" bind:value={flatForm.payment_receipt_sms_message} maxlength={500} />
-														<p class="text-xs text-muted-foreground">Keep it short. Allowed variables: <code>{'{contact_name}'}</code>, <code>{'{org_name}'}</code>, <code>{'{amount}'}</code></p>
-														{#if flatErrors.payment_receipt_sms_message}<p class="text-xs text-destructive">{flatErrors.payment_receipt_sms_message}</p>{/if}
+													<div class="field">
+														<Label for="pr_sms_msg" class="field__label field__label--required"
+															>SMS receipt message</Label
+														>
+														<Textarea
+															id="pr_sms_msg"
+															bind:value={flatForm.payment_receipt_sms_message}
+															maxlength={500}
+														/>
+														<p class="field__hint">
+															Keep it short. Allowed variables: <code>{'{contact_name}'}</code>,
+															<code>{'{org_name}'}</code>, <code>{'{amount}'}</code>
+														</p>
+														{#if flatErrors.payment_receipt_sms_message}<p class="field__error">
+																{flatErrors.payment_receipt_sms_message}
+															</p>{/if}
 													</div>
 												{/if}
 											</div>
@@ -511,10 +802,9 @@
 							</div>
 
 							{#if flatDirty}
-								<footer class="sticky bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+12px)] mt-4 flex items-center justify-end gap-2 rounded-xl border border-border bg-card p-3 shadow-md md:bottom-4">
+								<footer class="auto-savebar">
 									<Button
 										variant="outline"
-										type="button"
 										disabled={savingFlat}
 										onclick={() => {
 											if (flatOriginal) flatForm = { ...flatOriginal };
@@ -523,7 +813,9 @@
 									>
 										Reset
 									</Button>
-									<Button type="submit" disabled={savingFlat}>{savingFlat ? 'Saving…' : 'Save changes'}</Button>
+									<Button type="submit" loading={savingFlat} loadingLabel="Saving…">
+										Save changes
+									</Button>
 								</footer>
 							{/if}
 						</form>
@@ -533,3 +825,20 @@
 		{/if}
 	</div>
 </PageWrapper>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.automation-page {
+		width: 100%;
+		max-width: 1024px;
+		margin: 0 auto;
+		padding-bottom: $space-16;
+
+		&__sections {
+			display: flex;
+			flex-direction: column;
+			gap: $space-8;
+		}
+	}
+</style>

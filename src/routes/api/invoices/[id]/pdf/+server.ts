@@ -13,6 +13,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { generateAndStoreInvoicePdf } from '$lib/server/invoices/pdf';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
+import { loadJobSignoff } from '$lib/server/jobs/signoffResponse';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -39,13 +40,15 @@ export const POST: RequestHandler = async (event) => {
 			description: invoiceLineItems.description,
 			quantity: invoiceLineItems.quantity,
 			unit_price: invoiceLineItems.unit_price,
-			total: invoiceLineItems.total
+			total: invoiceLineItems.total,
+			taxable: invoiceLineItems.taxable
 		})
 		.from(invoiceLineItems)
 		.where(
 			and(
 				eq(invoiceLineItems.invoice_id, id),
 				eq(invoiceLineItems.org_id, auth.orgId),
+				eq(invoiceLineItems.is_late_fee, false),
 				isNull(invoiceLineItems.deleted_at)
 			)
 		)
@@ -54,6 +57,7 @@ export const POST: RequestHandler = async (event) => {
 	const paymentRows = await db
 		.select({
 			amount: payments.amount,
+			tip_amount: payments.tip_amount,
 			payment_method: payments.payment_method,
 			paid_at: payments.paid_at,
 			notes: payments.notes
@@ -61,6 +65,21 @@ export const POST: RequestHandler = async (event) => {
 		.from(payments)
 		.where(eq(payments.invoice_id, id))
 		.orderBy(desc(payments.paid_at));
+
+	// Client sign-off (Session 6): when this invoice came from a job the customer signed off on,
+	// print the signature as proof-of-approval on the work order — Jobber/ServiceTitan behavior.
+	let signoff: { signer_name: string | null; signed_at: string; signature_url: string } | null =
+		null;
+	if (row.invoice.job_id) {
+		const s = await loadJobSignoff(auth.orgId, row.invoice.job_id);
+		if (s.signed_at && s.signature) {
+			signoff = {
+				signer_name: s.signer_name,
+				signed_at: s.signed_at,
+				signature_url: s.signature.full_url
+			};
+		}
+	}
 
 	const { url } = await generateAndStoreInvoicePdf({
 		org: {
@@ -77,12 +96,19 @@ export const POST: RequestHandler = async (event) => {
 			title: row.invoice.title,
 			status: row.invoice.status,
 			subtotal: row.invoice.subtotal,
+			discount_type: row.invoice.discount_type,
+			discount_value: row.invoice.discount_value,
+			discount_amount: row.invoice.discount_amount,
+			discount_label: row.invoice.discount_label,
 			tax_rate: row.invoice.tax_rate,
 			tax_amount: row.invoice.tax_amount,
 			total: row.invoice.total,
 			amount_paid: row.invoice.amount_paid,
 			amount_due: row.invoice.amount_due,
+			tip_total: row.invoice.tip_total,
+			late_fee_total: row.invoice.late_fee_total,
 			notes: row.invoice.notes,
+			terms: row.invoice.terms,
 			due_date: row.invoice.due_date,
 			created_at: row.invoice.created_at
 		},
@@ -92,7 +118,8 @@ export const POST: RequestHandler = async (event) => {
 			phone: row.contact.phone
 		},
 		lineItems,
-		payments: paymentRows
+		payments: paymentRows,
+		signoff
 	});
 
 	return json({ data: { url, expires_in: 3600 } });

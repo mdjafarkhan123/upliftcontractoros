@@ -1,16 +1,25 @@
 <script lang="ts">
-	import { X, ChevronLeft, ChevronRight, Loader2 } from '@lucide/svelte';
 	import type { LocalMediaItem } from './types';
 
 	let {
 		items,
 		activeIndex = $bindable(-1),
-		onClose
+		onClose,
+		canRetag = false,
+		onRetag
 	}: {
 		items: LocalMediaItem[];
 		activeIndex?: number;
 		onClose: () => void;
+		canRetag?: boolean;
+		onRetag?: (localId: string, tag: 'before' | 'after' | 'job_photo') => void;
 	} = $props();
+
+	const RETAG_OPTIONS: { key: 'before' | 'after' | 'job_photo'; label: string }[] = [
+		{ key: 'before', label: 'Before' },
+		{ key: 'after', label: 'After' },
+		{ key: 'job_photo', label: 'General' }
+	];
 
 	const open = $derived(activeIndex >= 0 && activeIndex < items.length);
 	const activeItem = $derived(open ? items[activeIndex] : null);
@@ -80,7 +89,7 @@
 {#if open}
 	<!-- Backdrop -->
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
+		class="media-lightbox"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Photo viewer"
@@ -89,52 +98,48 @@
 		ontouchend={onTouchEnd}
 	>
 		<!-- Close button -->
-		<button
-			class="absolute right-4 top-4 z-10 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-			onclick={onClose}
-			aria-label="Close"
-		>
-			<X class="h-5 w-5" />
+		<button class="media-lightbox__btn media-lightbox__btn--close" onclick={onClose} aria-label="Close">
+			<i class="ri-close-line" aria-hidden="true"></i>
 		</button>
 
 		<!-- Prev button -->
 		{#if activeIndex > 0}
 			<button
-				class="absolute left-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+				class="media-lightbox__btn media-lightbox__btn--prev"
 				onclick={prev}
 				aria-label="Previous photo"
 			>
-				<ChevronLeft class="h-6 w-6" />
+				<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 			</button>
 		{/if}
 
 		<!-- Image area -->
-		<div class="flex h-full w-full items-center justify-center p-4">
+		<div class="media-lightbox__stage">
 			{#if webLoading}
-				<div class="flex flex-col items-center gap-3">
+				<div class="media-lightbox__loading">
 					<!-- Show thumbnail while full image loads -->
 					{#if activeItem?.thumbnailUrl ?? activeItem?.previewUrl}
 						<img
 							src={activeItem.thumbnailUrl ?? activeItem.previewUrl}
 							alt={activeItem?.original_filename ?? 'Photo'}
-							class="max-h-[70vh] max-w-full rounded-lg object-contain opacity-60 blur-sm"
+							class="media-lightbox__img media-lightbox__img--preview"
 						/>
 					{:else}
-						<Loader2 class="h-8 w-8 animate-spin text-white/60" />
+						<i class="ri-loader-4-line animate-spin media-lightbox__spinner" aria-hidden="true"></i>
 					{/if}
-					<span class="text-xs text-white/40">Loading full image…</span>
+					<span class="media-lightbox__loading-text">Loading full image…</span>
 				</div>
 			{:else if webUrl}
 				<img
 					src={webUrl}
 					alt={activeItem?.original_filename ?? 'Photo'}
-					class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
+					class="media-lightbox__img"
 				/>
 			{:else if activeItem?.previewUrl ?? activeItem?.thumbnailUrl}
 				<img
 					src={activeItem.previewUrl ?? activeItem.thumbnailUrl}
 					alt={activeItem?.original_filename ?? 'Photo'}
-					class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
+					class="media-lightbox__img"
 				/>
 			{/if}
 		</div>
@@ -142,20 +147,34 @@
 		<!-- Next button -->
 		{#if activeIndex < items.length - 1}
 			<button
-				class="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+				class="media-lightbox__btn media-lightbox__btn--next"
 				onclick={next}
 				aria-label="Next photo"
 			>
-				<ChevronRight class="h-6 w-6" />
+				<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 			</button>
+		{/if}
+
+		<!-- Re-tag control -->
+		{#if canRetag && onRetag && activeItem?.id}
+			<div class="media-lightbox__retag">
+				{#each RETAG_OPTIONS as opt (opt.key)}
+					<button
+						class="media-lightbox__retag-btn"
+						class:media-lightbox__retag-btn--active={(activeItem.purpose_tag ?? 'job_photo') ===
+							opt.key}
+						onclick={() => onRetag(activeItem.localId, opt.key)}
+					>
+						{opt.label}
+					</button>
+				{/each}
+			</div>
 		{/if}
 
 		<!-- Counter -->
 		{#if items.length > 1}
-			<div class="absolute bottom-6 left-1/2 -translate-x-1/2">
-				<span class="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
-					{activeIndex + 1} / {items.length}
-				</span>
+			<div class="media-lightbox__counter">
+				{activeIndex + 1} / {items.length}
 			</div>
 		{/if}
 	</div>

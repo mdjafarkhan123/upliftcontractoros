@@ -1,0 +1,2859 @@
+// ============================================================================
+// JAFAR ADMIN — S17
+// Always-dark isolated internal tool. No theme flip needed.
+// Accent: red. Palette: hardcoded slate values.
+// ============================================================================
+
+$j-950: #020617;
+$j-900: #0f172a;
+$j-800: #1e293b;
+$j-700: #334155;
+$j-600: #475569;
+$j-500: #64748b;
+$j-400: #94a3b8;
+$j-300: #cbd5e1;
+$j-200: #e2e8f0;
+$j-100: #f1f5f9;
+
+$j-red-600: #dc2626;
+$j-red-500: #ef4444;
+$j-red-400: #f87171;
+$j-red-300: #fca5a5;
+$j-red-200: #fecaca;
+
+$j-emerald-600: #059669;
+$j-emerald-500: #10b981;
+$j-emerald-400: #34d399;
+$j-emerald-300: #6ee7b7;
+$j-emerald-200: #a7f3d0;
+
+$j-amber-300: #fcd34d;
+$j-amber-200: #fde68a;
+
+$j-panel-bg: rgba(15, 23, 42, 0.5);
+$j-panel-border: #1e293b;
+$j-panel-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+$j-input-bg: rgba(2, 6, 23, 0.6);
+$j-radius-sm: 0.6rem;
+$j-radius-md: 0.8rem;
+$j-radius-lg: 1.2rem;
+$j-radius-xl: 1.6rem;
+$j-radius-2xl: 2.4rem;
+$j-radius-full: 9999px;
+
+@keyframes jafar-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@keyframes jafar-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
+// ─── SHELL ────────────────────────────────────────────────────────────────────
+.jafar-shell {
+	min-height: 100dvh;
+	background: linear-gradient(135deg, $j-950, $j-900, $j-950);
+	color: $j-100;
+}
+
+.jafar-header {
+	border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+	background: rgba(2, 6, 23, 0.6);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+
+	&__inner {
+		max-width: 115.2rem;
+		margin: 0 auto;
+		padding: 1.2rem 1.6rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		@media (min-width: 640px) {
+			padding-inline: 2.4rem;
+		}
+	}
+
+	&__brand {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		text-decoration: none;
+	}
+
+	&__logo {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.2rem;
+		height: 3.2rem;
+		border-radius: $j-radius-md;
+		background: linear-gradient(135deg, $j-red-500, $j-red-600);
+		box-shadow:
+			0 4px 6px -1px rgba(127, 29, 29, 0.4),
+			0 0 0 1px rgba(252, 165, 165, 0.3);
+		color: #fff;
+		flex-shrink: 0;
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__wordmark {
+		line-height: 1.25;
+	}
+
+	&__eyebrow {
+		display: block;
+		font-size: 1rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.24em;
+		color: rgba(252, 165, 165, 0.9);
+	}
+
+	&__app {
+		display: block;
+		font-size: 1.2rem;
+		font-weight: 500;
+		color: $j-400;
+		transition: color 0.15s;
+		.jafar-header__brand:hover & {
+			color: $j-300;
+		}
+	}
+
+	&__logout {
+		display: inline-flex;
+		height: 3.6rem;
+		align-items: center;
+		gap: 0.6rem;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-700;
+		background: rgba(15, 23, 42, 0.6);
+		padding: 0 1.2rem;
+		font-size: 1.2rem;
+		font-weight: 600;
+		color: $j-300;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			background 0.15s,
+			color 0.15s;
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			border-color: $j-600;
+			background: rgba(30, 41, 59, 0.8);
+			color: #fff;
+		}
+	}
+}
+
+.jafar-main {
+	max-width: 115.2rem;
+	margin: 0 auto;
+	padding: 2.4rem 1.6rem;
+	@media (min-width: 640px) {
+		padding: 4rem 2.4rem;
+	}
+}
+
+// ─── BUTTONS ─────────────────────────────────────────────────────────────────
+.jafar-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.6rem;
+	height: 3.6rem;
+	padding: 0 1.2rem;
+	border-radius: $j-radius-md;
+	font-size: 1.2rem;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		border-color 0.15s,
+		background 0.15s,
+		color 0.15s;
+	border: 1px solid $j-700;
+	background: rgba(15, 23, 42, 0.6);
+	color: $j-300;
+
+	&:hover:not(:disabled) {
+		border-color: $j-600;
+		background: rgba(30, 41, 59, 0.8);
+		color: #fff;
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	i {
+		font-size: 1.4rem;
+	}
+
+	.j-spin {
+		animation: jafar-spin 0.7s linear infinite;
+	}
+
+	&--red {
+		border: none;
+		background: linear-gradient(180deg, $j-red-500, $j-red-600);
+		box-shadow: 0 4px 6px -1px rgba(127, 29, 29, 0.4);
+		color: #fff;
+		height: 4rem;
+		border-radius: $j-radius-lg;
+
+		&:hover:not(:disabled) {
+			background: linear-gradient(180deg, $j-red-500, #b91c1c);
+		}
+		&:focus-visible {
+			box-shadow:
+				0 0 0 2px rgba(239, 68, 68, 0.5),
+				0 0 0 4px $j-950;
+		}
+	}
+
+	&--red-lg {
+		border: none;
+		background: linear-gradient(180deg, $j-red-500, $j-red-600);
+		box-shadow: 0 4px 6px -1px rgba(127, 29, 29, 0.4);
+		color: #fff;
+		height: 4.4rem;
+		width: 100%;
+		font-size: 1.4rem;
+		border-radius: $j-radius-lg;
+
+		&:hover:not(:disabled) {
+			background: linear-gradient(180deg, $j-red-500, #b91c1c);
+		}
+		&:focus-visible {
+			box-shadow:
+				0 0 0 2px rgba(239, 68, 68, 0.5),
+				0 0 0 4px $j-900;
+		}
+	}
+
+	&--emerald {
+		border: none;
+		background: linear-gradient(180deg, $j-emerald-500, $j-emerald-600);
+		box-shadow: 0 4px 6px -1px rgba(6, 78, 59, 0.4);
+		color: #fff;
+
+		&:hover:not(:disabled) {
+			background: linear-gradient(180deg, $j-emerald-500, #047857);
+		}
+	}
+
+	&--danger {
+		border-color: rgba(239, 68, 68, 0.4);
+		background: rgba(239, 68, 68, 0.1);
+		color: $j-red-200;
+
+		&:hover:not(:disabled) {
+			border-color: rgba(239, 68, 68, 0.6);
+			background: rgba(239, 68, 68, 0.2);
+		}
+	}
+
+	&--ghost {
+		border-color: transparent;
+		background: rgba(30, 41, 59, 0.6);
+		color: $j-200;
+
+		&:hover:not(:disabled) {
+			background: rgba(30, 41, 59, 0.9);
+		}
+	}
+
+	&--sky {
+		border: none;
+		background: linear-gradient(180deg, #0ea5e9, #0284c7);
+		box-shadow: 0 4px 6px -1px rgba(12, 74, 110, 0.4);
+		color: #fff;
+		height: 4rem;
+		border-radius: $j-radius-lg;
+
+		&:hover:not(:disabled) {
+			background: linear-gradient(180deg, #0ea5e9, #0369a1);
+		}
+		&:focus-visible {
+			box-shadow:
+				0 0 0 2px rgba(14, 165, 233, 0.5),
+				0 0 0 4px $j-950;
+		}
+	}
+
+	&--sm {
+		height: 3.2rem;
+		padding: 0 1rem;
+		font-size: 1.1rem;
+	}
+	&--lg {
+		height: 4rem;
+		padding: 0 2rem;
+		font-size: 1.4rem;
+		border-radius: $j-radius-lg;
+	}
+	&--full {
+		width: 100%;
+	}
+}
+
+// ─── INPUT ───────────────────────────────────────────────────────────────────
+.jafar-input {
+	display: block;
+	width: 100%;
+	height: 4.2rem;
+	padding: 0 1.2rem;
+	border-radius: $j-radius-md;
+	border: 1px solid $j-700;
+	background: $j-input-bg;
+	color: #fff;
+	font-size: 1.4rem;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
+
+	&::placeholder {
+		color: $j-600;
+	}
+	&:focus {
+		outline: none;
+		border-color: rgba(239, 68, 68, 0.6);
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+	}
+	&:disabled {
+		opacity: 0.5;
+	}
+
+	&--mono {
+		font-family: ui-monospace, monospace;
+	}
+	&--totp {
+		letter-spacing: 0.4em;
+		font-family: ui-monospace, monospace;
+	}
+	&--compact {
+		height: 3.2rem;
+		font-size: 1.2rem;
+		padding: 0 0.8rem;
+	}
+	&--sm {
+		height: 3.2rem;
+	}
+}
+
+// ─── PANEL ───────────────────────────────────────────────────────────────────
+.jafar-panel {
+	border-radius: $j-radius-xl;
+	border: 1px solid $j-panel-border;
+	background: $j-panel-bg;
+	box-shadow: $j-panel-shadow;
+	overflow: hidden;
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: 1.2rem;
+		border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+		padding: 1.6rem 2rem;
+
+		&--between {
+			justify-content: space-between;
+		}
+	}
+
+	// Colored icon tiles
+	&__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.6rem;
+		height: 3.6rem;
+		border-radius: $j-radius-md;
+		flex-shrink: 0;
+		i {
+			font-size: 1.7rem;
+		}
+
+		&--sky {
+			border: 1px solid rgba(14, 165, 233, 0.3);
+			background: rgba(14, 165, 233, 0.1);
+			color: #7dd3fc;
+		}
+		&--emerald {
+			border: 1px solid rgba(16, 185, 129, 0.3);
+			background: rgba(16, 185, 129, 0.1);
+			color: $j-emerald-300;
+		}
+		&--violet {
+			border: 1px solid rgba(139, 92, 246, 0.3);
+			background: rgba(139, 92, 246, 0.1);
+			color: #c4b5fd;
+		}
+		&--indigo {
+			border: 1px solid rgba(99, 102, 241, 0.3);
+			background: rgba(99, 102, 241, 0.1);
+			color: #a5b4fc;
+		}
+		&--amber {
+			border: 1px solid rgba(245, 158, 11, 0.3);
+			background: rgba(245, 158, 11, 0.1);
+			color: $j-amber-300;
+		}
+		&--blue {
+			border: 1px solid rgba(59, 130, 246, 0.3);
+			background: rgba(59, 130, 246, 0.1);
+			color: #93c5fd;
+		}
+		&--rose {
+			border: 1px solid rgba(244, 63, 94, 0.3);
+			background: rgba(244, 63, 94, 0.1);
+			color: #fda4af;
+		}
+		&--red {
+			border: 1px solid rgba(239, 68, 68, 0.3);
+			background: rgba(239, 68, 68, 0.1);
+			color: $j-red-300;
+		}
+		&--teal {
+			border: 1px solid rgba(20, 184, 166, 0.3);
+			background: rgba(20, 184, 166, 0.1);
+			color: #5eead4;
+		}
+		&--cyan {
+			border: 1px solid rgba(6, 182, 212, 0.3);
+			background: rgba(6, 182, 212, 0.1);
+			color: #67e8f9;
+		}
+	}
+
+	&__title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__sub {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+	&__body {
+		padding: 2rem;
+	}
+}
+
+// ─── BADGE ───────────────────────────────────────────────────────────────────
+.jafar-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.2rem 1rem;
+	border-radius: $j-radius-full;
+	font-size: 1.1rem;
+	font-weight: 600;
+
+	&__dot {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	&--active {
+		border: 1px solid rgba(16, 185, 129, 0.3);
+		background: rgba(16, 185, 129, 0.15);
+		color: $j-emerald-300;
+		text-transform: capitalize;
+	}
+	&--suspended {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.15);
+		color: $j-amber-300;
+		text-transform: capitalize;
+	}
+	&--pending_setup {
+		border: 1px solid rgba(14, 165, 233, 0.3);
+		background: rgba(14, 165, 233, 0.1);
+		color: #7dd3fc;
+		text-transform: capitalize;
+	}
+	&--pending_deletion {
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.15);
+		color: $j-red-300;
+		text-transform: capitalize;
+	}
+	&--deleted {
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.15);
+		color: $j-red-300;
+		text-transform: capitalize;
+	}
+	&--pending {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.15);
+		color: $j-amber-300;
+		text-transform: capitalize;
+	}
+	&--sky {
+		border: 1px solid rgba(14, 165, 233, 0.3);
+		background: rgba(14, 165, 233, 0.1);
+		color: #7dd3fc;
+		text-transform: uppercase;
+		font-size: 1.1rem;
+	}
+	&--muted {
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.6);
+		color: $j-400;
+		text-transform: uppercase;
+		font-size: 1.1rem;
+	}
+	&--red {
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.15);
+		color: $j-red-300;
+	}
+	&--mode-live {
+		border: 1px solid rgba(16, 185, 129, 0.3);
+		background: rgba(16, 185, 129, 0.1);
+		color: $j-emerald-300;
+		font-size: 1rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	&--mode-test {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.1);
+		color: $j-amber-300;
+		font-size: 1rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+}
+
+// ─── ALERT ───────────────────────────────────────────────────────────────────
+.jafar-alert {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.2rem;
+	border-radius: $j-radius-lg;
+	padding: 1.2rem 1.6rem;
+	font-size: 1.4rem;
+
+	&--error {
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.1);
+		color: $j-red-200;
+	}
+	&--amber {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.1);
+		color: $j-amber-200;
+	}
+	&--emerald {
+		border: 1px solid rgba(16, 185, 129, 0.3);
+		background: rgba(16, 185, 129, 0.1);
+		color: $j-emerald-200;
+	}
+	&--center {
+		text-align: center;
+		flex-direction: column;
+		align-items: center;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 0.2rem;
+		i {
+			font-size: 1.8rem;
+		}
+	}
+	&__title {
+		font-weight: 600;
+	}
+	&__text {
+		margin-top: 0.2rem;
+		opacity: 0.9;
+		font-size: 1.3rem;
+	}
+}
+
+// ─── TABLE ───────────────────────────────────────────────────────────────────
+.jafar-tbl {
+	width: 100%;
+	font-size: 1.4rem;
+
+	thead {
+		background: rgba(2, 6, 23, 0.6);
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-400;
+
+		th {
+			padding: 1.2rem 2rem;
+			text-align: left;
+			white-space: nowrap;
+			&:last-child {
+				text-align: right;
+			}
+		}
+	}
+
+	tbody {
+		tr {
+			border-top: 1px solid rgba(30, 41, 59, 0.7);
+			transition: background-color 0.15s;
+			&:hover {
+				background: rgba(30, 41, 59, 0.3);
+			}
+		}
+
+		td {
+			padding: 1.4rem 2rem;
+			vertical-align: middle;
+			&:last-child {
+				text-align: right;
+			}
+		}
+	}
+
+	&__name {
+		font-weight: 500;
+		color: #fff;
+	}
+	&__sub {
+		font-size: 1.2rem;
+		color: $j-500;
+	}
+	&__mono {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-400;
+	}
+	&__actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+}
+
+// ─── BACK LINK ───────────────────────────────────────────────────────────────
+.jafar-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-size: 1.2rem;
+	font-weight: 500;
+	color: $j-400;
+	text-decoration: none;
+	transition: color 0.15s;
+	i {
+		font-size: 1.4rem;
+	}
+
+	&:hover {
+		color: $j-200;
+	}
+}
+
+// ─── PAGE HEADER ─────────────────────────────────────────────────────────────
+.jafar-page-hd {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.6rem;
+
+	&__icon {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: 4.8rem;
+		height: 4.8rem;
+		border-radius: $j-radius-lg;
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.05));
+		color: $j-red-300;
+		flex-shrink: 0;
+		i {
+			font-size: 2.2rem;
+		}
+		@media (min-width: 640px) {
+			display: inline-flex;
+		}
+	}
+
+	h1 {
+		font-size: 2.4rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		color: #fff;
+		@media (min-width: 640px) {
+			font-size: 3rem;
+		}
+	}
+
+	p {
+		margin-top: 0.4rem;
+		font-size: 1.4rem;
+		color: $j-400;
+	}
+}
+
+// ─── ORG DETAIL HEADER ───────────────────────────────────────────────────────
+.jafar-org-hd {
+	display: flex;
+	flex-direction: column;
+	gap: 1.6rem;
+	@media (min-width: 640px) {
+		flex-direction: row;
+		align-items: flex-start;
+		justify-content: space-between;
+	}
+
+	&__inner {
+		display: flex;
+		align-items: flex-start;
+		gap: 1.6rem;
+		min-width: 0;
+	}
+
+	&__initials {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: 4.8rem;
+		height: 4.8rem;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-700;
+		background: linear-gradient(135deg, rgba(30, 41, 59, 1), rgba(15, 23, 42, 1));
+		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+		color: $j-200;
+		font-size: 1.4rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		flex-shrink: 0;
+		@media (min-width: 640px) {
+			display: inline-flex;
+		}
+	}
+
+	&__meta {
+		min-width: 0;
+	}
+
+	&__pills {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	h1 {
+		font-size: 2.4rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		color: #fff;
+		@media (min-width: 640px) {
+			font-size: 3rem;
+		}
+	}
+
+	&__sub {
+		margin-top: 0.6rem;
+		font-size: 1.4rem;
+		color: $j-400;
+	}
+	&__dot {
+		color: $j-700;
+		margin: 0 0.6rem;
+	}
+	&__revalidating {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 1.1rem;
+		color: $j-500;
+		i {
+			animation: jafar-spin 0.7s linear infinite;
+			font-size: 1rem;
+		}
+	}
+}
+
+// ─── CATEGORY NAV (org detail page sidebar) ──────────────────────────────────
+.jafar-cat {
+	width: 22.4rem;
+	flex-shrink: 0;
+	position: sticky;
+	top: 1.6rem;
+	align-self: flex-start;
+
+	&__nav {
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: $j-panel-bg;
+		box-shadow: $j-panel-shadow;
+		overflow: hidden;
+	}
+
+	&__label {
+		padding: 1.2rem 1.6rem 0.4rem;
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.2em;
+		color: $j-500;
+	}
+
+	&__list {
+		padding: 0 0.6rem 0.6rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: 1.2rem;
+		width: 100%;
+		border: none;
+		border-radius: $j-radius-md;
+		padding: 1rem;
+		text-align: left;
+		cursor: pointer;
+		min-height: 4.4rem;
+		background: none;
+		color: $j-400;
+		transition:
+			background 0.15s,
+			color 0.15s;
+
+		&:hover {
+			background: rgba(30, 41, 59, 0.5);
+			color: $j-200;
+		}
+
+		&--active {
+			background: rgba(52, 211, 153, 0.2);
+			color: #d1fae5;
+			box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.15);
+		}
+	}
+
+	&__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.2rem;
+		height: 3.2rem;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.4);
+		color: $j-500;
+		flex-shrink: 0;
+		font-size: 1.5rem;
+		transition:
+			border-color 0.15s,
+			color 0.15s,
+			background 0.15s;
+
+		.jafar-cat__item:hover & {
+			border-color: $j-600;
+			color: $j-300;
+		}
+		.jafar-cat__item--active & {
+			border-color: rgba(52, 211, 153, 0.4);
+			background: rgba(52, 211, 153, 0.15);
+			color: $j-emerald-300;
+		}
+	}
+
+	&__item-label {
+		font-size: 1.4rem;
+		font-weight: 600;
+		line-height: 1.25;
+	}
+	&__item-desc {
+		font-size: 1rem;
+		line-height: 1.25;
+		color: $j-500;
+	}
+}
+
+// ─── DATA LIST (dl grid inside panels) ────────────────────────────────────────
+.jafar-dl {
+	display: grid;
+	gap: 1px;
+	background: rgba(30, 41, 59, 0.6);
+	@media (min-width: 640px) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	&__cell {
+		background: $j-panel-bg;
+		padding: 1.6rem 2rem;
+		transition: background 0.15s;
+		&:hover {
+			background: rgba(15, 23, 42, 0.8);
+		}
+	}
+
+	&__term {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-500;
+	}
+
+	&__val {
+		margin-top: 0.4rem;
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+	&__code {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-200;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	&__text {
+		font-size: 1.4rem;
+		color: #fff;
+	}
+
+	&__copy {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		border-radius: 0.6rem;
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.6);
+		padding: 0.2rem 0.6rem;
+		font-size: 1rem;
+		font-weight: 600;
+		color: $j-400;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			color 0.15s;
+		&:hover {
+			border-color: $j-600;
+			color: #fff;
+		}
+	}
+}
+
+// ─── TOGGLE (red switch) ──────────────────────────────────────────────────────
+.jafar-toggle {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	width: 4.4rem;
+	height: 2.4rem;
+	border-radius: $j-radius-full;
+	border: 1px solid transparent;
+	background: $j-700;
+	cursor: pointer;
+	transition: background 0.2s;
+	flex-shrink: 0;
+
+	&:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px rgba(239, 68, 68, 0.4),
+			0 0 0 4px $j-950;
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	&[aria-checked='true'] {
+		background: linear-gradient(180deg, $j-red-500, $j-red-600);
+		box-shadow: inset 0 2px 4px rgba(127, 29, 29, 0.5);
+	}
+
+	&__knob {
+		pointer-events: none;
+		display: inline-block;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+		transform: translateX(0.2rem);
+		transition: transform 0.2s;
+
+		[aria-checked='true'] & {
+			transform: translateX(2.2rem);
+		}
+	}
+}
+
+// ─── FEATURE FLAG GROUP ───────────────────────────────────────────────────────
+.jafar-flag-group {
+	border-radius: $j-radius-lg;
+	border: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.4);
+	overflow: hidden;
+
+	&__head {
+		padding: 1.2rem 1.6rem;
+		border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+	}
+	&__title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__sub {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+}
+
+.jafar-flag-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1.6rem;
+	padding: 1.2rem 1.6rem;
+	border-top: 1px solid rgba(30, 41, 59, 0.6);
+
+	&--mastered {
+		opacity: 0.5;
+	}
+	&__info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.8rem;
+		font-size: 1.4rem;
+		font-weight: 500;
+		color: #fff;
+	}
+
+	&__desc {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		line-height: 1.4;
+		color: $j-500;
+	}
+	&__warn {
+		margin-top: 0.4rem;
+		font-size: 1.1rem;
+		color: rgba(252, 211, 77, 0.9);
+	}
+}
+
+.jafar-req-pill {
+	display: inline-flex;
+	align-items: center;
+	border-radius: $j-radius-full;
+	padding: 0.2rem 0.6rem;
+	font-size: 1rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+
+	&--ready {
+		border: 1px solid rgba(16, 185, 129, 0.3);
+		background: rgba(16, 185, 129, 0.1);
+		color: $j-emerald-300;
+	}
+	&--warn {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		background: rgba(245, 158, 11, 0.1);
+		color: $j-amber-300;
+	}
+}
+
+// ─── LIMIT CARDS ─────────────────────────────────────────────────────────────
+.jafar-limit-card {
+	border-radius: $j-radius-lg;
+	border: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.4);
+	padding: 1.2rem 1.6rem;
+
+	&__header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1.2rem;
+	}
+	&__label {
+		font-size: 1.4rem;
+		font-weight: 500;
+		color: #fff;
+	}
+	&__desc {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		line-height: 1.4;
+		color: $j-500;
+	}
+	&__unit {
+		flex-shrink: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-500;
+	}
+
+	&__input-row {
+		margin-top: 1.2rem;
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+	&__hint {
+		margin-top: 0.6rem;
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+
+	&__zero-pill {
+		display: inline-flex;
+		align-items: center;
+		border-radius: $j-radius-full;
+		border: 1px solid $j-700;
+		background: rgba(15, 23, 42, 0.6);
+		padding: 0.2rem 0.6rem;
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-400;
+	}
+}
+
+// ─── PLAN CHIPS ──────────────────────────────────────────────────────────────
+.jafar-plan-chip {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.6rem;
+	border-radius: $j-radius-lg;
+	padding: 1.2rem 1.6rem;
+	text-align: left;
+	cursor: pointer;
+	border: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.4);
+	transition:
+		border-color 0.15s,
+		background 0.15s;
+
+	&:hover {
+		border-color: $j-700;
+		background: rgba(15, 23, 42, 0.6);
+	}
+	&:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+	}
+
+	&--active {
+		border-color: rgba(239, 68, 68, 0.5);
+		background: rgba(239, 68, 68, 0.05);
+		box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
+	}
+
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		gap: 0.8rem;
+	}
+	&__name {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__tagline {
+		font-size: 1.1rem;
+		line-height: 1.4;
+		color: $j-400;
+	}
+	&__note {
+		margin-top: 1.2rem;
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+
+	&__applied {
+		display: inline-flex;
+		align-items: center;
+		border-radius: $j-radius-full;
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.1);
+		padding: 0.2rem 0.8rem;
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-red-300;
+	}
+}
+
+// ─── PERMISSION MATRIX ────────────────────────────────────────────────────────
+.jafar-perm {
+	display: flex;
+	flex-direction: column;
+	gap: 1.6rem;
+
+	&__tpl {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.2rem;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1.2rem 1.6rem;
+
+		&-label {
+			font-size: 1.2rem;
+			font-weight: 600;
+			color: $j-300;
+		}
+		&-sub {
+			margin-top: 0.2rem;
+			font-size: 1.1rem;
+			color: $j-500;
+		}
+		&-btns {
+			display: flex;
+			gap: 0.8rem;
+		}
+	}
+
+	&-group {
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		overflow: hidden;
+
+		&__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1.2rem;
+			padding: 1.2rem 1.6rem;
+			border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+		}
+
+		&__title {
+			font-size: 1.4rem;
+			font-weight: 600;
+			color: #fff;
+		}
+		&__counts {
+			margin-top: 0.2rem;
+			font-size: 1.1rem;
+			color: $j-500;
+		}
+		&__list {
+			display: flex;
+			flex-direction: column;
+		}
+	}
+
+	&-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.2rem;
+		padding: 0.8rem 1.6rem;
+		border-top: 1px solid rgba(30, 41, 59, 0.5);
+
+		&__label {
+			font-size: 1.3rem;
+			color: $j-300;
+			flex: 1;
+			min-width: 0;
+		}
+	}
+}
+
+// ─── SMS MASTER CARD ─────────────────────────────────────────────────────────
+.jafar-sms {
+	&__status {
+		border-radius: $j-radius-lg;
+		padding: 1.2rem 1.6rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.2rem;
+		@media (min-width: 640px) {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+
+		&--paused {
+			border: 1px solid rgba(239, 68, 68, 0.3);
+			background: rgba(239, 68, 68, 0.1);
+		}
+		&--active {
+			border: 1px solid rgba(16, 185, 129, 0.25);
+			background: rgba(16, 185, 129, 0.1);
+		}
+	}
+
+	&__paused-title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fecaca;
+	}
+	&__paused-text {
+		margin-top: 0.2rem;
+		font-size: 1.2rem;
+		color: rgba(252, 165, 165, 0.8);
+	}
+	&__paused-note {
+		margin-top: 0.4rem;
+		font-size: 1.2rem;
+		color: rgba(252, 165, 165, 0.7);
+	}
+	&__active-title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: $j-emerald-200;
+	}
+	&__active-text {
+		margin-top: 0.2rem;
+		font-size: 1.2rem;
+		color: rgba(110, 231, 183, 0.7);
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.6rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	&__stat {
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(15, 23, 42, 0.4);
+		padding: 1.2rem 1.6rem;
+
+		&-label {
+			font-size: 1.2rem;
+			font-weight: 500;
+			color: $j-500;
+		}
+		&-val {
+			margin-top: 0.4rem;
+			font-size: 2rem;
+			font-weight: 700;
+			color: #fff;
+		}
+		&-sub {
+			margin-top: 0.2rem;
+			font-size: 1.2rem;
+			color: $j-500;
+		}
+		&-row {
+			display: flex;
+			align-items: center;
+			gap: 0.8rem;
+			margin-top: 0.4rem;
+		}
+	}
+
+	&__err {
+		font-size: 1.2rem;
+		font-weight: 600;
+		color: $j-red-300;
+	}
+}
+
+// ─── SAVE BAR (fixed dirty-state footer) ─────────────────────────────────────
+.jafar-save-bar {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 50;
+	border-top: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.95);
+	backdrop-filter: blur(8px);
+	padding: 1.2rem 2.4rem;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 1.2rem;
+
+	&__note {
+		font-size: 1.2rem;
+		color: $j-400;
+		margin-right: auto;
+	}
+}
+
+// ─── CONNECTIONS LIST ─────────────────────────────────────────────────────────
+.jafar-connection {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.2rem;
+	padding: 1.4rem 2rem;
+	border-top: 1px solid rgba(30, 41, 59, 0.6);
+	&:first-child {
+		border-top: none;
+	}
+
+	&__left {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+	&__label {
+		font-size: 1.4rem;
+		font-weight: 500;
+		color: #fff;
+	}
+	&__sub {
+		font-size: 1.2rem;
+		color: $j-500;
+	}
+	&__detail {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-400;
+	}
+	&__right {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		flex-shrink: 0;
+	}
+}
+
+// ─── DNS TABLE (EmailDomainPanel) ─────────────────────────────────────────────
+.jafar-dns {
+	&__tbl {
+		margin-top: 1.2rem;
+		overflow: hidden;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+	}
+
+	&__head {
+		display: none;
+		gap: 1.6rem;
+		border-bottom: 1px solid $j-800;
+		background: rgba(15, 23, 42, 0.6);
+		padding: 1rem 1.6rem;
+		grid-template-columns: 72px minmax(0, 1.1fr) minmax(0, 2fr) 60px 112px;
+		@media (min-width: 640px) {
+			display: grid;
+		}
+	}
+
+	&__col {
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-500;
+	}
+
+	&__row {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1rem 1.6rem;
+		padding: 1.4rem 1.6rem;
+		border-top: 1px solid $j-800;
+		@media (min-width: 640px) {
+			grid-template-columns: 72px minmax(0, 1.1fr) minmax(0, 2fr) 60px 112px;
+			align-items: center;
+			gap: 0.4rem 1.6rem;
+		}
+	}
+
+	&__mob-label {
+		font-size: 1.2rem;
+		font-weight: 600;
+		color: $j-200;
+		@media (min-width: 640px) {
+			display: none;
+		}
+	}
+	&__mob-key {
+		font-size: 1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-500;
+		@media (min-width: 640px) {
+			display: none;
+		}
+	}
+
+	&__cell {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		min-width: 0;
+	}
+	&__type-pill {
+		display: inline-flex;
+		align-items: center;
+		border-radius: 0.6rem;
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.6);
+		padding: 0.2rem 0.6rem;
+		font-family: ui-monospace, monospace;
+		font-size: 1rem;
+		font-weight: 600;
+		color: $j-300;
+	}
+
+	&__mono {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-200;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__copy-btn {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.4rem;
+		height: 2.4rem;
+		border-radius: 0.6rem;
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.6);
+		color: $j-400;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			color 0.15s;
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			border-color: $j-600;
+			color: #fff;
+		}
+	}
+
+	&__v-ok {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-size: 1.2rem;
+		font-weight: 500;
+		color: $j-emerald-300;
+	}
+	&__v-pend {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-size: 1.2rem;
+		font-weight: 500;
+		color: $j-amber-300;
+	}
+	&__v-dot {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	&__section-title {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-400;
+	}
+	&__section-sub {
+		margin-top: 0.2rem;
+		font-size: 1.2rem;
+		color: $j-500;
+	}
+
+	&__preview {
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1.2rem 1.6rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+
+	&__preview-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.4rem 0.8rem;
+		font-size: 1.1rem;
+		color: $j-400;
+	}
+	&__preview-code {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-emerald-300;
+		&--sky {
+			color: #7dd3fc;
+		}
+	}
+	&__collide {
+		font-size: 1.1rem;
+		font-weight: 500;
+		color: $j-red-300;
+	}
+
+	&__inbound-card {
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1.2rem 1.6rem;
+	}
+
+	&__inbound-term {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-500;
+	}
+	&__inbound-row {
+		margin-top: 0.6rem;
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+
+	&__domain-hd {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.2rem;
+	}
+
+	&__domain-inner {
+		min-width: 0;
+	}
+
+	&__domain-name {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	&__domain-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.2rem;
+		height: 3.2rem;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-700;
+		background: rgba(30, 41, 59, 0.6);
+		color: $j-300;
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__domain-mono {
+		font-family: ui-monospace, monospace;
+		font-size: 1.4rem;
+		font-weight: 500;
+		color: #fff;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__domain-pills {
+		margin-top: 0.8rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	&__poll-note {
+		margin-top: 0.8rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-size: 1.1rem;
+		color: $j-400;
+	}
+	&__poll-dot {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: $j-emerald-400;
+		animation: jafar-pulse 1.5s ease-in-out infinite;
+	}
+
+	&__domain-actions {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 0.8rem;
+	}
+
+	&__instruction {
+		margin-top: 1.6rem;
+		font-size: 1.4rem;
+		color: $j-300;
+		line-height: 1.6;
+		strong {
+			font-weight: 600;
+			color: #fff;
+		}
+	}
+
+	&__form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.6rem;
+	}
+
+	&__label {
+		display: block;
+	}
+	&__label-text {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-400;
+	}
+	&__label-hint {
+		margin-top: 0.6rem;
+		display: block;
+		font-size: 1.1rem;
+		color: $j-400;
+	}
+	&__req {
+		color: $j-red-300;
+	}
+
+	&__label .jafar-input {
+		margin-top: 0.6rem;
+	}
+
+	&__prefix-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.2rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		&--3 {
+			@media (min-width: 640px) {
+				grid-template-columns: 1fr 1fr 1fr;
+			}
+		}
+	}
+
+	&__tbl--4col {
+		.jafar-dns__head,
+		.jafar-dns__row {
+			@media (min-width: 640px) {
+				grid-template-columns: 72px minmax(0, 1.1fr) minmax(0, 2fr) 112px;
+			}
+		}
+	}
+
+	&__domain-from {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-400;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__section {
+		margin-top: 2rem;
+	}
+	&__section-sub + .jafar-dns__tbl {
+		margin-top: 1.2rem;
+	}
+
+	&__error {
+		margin-top: 1.6rem;
+	}
+}
+
+// ─── REVIEW LINK ROW ──────────────────────────────────────────────────────────
+.jafar-review {
+	display: flex;
+	width: 100%;
+	flex-direction: column;
+	gap: 0.6rem;
+	@media (min-width: 640px) {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	&__msg {
+		margin-top: 0.4rem;
+		font-size: 1.1rem;
+		&--ok {
+			color: $j-emerald-300;
+		}
+		&--err {
+			color: $j-red-300;
+		}
+		&--sub {
+			color: $j-400;
+		}
+	}
+}
+
+// ─── SKELETONS ────────────────────────────────────────────────────────────────
+.jafar-skel-section {
+	border-radius: $j-radius-xl;
+	border: 1px solid $j-panel-border;
+	background: $j-panel-bg;
+	box-shadow: $j-panel-shadow;
+	overflow: hidden;
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+		padding: 1.6rem 2rem;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: 1.6rem;
+		padding: 1.4rem 2rem;
+		border-top: 1px solid rgba(30, 41, 59, 0.7);
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1px;
+		background: rgba(30, 41, 59, 0.6);
+	}
+
+	&__cell {
+		background: $j-panel-bg;
+		padding: 1.6rem 2rem;
+
+		&--block {
+			display: block;
+			height: 100%;
+		}
+	}
+}
+
+.jafar-skel-hd {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.6rem;
+
+	&__circle {
+		width: 4.8rem;
+		height: 4.8rem;
+		border-radius: $j-radius-lg;
+		background: $j-800;
+		flex-shrink: 0;
+		animation: jafar-pulse 2s ease-in-out infinite;
+	}
+
+	&__lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		padding-top: 0.4rem;
+	}
+}
+
+.j-skel {
+	animation: jafar-pulse 2s ease-in-out infinite;
+	background: $j-800;
+	border-radius: 0.4rem;
+
+	&--h3 {
+		height: 1.2rem;
+	}
+	&--h4 {
+		height: 1.6rem;
+	}
+	&--h5 {
+		height: 2rem;
+	}
+	&--h6 {
+		height: 2.4rem;
+	}
+	&--dim {
+		background: rgba(30, 41, 59, 0.6);
+	}
+}
+
+// ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
+.jafar-login {
+	min-height: 100dvh;
+	background: linear-gradient(135deg, $j-950, $j-900, $j-950);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1.6rem;
+
+	&__wrap {
+		width: 100%;
+		max-width: 44rem;
+	}
+
+	&__brand {
+		text-align: center;
+		margin-bottom: 3.2rem;
+	}
+
+	&__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 5.6rem;
+		height: 5.6rem;
+		border-radius: 1.6rem;
+		background: linear-gradient(135deg, $j-red-500, $j-red-600);
+		box-shadow:
+			0 8px 16px rgba(127, 29, 29, 0.4),
+			0 0 0 1px rgba(252, 165, 165, 0.3);
+		color: #fff;
+		margin-bottom: 2rem;
+		i {
+			font-size: 2.6rem;
+		}
+	}
+
+	&__eyebrow {
+		display: block;
+		font-size: 1rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.28em;
+		color: rgba(252, 165, 165, 0.9);
+	}
+
+	&__subtitle {
+		margin-top: 0.4rem;
+		font-size: 1.2rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: $j-400;
+	}
+
+	&__card {
+		background: rgba(15, 23, 42, 0.7);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border-radius: $j-radius-xl;
+		border: 1px solid $j-800;
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+		overflow: hidden;
+	}
+
+	&__head {
+		padding: 3.2rem 3.2rem 0.8rem;
+	}
+	&__title {
+		font-size: 2.4rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		color: #fff;
+	}
+	&__desc {
+		margin-top: 0.6rem;
+		font-size: 1.4rem;
+		color: $j-400;
+		line-height: 1.6;
+	}
+
+	&__body {
+		padding: 3.2rem;
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+
+	// Override AuthField label/input for the dark Jafar theme
+	:global(.jafar-login__body label) {
+		color: $j-300;
+	}
+	:global(.jafar-login__body .field__input) {
+		background: $j-input-bg;
+		border-color: $j-700;
+		color: #fff;
+		&::placeholder {
+			color: $j-500;
+		}
+		&:focus {
+			border-color: rgba(239, 68, 68, 0.6);
+			box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+		}
+	}
+
+	&__totp {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	&__totp-label {
+		display: block;
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: $j-300;
+	}
+	&__totp-input {
+		display: flex;
+		height: 4.4rem;
+		width: 100%;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-700;
+		background: $j-input-bg;
+		padding: 0 1.6rem;
+		font-size: 1.4rem;
+		letter-spacing: 0.4em;
+		font-family: ui-monospace, monospace;
+		color: #fff;
+		transition: border-color 0.15s;
+		&::placeholder {
+			color: $j-500;
+			letter-spacing: normal;
+			font-family: inherit;
+		}
+		&:focus {
+			outline: none;
+			border-color: rgba(239, 68, 68, 0.6);
+			box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+		}
+	}
+	&__totp-hint {
+		font-size: 1.2rem;
+		color: $j-500;
+		line-height: 1.5;
+		padding-top: 0.2rem;
+	}
+
+	&__footer {
+		padding: 1.6rem 3.2rem 2.4rem;
+		border-top: 1px solid rgba(30, 41, 59, 0.8);
+		text-align: center;
+		font-size: 1.1rem;
+		color: $j-500;
+		line-height: 1.6;
+		a {
+			color: $j-300;
+			font-weight: 500;
+			text-decoration: none;
+			text-underline-offset: 2px;
+			transition: color 0.15s;
+			&:hover {
+				color: #fff;
+				text-decoration: underline;
+			}
+		}
+	}
+
+	&__copyright {
+		text-align: center;
+		font-size: 1.1rem;
+		color: #334155;
+		margin-top: 2.4rem;
+	}
+}
+
+// ─── ORG EDITOR PANELS (S17c-2) ──────────────────────────────────────────────
+// Shared form helpers (10px rem base: 1.4rem = 14px)
+.jafar-flabel {
+	display: block;
+	font-size: 1.1rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: $j-400;
+
+	&__req {
+		color: $j-red-300;
+	}
+}
+
+.jafar-fhint {
+	font-size: 1.1rem;
+	line-height: 1.4;
+	color: $j-500;
+}
+
+.jafar-fmsg {
+	font-size: 1.4rem;
+
+	&--err {
+		color: $j-red-300;
+	}
+	&--ok {
+		color: $j-emerald-300;
+	}
+	&--muted {
+		color: $j-400;
+	}
+}
+
+.jafar-textarea {
+	display: block;
+	width: 100%;
+	padding: 0.8rem 1.2rem;
+	border-radius: $j-radius-md;
+	border: 1px solid $j-700;
+	background: $j-input-bg;
+	color: #fff;
+	font-size: 1.4rem;
+	line-height: 1.5;
+	resize: vertical;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
+
+	&::placeholder {
+		color: $j-600;
+	}
+	&:focus {
+		outline: none;
+		border-color: rgba(239, 68, 68, 0.6);
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+	}
+}
+
+.jafar-checkbox {
+	margin-top: 0.2rem;
+	width: 2rem;
+	height: 2rem;
+	flex-shrink: 0;
+	cursor: pointer;
+	border-radius: 0.4rem;
+	border: 1px solid $j-600;
+	background: rgba(15, 23, 42, 0.5);
+	accent-color: $j-red-500;
+}
+
+.jafar-copy-chip {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	border-radius: 0.6rem;
+	border: 1px solid $j-700;
+	background: rgba(30, 41, 59, 0.6);
+	padding: 0.2rem 0.8rem;
+	font-size: 1rem;
+	font-weight: 600;
+	color: $j-400;
+	cursor: pointer;
+	transition:
+		border-color 0.15s,
+		color 0.15s;
+
+	&:hover {
+		border-color: $j-600;
+		color: #fff;
+	}
+}
+
+.jafar-subcard {
+	border-radius: $j-radius-lg;
+	border: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.4);
+	padding: 1.4rem 1.6rem;
+}
+
+// Stacked panel header (title + description, no icon)
+.jafar-panel__head--column {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.4rem;
+}
+.jafar-panel__desc {
+	font-size: 1.4rem;
+	line-height: 1.5;
+	color: $j-300;
+}
+
+// ─── SMS CREDIT ──────────────────────────────────────────────────────────────
+.jafar-credit {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+
+	&__balance {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 1.2rem;
+	}
+	&__balance-label {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: $j-400;
+	}
+	&__balance-val {
+		margin-top: 0.4rem;
+		font-size: 3rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: #fff;
+
+		&--zero {
+			color: $j-red-400;
+		}
+	}
+	&__balance-meta {
+		font-size: 1.1rem;
+		line-height: 1.5;
+		text-align: right;
+		color: $j-400;
+	}
+
+	&__config {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.6rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr 1fr;
+		}
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+
+		&--amount {
+			@media (min-width: 640px) {
+				width: 16rem;
+			}
+		}
+		&--grow {
+			flex: 1;
+		}
+	}
+
+	&__toggle {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1.6rem;
+		cursor: pointer;
+	}
+	&__toggle-title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__toggle-desc {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		line-height: 1.4;
+		color: $j-400;
+	}
+
+	&__actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	&__topup {
+		display: flex;
+		flex-direction: column;
+		gap: 1.2rem;
+	}
+	&__topup-title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__topup-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.2rem;
+		@media (min-width: 640px) {
+			flex-direction: row;
+			align-items: flex-end;
+		}
+	}
+
+	&__ledger {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+	&__ledger-list {
+		overflow: hidden;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+	}
+	&__ledger-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.2rem;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1rem 1.6rem;
+		border-top: 1px solid rgba(30, 41, 59, 0.7);
+
+		&:first-child {
+			border-top: none;
+		}
+	}
+	&__ledger-type {
+		font-size: 1.4rem;
+		font-weight: 500;
+		color: $j-200;
+	}
+	&__ledger-time {
+		font-size: 1.1rem;
+		color: $j-400;
+	}
+	&__ledger-right {
+		flex-shrink: 0;
+		text-align: right;
+	}
+	&__ledger-amt {
+		font-size: 1.4rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+
+		&--neg {
+			color: $j-red-400;
+		}
+		&--pos {
+			color: $j-emerald-400;
+		}
+	}
+	&__ledger-bal {
+		font-size: 1.1rem;
+		font-variant-numeric: tabular-nums;
+		color: $j-400;
+	}
+}
+
+// ─── WEBCHAT WIDGET ──────────────────────────────────────────────────────────
+.jafar-wc {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+
+	&__modes {
+		display: flex;
+		gap: 1.2rem;
+	}
+	&__mode {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.2rem;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1rem 1.2rem;
+		text-align: left;
+		cursor: pointer;
+		color: $j-400;
+		transition:
+			border-color 0.15s,
+			background 0.15s,
+			color 0.15s;
+
+		&:hover {
+			border-color: $j-600;
+			color: #fff;
+		}
+		&--active {
+			border-color: rgba(239, 68, 68, 0.5);
+			background: rgba(239, 68, 68, 0.05);
+			color: #fff;
+			box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
+		}
+	}
+	&__mode-name {
+		font-size: 1.4rem;
+		font-weight: 600;
+	}
+	&__mode-hint {
+		font-size: 1.1rem;
+		opacity: 0.7;
+	}
+
+	&__toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.6rem;
+	}
+	&__toggle-title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__toggle-desc {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		color: $j-400;
+	}
+
+	&__preview {
+		font-size: 1.1rem;
+		font-style: italic;
+		color: $j-400;
+	}
+
+	&__code {
+		font-family: ui-monospace, monospace;
+		color: $j-400;
+	}
+
+	&__domain-add {
+		display: flex;
+		gap: 0.8rem;
+	}
+	&__domain-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	&__domain-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 0.8rem 1.2rem;
+	}
+	&__domain-code {
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-200;
+	}
+	&__domain-remove {
+		border: none;
+		background: none;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: $j-red-400;
+		cursor: pointer;
+		transition: color 0.15s;
+
+		&:hover {
+			color: $j-red-300;
+		}
+	}
+
+	&__token-row {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+	&__token-code {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		color: $j-200;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-800;
+		background: $j-input-bg;
+		padding: 0.8rem 1.2rem;
+	}
+
+	&__snippet {
+		position: relative;
+	}
+	&__snippet-pre {
+		margin: 0;
+		overflow-x: auto;
+		border-radius: $j-radius-md;
+		border: 1px solid $j-800;
+		background: $j-input-bg;
+		padding: 1.2rem 1.6rem;
+		font-family: ui-monospace, monospace;
+		font-size: 1.2rem;
+		line-height: 1.6;
+		color: $j-emerald-300;
+	}
+	&__snippet-copy {
+		position: absolute;
+		top: 0.8rem;
+		right: 0.8rem;
+	}
+
+	&__actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+}
+
+// ─── ORG DETAIL PAGE (S17c-3) ────────────────────────────────────────────────
+.jafar-orgdetail {
+	display: flex;
+	flex-direction: column;
+	gap: 2.4rem;
+	padding-bottom: 12rem; // clearance for the fixed save bar
+
+	&__body {
+		display: flex;
+		align-items: flex-start;
+		gap: 2.4rem;
+	}
+
+	&__content {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1.6rem;
+	}
+
+	&__cached {
+		font-size: 1.1rem;
+		color: rgba(252, 211, 77, 0.8);
+	}
+}
+
+// Slug + setup pill extras on the org header
+.jafar-org-hd__slug {
+	font-family: ui-monospace, monospace;
+	color: $j-500;
+}
+
+// Data-list extras (logo, color swatch, multiline, full-width cells)
+.jafar-dl {
+	&__val--start {
+		align-items: flex-start;
+	}
+	&__muted {
+		color: $j-500;
+	}
+	&__na {
+		font-size: 1.4rem;
+		font-style: italic;
+		color: $j-500;
+	}
+	&__pre {
+		white-space: pre-wrap;
+		font-size: 1.4rem;
+		color: #fff;
+	}
+	&__cell--full {
+		@media (min-width: 640px) {
+			grid-column: span 2;
+		}
+	}
+	&__logo {
+		height: 4.8rem;
+		width: auto;
+		max-width: 16rem;
+		border-radius: $j-radius-sm;
+		border: 1px solid $j-800;
+		background: rgba(255, 255, 255, 0.05);
+		object-fit: contain;
+		padding: 0.4rem;
+	}
+	&__swatch {
+		display: inline-block;
+		width: 2rem;
+		height: 2rem;
+		flex-shrink: 0;
+		border-radius: 0.4rem;
+		border: 1px solid $j-700;
+	}
+}
+
+// Lifecycle action cards (general tab)
+.jafar-life {
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.2rem;
+		padding: 2rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr 1fr;
+		}
+	}
+
+	&__card {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.6rem;
+		border-radius: $j-radius-lg;
+		border: 1px solid $j-800;
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1.2rem 1.6rem;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		&--emerald:hover:not(:disabled) {
+			border-color: rgba(16, 185, 129, 0.4);
+			background: rgba(16, 185, 129, 0.05);
+		}
+		&--amber:hover:not(:disabled) {
+			border-color: rgba(245, 158, 11, 0.4);
+			background: rgba(245, 158, 11, 0.05);
+		}
+		&--sky:hover:not(:disabled) {
+			border-color: rgba(14, 165, 233, 0.4);
+			background: rgba(14, 165, 233, 0.05);
+		}
+	}
+
+	&__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.2rem;
+		height: 3.2rem;
+		border-radius: $j-radius-md;
+		i {
+			font-size: 1.6rem;
+		}
+
+		&--emerald {
+			border: 1px solid rgba(16, 185, 129, 0.3);
+			background: rgba(16, 185, 129, 0.1);
+			color: $j-emerald-300;
+		}
+		&--amber {
+			border: 1px solid rgba(245, 158, 11, 0.3);
+			background: rgba(245, 158, 11, 0.1);
+			color: $j-amber-300;
+		}
+		&--sky {
+			border: 1px solid rgba(14, 165, 233, 0.3);
+			background: rgba(14, 165, 233, 0.1);
+			color: #7dd3fc;
+		}
+	}
+
+	&__title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__hint {
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+
+	&__applying {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		border-top: 1px solid rgba(30, 41, 59, 0.8);
+		background: rgba(2, 6, 23, 0.4);
+		padding: 1.2rem 2rem;
+		font-size: 1.2rem;
+		color: $j-400;
+		i {
+			font-size: 1.4rem;
+			animation: jafar-spin 0.7s linear infinite;
+		}
+	}
+}
+
+// Master switch row (SMS activation) + panel footnote
+.jafar-switchrow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.6rem;
+	padding: 2rem;
+
+	&__info {
+		min-width: 0;
+	}
+	&__title {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+	&__desc {
+		margin-top: 0.2rem;
+		font-size: 1.1rem;
+		color: $j-500;
+	}
+}
+
+.jafar-panel__note {
+	border-top: 1px solid rgba(30, 41, 59, 0.8);
+	padding: 1.6rem 2rem;
+	font-size: 1.1rem;
+	line-height: 1.5;
+	color: $j-500;
+
+	button {
+		border: none;
+		background: none;
+		padding: 0;
+		font: inherit;
+		font-weight: 600;
+		color: $j-emerald-300;
+		cursor: pointer;
+		text-underline-offset: 2px;
+		&:hover {
+			color: $j-emerald-200;
+			text-decoration: underline;
+		}
+	}
+}
+
+// Carrier approval lifecycle (details tab footer)
+.jafar-approval {
+	border-top: 1px solid rgba(30, 41, 59, 0.8);
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.6rem;
+
+	&__status {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 1.2rem;
+	}
+	&__status-label {
+		font-size: 1.4rem;
+		font-weight: 600;
+		color: #fff;
+	}
+
+	&__reason {
+		border-radius: $j-radius-md;
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.1);
+		padding: 1.2rem 1.6rem;
+		color: $j-red-200;
+		font-size: 1.4rem;
+	}
+	&__reason-term {
+		font-size: 1.1rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: rgba(252, 165, 165, 0.8);
+	}
+	&__reason-text {
+		margin-top: 0.4rem;
+		white-space: pre-wrap;
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.8rem;
+	}
+
+	&__form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+	&__form-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	&__note {
+		font-size: 1.1rem;
+		line-height: 1.5;
+		color: $j-500;
+	}
+}
+
+// Integration connections list wrapper
+.jafar-connections {
+	border-radius: $j-radius-lg;
+	border: 1px solid $j-800;
+	background: rgba(2, 6, 23, 0.4);
+	overflow: hidden;
+}
+
+.jafar-save-bar__title {
+	display: block;
+	font-size: 1.4rem;
+	font-weight: 600;
+	color: #fff;
+}

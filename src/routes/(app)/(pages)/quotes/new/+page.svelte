@@ -1,17 +1,12 @@
 <script lang="ts">
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import QuoteProgressStrip from '$lib/components/quotes/QuoteProgressStrip.svelte';
 	import ServiceAddressPicker from '$lib/components/quotes/ServiceAddressPicker.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { AlertTriangle, MapPin, Target, User } from '@lucide/svelte';
 
 	type OpportunityPick = {
 		id: string;
@@ -162,70 +157,70 @@
 <svelte:head><title>New quote</title></svelte:head>
 
 <PageWrapper title="New quote" back="/quotes">
-	<div class="mx-auto w-full max-w-2xl space-y-5">
+	<div class="quote-start">
 		<!-- Progress -->
-		<div class="rounded-xl border border-border/60 bg-card px-4 py-3 shadow-card">
+		<div class="quote-start__progress-card">
 			<QuoteProgressStrip current="customer" />
 		</div>
 
 		<!-- Customer + address + opportunity -->
-		<div class="rounded-xl border border-border/60 bg-card p-5 shadow-card">
-			<h2 class="text-sm font-semibold text-foreground">Who's this quote for?</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
+		<div class="quote-start__card">
+			<h2 class="quote-start__card-title">Who's this quote for?</h2>
+			<p class="quote-start__card-sub">
 				Pick the customer and the job site. You'll build the line items next.
 			</p>
 
-			<div class="mt-4 grid gap-4">
+			<div class="quote-start__fields">
 				<!-- Contact -->
-				<div class="grid gap-2">
-					<Label>Contact <span class="text-destructive">*</span></Label>
+				<div class="quote-start__field">
+					<span class="quote-start__label">Contact <span class="quote-start__req">*</span></span>
 					{#if selectedContact}
 						<button
 							type="button"
-							class="flex items-center gap-3 rounded-lg border border-border bg-card-raised p-3 text-left transition-colors hover:bg-accent"
+							class="quote-start__contact-btn"
 							onclick={() => (pickerOpen = true)}
 						>
-							<div
-								class="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
-							>
-								<User class="h-4 w-4" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{selectedContact.full_name}</p>
-								<p class="truncate text-xs text-muted-foreground">
+							<span class="quote-start__avatar">
+								<i class="ri-user-line" aria-hidden="true"></i>
+							</span>
+							<span class="quote-start__contact-info">
+								<span class="quote-start__contact-name">{selectedContact.full_name}</span>
+								<span class="quote-start__contact-sub">
 									{selectedContact.phone}{selectedContact.email
 										? ` · ${selectedContact.email}`
 										: ''}
-								</p>
-							</div>
-							<span class="shrink-0 text-xs text-muted-foreground">Change</span>
+								</span>
+							</span>
+							<span class="quote-start__contact-change">Change</span>
 						</button>
 					{:else}
-						<Button variant="outline" onclick={() => (pickerOpen = true)}>
-							<User class="mr-1 h-4 w-4" />Choose contact
-						</Button>
+						<button
+							type="button"
+							class="btn btn--outline btn--lg"
+							onclick={() => (pickerOpen = true)}
+						>
+							<i class="ri-user-line" aria-hidden="true"></i>Choose contact
+						</button>
 					{/if}
 					{#if selectedContact && !selectedContact.email}
-						<p
-							class="inline-flex w-fit items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
-						>
-							<AlertTriangle class="h-3 w-3 shrink-0" />No email on file — you'll only be able to
-							send this quote by SMS
+						<p class="quote-start__warn">
+							<i class="ri-alert-line" aria-hidden="true"></i>No email on file — you'll only be able
+							to send this quote by SMS
 						</p>
 					{/if}
 					{#if fieldErrors.contact_id}
-						<p class="text-xs text-destructive">{fieldErrors.contact_id}</p>
+						<p class="quote-start__error">{fieldErrors.contact_id}</p>
 					{/if}
 				</div>
 
 				<!-- Service address -->
 				{#if selectedContact}
-					<div class="grid gap-2">
-						<Label class="flex items-center gap-1.5">
-							<MapPin class="h-3.5 w-3.5 text-muted-foreground" />
+					<div class="quote-start__field">
+						<span class="quote-start__label">
+							<i class="ri-map-pin-line" aria-hidden="true"></i>
 							Service address
-							<span class="text-xs font-normal text-muted-foreground">(optional)</span>
-						</Label>
+							<span class="quote-start__label-opt">(optional)</span>
+						</span>
 						<ServiceAddressPicker
 							contactId={selectedContact.id}
 							bind:selectedAddressId={serviceAddressId}
@@ -236,59 +231,49 @@
 
 				<!-- Opportunity -->
 				{#if selectedContact}
-					<div class="grid gap-2">
-						<Label class="flex items-center gap-1.5">
-							<Target class="h-3.5 w-3.5 text-muted-foreground" />
+					<div class="quote-start__field">
+						<span class="quote-start__label">
+							<i class="ri-focus-3-line" aria-hidden="true"></i>
 							Opportunity
-							<span class="text-xs font-normal text-muted-foreground">(optional)</span>
-						</Label>
+							<span class="quote-start__label-opt">(optional)</span>
+						</span>
 						{#if opportunityLocked && selectedOpportunityId}
 							{@const locked = opportunities.find((o) => o.id === selectedOpportunityId)}
-							<div
-								class="flex items-center gap-3 rounded-lg border border-border bg-card-raised p-3"
-							>
-								<div
-									class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"
-								>
-									<Target class="h-4 w-4" />
-								</div>
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-sm font-medium">
-										{locked?.title ?? 'Linked opportunity'}
-									</p>
-									<p class="truncate text-xs text-muted-foreground">Attached from pipeline</p>
-								</div>
+							<div class="quote-start__opp quote-start__opp--locked">
+								<span class="quote-start__avatar quote-start__avatar--brand">
+									<i class="ri-focus-3-line" aria-hidden="true"></i>
+								</span>
+								<span class="quote-start__opp-info">
+									<span class="quote-start__opp-title">{locked?.title ?? 'Linked opportunity'}</span
+									>
+									<span class="quote-start__opp-sub">Attached from pipeline</span>
+								</span>
 							</div>
 						{:else if opportunitiesLoading}
-							<p class="text-xs text-muted-foreground">Loading…</p>
+							<p class="quote-start__note">Loading…</p>
 						{:else if opportunities.length === 0}
-							<p
-								class="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300"
-							>
+							<p class="quote-start__note quote-start__note--warn">
 								No open opportunities for this contact. The quote will be saved without a pipeline
 								link.
 							</p>
 						{:else}
-							<div class="grid gap-2">
+							<div class="quote-start__opp-list">
 								{#each opportunities as opp (opp.id)}
 									<button
 										type="button"
-										class="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors {selectedOpportunityId ===
-										opp.id
-											? 'border-primary bg-primary/5'
-											: 'border-border bg-card-raised hover:bg-accent'}"
+										class="quote-start__opp {selectedOpportunityId === opp.id
+											? 'quote-start__opp--active'
+											: ''}"
 										onclick={() =>
 											(selectedOpportunityId = selectedOpportunityId === opp.id ? null : opp.id)}
 									>
-										<div
-											class="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
-										>
-											<Target class="h-4 w-4" />
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="truncate text-sm font-medium">{opp.title}</p>
-											{#if opp.value}<p class="text-xs text-muted-foreground">${opp.value}</p>{/if}
-										</div>
+										<span class="quote-start__avatar">
+											<i class="ri-focus-3-line" aria-hidden="true"></i>
+										</span>
+										<span class="quote-start__opp-info">
+											<span class="quote-start__opp-title">{opp.title}</span>
+											{#if opp.value}<span class="quote-start__opp-sub">${opp.value}</span>{/if}
+										</span>
 									</button>
 								{/each}
 							</div>
@@ -299,42 +284,54 @@
 		</div>
 
 		<!-- Details -->
-		<div class="rounded-xl border border-border/60 bg-card p-5 shadow-card">
-			<h2 class="text-sm font-semibold text-foreground">Quote details</h2>
-			<div class="mt-4 grid gap-4">
-				<div class="grid gap-2">
-					<Label for="title">Title <span class="text-destructive">*</span></Label>
-					<Input id="title" bind:value={title} placeholder="e.g. Roof replacement" />
-					{#if fieldErrors.title}<p class="text-xs text-destructive">{fieldErrors.title}</p>{/if}
-				</div>
-				<div class="grid gap-2">
-					<Label for="notes"
-						>Client note <span class="text-xs font-normal text-muted-foreground">(optional)</span
-						></Label
+		<div class="quote-start__card">
+			<h2 class="quote-start__card-title">Quote details</h2>
+			<div class="quote-start__fields">
+				<div class="quote-start__field">
+					<label class="quote-start__label" for="title"
+						>Title <span class="quote-start__req">*</span></label
 					>
-					<Textarea
+					<input
+						id="title"
+						class="field__input"
+						bind:value={title}
+						placeholder="e.g. Roof replacement"
+					/>
+					{#if fieldErrors.title}<p class="quote-start__error">{fieldErrors.title}</p>{/if}
+				</div>
+				<div class="quote-start__field">
+					<label class="quote-start__label" for="notes">
+						Client note <span class="quote-start__label-opt">(optional)</span>
+					</label>
+					<textarea
 						id="notes"
+						class="field__textarea"
 						bind:value={notes}
 						rows={2}
 						placeholder="e.g. All work includes a 1-year warranty."
-					/>
+					></textarea>
 				</div>
 			</div>
 		</div>
 
 		<!-- Actions -->
-		<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-			<Button variant="outline" onclick={() => history.back()} disabled={saving} class="sm:w-auto">
+		<div class="quote-start__actions">
+			<button
+				type="button"
+				class="btn btn--secondary"
+				onclick={() => history.back()}
+				disabled={saving}
+			>
 				Cancel
-			</Button>
-			<JetEngineButton
-				label="Start quote"
+			</button>
+			<Button
 				loadingLabel="Creating…"
 				successLabel="Created"
-				state={saving ? 'loading' : 'idle'}
+				loading={saving}
 				onclick={start}
-				class="sm:w-auto"
-			/>
+			>
+				Start quote
+			</Button>
 		</div>
 	</div>
 

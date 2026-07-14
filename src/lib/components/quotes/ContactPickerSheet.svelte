@@ -1,8 +1,6 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
-	import { AlertTriangle, Loader2, User } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	type ContactItem = { id: string; full_name: string; phone: string; email: string | null };
@@ -45,57 +43,59 @@
 </script>
 
 <Sheet.Root bind:open>
-	<Sheet.Content side="bottom" class="max-h-[80vh]">
-		<Sheet.Header>
-			<Sheet.Title>Choose contact</Sheet.Title>
+	<Sheet.Content side="bottom">
+		<Sheet.Header class="dialog-sheet__header">
+			<Sheet.Title class="dialog-sheet__title">Choose contact</Sheet.Title>
 		</Sheet.Header>
-		<div class="space-y-3 py-3">
-			<Input
-				bind:value={query}
-				oninput={onQueryChange}
-				placeholder="Search name or phone"
-				autocomplete="off"
-			/>
-			<div class="max-h-[55vh] space-y-2 overflow-y-auto">
+		<div class="contact-picker">
+			<div class="field__input-wrap">
+				<i class="ri-search-line field__icon" aria-hidden="true"></i>
+				<input
+					class="field__input"
+					bind:value={query}
+					oninput={onQueryChange}
+					placeholder="Search name or phone"
+					autocomplete="off"
+				/>
+			</div>
+			<div class="contact-picker__list">
 				{#if loading}
-					<div class="flex items-center justify-center py-6 text-muted-foreground">
-						<Loader2 class="h-4 w-4 animate-spin" />
-					</div>
+					<p class="contact-picker__state">
+						<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
+					</p>
 				{:else if items.length === 0}
-					<p class="py-6 text-center text-sm text-muted-foreground">No contacts found.</p>
+					<p class="contact-picker__state">No contacts found.</p>
 				{:else}
 					{#each items as c (c.id)}
 						<button
 							type="button"
-							class="flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+							class="contact-picker__item"
 							onclick={() => {
 								onPick(c);
 								open = false;
 							}}
 						>
-							<div
-								class="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
-							>
-								<User class="h-4 w-4" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{c.full_name}</p>
-								<p class="truncate text-xs text-muted-foreground">
+							<span class="contact-picker__avatar">
+								<i class="ri-user-line" aria-hidden="true"></i>
+							</span>
+							<span class="contact-picker__info">
+								<span class="contact-picker__name">{c.full_name}</span>
+								<span class="contact-picker__sub">
 									{c.phone}{c.email ? ` · ${c.email}` : ''}
-								</p>
+								</span>
 								{#if !c.email}
-									<p
-										class="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
-									>
-										<AlertTriangle class="h-3 w-3 shrink-0" />No email
-									</p>
+									<span class="contact-picker__warn">
+										<i class="ri-error-warning-line" aria-hidden="true"></i>No email
+									</span>
 								{/if}
-							</div>
+							</span>
 						</button>
 					{/each}
 				{/if}
 			</div>
-			<Button variant="outline" class="w-full" onclick={() => (open = false)}>Cancel</Button>
+			<Button variant="outline" class="btn--full" onclick={() => (open = false)}>
+				Cancel
+			</Button>
 		</div>
 	</Sheet.Content>
 </Sheet.Root>

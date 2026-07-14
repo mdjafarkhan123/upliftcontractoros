@@ -1,0 +1,6146 @@
+@use '../tokens' as *;
+@use 'sass:list';
+
+// =============================================================================
+// SETTINGS (S10) — settings hub, account, organization, and team pages.
+// Shared BEM blocks consumed across the whole /settings area. Page-only grid
+// layout stays in each page's scoped <style lang="scss">.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// PAGE SHELL — centered single-column form layout used by account / org / team.
+// -----------------------------------------------------------------------------
+.settings-form {
+	width: 100%;
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+	gap: $space-5;
+	padding-bottom: $space-16;
+}
+
+// Small uppercase section eyebrow between cards.
+.settings-eyebrow {
+	margin: $space-2 0 0 $space-1;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	letter-spacing: $tracking-label;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+// -----------------------------------------------------------------------------
+// SECTION CARD — soft elevated card with optional header / body / footer.
+// -----------------------------------------------------------------------------
+.settings-card {
+	background: var(--color-bg-surface);
+	border-radius: $radius-xl;
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	&__header {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-4 $space-5;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__head-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: 2rem;
+	}
+
+	&__head-text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+		padding: $space-5;
+	}
+
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+		padding: $space-4 $space-5;
+		border-top: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// IDENTITY ROW — avatar + name/email + role pill (settings hub, account hero).
+// -----------------------------------------------------------------------------
+.settings-identity {
+	display: flex;
+	align-items: center;
+	gap: $space-4;
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 56px;
+		height: 56px;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		box-shadow: inset 0 0 0 2px rgba(34, 125, 83, 0.15);
+	}
+
+	&__info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__email {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+}
+
+// Profile summary link (settings hub) — identity row that navigates to account.
+.settings-profile {
+	display: flex;
+	align-items: center;
+	gap: $space-4;
+	padding: $space-4 $space-5;
+	margin-bottom: $space-6;
+	background: var(--color-bg-surface);
+	border-radius: $radius-xl;
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		transform $duration-fast $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 2rem;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ROLE PILL — admin / manager / member badge, reused across settings + team.
+// -----------------------------------------------------------------------------
+.role-pill {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	padding: 2px $space-3;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	line-height: $lh-caption;
+
+	&--admin {
+		background: var(--success-bg);
+		color: var(--success-text);
+	}
+	&--manager {
+		background: var(--warning-bg);
+		color: var(--warning-text);
+	}
+	&--member {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+	}
+	&--inactive {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEMBER AVATAR — initials disc with role color + optional active dot.
+// -----------------------------------------------------------------------------
+.member-avatar {
+	position: relative;
+	flex-shrink: 0;
+
+	&__disc {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: $radius-full;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+	}
+
+	&--lg &__disc {
+		width: 56px;
+		height: 56px;
+		font-size: $fs-lg;
+	}
+
+	&--admin &__disc {
+		background: var(--success-bg);
+		color: var(--success-text);
+	}
+	&--manager &__disc {
+		background: var(--warning-bg);
+		color: var(--warning-text);
+	}
+	&--member &__disc {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+	}
+
+	&__dot {
+		position: absolute;
+		right: -1px;
+		bottom: -1px;
+		width: 11px;
+		height: 11px;
+		border-radius: $radius-full;
+		background: var(--success-solid);
+		border: 2px solid var(--color-bg-surface);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TOGGLE ROW — descriptive label on the left, Switch on the right.
+// -----------------------------------------------------------------------------
+.settings-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-4;
+	min-height: 52px;
+
+	&__text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__label {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		line-height: 1.3;
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// Inline switch label (e.g. "Show inactive" toolbar, quiet-hours enable).
+.settings-switch-inline {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-2;
+	font-size: $fs-body;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	user-select: none;
+}
+
+// -----------------------------------------------------------------------------
+// UNSAVED CHANGES BAR — sticky/inline footer shown when a form is dirty.
+// -----------------------------------------------------------------------------
+.unsaved-bar {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: stretch;
+	gap: $space-2;
+	padding: $space-4 $space-5;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-bg-surface-sunk);
+
+	@media (min-width: $bp-mobile) {
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-end;
+	}
+
+	&__status {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--warning-text);
+
+		@media (min-width: $bp-mobile) {
+			margin-right: auto;
+		}
+	}
+
+	&__dot {
+		position: relative;
+		width: 8px;
+		height: 8px;
+
+		&::before,
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			border-radius: $radius-full;
+			background: var(--warning-solid);
+		}
+		&::before {
+			animation: settings-ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+			opacity: 0.7;
+		}
+	}
+}
+
+@keyframes settings-ping {
+	75%,
+	100% {
+		transform: scale(2);
+		opacity: 0;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CALLOUT NOTE — info / warning banner row (team detail access notices).
+// -----------------------------------------------------------------------------
+.settings-note {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface-sunk);
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&--warning {
+		background: var(--warning-bg);
+		.settings-note__icon {
+			color: var(--warning-solid);
+		}
+		.settings-note__text {
+			color: var(--warning-text);
+		}
+	}
+
+	&--error {
+		background: var(--danger-bg);
+		.settings-note__icon,
+		.settings-note__text {
+			color: var(--danger-text);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// FORM GRID HELPERS — shared field grids inside settings cards.
+// -----------------------------------------------------------------------------
+.settings-grid {
+	display: grid;
+	gap: $space-4;
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	&__full {
+		@media (min-width: $bp-mobile) {
+			grid-column: 1 / -1;
+		}
+	}
+}
+
+// =============================================================================
+// SETTINGS HUB — landing grid of category cards.
+// =============================================================================
+.settings-nav {
+	display: flex;
+	flex-direction: column;
+	gap: $space-7;
+
+	&__group {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__group-label {
+		margin-left: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__grid {
+		display: grid;
+		gap: $space-3;
+		grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+	}
+
+	// Card — both the active <a> and the locked <div> share base chrome.
+	&__item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: $space-4;
+		padding: $space-4;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		text-decoration: none;
+		text-align: left;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		&:hover {
+			box-shadow: var(--shadow-md);
+			transform: translateY(-2px);
+
+			.settings-nav__chevron {
+				transform: translateX(2px);
+				color: var(--color-text-secondary);
+			}
+		}
+
+		&--active {
+			box-shadow:
+				var(--shadow-sm),
+				inset 0 0 0 1.5px var(--color-brand);
+		}
+
+		&--locked {
+			background: var(--color-bg-surface-sunk);
+			box-shadow: none;
+			cursor: not-allowed;
+
+			.settings-nav__icon {
+				background: var(--color-border);
+				color: var(--color-text-muted);
+			}
+			.settings-nav__label {
+				color: var(--color-text-secondary);
+			}
+		}
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: $radius-md;
+		font-size: 2.2rem;
+		transition: transform $duration-fast $ease-standard;
+
+		// Decorative category accents — translucent tint + mid-tone hue read on
+		// both light and dark surfaces.
+		&--brand {
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+		&--violet {
+			background: rgba(139, 92, 246, 0.12);
+			color: #8b5cf6;
+		}
+		&--rose {
+			background: rgba(244, 63, 94, 0.12);
+			color: #f43f5e;
+		}
+		&--blue {
+			background: rgba(59, 130, 246, 0.12);
+			color: #3b82f6;
+		}
+		&--amber {
+			background: rgba(245, 158, 11, 0.14);
+			color: #d97706;
+		}
+		&--sky {
+			background: rgba(14, 165, 233, 0.12);
+			color: #0ea5e9;
+		}
+		&--indigo {
+			background: rgba(99, 102, 241, 0.12);
+			color: #6366f1;
+		}
+		&--yellow {
+			background: rgba(234, 179, 8, 0.14);
+			color: #ca8a04;
+		}
+		&--teal {
+			background: rgba(20, 184, 166, 0.12);
+			color: #14b8a6;
+		}
+		&--green {
+			background: rgba(16, 185, 129, 0.12);
+			color: #10b981;
+		}
+		&--slate {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+		}
+	}
+
+	&__item:hover &__icon {
+		transform: scale(1.06);
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		line-height: 1.35;
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition:
+			transform $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+	}
+
+	&__lock {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		margin-top: 3px;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-border);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+}
+
+// =============================================================================
+// ACCOUNT — password reveal field + strength rules.
+// =============================================================================
+.pw-field {
+	position: relative;
+
+	.field__input {
+		padding-left: $space-10;
+		padding-right: $space-10;
+	}
+
+	&__icon {
+		position: absolute;
+		left: $space-4;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 1.7rem;
+		color: var(--color-text-muted);
+		pointer-events: none;
+	}
+
+	&__reveal {
+		position: absolute;
+		right: $space-2;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.7rem;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+.pw-rules {
+	display: grid;
+	gap: $space-2;
+	padding: $space-3;
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: repeat(3, 1fr);
+	}
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--met {
+			color: var(--success-text);
+		}
+	}
+}
+
+// =============================================================================
+// ORGANIZATION — logo uploader, brand color picker, signature preview.
+// =============================================================================
+.logo-uploader {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-4;
+	}
+
+	&__preview {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 80px;
+		height: 80px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		overflow: hidden;
+	}
+
+	&__img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		padding: 6px;
+	}
+
+	&__empty {
+		font-size: $fs-caption;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+	}
+
+	&__spinner {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(255, 255, 255, 0.7);
+		color: var(--color-brand);
+		font-size: 2rem;
+
+		[data-theme='dark'] & {
+			background: rgba(0, 0, 0, 0.5);
+		}
+	}
+
+	&__main {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__help {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__bar {
+		height: 6px;
+		width: 100%;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		overflow: hidden;
+	}
+
+	&__fill {
+		height: 100%;
+		background: var(--color-brand);
+		transition: width $duration-fast $ease-standard;
+	}
+}
+
+.color-picker {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+
+	.field__input {
+		font-family: ui-monospace, 'SF Mono', monospace;
+	}
+
+	&__trigger {
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		overflow: hidden;
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.05);
+		}
+	}
+
+	&__trigger-empty {
+		display: block;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(135deg, #fb7185, #fcd34d, #38bdf8);
+		opacity: 0.6;
+	}
+
+	&__panel {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		width: 240px;
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: $space-2;
+	}
+
+	&__swatch {
+		width: 32px;
+		height: 32px;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.12);
+		}
+
+		&--selected {
+			box-shadow:
+				0 0 0 2px var(--color-bg-surface),
+				0 0 0 4px var(--color-brand);
+		}
+	}
+
+	&__custom {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__custom-swatch {
+		position: relative;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		overflow: hidden;
+		cursor: pointer;
+
+		input {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			opacity: 0;
+			cursor: pointer;
+		}
+
+		span {
+			display: block;
+			width: 100%;
+			height: 100%;
+		}
+	}
+
+	&__custom-label {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__clear {
+		margin-left: auto;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// Signature "Authorized by" preview block on the org page.
+.sig-preview {
+	padding: $space-4;
+	border-radius: $radius-md;
+	border: 1px dashed var(--color-border-strong);
+	background: var(--color-bg-surface-sunk);
+
+	&__eyebrow {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+
+		& + & {
+			margin-top: $space-2;
+		}
+	}
+
+	&__img {
+		margin-top: $space-2;
+		max-height: 56px;
+		max-width: 220px;
+		object-fit: contain;
+	}
+
+	&__name {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__title {
+		font-weight: $weight-regular;
+		color: var(--color-text-secondary);
+	}
+
+	&__statement {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// =============================================================================
+// TEAM — stat strip, member list card, toolbar, inactive note.
+// =============================================================================
+.team-toolbar {
+	display: flex;
+	align-items: center;
+	gap: $space-4;
+}
+
+.team-stats {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: $space-3;
+	margin-bottom: $space-5;
+	max-width: 460px;
+
+	&__card {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-2;
+		padding: $space-4;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__value {
+		font-size: $fs-h2;
+		font-weight: $weight-bold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+		line-height: 1.1;
+	}
+
+	&__label {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		font-size: 1.8rem;
+
+		&--active {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		&--total {
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+	}
+}
+
+.member-card {
+	display: flex;
+	align-items: center;
+	gap: $space-4;
+	width: 100%;
+	min-height: 72px;
+	padding: $space-3 $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-align: left;
+	border: none;
+	cursor: pointer;
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		transform $duration-fast $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+
+		.member-card__chevron {
+			transform: translateX(2px);
+			color: var(--color-text-secondary);
+		}
+	}
+
+	&--inactive {
+		opacity: 0.55;
+	}
+
+	&__info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__email {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition:
+			transform $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+	}
+}
+
+.team-inactive-note {
+	margin-top: $space-3;
+	text-align: center;
+	font-size: $fs-body;
+	color: var(--color-text-muted);
+
+	button {
+		border: none;
+		background: transparent;
+		color: var(--color-text-secondary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// Footer action bar on the team detail page.
+.team-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-3;
+	padding: $space-4 $space-5;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__group {
+		display: flex;
+		gap: $space-2;
+	}
+}
+
+// Credentials block shown after creating a member (team/new success state).
+.credentials {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	&__field + &__field {
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+	}
+
+	&__value {
+		margin-top: $space-1;
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		word-break: break-all;
+	}
+}
+
+.copy-confirm {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	cursor: pointer;
+	transition: box-shadow $duration-fast $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+	}
+
+	input {
+		margin-top: 2px;
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		accent-color: var(--color-brand);
+		cursor: pointer;
+	}
+
+	span {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+}
+
+// =============================================================================
+// PERMISSION EDITOR — accordion of permission groups with switches + scope.
+// =============================================================================
+.perm-editor {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	&__group {
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		overflow: hidden;
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		width: 100%;
+		min-height: 52px;
+		padding: $space-3 $space-4;
+		border: none;
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+		transition: background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__head-main {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__module {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__count {
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition: transform $duration-base $ease-standard;
+
+		&--open {
+			transform: rotate(180deg);
+		}
+	}
+
+	&__body {
+		padding: 0 $space-4 $space-2;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-4;
+		min-height: 52px;
+		padding: $space-2 0;
+	}
+
+	&__row-text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__row-label {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		line-height: 1.3;
+		cursor: pointer;
+	}
+
+	&__row-desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	// Pipeline visibility radio group
+	&__scope {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding: $space-3 0;
+		border: none;
+	}
+
+	&__scope-legend {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__scope-hint {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__scope-list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__scope-opt {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--selected {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+		}
+
+		&--readonly {
+			cursor: default;
+			opacity: 0.7;
+		}
+
+		input {
+			margin-top: 2px;
+			width: 16px;
+			height: 16px;
+			flex-shrink: 0;
+			accent-color: var(--color-brand);
+			cursor: pointer;
+		}
+	}
+
+	&__scope-text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__scope-label {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__scope-desc {
+		display: block;
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: 1.4;
+		color: var(--color-text-secondary);
+	}
+}
+
+// =============================================================================
+// TIMEZONE COMBOBOX — searchable popover select on the org page.
+// =============================================================================
+.tz-combo {
+	&__trigger {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		width: 100%;
+		height: 44px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-border-strong);
+		}
+
+		&:focus-visible {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+
+		&[aria-invalid] {
+			border-color: var(--danger-solid);
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__value {
+		display: flex;
+		min-width: 0;
+		flex: 1;
+		align-items: center;
+		gap: $space-2;
+		text-align: left;
+	}
+
+	&__globe {
+		flex-shrink: 0;
+		font-size: 1.7rem;
+		color: var(--color-text-muted);
+	}
+
+	&__city {
+		font-weight: $weight-medium;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__region {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+
+		@media (max-width: $bp-mobile) {
+			display: none;
+		}
+	}
+
+	&__offset {
+		margin-left: auto;
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__placeholder {
+		color: var(--color-text-muted);
+	}
+
+	&__invalid {
+		color: var(--danger-text);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__caret {
+		flex-shrink: 0;
+		font-size: 1.7rem;
+		color: var(--color-text-muted);
+	}
+
+	&__panel {
+		width: var(--bits-popover-anchor-width);
+		min-width: 288px;
+		max-height: 360px;
+		display: flex;
+		flex-direction: column;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-lg);
+		overflow: hidden;
+		z-index: $z-dropdown;
+
+		&[data-state='open'] {
+			animation: tz-in $duration-fast $ease-standard;
+		}
+	}
+
+	&__search {
+		position: relative;
+		padding: $space-2;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__search-icon {
+		position: absolute;
+		left: $space-4;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 1.5rem;
+		color: var(--color-text-muted);
+		pointer-events: none;
+	}
+
+	&__input {
+		width: 100%;
+		height: 36px;
+		padding: 0 $space-3 0 $space-8;
+		border-radius: $radius-sm;
+		border: 1px solid transparent;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			background: var(--color-bg-surface);
+		}
+	}
+
+	&__list {
+		flex: 1;
+		overflow-y: auto;
+		padding: $space-1 0;
+	}
+
+	&__empty {
+		padding: $space-8 $space-4;
+		text-align: center;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__group-label {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		padding: $space-2 $space-3 $space-1;
+		background: var(--color-bg-surface);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+	}
+
+	&__opt {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+		padding: $space-2 $space-3;
+		border: none;
+		background: transparent;
+		text-align: left;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+
+		&--active {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--selected {
+			color: var(--color-brand);
+			font-weight: $weight-medium;
+		}
+	}
+
+	&__opt-city {
+		min-width: 0;
+		flex: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__opt-offset {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__opt-check {
+		flex-shrink: 0;
+		font-size: 1.5rem;
+		color: var(--color-brand);
+		opacity: 0;
+
+		&--on {
+			opacity: 1;
+		}
+	}
+}
+
+@keyframes tz-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+// =============================================================================
+// SETTINGS — BUSINESS CONFIG (S11): price book, pipeline stages, quick replies,
+// SMS credits. Desktop-first; each block composes the shared .settings-card /
+// .field / .btn primitives above.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// PRICE BOOK (catalog) — search + category chips + reusable-items table.
+// -----------------------------------------------------------------------------
+.pricebook {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__filters {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__search {
+		max-width: 420px;
+	}
+
+	&__cats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__cat {
+		flex-shrink: 0;
+		padding: $space-2 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-border-strong);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+	}
+
+	&__none {
+		padding: $space-12 $space-4;
+		text-align: center;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__table-wrap {
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		overflow: hidden;
+	}
+
+	&__scroll {
+		overflow-x: auto;
+	}
+
+	&__table {
+		width: 100%;
+		min-width: 560px;
+		border-collapse: collapse;
+		font-size: $fs-body;
+	}
+
+	&__th {
+		padding: $space-3 $space-4;
+		text-align: left;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+		background: var(--color-bg-surface-sunk);
+		border-bottom: 1px solid var(--color-border);
+		white-space: nowrap;
+
+		&--num {
+			text-align: right;
+		}
+		&--thumb {
+			width: 64px;
+		}
+		&--actions {
+			width: 56px;
+		}
+	}
+
+	&__row {
+		cursor: pointer;
+		transition: background $duration-fast $ease-standard;
+
+		& + & .pricebook__cell {
+			border-top: 1px solid var(--color-border);
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&:hover .pricebook__menu-btn {
+			opacity: 1;
+		}
+	}
+
+	&__cell {
+		padding: $space-3 $space-4;
+		vertical-align: middle;
+		color: var(--color-text-primary);
+
+		&--num {
+			text-align: right;
+		}
+		&--thumb {
+			width: 64px;
+		}
+		&--actions {
+			width: 56px;
+		}
+	}
+
+	&__thumb {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: $radius-md;
+		object-fit: cover;
+		background: var(--color-bg-surface-sunk);
+		box-shadow: inset 0 0 0 1px var(--color-border);
+
+		&--empty {
+			color: var(--color-text-muted);
+			font-size: 1.9rem;
+		}
+	}
+
+	&__name {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 320px;
+	}
+
+	&__item-desc {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 320px;
+	}
+
+	&__cat-tag {
+		display: inline-flex;
+		align-items: center;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+
+	&__unit,
+	&__cost {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__price {
+		font-variant-numeric: tabular-nums;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__muted {
+		color: var(--color-text-muted);
+	}
+
+	&__menu-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.9rem;
+		cursor: pointer;
+		opacity: 0;
+		transition:
+			opacity $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			opacity: 1;
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	// Hide secondary columns as the viewport narrows.
+	&__th--category,
+	&__cell--category {
+		@media (max-width: $bp-tablet) {
+			display: none;
+		}
+	}
+	&__th--unit,
+	&__cell--unit {
+		@media (max-width: 1100px) {
+			display: none;
+		}
+	}
+	&__th--cost,
+	&__cell--cost {
+		@media (max-width: 1280px) {
+			display: none;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUICK REPLIES — token hint + saved-template cards + inline create form.
+// -----------------------------------------------------------------------------
+.quick-replies {
+	width: 100%;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding-bottom: $space-16;
+
+	&__hint {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-4;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__hint-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		background: var(--warning-bg);
+		color: var(--warning-text);
+		font-size: 2rem;
+	}
+
+	&__hint-body {
+		flex: 1;
+		min-width: 0;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__hint-list {
+		margin: $space-2 0 0;
+		padding-left: $space-5;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__token {
+		padding: 1px $space-2;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface-sunk);
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__list {
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__card {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-4;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+
+		&--new {
+			box-shadow:
+				var(--shadow-sm),
+				inset 0 0 0 1.5px var(--color-brand);
+		}
+	}
+
+	&__card-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__card-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__card-foot {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title-input {
+		font-weight: $weight-semibold;
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.8rem;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--danger:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__add {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		min-height: 48px;
+		border-radius: $radius-xl;
+		border: 1px dashed var(--color-border-strong);
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		i {
+			font-size: 1.8rem;
+		}
+	}
+
+	// channel <Select> + Save button row sizing
+	&__channel {
+		width: 150px;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SMS CREDITS — hero balance card, usage stat grid, activity ledger.
+// -----------------------------------------------------------------------------
+.sms-credit {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__hero {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: $space-4;
+		padding: $space-6;
+		border-radius: $radius-2xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__hero-label {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__balance {
+		margin-top: $space-2;
+		font-size: 3rem;
+		font-weight: $weight-bold;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.02em;
+		line-height: 1;
+		color: var(--color-text-primary);
+
+		&--zero {
+			color: var(--danger-text);
+		}
+	}
+
+	&__remaining {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			font-variant-numeric: tabular-nums;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__hero-meta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__pill {
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__stats {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: $space-3;
+
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: repeat(4, 1fr);
+		}
+	}
+
+	&__stat {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding: $space-4;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__stat-label {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		span {
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+
+	&__stat-value {
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+		line-height: 1.1;
+	}
+
+	&__ledger {
+		border-radius: $radius-2xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		overflow: hidden;
+	}
+
+	&__ledger-head {
+		padding: $space-4 $space-5;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__ledger-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__ledger-sub {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__ledger-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-12 $space-5;
+		text-align: center;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2.6rem;
+		}
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 $space-5;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__row-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		font-size: 1.7rem;
+
+		&--positive {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+	}
+
+	&__row-main {
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__row-label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__row-meta {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__row-amounts {
+		flex-shrink: 0;
+		text-align: right;
+	}
+
+	&__row-amount {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--positive {
+			color: var(--success-text);
+		}
+	}
+
+	&__row-balance {
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	// Error / retry panel
+	&__error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-16 $space-6;
+		text-align: center;
+		border-radius: $radius-2xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+
+		i {
+			font-size: 2.6rem;
+			color: var(--color-text-muted);
+		}
+
+		p {
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+	}
+
+	// Skeleton blocks
+	&__sk-hero {
+		height: 132px;
+		border-radius: $radius-2xl;
+	}
+	&__sk-stat {
+		height: 92px;
+		border-radius: $radius-xl;
+	}
+	&__sk-ledger {
+		height: 240px;
+		border-radius: $radius-2xl;
+	}
+}
+
+// Low-credit / amber banner — reused for any inline alert in this area.
+.credit-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--warning-bg);
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 2rem;
+		color: var(--warning-solid);
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--warning-text);
+	}
+
+	&__text {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--warning-text);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// PIPELINE STAGES — behavior section, draggable stage rows, inline chips,
+// color swatches, sheet forms.
+// -----------------------------------------------------------------------------
+.stages {
+	width: 100%;
+	max-width: 1200px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding-bottom: $space-16;
+
+	&__hint {
+		margin: 0 0 $space-1 $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__add {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		min-height: 48px;
+		border-radius: $radius-xl;
+		border: 1px dashed var(--color-border-strong);
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		i {
+			font-size: 1.8rem;
+		}
+	}
+}
+
+// Pipeline behavior settings card (won trigger + ghost-lead nudge).
+.pipeline-behavior {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+	padding: $space-5;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__note {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__radios {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__days {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__day {
+		display: inline-flex;
+		align-items: center;
+		min-height: 38px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+}
+
+// Selectable radio card — shared by won-trigger + move-deal destinations.
+.radio-card {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-3;
+	border-radius: $radius-lg;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: var(--color-border-strong);
+	}
+
+	&--selected {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+	}
+
+	&__radio {
+		margin-top: 2px;
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		accent-color: var(--color-brand);
+		cursor: pointer;
+	}
+
+	&__dot {
+		margin-top: 3px;
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+	}
+
+	&__text {
+		min-width: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__hint {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// A single draggable pipeline stage row.
+.stage-row {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__grip {
+		flex-shrink: 0;
+		font-size: 1.9rem;
+		color: var(--color-text-muted);
+		cursor: grab;
+
+		&:active {
+			cursor: grabbing;
+		}
+	}
+
+	&__dot {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__default {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		flex-shrink: 0;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__desc {
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__actions {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.7rem;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--danger:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+
+		&:disabled {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+	}
+
+	// Drag-zone highlight applied by svelte-dnd-action.
+	&--dropzone {
+		box-shadow:
+			var(--shadow-sm),
+			inset 0 0 0 2px var(--color-brand);
+	}
+}
+
+// Inline editable stage chip (probability / stale / follow-up).
+.stage-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	padding: 2px $space-2;
+	border-radius: $radius-full;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: var(--color-brand);
+		color: var(--color-text-primary);
+	}
+
+	&__value {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__input {
+		width: 76px;
+		height: 28px;
+		padding: 0 $space-2;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-brand);
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&:focus {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+}
+
+// Color swatch grid for stage create / edit sheets.
+.swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $space-2;
+
+	&__swatch {
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: $radius-full;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.1);
+		}
+
+		&--selected {
+			box-shadow:
+				0 0 0 2px var(--color-bg-surface),
+				0 0 0 4px var(--color-text-primary);
+		}
+	}
+}
+
+// Generic form column inside a BottomSheet (stage create / edit / move).
+.sheet-fields {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	margin-top: $space-4;
+
+	&__row {
+		display: flex;
+		gap: $space-3;
+
+		> .field {
+			flex: 1;
+		}
+	}
+
+	&__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		padding-top: $space-1;
+	}
+
+	&__default-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.5rem;
+			color: var(--color-brand);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// STRIPE (S11b) — connection card, plain-English setup guide, test invoice,
+// and the key-entry form. Page layout is a single centered column.
+// -----------------------------------------------------------------------------
+.stripe-page {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+	max-width: 760px;
+	margin: 0 auto;
+	padding-bottom: $space-16;
+}
+
+// Invoice tips card (M7) — enable toggle + editable percent presets.
+.tips-card {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+	padding: $space-5;
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-4;
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		line-height: $lh-body;
+	}
+
+	&__presets {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-2 $space-1 $space-3;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__chip-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&:hover:not(:disabled) {
+			background: var(--color-border);
+			color: var(--color-text-primary);
+		}
+
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.6;
+		}
+	}
+
+	&__add {
+		display: flex;
+		gap: $space-2;
+		align-items: center;
+	}
+
+	&__add-input {
+		max-width: 8rem;
+	}
+
+	&__footer {
+		display: flex;
+		justify-content: flex-end;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// Late-fee card extras (M8): fee-type radios + the unit label beside the amount input.
+.late-fee {
+	&__types {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-4;
+	}
+
+	&__type {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+	}
+
+	&__unit {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+	}
+}
+
+// Connection card (connected hero + details, or not-connected prompt).
+.stripe-card {
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	// Connected hero — intentional always-dark green accent surface.
+	&__hero {
+		padding: $space-6 $space-5;
+		color: #fff;
+		background: linear-gradient(135deg, #047857, #065f46);
+	}
+
+	&__hero-top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__hero-id {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__hero-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.15);
+		font-size: 2rem;
+	}
+
+	&__eyebrow {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	&__hero-name {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+	}
+
+	&__hero-email {
+		font-size: $fs-body;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	&__hero-badges {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-2;
+	}
+
+	&__badge {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		background: rgba(255, 255, 255, 0.2);
+
+		&--mode {
+			text-transform: uppercase;
+			letter-spacing: $tracking-label;
+			background: rgba(255, 255, 255, 0.15);
+		}
+
+		&--test {
+			background: rgba(251, 191, 36, 0.3);
+			color: #fffbeb;
+		}
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__hero-note {
+		margin-top: $space-4;
+		max-width: 36rem;
+		font-size: $fs-body;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding: $space-5;
+	}
+
+	&__meta-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__meta {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__test-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		height: 34px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition: background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		i.ri-loader-4-line {
+			animation: stripe-spin 0.8s linear infinite;
+		}
+	}
+
+	&__dl {
+		display: grid;
+		gap: $space-3;
+		padding: $space-3;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	&__dt {
+		font-size: $fs-caption;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__dd {
+		margin-top: 1px;
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		word-break: break-all;
+	}
+
+	&__webhook {
+		padding: $space-3;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+	}
+
+	&__webhook-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__webhook-desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__webhook-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__code {
+		flex: 1;
+		min-width: 0;
+		padding: $space-2 $space-3;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface-sunk);
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	// Not-connected prompt
+	&__prompt {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding: $space-6 $space-5;
+	}
+
+	&__prompt-top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__prompt-id {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__prompt-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--warning-bg);
+		color: var(--warning-text);
+		font-size: 2rem;
+	}
+
+	&__prompt-title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__prompt-desc {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__pill-warn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		background: var(--warning-bg);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--warning-text);
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__reassure {
+		padding: $space-3;
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+@keyframes stripe-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// Small bordered "code button" reused for copy / open-stripe links.
+.stripe-codebtn {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	height: 34px;
+	padding: 0 $space-3;
+	border: 1px solid var(--color-border-strong);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-primary);
+	text-decoration: none;
+	cursor: pointer;
+	transition: background $duration-fast $ease-standard;
+
+	&:hover {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	i {
+		font-size: 1.4rem;
+	}
+}
+
+// Plain-English setup guide (accordion).
+.stripe-guide {
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		width: 100%;
+		padding: $space-4 $space-5;
+		border: none;
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+		transition: background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__toggle-left {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__toggle-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: rgba(99, 102, 241, 0.12);
+		color: #6366f1;
+		font-size: 1.8rem;
+	}
+
+	&__toggle-title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__toggle-sub {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition: transform $duration-base $ease-standard;
+
+		&--open {
+			transform: rotate(180deg);
+		}
+	}
+
+	&__body {
+		padding: $space-6 $space-5;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__steps {
+		display: flex;
+		flex-direction: column;
+		gap: $space-7;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	&__step {
+		display: flex;
+		gap: $space-4;
+	}
+
+	&__num {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--success-bg);
+		color: var(--success-text);
+		font-size: $fs-body;
+		font-weight: $weight-bold;
+	}
+
+	&__step-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__step-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__mono {
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: 0.92em;
+		color: var(--color-text-primary);
+	}
+
+	&__cta {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		background: var(--success-bg);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--success-text);
+		text-decoration: none;
+		transition: filter $duration-fast $ease-standard;
+
+		&:hover {
+			filter: brightness(0.96);
+		}
+	}
+
+	&__search {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	&__chip {
+		padding: 1px $space-2;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__perms {
+		padding: $space-3;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__perms-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__perm-list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: $space-2 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	&__perm {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		strong {
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__perm-level {
+		flex-shrink: 0;
+		padding: 1px $space-2;
+		border-radius: $radius-sm;
+		background: var(--success-bg);
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-weight: $weight-semibold;
+		color: var(--success-text);
+	}
+
+	&__events {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	&__event {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__event-dot {
+		width: 6px;
+		height: 6px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-text-muted);
+	}
+
+	&__note {
+		padding: $space-4;
+		border-radius: $radius-lg;
+		font-size: $fs-body;
+		line-height: $lh-body;
+
+		&--amber {
+			background: var(--warning-bg);
+			color: var(--warning-text);
+			strong {
+				color: var(--warning-text);
+			}
+		}
+
+		&--indigo {
+			margin-top: $space-7;
+			background: rgba(99, 102, 241, 0.1);
+			color: var(--color-text-secondary);
+			strong {
+				color: var(--color-text-primary);
+			}
+		}
+	}
+}
+
+// Test invoice card.
+.stripe-test {
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-4 $space-5;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__head-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--warning-bg);
+		color: var(--warning-text);
+		font-size: 1.8rem;
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding: $space-5;
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__hint {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+
+		code {
+			font-family: ui-monospace, 'SF Mono', monospace;
+			color: var(--color-text-secondary);
+		}
+	}
+
+	&__result {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-4;
+		border-radius: $radius-lg;
+		background: var(--success-bg);
+	}
+
+	&__result-icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.7rem;
+		color: var(--success-text);
+	}
+
+	&__result-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__result-desc {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__result-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+}
+
+// Stripe key-entry form.
+.stripe-form {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding: $space-5;
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__hint {
+		font-size: $fs-body;
+
+		&--ok {
+			color: var(--success-text);
+		}
+		&--warn {
+			color: var(--warning-text);
+		}
+	}
+
+	&__mismatch {
+		padding: $space-3;
+		border-radius: $radius-lg;
+		background: var(--warning-bg);
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--warning-text);
+
+		strong {
+			color: var(--warning-text);
+		}
+	}
+
+	&__footer {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+}
+
+// =============================================================================
+// SETTINGS — INTEGRATIONS (S11c): connection cards for Messenger, Payments, and
+// SMS/Phone, plus the SMS number-setup flow and carrier-registration form.
+// =============================================================================
+.integrations {
+	width: 100%;
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+	gap: $space-4;
+	padding-bottom: $space-16;
+}
+
+.integration {
+	background: var(--color-bg-surface);
+	border-radius: $radius-xl;
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+
+	// Top row — icon + identity/description + action button.
+	&__main {
+		display: flex;
+		align-items: center;
+		gap: $space-4;
+		padding: $space-5;
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		flex-shrink: 0;
+		border-radius: $radius-lg;
+		font-size: 2.4rem;
+
+		&--indigo {
+			background: rgba(99, 102, 241, 0.12);
+			color: #6366f1;
+		}
+		&--blue {
+			background: rgba(59, 130, 246, 0.12);
+			color: #3b82f6;
+		}
+		&--emerald {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		line-height: $lh-body;
+	}
+
+	&__action {
+		flex-shrink: 0;
+	}
+
+	// Status pill next to the integration title.
+	&__status {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 2px $space-3;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		line-height: $lh-caption;
+
+		&--ok {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		&--pending {
+			background: var(--warning-bg);
+			color: var(--warning-text);
+		}
+		&--muted {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+	}
+
+	// Expandable region under a card (SMS number setup / carrier form).
+	&__expand {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+		padding: $space-5;
+		border-top: 1px solid var(--color-border);
+	}
+
+	// Inline button spinner.
+	&__spin {
+		display: inline-block;
+		animation: integ-spin 0.6s linear infinite;
+	}
+
+	@media (max-width: $bp-mobile) {
+		&__main {
+			flex-wrap: wrap;
+		}
+		&__action {
+			width: 100%;
+
+			.btn {
+				width: 100%;
+			}
+		}
+	}
+}
+
+@keyframes integ-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SMS NUMBER SETUP — ZIP search + available-number radio list.
+// -----------------------------------------------------------------------------
+.num-setup {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__search {
+		display: flex;
+		align-items: flex-end;
+		gap: $space-3;
+	}
+
+	&__field {
+		flex: 1;
+	}
+
+	&__error {
+		font-size: $fs-body;
+		color: var(--danger-text);
+	}
+
+	&__empty {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: 0;
+		padding: 0;
+		border: none;
+	}
+
+	&__opt {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--selected {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+		}
+
+		input {
+			width: 16px;
+			height: 16px;
+			flex-shrink: 0;
+			accent-color: var(--color-brand);
+			cursor: pointer;
+		}
+	}
+
+	&__opt-main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__opt-number {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__opt-loc {
+		display: block;
+		margin-top: 1px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__hint {
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CARRIER REGISTRATION — amber prompt, submitted summary, country-aware form.
+// -----------------------------------------------------------------------------
+.carrier-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-lg;
+	background: var(--warning-bg);
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 2rem;
+		color: var(--warning-solid);
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--warning-text);
+	}
+
+	&__text {
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--warning-text);
+	}
+}
+
+.carrier-summary {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__status {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+
+		i {
+			font-size: 1.8rem;
+			color: var(--success-text);
+		}
+	}
+
+	&__grid {
+		display: grid;
+		gap: $space-3 $space-6;
+		grid-template-columns: 1fr;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	&__full {
+		@media (min-width: $bp-mobile) {
+			grid-column: 1 / -1;
+		}
+	}
+
+	&__dt {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__dd {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		word-break: break-word;
+		white-space: pre-wrap;
+	}
+}
+
+.carrier-form {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+}
+
+// =============================================================================
+// SETTINGS — AUTOMATION (S12a) — automation engine settings + active-automations
+// panel. Shared across the automation page and its card/step/template editors.
+// =============================================================================
+
+// Accent palette for icon tiles — translucent tint + mid-tone hue that reads on
+// both light and dark surfaces (mirrors the .settings-nav__icon system).
+$auto-accents: (
+	'amber': (
+		rgba(245, 158, 11, 0.14),
+		#d97706
+	),
+	'rose': (
+		rgba(244, 63, 94, 0.12),
+		#f43f5e
+	),
+	'blue': (
+		rgba(59, 130, 246, 0.12),
+		#3b82f6
+	),
+	'emerald': (
+		rgba(16, 185, 129, 0.14),
+		#059669
+	),
+	'violet': (
+		rgba(139, 92, 246, 0.12),
+		#8b5cf6
+	),
+	'orange': (
+		rgba(249, 115, 22, 0.13),
+		#ea580c
+	),
+	'sky': (
+		rgba(14, 165, 233, 0.12),
+		#0ea5e9
+	),
+	'teal': (
+		rgba(20, 184, 166, 0.12),
+		#0d9488
+	),
+	'green': (
+		rgba(34, 197, 94, 0.13),
+		#16a34a
+	),
+	'indigo': (
+		rgba(99, 102, 241, 0.12),
+		#6366f1
+	)
+);
+
+.auto-tile {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 48px;
+	height: 48px;
+	border-radius: $radius-md;
+	font-size: 1.5rem;
+
+	@each $name, $pair in $auto-accents {
+		&--#{$name} {
+			background: list.nth($pair, 1);
+			color: list.nth($pair, 2);
+		}
+	}
+}
+
+// ── Page-level layout helpers (used by automation/+page) ────────────────────
+.auto-section {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__title {
+		margin-left: 2px;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__form {
+		display: contents;
+	}
+}
+
+.auto-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: $space-4;
+
+	@media (min-width: $bp-tablet) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	&__cell--wide {
+		@media (min-width: $bp-tablet) {
+			grid-column: 1 / -1;
+		}
+	}
+}
+
+// ── SMS-credit summary row ──────────────────────────────────────────────────
+.auto-sms {
+	display: flex;
+	align-items: center;
+	gap: $space-4;
+	margin-bottom: $space-5;
+	padding: $space-3 $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__tile {
+		width: 44px;
+		height: 44px;
+		font-size: 1.35rem;
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__right {
+		flex-shrink: 0;
+		text-align: right;
+	}
+
+	&__amount {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--low {
+			color: var(--danger-text);
+		}
+	}
+
+	&__allowance {
+		font-weight: $weight-regular;
+		color: var(--color-text-muted);
+	}
+
+	&__warn {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--danger-text);
+	}
+}
+
+// ── Plan-not-enabled notice ─────────────────────────────────────────────────
+.auto-notice {
+	margin-bottom: $space-5;
+	padding: $space-6;
+	border: 1px dashed var(--color-border-strong);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface-sunk);
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// ── Automation card shell (collapsible) ─────────────────────────────────────
+.auto-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		transform $duration-fast $ease-standard;
+
+	&:not(&--locked):not(&--open):hover {
+		box-shadow: var(--shadow-md);
+	}
+
+	&--open {
+		box-shadow: var(--shadow-md);
+	}
+
+	&--locked {
+		opacity: 0.7;
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-4 $space-5;
+	}
+
+	&__trigger {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		gap: $space-4;
+		min-height: 44px;
+		padding: 0;
+		border: 0;
+		background: none;
+		text-align: left;
+		cursor: pointer;
+
+		&:disabled {
+			cursor: default;
+		}
+	}
+
+	&__text {
+		min-width: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__title-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__lock {
+		flex-shrink: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+	}
+
+	&__dot {
+		flex-shrink: 0;
+		width: 6px;
+		height: 6px;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__meta {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.1rem;
+		color: var(--color-text-muted);
+		transition: transform $duration-base $ease-standard;
+	}
+
+	&--open &__chevron {
+		transform: rotate(180deg);
+	}
+
+	&__body {
+		padding: $space-5;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// ── Channel picker inner content (Select trigger + items) ───────────────────
+.auto-chan {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+
+	&--option {
+		align-items: flex-start;
+		padding: 2px 0;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		font-size: 1rem;
+		color: var(--color-text-muted);
+	}
+
+	&--option &__icon {
+		margin-top: 2px;
+	}
+
+	&__placeholder {
+		color: var(--color-text-muted);
+	}
+
+	&__text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__label {
+		font-weight: $weight-medium;
+		line-height: 1;
+	}
+
+	&__desc {
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// ── Sequence editor (channel + steps + footer) ──────────────────────────────
+.seq-edit {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__channel {
+		max-width: 300px;
+	}
+
+	&__steps {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+.seq-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: $space-2;
+	padding: $space-3;
+	border: 2px dashed var(--color-border-strong);
+	border-radius: $radius-lg;
+	background: none;
+	font-size: $fs-body;
+	font-weight: $weight-semibold;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+		color: var(--color-text-primary);
+	}
+
+	&__plus {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: 0.95rem;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+	}
+
+	&:hover &__plus {
+		background: var(--color-brand);
+		color: #fff;
+	}
+}
+
+// ── Single sequence step (collapsible) ──────────────────────────────────────
+.seq-step {
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface-sunk);
+	transition: border-color $duration-fast $ease-standard;
+
+	&--open {
+		border-color: var(--color-brand);
+	}
+
+	&--error {
+		border-color: var(--danger-solid);
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-3;
+	}
+
+	&__trigger {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		gap: $space-3;
+		min-height: 40px;
+		padding: 0;
+		border: 0;
+		background: none;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	&__num {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+	}
+
+	&__text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__summary {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 0.85rem;
+		}
+
+		&-icon--brand {
+			color: var(--color-brand);
+		}
+
+		&--channel {
+			display: none;
+
+			@media (min-width: $bp-mobile) {
+				display: inline-flex;
+			}
+		}
+	}
+
+	&__preview {
+		display: block;
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 1.1rem;
+		color: var(--color-text-muted);
+		transition: transform $duration-base $ease-standard;
+	}
+
+	&--open &__chevron {
+		transform: rotate(180deg);
+	}
+
+	&__remove {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		border: 0;
+		border-radius: $radius-md;
+		background: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__instant {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			color: var(--color-brand);
+		}
+	}
+
+	&__timing {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+
+		@media (min-width: $bp-mobile) {
+			flex-direction: row;
+			align-items: center;
+		}
+	}
+
+	&__timing-select {
+		max-width: 220px;
+	}
+
+	&__custom {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__custom-num {
+		max-width: 90px;
+	}
+
+	&__custom-unit {
+		max-width: 140px;
+	}
+
+	&__channel {
+		max-width: 300px;
+	}
+
+	&__bodies {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+}
+
+// ── Template editor (variable chips + preview) ──────────────────────────────
+.tpl-field {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	&__top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__req {
+		color: var(--danger-text);
+	}
+
+	&__count {
+		font-size: $fs-caption;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__vars {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__var {
+		display: inline-flex;
+		align-items: center;
+		padding: $space-1 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__preview {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		border: 1px dashed var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__preview-icon {
+		margin-top: 2px;
+		flex-shrink: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+	}
+
+	&__preview-text {
+		white-space: pre-wrap;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// ── Inline form helpers inside flat automation cards ────────────────────────
+.auto-fields {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	&__narrow {
+		max-width: 160px;
+	}
+
+	&__code {
+		padding: 1px $space-1;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+	}
+}
+
+.auto-subcard {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	&--muted {
+		opacity: 0.6;
+	}
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__text {
+		min-width: 0;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__note {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+.auto-savebar {
+	position: sticky;
+	bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 12px);
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: $space-2;
+	margin-top: $space-4;
+	padding: $space-3;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-md);
+
+	@media (min-width: $bp-tablet) {
+		bottom: $space-4;
+	}
+}
+
+// ── Active-automations panel (contact / opportunity side rails) ─────────────
+.active-auto {
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__head-icon {
+		font-size: 0.9rem;
+		color: var(--color-brand);
+	}
+
+	&__head-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__info {
+		min-width: 0;
+	}
+
+	&__title-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__meta {
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__stop {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		flex-shrink: 0;
+		height: 32px;
+		padding: 0 $space-2;
+		border: 0;
+		border-radius: $radius-md;
+		background: none;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--danger-text);
+		}
+	}
+}
+
+// =============================================================================
+// SETTINGS — EMAIL (S12c): branded sending address + inbound forwarding setup.
+// Two pages — settings/email (sending domain, from-address, extra addresses,
+// domain request) and settings/email/forwarding (forwarding address, provider
+// steps, verification, health). Status tones map to the theme-aware semantic
+// tokens so light/dark both work with zero per-mode overrides.
+// =============================================================================
+
+// Centered single-column page shell for both email screens.
+.email-page {
+	width: 100%;
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+	gap: $space-5;
+	padding-bottom: $space-16;
+}
+
+// --- Status tone helpers --------------------------------------------------
+// One @each map drives every tone surface (pill, circle, note) so all three
+// stay in lockstep. Keys mirror the script `tone` values.
+$email-tones: (
+	'success': (
+		var(--success-bg),
+		var(--success-text)
+	),
+	'info': (
+		var(--info-bg),
+		var(--info-text)
+	),
+	'warning': (
+		var(--warning-bg),
+		var(--warning-text)
+	),
+	'danger': (
+		var(--danger-bg),
+		var(--danger-text)
+	)
+);
+
+// Pill badge — status chip in section headers.
+.email-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	flex-shrink: 0;
+	padding: $space-1 $space-3;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+
+	i {
+		font-size: 1.4rem;
+	}
+
+	@each $name, $pair in $email-tones {
+		&--#{$name} {
+			background: list.nth($pair, 1);
+			color: list.nth($pair, 2);
+		}
+	}
+}
+
+// Spinning loader inside a pill / button (reuses book-spin keyframe).
+.email-spin {
+	animation: book-spin 0.7s linear infinite;
+}
+
+// Round icon disc — forwarding health indicator.
+.email-circle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 40px;
+	height: 40px;
+	border-radius: $radius-full;
+	font-size: 1.8rem;
+
+	@each $name, $pair in $email-tones {
+		&--#{$name} {
+			background: list.nth($pair, 1);
+			color: list.nth($pair, 2);
+		}
+	}
+}
+
+// Tinted callout note — inline guidance / status messaging.
+.email-note {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-2;
+	padding: $space-3;
+	border-radius: $radius-md;
+	font-size: $fs-body;
+	line-height: $lh-body;
+
+	i {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.6rem;
+	}
+
+	@each $name, $pair in $email-tones {
+		&--#{$name} {
+			background: list.nth($pair, 1);
+			color: list.nth($pair, 2);
+		}
+	}
+}
+
+// --- Reusable card chrome -------------------------------------------------
+// Slim section card local to the email screens (lighter than .settings-card —
+// no separate header band; head + body share one padded surface).
+.email-section {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding: $space-5;
+	background: var(--color-bg-surface);
+	border-radius: $radius-xl;
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// Monospace value box — sending domain / forwarding address display.
+.email-mono {
+	display: flex;
+	align-items: center;
+	padding: $space-3 $space-4;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface-sunk);
+
+	p {
+		min-width: 0;
+		font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+}
+
+// --- Receive-emails link card (top of sending page) -----------------------
+.email-forward-link {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	transition:
+		box-shadow $duration-base $ease-standard,
+		transform $duration-base $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+
+		.email-forward-link__arrow {
+			transform: translateX(2px);
+			color: var(--color-brand);
+		}
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: $radius-md;
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		font-size: 2rem;
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__arrow {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+		transition:
+			transform $duration-base $ease-standard,
+			color $duration-base $ease-standard;
+	}
+}
+
+// --- From-address input (local-part + @domain suffix) ---------------------
+.email-addr {
+	display: flex;
+	align-items: stretch;
+
+	&__input {
+		flex: 1;
+		min-width: 0;
+		border-top-right-radius: 0;
+		border-bottom-right-radius: 0;
+		font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+	}
+
+	&__suffix {
+		display: inline-flex;
+		align-items: center;
+		white-space: nowrap;
+		padding: 0 $space-4;
+		border: 1px solid var(--color-border-strong);
+		border-left: 0;
+		border-top-right-radius: $radius-md;
+		border-bottom-right-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// Preview line beneath the from-address field.
+.email-preview {
+	font-size: $fs-body;
+	color: var(--color-text-secondary);
+
+	strong {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	code {
+		font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+		color: var(--color-text-primary);
+	}
+}
+
+// --- Additional addresses list --------------------------------------------
+.email-addrs {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+}
+
+.email-addr-row {
+	padding: $space-3 $space-4;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface-sunk);
+
+	&__view {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__main {
+		min-width: 0;
+	}
+
+	&__email {
+		font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__label {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__edit {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__edit-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+}
+
+// Standalone monospace input (sits on top of .field__input base from <Input/>).
+.email-input-mono {
+	font-family: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+}
+
+// Add-a-new-address block (column form below the address list).
+.email-addnew {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	padding-top: $space-4;
+	border-top: 1px solid var(--color-border);
+
+	&__actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+}
+
+// Small square icon button (edit / remove / cancel / confirm in rows).
+.email-iconbtn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 32px;
+	height: 32px;
+	border: 0;
+	border-radius: $radius-md;
+	background: none;
+	color: var(--color-text-secondary);
+	font-size: 1.6rem;
+	cursor: pointer;
+	transition:
+		background-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+	}
+
+	&--danger:hover {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+}
+
+// --- Forwarding: provider tabs --------------------------------------------
+.email-providers {
+	display: flex;
+	gap: $space-2;
+}
+
+.email-provider {
+	flex: 1;
+	padding: $space-2 $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition:
+		background-color $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		border-color: var(--color-border-strong);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&--active {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+
+		&:hover {
+			background: var(--state-active-tint);
+		}
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+}
+
+// --- Forwarding: numbered step list ---------------------------------------
+.email-steps {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.email-step {
+	display: flex;
+	gap: $space-3;
+
+	&__num {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+	}
+
+	&__text {
+		padding-top: 1px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-primary);
+	}
+}
+
+// --- Forwarding: health stats ---------------------------------------------
+.email-stats {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: $space-3;
+}
+
+.email-stat {
+	padding: $space-3 $space-4;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface-sunk);
+
+	&__label {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__value {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+}
+
+// --- Forwarding: verify-test field row ------------------------------------
+.email-test {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	@media (min-width: #{$bp-mobile + 1px}) {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+
+	&__field {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__input {
+		width: 100%;
+	}
+}
+
+// Health header row (forwarding page top): icon disc + title + pill + body.
+.email-health {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// =============================================================================
+// SETTINGS — NOTIFICATIONS (S12d): per-member alert preferences — My Status,
+// push (this phone), mobile number, 4-channel matrix, quiet hours, escalation.
+// =============================================================================
+
+// Colored icon tile — reuses the $auto-accents palette (incl. the indigo key
+// added for quiet-hours). 40px to sit beside a two-line title/desc.
+.notif-tile {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 40px;
+	height: 40px;
+	border-radius: $radius-md;
+	font-size: 2rem;
+
+	@each $name, $pair in $auto-accents {
+		&--#{$name} {
+			background: list.nth($pair, 1);
+			color: list.nth($pair, 2);
+		}
+	}
+}
+
+// Section card — surface with an icon/title/desc head and a free-form body.
+
+.notif-card {
+	padding: $space-5;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		margin-bottom: $space-4;
+	}
+
+	&__head-text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__actions {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__hint {
+		margin-top: $space-3;
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// Push status chip (top-right of "This phone").
+.notif-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	flex-shrink: 0;
+	padding: $space-1 $space-3;
+	border-radius: $radius-full;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	white-space: nowrap;
+
+	i {
+		font-size: 1.3rem;
+	}
+
+	&--on {
+		background: var(--success-bg);
+		color: var(--success-text);
+	}
+	&--off {
+		background: var(--warning-bg);
+		color: var(--warning-text);
+	}
+	&--blocked {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+	&--muted {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+	}
+}
+
+// Tinted callout used for push-blocked / unsupported / iOS-install hints.
+.notif-msg {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-2;
+	padding: $space-3 $space-4;
+	border-radius: $radius-md;
+	font-size: $fs-body;
+	line-height: $lh-body;
+
+	i {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.6rem;
+	}
+
+	&--info {
+		background: var(--info-bg);
+		color: var(--info-text);
+	}
+	&--danger {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+	&--muted {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+	}
+}
+
+// "My Status" preset list — selectable rows with a colored dot + icon.
+.notif-statuses {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		width: 100%;
+		min-height: 52px;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&:disabled {
+			opacity: 0.7;
+			cursor: default;
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+		}
+	}
+
+	&__dot {
+		width: 10px;
+		height: 10px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		font-size: 1.5rem;
+	}
+
+	&__text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		display: block;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__check {
+		flex-shrink: 0;
+		font-size: 1.5rem;
+		color: var(--color-brand);
+	}
+}
+
+// "Clear after" pill row beneath the status list.
+.notif-clear {
+	margin-top: $space-4;
+
+	&__label {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__chip {
+		min-height: 36px;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+	}
+
+	&__note {
+		margin-top: $space-2;
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// Phone-number row — field input + inline Save button.
+.notif-phone {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $space-2;
+
+	.field__input,
+	.phone-field {
+		flex: 1;
+	}
+
+	.btn {
+		flex-shrink: 0;
+	}
+
+	// PhoneField's own "enter a valid number" message drops to its own line
+	// instead of squeezing into the input/button row.
+	.field__error {
+		flex-basis: 100%;
+		margin-top: 0;
+	}
+}
+
+// Section group eyebrow (Default alerts / Advanced / Timing).
+.notif-eyebrow {
+	margin-left: 2px;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	letter-spacing: $tracking-label;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+// 4-channel preference matrix — grouped surface of pref rows.
+.notif-prefs {
+	overflow: hidden;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__group-head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-4;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__group-dot {
+		width: 8px;
+		height: 8px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+
+		&--critical {
+			background: var(--danger-solid);
+		}
+		&--wins {
+			background: var(--success-solid);
+		}
+	}
+
+	&__group-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+}
+
+.notif-pref {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-4;
+
+	&--divided {
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		line-height: 1.35;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		line-height: 1.35;
+		color: var(--color-text-secondary);
+	}
+
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+	}
+}
+
+// A single channel toggle chip (App / Buzz / Email / Text).
+.notif-channel {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	min-height: 38px;
+	padding: $space-2 $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition:
+		background $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	i {
+		font-size: 1.4rem;
+	}
+
+	&:hover:not(:disabled) {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&--on {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+	}
+
+	&:disabled {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+		cursor: not-allowed;
+		opacity: 0.6;
+	}
+}
+
+// Advanced section collapse toggle.
+.notif-advanced {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: space-between;
+	padding: $space-1 2px;
+	background: none;
+	border: 0;
+	cursor: pointer;
+
+	&__chevron {
+		font-size: 1.5rem;
+		color: var(--color-text-muted);
+		transition: transform $duration-base $ease-standard;
+	}
+
+	&--open &__chevron {
+		transform: rotate(180deg);
+	}
+}
+
+// Quiet-hours From/To grid + escalation select width cap.
+.notif-times {
+	margin-top: $space-4;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: $space-3;
+}
+
+.notif-escalation {
+	margin-top: $space-4;
+	max-width: 220px;
+}
+
+// -----------------------------------------------------------------------------
+// JOB FORMS — reusable checklist / inspection templates (Session 4.1).
+// List of saved templates + the field builder used on new/[id] pages.
+// -----------------------------------------------------------------------------
+.job-forms {
+	width: 100%;
+	max-width: 720px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding-bottom: $space-16;
+
+	&__toolbar {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__card {
+		display: flex;
+		align-items: stretch;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		overflow: hidden;
+	}
+
+	&__card-link {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-4;
+		text-decoration: none;
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		border-radius: $radius-md;
+		background: rgba(16, 185, 129, 0.12);
+		color: #10b981;
+		font-size: 2rem;
+	}
+
+	&__body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__meta {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 2rem;
+		color: var(--color-text-muted);
+	}
+
+	&__delete {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 52px;
+		flex-shrink: 0;
+		border: none;
+		border-left: 1px solid var(--color-border);
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.8rem;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+}
+
+.form-builder {
+	width: 100%;
+	max-width: 720px;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+	padding-bottom: $space-16;
+
+	&__meta {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding: $space-4;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__fields {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding: $space-4;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__field-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__type {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		width: auto;
+		min-width: 200px;
+
+		i {
+			font-size: 1.6rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__field-actions {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.7rem;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&:disabled {
+			opacity: 0.35;
+			cursor: not-allowed;
+		}
+
+		&--danger:hover:not(:disabled) {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__options {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding-left: $space-3;
+		border-left: 2px solid var(--color-border);
+	}
+
+	&__option {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+
+		.field__input {
+			flex: 1;
+		}
+	}
+
+	&__add-option {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-2;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		cursor: pointer;
+	}
+
+	&__field-foot {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__help {
+		flex: 1;
+	}
+
+	&__required {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		flex-shrink: 0;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	&__add {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		min-height: 48px;
+		border-radius: $radius-xl;
+		border: 1px dashed var(--color-border-strong);
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		i {
+			font-size: 1.8rem;
+		}
+	}
+
+	&__bar {
+		position: sticky;
+		bottom: 0;
+		display: flex;
+		justify-content: flex-end;
+		gap: $space-3;
+		padding: $space-3 0;
+		background: linear-gradient(to top, var(--color-bg-app) 60%, transparent);
+	}
+}

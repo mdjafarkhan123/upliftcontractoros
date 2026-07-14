@@ -184,6 +184,12 @@ export const contactImports = pgTable('contact_imports', {
 	status: contactImportStatusEnum('status').notNull().default('pending'),
 	// Duplicate-handling mode chosen on the import screen (match is phone OR email).
 	on_duplicate: contactImportOnDuplicateEnum('on_duplicate').notNull().default('skip'),
+	// User's explicit column mapping from the "Map columns" step: an array aligned by
+	// CSV column index, each entry the canonical field name that column feeds (e.g.
+	// 'phone', 'full_name') or null for "don't import". When present the worker uses
+	// THIS instead of auto-guessing headers via HEADER_MAP. Null on older/pre-mapping
+	// imports — the worker then falls back to auto-detection.
+	column_map: jsonb('column_map').$type<(string | null)[]>(),
 	// total_rows = data rows detected at upload; the rest advance as the worker runs.
 	total_rows: integer('total_rows').notNull().default(0),
 	processed_rows: integer('processed_rows').notNull().default(0),

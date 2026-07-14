@@ -36,6 +36,7 @@ export const GET: RequestHandler = async (event) => {
 			unit: quoteTemplateLineItems.unit,
 			section_label: quoteTemplateLineItems.section_label,
 			is_optional: quoteTemplateLineItems.is_optional,
+			taxable: quoteTemplateLineItems.taxable,
 			unit_price: quoteTemplateLineItems.unit_price,
 			total: quoteTemplateLineItems.total,
 			position: quoteTemplateLineItems.position
@@ -126,6 +127,7 @@ export const PATCH: RequestHandler = async (event) => {
 						unit: li.unit?.trim() || null,
 						section_label: li.section_label?.trim() || null,
 						is_optional: li.is_optional ?? false,
+						taxable: li.taxable ?? true,
 						unit_price: String(li.unit_price),
 						total: computeLineTotal(li.quantity, li.unit_price),
 						position: li.position ?? idx

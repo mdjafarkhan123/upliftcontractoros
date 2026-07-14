@@ -1,15 +1,6 @@
 <script lang="ts">
 	import { formatCurrency } from '$lib/utils/format';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import {
-		ChevronLeft,
-		ChevronRight,
-		MapPin,
-		MessageSquare,
-		PenLine,
-		ShieldCheck,
-		User
-	} from '@lucide/svelte';
 	import type { PublicQuoteView, QuoteLinePhoto } from '$lib/types/quotes';
 
 	// The single source of truth for "what the client sees" — rendered both on the live public
@@ -19,12 +10,40 @@
 	let {
 		quote,
 		selectedOptional = $bindable({}),
+		selectedPackageId = $bindable(null),
 		actions
 	}: {
 		quote: PublicQuoteView;
 		selectedOptional?: Record<string, boolean>;
+		// Good-Better-Best: the tier the customer has selected (parent-owned, sent on accept).
+		// Null / ignored on a simple quote.
+		selectedPackageId?: string | null;
 		actions?: import('svelte').Snippet;
 	} = $props();
+
+	// ── Good-Better-Best tiers ──────────────────────────────────────────────────
+	const packages = $derived(quote.packages ?? []);
+	const isTiered = $derived(packages.length > 0);
+	type PkgLine = PublicQuoteView['line_items'][number];
+	function pkgLines(pkgId: string): PkgLine[] {
+		return (quote.line_items ?? []).filter((li) => li.package_id === pkgId);
+	}
+	function pkgRequired(pkgId: string): PkgLine[] {
+		return pkgLines(pkgId).filter((li) => !li.is_optional);
+	}
+	function pkgOptional(pkgId: string): PkgLine[] {
+		return pkgLines(pkgId).filter((li) => li.is_optional);
+	}
+	const selectedPkg = $derived(packages.find((p) => p.id === selectedPackageId) ?? null);
+	// Pre-select the recommended tier (fallback: first) so the customer sees a price immediately.
+	$effect(() => {
+		if (isTiered && (selectedPackageId === null || !packages.some((p) => p.id === selectedPackageId))) {
+			selectedPackageId = (packages.find((p) => p.is_recommended) ?? packages[0])?.id ?? null;
+		}
+	});
+	function selectPackage(id: string) {
+		selectedPackageId = id;
+	}
 
 	const orgInitials = $derived(
 		(quote.org_name ?? '?')
@@ -38,6 +57,9 @@
 
 	const alreadyChangesRequested = $derived(quote.status === 'changes_requested');
 	const taxPct = $derived((Number(quote.tax_rate) * 100).toFixed(2) + '%');
+	// Only surface per-line "Tax exempt" hints when the quote actually charges tax — otherwise
+	// every line is effectively untaxed and the label would just be noise.
+	const hasTax = $derived(Number(quote.tax_rate) > 0);
 
 	// Group line items into sections (preserving order). A null label = ungrouped: no heading,
 	// no subtotal. Items arrive ordered so a section's rows are contiguous.
@@ -69,19 +91,28 @@
 	}
 
 	// ── Optional add-ons the customer can choose ────────────────────────────────
-	const optionalLines = $derived((quote.line_items ?? []).filter((li) => li.is_optional));
+	// On a tiered quote the add-ons are scoped to the SELECTED package; on a simple quote they
+	// are all optional lines (today's behavior).
+	const optionalLines = $derived(
+		isTiered
+			? selectedPkg
+				? pkgOptional(selectedPkg.id)
+				: []
+			: (quote.line_items ?? []).filter((li) => li.is_optional)
+	);
 	function toggleOptional(id: string) {
 		selectedOptional = { ...selectedOptional, [id]: !selectedOptional[id] };
 	}
-	// Live totals = base (required) + selected optional add-ons, recomputed in the browser for
-	// instant feedback. The server independently recomputes the authoritative total at acceptance.
-	const liveTotals = $derived.by(() => {
-		const base = Number(quote.subtotal ?? 0);
-		const optSum = optionalLines.reduce(
-			(s, li) => (selectedOptional[li.id] ? s + Number(li.total) : s),
-			0
-		);
+	// Pure totals math (base required subtotal + chosen add-ons → discount → tax). Reused for the
+	// live selected-tier totals AND each package card's headline price. Mirrors the server's
+	// accept-route math, which applies the quote-level discount to whichever tier is chosen.
+	// `taxableBase` / `taxableOpt` are the TAXABLE portions of base / add-ons. Only they feed the
+	// tax base, and the quote-level discount is allocated proportionally across the whole subtotal
+	// before tax — mirrors the accept route exactly. Collapses to discounted × rate when every
+	// line is taxable.
+	function computeTotals(base: number, optSum: number, taxableBase: number, taxableOpt: number) {
 		const sub = Math.round((base + optSum) * 100) / 100;
+		const taxableSub = Math.round((taxableBase + taxableOpt) * 100) / 100;
 		const dType = quote.discount_type ?? 'none';
 		const dVal = Number(quote.discount_value ?? 0);
 		let discount = 0;
@@ -92,10 +123,57 @@
 		}
 		const discounted = Math.round((sub - discount) * 100) / 100;
 		const rate = Number(quote.tax_rate ?? 0);
-		const tax = Math.round(discounted * rate * 100) / 100;
+		const taxableAfterDiscount = sub > 0 ? (taxableSub * discounted) / sub : 0;
+		const tax = Math.round(taxableAfterDiscount * rate * 100) / 100;
 		const grand = Math.round((discounted + tax) * 100) / 100;
 		return { subtotal: sub, discount, tax, total: grand };
+	}
+	// Sum the taxable portion of a set of lines (absent taxable = taxable, the default).
+	function taxableSumOf(lines: PkgLine[]): number {
+		return lines.reduce((s, li) => (li.taxable === false ? s : s + Number(li.total)), 0);
+	}
+	// Base required subtotal for the current view: the selected tier's subtotal when tiered,
+	// else the quote's headline subtotal.
+	const baseSubtotal = $derived(
+		isTiered ? Number(selectedPkg?.subtotal ?? 0) : Number(quote.subtotal ?? 0)
+	);
+	// Live totals = base + selected optional add-ons, recomputed in the browser for instant
+	// feedback. The server independently recomputes the authoritative total at acceptance.
+	// Required lines feeding the current view — the selected tier's when tiered, else all
+	// required lines. Used for the taxable-base portion of the live tax.
+	const requiredLinesForView = $derived(
+		isTiered
+			? selectedPkg
+				? pkgRequired(selectedPkg.id)
+				: []
+			: (quote.line_items ?? []).filter((li) => !li.is_optional)
+	);
+	const liveTotals = $derived.by(() => {
+		const optSum = optionalLines.reduce(
+			(s, li) => (selectedOptional[li.id] ? s + Number(li.total) : s),
+			0
+		);
+		const taxableOpt = optionalLines.reduce(
+			(s, li) => (selectedOptional[li.id] && li.taxable !== false ? s + Number(li.total) : s),
+			0
+		);
+		return computeTotals(baseSubtotal, optSum, taxableSumOf(requiredLinesForView), taxableOpt);
 	});
+	// Each package card's all-in headline price (required items only, discount + tax applied).
+	function pkgCardTotal(pkgId: string, pkgSubtotal: string): number {
+		return computeTotals(Number(pkgSubtotal), 0, taxableSumOf(pkgRequired(pkgId)), 0).total;
+	}
+	// A package's required lines grouped into contiguous sections (same rule as the flat list).
+	function pkgSections(pkgId: string): { label: string | null; items: PkgLine[] }[] {
+		const secs: { label: string | null; items: PkgLine[] }[] = [];
+		for (const li of pkgRequired(pkgId)) {
+			const label = li.section_label?.trim() || null;
+			const last = secs[secs.length - 1];
+			if (last && last.label === label) last.items.push(li);
+			else secs.push({ label, items: [li] });
+		}
+		return secs;
+	}
 	const discountText = $derived.by(() => {
 		const base = quote.discount_label?.trim() || 'Discount';
 		if (quote.discount_type === 'percent' && quote.discount_value) {
@@ -119,111 +197,91 @@
 	});
 </script>
 
-{#snippet brandHeader()}
-	<div class="flex items-center gap-3">
-		{#if quote.org_logo_url}
-			<img
-				src={quote.org_logo_url}
-				alt={quote.org_name}
-				class="h-12 w-auto max-w-[150px] shrink-0 object-contain"
-			/>
-		{:else}
-			<div
-				class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold"
-				style="background-color: var(--brand); color: var(--brand-fg);"
-			>
-				{orgInitials}
-			</div>
-		{/if}
-		<div class="min-w-0">
-			<p class="truncate text-base font-semibold leading-tight text-foreground">
-				{quote.org_name}
-			</p>
-			{#if quote.org_tagline}
-				<p class="truncate text-xs text-muted-foreground">{quote.org_tagline}</p>
-			{/if}
-		</div>
-	</div>
-{/snippet}
-
 {#snippet photoThumbs(photos: QuoteLinePhoto[])}
 	{#if photos.length > 0}
-		<div class="mt-2 flex flex-wrap gap-2">
+		<div class="quote-doc__line-photos">
 			{#each photos as ph, i (ph.id)}
 				<button
 					type="button"
-					class="h-14 w-14 overflow-hidden rounded-lg border border-border/60 transition-transform hover:scale-105"
+					class="quote-doc__line-photo-btn"
 					onclick={() => openLightbox(photos, i)}
 					aria-label="View photo"
 				>
-					<img src={ph.thumb_url} alt="" class="h-full w-full object-cover" loading="lazy" />
+					<img src={ph.thumb_url} alt="" loading="lazy" />
 				</button>
 			{/each}
 		</div>
 	{/if}
 {/snippet}
 
-<div class="space-y-6">
+<div class="quote-doc">
 	<!-- Branded header card -->
-	<header class="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-		<div class="h-1.5 w-full" style="background-color: var(--brand);"></div>
-		<div class="p-5 sm:p-6">
-			<div class="flex items-start justify-between gap-4">
-				{@render brandHeader()}
-				<div class="shrink-0 text-right">
-					<p class="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-						Quote
-					</p>
-					<p class="text-sm font-semibold tabular-nums">
-						{quote.quote_number_display}
-					</p>
+	<header class="quote-doc__header-card">
+		<div class="quote-doc__brand-bar" style="background-color: var(--brand);"></div>
+		<div class="quote-doc__header-body">
+			<div class="quote-doc__header-top">
+				<div class="quote-doc__brand-wrap">
+					{#if quote.org_logo_url}
+						<img
+							class="quote-doc__brand-logo"
+							src={quote.org_logo_url}
+							alt={quote.org_name}
+						/>
+					{:else}
+						<div
+							class="quote-doc__brand-initials"
+							style="background-color: var(--brand); color: var(--brand-fg);"
+						>
+							{orgInitials}
+						</div>
+					{/if}
+					<div style="min-width:0;">
+						<p class="quote-doc__brand-name">{quote.org_name}</p>
+						{#if quote.org_tagline}
+							<p class="quote-doc__brand-tagline">{quote.org_tagline}</p>
+						{/if}
+					</div>
+				</div>
+				<div class="quote-doc__quote-ref">
+					<p class="quote-doc__quote-label">Quote</p>
+					<p class="quote-doc__quote-num">{quote.quote_number_display}</p>
 				</div>
 			</div>
 
-			<h1 class="mt-5 text-2xl font-bold tracking-tight text-foreground">
-				{quote.title}
-			</h1>
+			<h1 class="quote-doc__title">{quote.title}</h1>
 
-			<div class="mt-5 border-t border-border pt-4">
-				<div class="grid grid-cols-2 gap-3">
-					<div class="flex items-center gap-2.5">
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-							<User class="h-4 w-4 text-muted-foreground" />
+			<div class="quote-doc__meta-section">
+				<div class="quote-doc__meta-grid">
+					<div class="quote-doc__meta-item">
+						<div class="quote-doc__meta-icon quote-doc__meta-icon--neutral">
+							<i class="ri-user-line" aria-hidden="true"></i>
 						</div>
-						<div class="min-w-0">
-							<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-								Prepared for
-							</p>
-							<p class="truncate text-sm font-semibold">{quote.contact_name}</p>
+						<div style="min-width:0;">
+							<p class="quote-doc__meta-row-label">Prepared for</p>
+							<p class="quote-doc__meta-row-value">{quote.contact_name}</p>
 						</div>
 					</div>
 					{#if quote.issued_by_name}
-						<div class="flex items-center gap-2.5">
-							<div
-								class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10"
-							>
-								<User class="h-4 w-4 text-primary" />
+						<div class="quote-doc__meta-item">
+							<div class="quote-doc__meta-icon quote-doc__meta-icon--brand">
+								<i class="ri-user-line" aria-hidden="true"></i>
 							</div>
-							<div class="min-w-0">
-								<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-									Prepared by
-								</p>
-								<p class="truncate text-sm font-semibold">{quote.issued_by_name}</p>
+							<div style="min-width:0;">
+								<p class="quote-doc__meta-row-label">Prepared by</p>
+								<p class="quote-doc__meta-row-value">{quote.issued_by_name}</p>
 							</div>
 						</div>
 					{/if}
 				</div>
 
 				{#if quote.service_address}
-					<div class="mt-3 flex items-center gap-2.5">
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-							<MapPin class="h-4 w-4 text-muted-foreground" />
+					<div class="quote-doc__meta-item" style="margin-top: 12px;">
+						<div class="quote-doc__meta-icon quote-doc__meta-icon--neutral">
+							<i class="ri-map-pin-line" aria-hidden="true"></i>
 						</div>
-						<div class="min-w-0">
-							<p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-								Service address
-							</p>
-							<p class="truncate text-sm font-semibold">
+						<div style="min-width:0;">
+							<p class="quote-doc__meta-row-label">Service address</p>
+							<p class="quote-doc__meta-row-value">
 								{[
 									quote.service_address.address_line_1,
 									quote.service_address.address_line_2,
@@ -244,10 +302,8 @@
 			</div>
 
 			{#if quote.expires_at}
-				<div
-					class="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
-				>
-					<ShieldCheck class="h-3.5 w-3.5 shrink-0" style="color: var(--brand);" />
+				<div class="quote-doc__validity">
+					<i class="ri-shield-check-line" aria-hidden="true" style="color: var(--brand);"></i>
 					<span>
 						Valid until {new Date(quote.expires_at).toLocaleDateString('en-US', {
 							month: 'long',
@@ -261,105 +317,156 @@
 	</header>
 
 	{#if alreadyChangesRequested}
-		<div
-			class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"
-		>
-			<p class="font-medium">Your change request was received</p>
-			<p class="mt-1 text-amber-700/90 dark:text-amber-300/80">
+		<div class="quote-doc__changes-banner">
+			<p class="quote-doc__changes-title">Your change request was received</p>
+			<p class="quote-doc__changes-body">
 				{quote.org_name} will review your request and send an updated quote shortly.
 			</p>
 		</div>
 	{/if}
 
-	<!-- Line items -->
-	<div class="rounded-2xl border border-border bg-card">
-		<div
-			class="border-b border-border px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground"
-		>
-			<div class="grid grid-cols-12">
-				<div class="col-span-7">Item</div>
-				<div class="col-span-2 text-right">Qty</div>
-				<div class="col-span-3 text-right">Amount</div>
+	{#if isTiered}
+		<!-- Good-Better-Best: side-by-side package selection -->
+		<div class="quote-doc__pkgs-card">
+			<div class="quote-doc__pkgs-head">
+				<p class="quote-doc__pkgs-title">Choose your package</p>
+				<p class="quote-doc__pkgs-sub">
+					Pick the option that's right for you — your total updates below.
+				</p>
+			</div>
+			<div class="quote-doc__pkgs-grid">
+				{#each packages as pkg (pkg.id)}
+					{@const selected = selectedPackageId === pkg.id}
+					<button
+						type="button"
+						class="quote-doc__pkg"
+						class:quote-doc__pkg--selected={selected}
+						class:quote-doc__pkg--recommended={pkg.is_recommended}
+						style={selected ? 'border-color: var(--brand);' : ''}
+						onclick={() => selectPackage(pkg.id)}
+						aria-pressed={selected}
+					>
+						{#if pkg.is_recommended}
+							<span
+								class="quote-doc__pkg-badge"
+								style="background-color: var(--brand); color: var(--brand-fg);">Recommended</span
+							>
+						{/if}
+						<div class="quote-doc__pkg-top">
+							<span class="quote-doc__pkg-radio" style={selected ? 'color: var(--brand);' : ''}>
+								<i
+									class={selected ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line'}
+									aria-hidden="true"
+								></i>
+							</span>
+							<span class="quote-doc__pkg-name">{pkg.name}</span>
+						</div>
+						<div class="quote-doc__pkg-price" style="color: var(--brand);">
+							{formatCurrency(pkgCardTotal(pkg.id, pkg.subtotal))}
+						</div>
+						<ul class="quote-doc__pkg-lines">
+							{#each pkgSections(pkg.id) as sec (sec.label ?? '__u__')}
+								{#if sec.label}
+									<li class="quote-doc__pkg-sec">{sec.label}</li>
+								{/if}
+								{#each sec.items as li (li.id)}
+									<li class="quote-doc__pkg-line">
+										<i class="ri-check-line" aria-hidden="true" style="color: var(--brand);"></i>
+										<span class="quote-doc__pkg-line-desc">
+											{li.description}{#if Number(li.quantity) !== 1}<span class="quote-doc__pkg-line-qty"
+													>&nbsp;× {Number(li.quantity)}{#if li.unit}&nbsp;{li.unit}{/if}</span
+												>{/if}
+										</span>
+										<span class="quote-doc__pkg-line-amt">{formatCurrency(li.total)}</span>
+									</li>
+								{/each}
+							{/each}
+						</ul>
+					</button>
+				{/each}
 			</div>
 		</div>
-		<ul class="divide-y divide-border">
-			{#each lineSections as sec (sec.label ?? '__ungrouped__')}
-				{#if sec.label}
-					<li
-						class="bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-					>
-						{sec.label}
-					</li>
-				{/if}
-				{#each sec.items as li (li.id)}
-					<li class="grid grid-cols-12 px-4 py-3 text-sm">
-						<div class="col-span-7">
-							<span class="font-medium text-foreground">{li.description}</span>
-							{#if li.details}
-								<p class="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">
-									{li.details}
-								</p>
-							{/if}
-							{#if li.photos}{@render photoThumbs(li.photos)}{/if}
-						</div>
-						<div class="col-span-2 text-right tabular-nums">
-							{Number(li.quantity)}{#if li.unit}<span class="text-muted-foreground"
-									>&nbsp;{li.unit}</span
-								>{/if}
-						</div>
-						<div class="col-span-3 text-right tabular-nums">{formatCurrency(li.total)}</div>
-					</li>
+	{:else}
+		<!-- Line items -->
+		<div class="quote-doc__lines-card">
+			<div class="quote-doc__lines-header">
+				<span>Item</span>
+				<span style="text-align:right;">Qty</span>
+				<span style="text-align:right;">Amount</span>
+			</div>
+			<ul class="quote-doc__lines-list">
+				{#each lineSections as sec (sec.label ?? '__ungrouped__')}
+					{#if sec.label}
+						<li class="quote-doc__section-label">{sec.label}</li>
+					{/if}
+					{#each sec.items as li (li.id)}
+						<li class="quote-doc__line-row">
+							<div>
+								<span class="quote-doc__line-desc">{li.description}</span>
+								{#if li.details}
+									<p class="quote-doc__line-details">{li.details}</p>
+								{/if}
+								{#if hasTax && li.taxable === false}
+									<p class="quote-doc__line-taxexempt">
+										<i class="ri-price-tag-3-line" aria-hidden="true"></i>Tax exempt
+									</p>
+								{/if}
+								{#if li.photos}{@render photoThumbs(li.photos)}{/if}
+							</div>
+							<div class="quote-doc__line-qty">
+								{Number(li.quantity)}{#if li.unit}<span class="quote-doc__line-unit">&nbsp;{li.unit}</span>{/if}
+							</div>
+							<div class="quote-doc__line-amount">{formatCurrency(li.total)}</div>
+						</li>
+					{/each}
+					{#if sec.label}
+						<li class="quote-doc__section-subtotal-row">
+							<span class="quote-doc__section-subtotal-label">{sec.label} subtotal</span>
+							<span class="quote-doc__section-subtotal-value">{formatCurrency(sectionSubtotal(sec.items))}</span>
+						</li>
+					{/if}
 				{/each}
-				{#if sec.label}
-					<li class="grid grid-cols-12 px-4 py-2 text-sm">
-						<div class="col-span-9 text-right text-muted-foreground">
-							{sec.label} subtotal
-						</div>
-						<div class="col-span-3 text-right font-semibold tabular-nums">
-							{formatCurrency(sectionSubtotal(sec.items))}
-						</div>
-					</li>
-				{/if}
-			{/each}
-		</ul>
-	</div>
+			</ul>
+		</div>
+	{/if}
 
 	<!-- Optional add-ons -->
 	{#if optionalLines.length > 0}
-		<div class="overflow-hidden rounded-2xl border border-amber-500/30 bg-card">
-			<div class="border-b border-amber-500/20 bg-amber-500/5 px-4 py-3">
-				<p class="text-sm font-semibold">Optional add-ons</p>
-				<p class="text-xs text-muted-foreground">
-					Check any extras you'd like — your total updates automatically.
+		<div class="quote-doc__optional-card">
+			<div class="quote-doc__optional-header">
+				<p class="quote-doc__optional-title">
+					Optional add-ons{#if isTiered && selectedPkg}<span class="quote-doc__optional-scope">
+							· {selectedPkg.name}</span
+						>{/if}
 				</p>
+				<p class="quote-doc__optional-sub">Check any extras you'd like — your total updates automatically.</p>
 			</div>
-			<ul class="divide-y divide-border">
+			<ul class="quote-doc__optional-list">
 				{#each optionalLines as li (li.id)}
-					<li>
-						<label
-							class="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40 has-[:checked]:bg-amber-500/5"
-						>
+					<li class="quote-doc__optional-item">
+						<label class="quote-doc__optional-label">
 							<input
 								type="checkbox"
+								class="quote-doc__optional-check"
 								checked={!!selectedOptional[li.id]}
 								onchange={() => toggleOptional(li.id)}
-								class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
 							/>
-							<span class="min-w-0 flex-1">
-								<span class="block text-sm font-medium">{li.description}</span>
+							<span class="quote-doc__optional-body">
+								<span class="quote-doc__optional-item-title">{li.description}</span>
 								{#if li.details}
-									<span class="block whitespace-pre-wrap text-xs text-muted-foreground">
-										{li.details}
-									</span>
+									<span class="quote-doc__optional-item-details">{li.details}</span>
 								{/if}
-								<span class="block text-xs text-muted-foreground">
+								<span class="quote-doc__optional-item-qty">
 									{Number(li.quantity)}{#if li.unit}&nbsp;{li.unit}{/if}
 								</span>
+								{#if hasTax && li.taxable === false}
+									<span class="quote-doc__line-taxexempt">
+										<i class="ri-price-tag-3-line" aria-hidden="true"></i>Tax exempt
+									</span>
+								{/if}
 								{#if li.photos}{@render photoThumbs(li.photos)}{/if}
 							</span>
-							<span class="shrink-0 text-sm font-medium tabular-nums"
-								>+{formatCurrency(li.total)}</span
-							>
+							<span class="quote-doc__optional-price">+{formatCurrency(li.total)}</span>
 						</label>
 					</li>
 				{/each}
@@ -368,71 +475,77 @@
 	{/if}
 
 	<!-- Totals -->
-	<dl class="space-y-2 rounded-2xl border border-border bg-card p-4 text-sm">
-		<div class="flex justify-between">
-			<dt class="text-muted-foreground">Subtotal</dt>
-			<dd class="tabular-nums">{formatCurrency(liveTotals.subtotal)}</dd>
+	<div class="quote-doc__totals-card">
+		{#if isTiered && selectedPkg}
+			<div class="quote-doc__totals-pkg">
+				<i class="ri-price-tag-3-line" aria-hidden="true" style="color: var(--brand);"></i>
+				<span>Selected package: <strong>{selectedPkg.name}</strong></span>
+			</div>
+		{/if}
+		<div class="quote-doc__totals-row">
+			<span class="quote-doc__totals-term">Subtotal</span>
+			<span class="quote-doc__totals-value">{formatCurrency(liveTotals.subtotal)}</span>
 		</div>
 		{#if liveTotals.discount > 0}
-			<div class="flex justify-between">
-				<dt class="text-emerald-600 dark:text-emerald-400">{discountText}</dt>
-				<dd class="tabular-nums text-emerald-600 dark:text-emerald-400">
-					−{formatCurrency(liveTotals.discount)}
-				</dd>
+			<div class="quote-doc__totals-row">
+				<span class="quote-doc__totals-term quote-doc__totals-term--discount">{discountText}</span>
+				<span class="quote-doc__totals-value quote-doc__totals-value--discount">−{formatCurrency(liveTotals.discount)}</span>
 			</div>
 		{/if}
-		<div class="flex justify-between">
-			<dt class="text-muted-foreground">Tax ({taxPct})</dt>
-			<dd class="tabular-nums">{formatCurrency(liveTotals.tax)}</dd>
+		<div class="quote-doc__totals-row">
+			<span class="quote-doc__totals-term">Tax ({taxPct})</span>
+			<span class="quote-doc__totals-value">{formatCurrency(liveTotals.tax)}</span>
 		</div>
 		<div
-			class="mt-1 flex items-center justify-between rounded-lg px-3 py-2.5 text-base font-bold"
+			class="quote-doc__totals-grand"
 			style="background-color: color-mix(in srgb, var(--brand) 10%, transparent);"
 		>
-			<dt class="text-foreground">Total</dt>
-			<dd class="tabular-nums" style="color: var(--brand);">
-				{formatCurrency(liveTotals.total)}
-			</dd>
+			<span style="color: var(--color-text-primary);">Total</span>
+			<span style="color: var(--brand); font-variant-numeric: tabular-nums;">{formatCurrency(liveTotals.total)}</span>
 		</div>
 		{#if quote.deposit_required && liveDepositAmount}
-			<div class="mt-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-				{depositLabel}
-				{formatCurrency(liveDepositAmount)} is required to start.
-			</div>
+			<p class="quote-doc__totals-deposit-note">
+				{depositLabel} {formatCurrency(liveDepositAmount)} is required to start.
+			</p>
 		{/if}
-	</dl>
+	</div>
 
 	{#if quote.notes}
-		<div class="rounded-2xl border border-border bg-card p-4 text-sm whitespace-pre-wrap">
-			{quote.notes}
+		<div class="quote-doc__notes">{quote.notes}</div>
+	{/if}
+
+	<!-- Terms & Conditions (per-quote fine print, frozen from the org default) -->
+	{#if quote.terms}
+		<div class="quote-doc__terms">
+			<div class="quote-doc__terms-header">
+				<i class="ri-file-text-line" aria-hidden="true"></i>
+				<p class="quote-doc__terms-heading">Terms &amp; Conditions</p>
+			</div>
+			<div class="quote-doc__terms-body">{quote.terms}</div>
 		</div>
 	{/if}
 
 	<!-- Business signature block (org-level "Authorized by" credential) -->
 	{#if quote.signature_block_enabled && quote.signature_name}
-		<div class="rounded-2xl border border-border bg-card p-5">
-			<div class="mb-3 flex items-center gap-2 text-muted-foreground">
-				<PenLine class="h-3.5 w-3.5" />
-				<p class="text-[11px] font-semibold uppercase tracking-wider">Authorized by</p>
+		<div class="quote-doc__signature">
+			<div class="quote-doc__signature-header">
+				<i class="ri-edit-line" aria-hidden="true"></i>
+				<p class="quote-doc__signature-heading">Authorized by</p>
 			</div>
 			{#if quote.signature_image_url}
 				<img
+					class="quote-doc__signature-image"
 					src={quote.signature_image_url}
 					alt="Authorized signature"
-					class="mb-2 max-h-16 max-w-[240px] object-contain"
 				/>
 			{/if}
-			<p class="text-sm font-semibold text-foreground">
-				{quote.signature_name}{#if quote.signature_title}<span
-						class="font-normal text-muted-foreground"
-					>
+			<p class="quote-doc__signature-name">
+				{quote.signature_name}{#if quote.signature_title}<span class="quote-doc__signature-title">
 						· {quote.signature_title}</span
 					>{/if}
 			</p>
 			{#if quote.signature_statement}
-				<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-					{quote.signature_statement}
-				</p>
+				<p class="quote-doc__signature-statement">{quote.signature_statement}</p>
 			{/if}
 		</div>
 	{/if}
@@ -440,7 +553,7 @@
 	<!-- Action area — injected by the parent (live accept/decline/pay, or inert preview) -->
 	{@render actions?.()}
 
-	<p class="text-center text-xs text-muted-foreground">
+	<p class="quote-doc__footer">
 		This quote was sent to you by {quote.org_name}.
 		{#if quote.expires_at}
 			It expires {new Date(quote.expires_at).toLocaleDateString('en-US')}.
@@ -449,30 +562,26 @@
 </div>
 
 <Dialog.Root open={lightbox !== null} onOpenChange={(o) => !o && (lightbox = null)}>
-	<Dialog.Content class="max-w-3xl border-0 bg-transparent p-0 shadow-none">
+	<Dialog.Content class="quote-doc-lightbox">
 		{#if lightbox && lightbox.photos[lightbox.index]}
-			<div class="relative flex items-center justify-center">
-				<img
-					src={lightbox.photos[lightbox.index].full_url}
-					alt=""
-					class="max-h-[80vh] w-auto rounded-lg object-contain"
-				/>
+			<div class="quote-doc-lightbox__inner">
+				<img src={lightbox.photos[lightbox.index].full_url} alt="" />
 				{#if lightbox.photos.length > 1}
 					<button
 						type="button"
-						class="absolute left-2 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-md hover:bg-background"
+						class="quote-doc-lightbox__nav quote-doc-lightbox__nav--prev"
 						onclick={() => lightboxStep(-1)}
 						aria-label="Previous photo"
 					>
-						<ChevronLeft class="h-5 w-5" />
+						<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 					</button>
 					<button
 						type="button"
-						class="absolute right-2 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-md hover:bg-background"
+						class="quote-doc-lightbox__nav quote-doc-lightbox__nav--next"
 						onclick={() => lightboxStep(1)}
 						aria-label="Next photo"
 					>
-						<ChevronRight class="h-5 w-5" />
+						<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 					</button>
 				{/if}
 			</div>

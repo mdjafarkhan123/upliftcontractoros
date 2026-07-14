@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS "idx_appointments_job_id" ON "appointments" USING btree ("job_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_invoices_job_id" ON "invoices" USING btree ("job_id");

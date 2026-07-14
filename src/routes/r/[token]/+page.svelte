@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { Star } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 	import type { FunnelInitialState } from './+page';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data } = $props<{ data: { initial: FunnelInitialState; token: string } }>();
 
@@ -119,61 +118,54 @@
 	<meta name="robots" content="noindex,nofollow" />
 </svelte:head>
 
-<main
-	class="flex min-h-[100dvh] items-start justify-center bg-background px-4 py-10 sm:items-center"
->
-	<div class="w-full max-w-md">
+<main class="pub pub--center">
+	<div class="pub__shell pub__shell--narrow">
 		{#if phase === 'not_found'}
-			<section class="rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-				<h1 class="text-xl font-semibold text-foreground">Link not found</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
-					This review link is invalid or has been removed.
-				</p>
+			<section class="pub-card pub-card--center">
+				<h1 class="pub-card__title">Link not found</h1>
+				<p class="pub-card__text">This review link is invalid or has been removed.</p>
 			</section>
 		{:else if phase === 'expired'}
-			<section class="rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-				<h1 class="text-xl font-semibold text-foreground">Link expired</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
+			<section class="pub-card pub-card--center">
+				<h1 class="pub-card__title">Link expired</h1>
+				<p class="pub-card__text">
 					This review link is no longer active. If you'd still like to share feedback, please
 					contact {orgName || 'us'} directly.
 				</p>
 			</section>
 		{:else if phase === 'done'}
-			<section class="rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-				<h1 class="text-xl font-semibold text-foreground">
+			<section class="pub-card pub-card--center">
+				<h1 class="pub-card__title">
 					Thank you{firstName ? `, ${firstName}` : ''}!
 				</h1>
 				{#if resultPath === 'review' && resultGoogleLink}
-					<p class="mt-2 text-sm text-muted-foreground">Redirecting you to share this publicly…</p>
-					<a
-						href={resultGoogleLink}
-						class="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-					>
+					<p class="pub-card__text">Redirecting you to share this publicly…</p>
+					<Button variant="default" class="btn--full pub-review__continue" href={resultGoogleLink}>
 						Continue to Google
-					</a>
+					</Button>
 				{:else if resultPath === 'review'}
-					<p class="mt-2 text-sm text-muted-foreground">
+					<p class="pub-card__text">
 						We really appreciate the {selectedScore}-star rating.
 					</p>
 				{:else}
-					<p class="mt-2 text-sm text-muted-foreground">
+					<p class="pub-card__text">
 						We appreciate the honest feedback — someone from our team will be in touch.
 					</p>
 				{/if}
 			</section>
 		{:else}
-			<section class="rounded-2xl border border-border bg-card p-6 shadow-sm">
-				<header class="text-center">
-					<h1 class="text-xl font-semibold text-foreground sm:text-2xl">
+			<section class="pub-card pub-review">
+				<header class="pub-review__header">
+					<h1 class="pub-review__title">
 						How was your experience{orgName ? ` with ${orgName}` : ''}?
 					</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
+					<p class="pub-review__subtitle">
 						Tap a star to rate{firstName ? `, ${firstName}` : ''}.
 					</p>
 				</header>
 
 				<div
-					class="mt-6 flex items-center justify-between gap-1"
+					class="pub-review__stars"
 					role="radiogroup"
 					aria-label="Rating"
 					tabindex="-1"
@@ -187,29 +179,21 @@
 							aria-checked={selectedScore === n}
 							aria-label={`${n} star${n > 1 ? 's' : ''}`}
 							disabled={phase === 'submitting'}
-							class={cn(
-								'flex h-14 w-14 items-center justify-center rounded-xl transition-transform',
-								'active:scale-95 disabled:opacity-60 sm:h-16 sm:w-16',
-								phase !== 'submitting' && 'hover:bg-muted'
-							)}
+							class="pub-review__star"
+							class:pub-review__star--active={active}
 							onmouseenter={() => (hoverScore = n)}
 							onfocus={() => (hoverScore = n)}
 							onblur={() => (hoverScore = null)}
 							onclick={() => pickScore(n)}
 						>
-							<Star
-								class={cn(
-									'h-9 w-9 sm:h-10 sm:w-10 transition-colors',
-									active ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/35'
-								)}
-							/>
+							<i class={active ? 'ri-star-fill' : 'ri-star-line'} aria-hidden="true"></i>
 						</button>
 					{/each}
 				</div>
 
 				{#if phase === 'comment'}
-					<div class="mt-6 space-y-3">
-						<label for="r-comment" class="block text-sm font-medium text-foreground">
+					<div class="pub-review__comment">
+						<label for="r-comment" class="pub-review__comment-label">
 							Sorry we missed the mark. What went wrong?
 						</label>
 						<textarea
@@ -218,27 +202,23 @@
 							rows="4"
 							maxlength="2000"
 							placeholder="Optional — share anything that would help us improve."
-							class="w-full resize-none rounded-lg border border-border bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+							class="field__textarea"
 						></textarea>
-						<button
-							type="button"
-							onclick={submitFeedback}
-							class="inline-flex h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground active:scale-[0.99]"
-						>
+						<Button type="button" variant="default" class="btn--full" onclick={submitFeedback}>
 							Send feedback
-						</button>
-						<p class="text-center text-xs text-muted-foreground">
+						</Button>
+						<p class="pub-review__note">
 							Your feedback goes privately to {orgName || 'the team'} — not posted publicly.
 						</p>
 					</div>
 				{/if}
 
 				{#if phase === 'submitting'}
-					<p class="mt-6 text-center text-sm text-muted-foreground">Submitting…</p>
+					<p class="pub-review__status">Submitting…</p>
 				{/if}
 
 				{#if errorMessage}
-					<p class="mt-4 text-center text-sm text-destructive">{errorMessage}</p>
+					<p class="pub-review__error">{errorMessage}</p>
 				{/if}
 			</section>
 		{/if}

@@ -1,0 +1,897 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// REPUTATION (S13a) — reviews, review funnel, private feedback, review requests
+// =============================================================================
+
+// --- Stats strip (ReputationStats) -------------------------------------------
+// The 4 KPI cards now render through the shared <KpiStrip> chassis; this wrapper
+// just stacks the strip above the Google-sync line.
+.rep-stats {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+}
+
+.rep-sync {
+	display: flex;
+	align-items: center;
+	gap: $space-1;
+	font-size: $fs-body;
+	color: var(--color-text-muted);
+
+	i {
+		font-size: 1.4rem;
+	}
+}
+
+// --- Review funnel (FunnelDashboard) -----------------------------------------
+.rep-funnel {
+	padding: $space-5;
+	border-radius: $radius-2xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__periods {
+		display: inline-flex;
+		gap: 2px;
+		padding: 3px;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__period {
+		padding: $space-1 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	&__empty {
+		margin-top: $space-4;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__steps {
+		margin-top: $space-4;
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: $space-3;
+
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: repeat(4, 1fr);
+		}
+	}
+
+	&__bars {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__stars {
+		margin-top: $space-5;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__stars-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	&__stars-title {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__stars-count {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__star-rows {
+		margin-top: $space-2;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+}
+
+.rep-step {
+	padding: $space-3;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface-sunk);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+	}
+
+	&__value {
+		margin-top: $space-1;
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__conv {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+.rep-bar {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+
+	&__label {
+		width: 64px;
+		flex-shrink: 0;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__track {
+		position: relative;
+		flex: 1;
+		height: 8px;
+		overflow: hidden;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__fill {
+		height: 100%;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+		transition: width $duration-slow $ease-standard;
+	}
+
+	&__val {
+		width: 40px;
+		flex-shrink: 0;
+		text-align: right;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	// star-distribution variant
+	&__label-star {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		width: 32px;
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+
+		i {
+			color: #f59e0b;
+			font-size: 1.2rem;
+		}
+	}
+
+	&__fill--positive {
+		background: var(--success-solid);
+	}
+
+	&__fill--negative {
+		background: var(--danger-solid);
+	}
+
+	&__val-wide {
+		width: 56px;
+		flex-shrink: 0;
+		text-align: right;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+// --- Dataset list (reviews / negative / requests) ----------------------------
+// Rendered inside the shared ListPageShell `content` slot.
+.rep-list {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+// Sort dropdown — sits in the shell toolbar's `filter` slot.
+.rep-sort {
+	@media (min-width: $bp-tablet) {
+		width: 208px;
+		flex-shrink: 0;
+	}
+}
+
+// --- Status filter chips (requests) ------------------------------------------
+.rep-chips {
+	display: flex;
+	gap: $space-2;
+	overflow-x: auto;
+	padding-bottom: $space-1;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	&__chip {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+		height: 36px;
+		padding: 0 $space-3;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-text-muted);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	&__count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 $space-1;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+
+		.rep-chips__chip--active & {
+			background: rgba(255, 255, 255, 0.22);
+			color: var(--color-text-on-brand);
+		}
+	}
+}
+
+// --- Star rating (StarRating) ------------------------------------------------
+.star-rating {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+
+	i {
+		color: var(--color-border-strong);
+
+		&.is-filled {
+			color: #f59e0b;
+		}
+	}
+
+	&--sm i {
+		font-size: 1.4rem;
+	}
+	&--md i {
+		font-size: 1.6rem;
+	}
+	&--lg i {
+		font-size: 2rem;
+	}
+}
+
+// --- Review card (ReviewCard) ------------------------------------------------
+.review-card {
+	padding: $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__id {
+		min-width: 0;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__body {
+		margin-top: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__date {
+		margin-top: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// --- Private feedback card (PrivateFeedbackCard) -----------------------------
+.feedback-card {
+	display: block;
+	padding: $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	text-decoration: none;
+	transition:
+		box-shadow $duration-fast $ease-standard,
+		transform $duration-fast $ease-standard;
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__id {
+		min-width: 0;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__meta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-2;
+	}
+
+	&__body {
+		margin-top: $space-3;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__date {
+		margin-top: $space-3;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// --- Review request row (ReviewRequestRow) -----------------------------------
+.request-row {
+	padding: $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__id {
+		min-width: 0;
+	}
+
+	&__job {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		text-decoration: none;
+
+		&:hover,
+		&:focus-visible {
+			color: var(--color-brand);
+			text-decoration: underline;
+			outline: none;
+		}
+	}
+
+	&__contact {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		text-decoration: none;
+
+		&:hover,
+		&:focus-visible {
+			color: var(--color-text-primary);
+			text-decoration: underline;
+			outline: none;
+		}
+	}
+
+	&__actions {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__rating {
+		margin-top: $space-3;
+	}
+
+	&__foot {
+		margin-top: $space-3;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__meta {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 32px;
+		min-width: 44px;
+		padding: 0 $space-2;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__chevron {
+		font-size: 1.4rem;
+		transition: transform $duration-base $ease-standard;
+
+		&--open {
+			transform: rotate(180deg);
+		}
+	}
+}
+
+// --- Row actions menu trigger (ReviewRequestRowActions) ----------------------
+.request-actions {
+	&__trigger {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+	}
+}
+
+// --- Request timeline (ReviewRequestTimeline) --------------------------------
+.request-timeline {
+	margin-top: $space-3;
+	padding-top: $space-3;
+	border-top: 1px solid var(--color-border);
+
+	&__loading {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__loading-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__loading-dot {
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+	}
+
+	&__loading-bar {
+		flex: 1;
+		height: 12px;
+		border-radius: $radius-sm;
+	}
+
+	&__msg {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	&__guide {
+		position: absolute;
+		left: 11px;
+		top: 4px;
+		bottom: 4px;
+		width: 1px;
+		background: var(--color-border);
+	}
+}
+
+.request-event {
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+
+	&__dot {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		box-shadow: 0 0 0 2px var(--color-bg-surface);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.2rem;
+		}
+
+		&--success {
+			color: var(--success-text);
+		}
+		&--danger {
+			color: var(--danger-text);
+		}
+		&--warning {
+			color: var(--warning-text);
+		}
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+		padding-top: 1px;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__time {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+// --- Eligible-jobs list (SendRequestSheet) -----------------------------------
+.eligible-jobs {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+
+	&__btn {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		width: 100%;
+		min-height: 64px;
+		padding: $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			border-color: var(--color-border-strong);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&:disabled {
+			opacity: 0.6;
+			cursor: default;
+		}
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		font-size: 1.6rem;
+	}
+
+	&__sending {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// --- Feedback detail page (feedback/[id]) ------------------------------------
+.feedback-detail {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+	padding: $space-5;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__id {
+		min-width: 0;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__meta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: $space-2;
+	}
+
+	&__body {
+		white-space: pre-wrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		&--empty {
+			font-style: italic;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__dl {
+		display: grid;
+		gap: $space-2;
+
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	&__dt {
+		font-size: $fs-caption;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__dd {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+}

@@ -7,6 +7,7 @@ import {
 	automationSettings,
 	contacts,
 	invoices,
+	jobs,
 	opportunities,
 	organizations,
 	outboxEvents,
@@ -595,6 +596,16 @@ async function handleInvoiceDispatch(data: EventJobData) {
 	const { org } = await loadContext(orgId);
 	if (!org) return;
 
+	// Re-check the invoice's live status at send time. A backlog drain can run this
+	// long after the event was queued; if the invoice was cancelled or deleted in the
+	// meantime, do NOT send the "here's your invoice" email/SMS or enroll dunning.
+	const [invRow] = await db
+		.select({ status: invoices.status, deleted_at: invoices.deleted_at })
+		.from(invoices)
+		.where(and(eq(invoices.id, data.resource_id), eq(invoices.org_id, orgId)))
+		.limit(1);
+	if (!invRow || invRow.deleted_at || invRow.status === 'cancelled') return;
+
 	const contactId = data.payload.contact_id as string | undefined;
 	const rawToken = data.payload.public_token as string | undefined;
 	const totalFormatted = (data.payload.total_formatted as string | undefined) ?? '';
@@ -603,6 +614,12 @@ async function handleInvoiceDispatch(data: EventJobData) {
 	const hasEmail = Boolean(data.payload.has_email);
 	const dueDate = data.payload.due_date as string | null | undefined;
 	const paymentLinkUrl = (data.payload.payment_link_url as string | null | undefined) ?? null;
+	// Contractor-chosen channels + custom copy. Null channels = legacy default (deliver on
+	// every available channel). Null body = built-in default copy.
+	const channels = (data.payload.channels as ('email' | 'sms')[] | null | undefined) ?? null;
+	const customSms = (data.payload.sms_body as string | null | undefined) ?? null;
+	const customEmailSubject = (data.payload.email_subject as string | null | undefined) ?? null;
+	const customEmailBody = (data.payload.email_body as string | null | undefined) ?? null;
 	if (!contactId) return;
 
 	const contact = await loadContact(orgId, contactId);
@@ -613,13 +630,29 @@ async function handleInvoiceDispatch(data: EventJobData) {
 		const dueLine = dueDate
 			? ` Due ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`
 			: '';
+		const wantSms = channels ? channels.includes('sms') : true;
+		const wantEmail = channels ? channels.includes('email') : true;
 
-		if (!contact.sms_opt_out) {
-			// Primary link first; fallback labeled explicitly so it's clearly secondary.
+		// Merge values for any custom copy the contractor wrote.
+		const vars = {
+			contact_name: contact.full_name,
+			org_name: org.name,
+			invoice_number: invoiceNumberDisplay,
+			invoice_amount: amountDueFormatted,
+			amount: amountDueFormatted,
+			invoice_link: url
+		};
+		// The public link must always survive, even if a custom message drops the token.
+		const ensureLink = (text: string) => (text.includes(url) ? text : `${text}\n\n${url}`);
+
+		if (wantSms && !contact.sms_opt_out) {
+			// Primary link first; the Stripe fallback link is always appended, labeled as secondary.
 			const fallbackSms = paymentLinkUrl
 				? `\nBackup payment link (original amount only): ${paymentLinkUrl}`
 				: '';
-			const smsBody = `Hi ${contact.full_name}, ${org.name} sent you invoice ${invoiceNumberDisplay} for ${totalFormatted}.${dueLine} Pay here: ${url}${fallbackSms}`;
+			const defaultBody = `Hi ${contact.full_name}, ${org.name} sent you invoice ${invoiceNumberDisplay} for ${totalFormatted}.${dueLine} Pay here: ${url}`;
+			const base = customSms ? ensureLink(interpolate(customSms, vars)) : defaultBody;
+			const smsBody = `${base}${fallbackSms}`;
 			try {
 				await queueAutomationSms(db, {
 					orgId,
@@ -632,24 +665,29 @@ async function handleInvoiceDispatch(data: EventJobData) {
 			}
 		}
 
-		if (hasEmail && contact.email) {
+		if (wantEmail && hasEmail && contact.email) {
 			try {
 				const fallbackEmail = paymentLinkUrl
 					? `\n\nBackup payment link (use only if the link above is unavailable):
 ${paymentLinkUrl}
 Note: this backup link charges the original invoice amount and does not reflect any later edits or partial payments. The link above always shows the current balance.`
 					: '';
-				const emailBody = `Hi ${contact.full_name},
+				const subject = customEmailSubject
+					? interpolate(customEmailSubject, vars)
+					: `Invoice ${invoiceNumberDisplay} from ${org.name}`;
+				const defaultBody = `Hi ${contact.full_name},
 
 ${org.name} has sent you invoice ${invoiceNumberDisplay} for ${amountDueFormatted}.${dueDate ? `\n\nDue date: ${new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
 
 View and pay your invoice:
-${url}${fallbackEmail}`;
+${url}`;
+				const base = customEmailBody ? ensureLink(interpolate(customEmailBody, vars)) : defaultBody;
+				const emailBody = `${base}${fallbackEmail}`;
 				await queueAutomationEmail(db, {
 					orgId,
 					contactId: contact.id,
 					contactEmail: contact.email,
-					subject: `Invoice ${invoiceNumberDisplay} from ${org.name}`,
+					subject,
 					body: emailBody,
 					source: 'automation.invoice_initial'
 				});
@@ -660,26 +698,69 @@ ${url}${fallbackEmail}`;
 	}
 
 	// Enroll the invoice into the engine-driven dunning sequence (Stage 3.c.2),
-	// anchored to the due_date so steps fire at due_date + step delays. No due
-	// date → no dunning (matches the prior behaviour). The sequence's own
-	// `enabled` flag + steps drive cadence/copy; stop happens on paid/cancelled.
-	// invoice_dispatch is ungated (it also sends the actual invoice), so the
-	// dunning feature gate — previously enforced at the fire job — must be applied
-	// here at enrollment time, mirroring how quote_followup's entry job carries
-	// feature_quote_followup.
-	if (dueDate && contactId && (await isFeatureEnabled(orgId, 'feature_invoice_reminders'))) {
-		// Treat due_date as UTC midnight, matching the overdue cron's semantics.
-		const anchor = new Date(dueDate + 'T00:00:00Z');
-		if (Number.isFinite(anchor.getTime())) {
-			await enroll({
-				orgId,
-				sequenceKey: 'invoice_dunning',
-				contactId,
-				resourceType: 'invoice',
-				resourceId: data.resource_id,
-				anchorAt: anchor
-			});
-		}
+	// anchored to the due_date so steps fire at due_date + step delays. The
+	// per-invoice `send_payment_reminders` opt-out + org feature gate are both
+	// enforced inside the helper.
+	await maybeEnrollInvoiceDunning(orgId, data.resource_id, contactId, dueDate ?? null);
+}
+
+// Shared invoice-dunning enrollment (used by invoice.sent dispatch AND the
+// per-invoice reminders toggle). Enrolls the invoice into the invoice_dunning
+// sequence anchored to its due_date. No-ops when: no due date (matches prior
+// behaviour), no contact, the invoice has reminders switched off
+// (send_payment_reminders = false — the per-invoice opt-out), or the org feature
+// gate is off. invoice_dispatch is ungated (it also sends the actual invoice), so
+// the dunning feature gate must be applied here at enrollment time, mirroring how
+// quote_followup's entry job carries feature_quote_followup. enroll() is
+// idempotent (active-enrollment unique index), so a redelivered toggle can't
+// double-enroll.
+async function maybeEnrollInvoiceDunning(
+	orgId: string,
+	invoiceId: string,
+	contactId: string | undefined,
+	dueDate: string | null
+): Promise<void> {
+	if (!dueDate || !contactId) return;
+
+	const [inv] = await db
+		.select({ send_payment_reminders: invoices.send_payment_reminders })
+		.from(invoices)
+		.where(and(eq(invoices.id, invoiceId), eq(invoices.org_id, orgId)))
+		.limit(1);
+	if (!inv || !inv.send_payment_reminders) return;
+
+	if (!(await isFeatureEnabled(orgId, 'feature_invoice_reminders'))) return;
+
+	// Treat due_date as UTC midnight, matching the overdue cron's semantics.
+	const anchor = new Date(dueDate + 'T00:00:00Z');
+	if (!Number.isFinite(anchor.getTime())) return;
+
+	await enroll({
+		orgId,
+		sequenceKey: 'invoice_dunning',
+		contactId,
+		resourceType: 'invoice',
+		resourceId: invoiceId,
+		anchorAt: anchor
+	});
+}
+
+// Per-invoice reminders toggle (invoice.reminders_toggled — emitted by the
+// /reminders endpoint only for already-sent invoices). enabled=true re-enrolls
+// the invoice into dunning (respecting the same gates as dispatch); enabled=false
+// stops any pending reminders for this invoice. Drafts never emit this event —
+// their flag is read fresh at invoice.sent time.
+async function handleInvoiceRemindersToggle(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const enabled = Boolean(data.payload.enabled);
+	const contactId = data.payload.contact_id as string | undefined;
+	const dueDate = (data.payload.due_date as string | null | undefined) ?? null;
+
+	if (enabled) {
+		await maybeEnrollInvoiceDunning(orgId, data.resource_id, contactId, dueDate);
+	} else {
+		await stopEnrollmentsForResource(orgId, 'invoice', data.resource_id, 'reminders_disabled');
 	}
 }
 
@@ -1048,8 +1129,11 @@ async function handleReviewExpire(job: Job, data: EventJobData) {
 // from appointment_reminder_enabled) is the on/off switch.
 async function enrollAppointmentReminder(
 	orgId: string,
-	appt: { id: string; contact_id: string; scheduled_start: Date }
+	appt: { id: string; contact_id: string; scheduled_start: Date | null }
 ) {
+	// Defensive: an unscheduled visit (no date) has nothing to anchor a reminder to. Callers
+	// already gate on this, but guarding here keeps the anchor type sound.
+	if (appt.scheduled_start === null) return;
 	await enroll({
 		orgId,
 		sequenceKey: 'appointment_reminder',
@@ -1067,6 +1151,9 @@ async function handleAppointmentReminderSetup(data: EventJobData) {
 		.from(appointments)
 		.where(and(eq(appointments.id, data.resource_id), isNull(appointments.deleted_at)));
 	if (!appointment || appointment.status !== 'scheduled') return;
+	// Unscheduled visits have no date, and "Anytime" visits no clock time — nothing to
+	// remind 24h/1h before in either case.
+	if (appointment.scheduled_start === null || appointment.all_day) return;
 	await enrollAppointmentReminder(data.org_id, appointment);
 }
 
@@ -1112,6 +1199,8 @@ async function handleAppointmentConfirmation(data: EventJobData) {
 		.where(and(eq(appointments.id, appointmentId), isNull(appointments.deleted_at)));
 	if (!appointment || appointment.status !== 'scheduled') return;
 	if (appointment.booking_source !== 'booking_link') return;
+	// A dateless (unscheduled) visit can't be confirmed to a time — skip.
+	if (appointment.scheduled_start === null) return;
 
 	const { org, settings } = await loadContext(orgId);
 	if (!org || !settings || !settings.appointment_confirmation_enabled) return;
@@ -1195,6 +1284,185 @@ async function handleAppointmentConfirmation(data: EventJobData) {
 	}
 }
 
+// Client-facing "your job is booked" confirmation. Fires when the contractor picked a
+// channel on the job form. Copy comes from the org's job_scheduled template, but the form
+// may attach a per-job override (sms_message/email_subject/email_message) for one-off
+// wording — when present it wins over the template; both still run through interpolate()
+// for merge tokens. A master enable gate in Settings can switch all of these off.
+// Best-effort per channel: a single-channel failure never fails the other.
+async function handleJobScheduledConfirmation(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const jobId = data.resource_id;
+	const channel = (data.payload.channel as 'sms' | 'email' | 'both' | undefined) ?? 'both';
+	const customSms = (data.payload.sms_message as string | null | undefined) ?? null;
+	const customSubject = (data.payload.email_subject as string | null | undefined) ?? null;
+	const customBody = (data.payload.email_message as string | null | undefined) ?? null;
+
+	const [jobRow] = await db
+		.select()
+		.from(jobs)
+		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId), isNull(jobs.deleted_at)));
+	if (!jobRow || !jobRow.scheduled_start || jobRow.status === 'cancelled') return;
+
+	const { org, settings } = await loadContext(orgId);
+	if (!org || !settings) return;
+
+	// Master gate on top of the per-job channel pick. Default-on; lets a contractor
+	// globally switch off customer job confirmations from Settings → Automation.
+	if (!settings.job_scheduled_confirmation_enabled) return;
+
+	const contact = await loadContact(orgId, jobRow.contact_id);
+	if (!contact) return;
+
+	const formatted = formatAppointmentForOrg(jobRow.scheduled_start, org.timezone);
+	const templateVars = {
+		contact_name: contact.full_name,
+		org_name: org.name,
+		job_title: jobRow.title,
+		scheduled_datetime: formatted.datetime
+	};
+	const wantsSms = channel === 'sms' || channel === 'both';
+	const wantsEmail = channel === 'email' || channel === 'both';
+
+	// SMS — best-effort. Skip when opted out, no phone, or org has no Twilio number.
+	if (wantsSms && contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+		try {
+			const smsBody = interpolate(customSms ?? settings.job_scheduled_sms_message, templateVars);
+			await queueAutomationSms(db, {
+				orgId,
+				contactId: contact.id,
+				body: smsBody,
+				source: 'automation.job_scheduled_confirmation'
+			});
+		} catch (err) {
+			console.error('[automation] job scheduled confirmation SMS failed:', err);
+		}
+	}
+
+	// Email — also best-effort.
+	if (wantsEmail && contact.email) {
+		try {
+			const subject = interpolate(
+				customSubject ?? settings.job_scheduled_email_subject,
+				templateVars
+			);
+			const emailBody = interpolate(
+				customBody ?? settings.job_scheduled_email_message,
+				templateVars
+			);
+			await queueAutomationEmail(db, {
+				orgId,
+				contactId: contact.id,
+				contactEmail: contact.email,
+				subject,
+				body: emailBody,
+				source: 'automation.job_scheduled_confirmation'
+			});
+		} catch (err) {
+			console.error('[automation] job scheduled confirmation email failed:', err);
+		}
+	}
+}
+
+// Client-facing reschedule confirmation. Fires only when the contractor opted to
+// notify on the drag-confirm popover (the PATCH handler emits the event with a
+// channel). Reuses the org's appointment_confirmation_* templates for copy — the
+// wording ("here's your appointment time") fits a reschedule, so no separate
+// template is needed (mirrors how jobs reuse job_scheduled_* on reschedule). The
+// per-reschedule channel pick IS the on/off switch, so this is intentionally NOT
+// gated on appointment_confirmation_enabled (that toggle governs the booking-link
+// self-book auto-confirmation, a different trigger). Best-effort per channel.
+async function handleAppointmentRescheduleConfirmation(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const appointmentId = data.resource_id;
+	const channel = (data.payload.channel as 'sms' | 'email' | 'both' | undefined) ?? 'both';
+	// Per-reschedule copy overrides edited in the notify dialog (null = use org template).
+	const customSms = (data.payload.sms_message as string | null | undefined) ?? null;
+	const customSubject = (data.payload.email_subject as string | null | undefined) ?? null;
+	const customBody = (data.payload.email_message as string | null | undefined) ?? null;
+
+	const [appointment] = await db
+		.select()
+		.from(appointments)
+		.where(and(eq(appointments.id, appointmentId), isNull(appointments.deleted_at)));
+	if (!appointment || appointment.status !== 'scheduled') return;
+	// A dateless (unscheduled) visit can't be confirmed to a time — skip.
+	if (appointment.scheduled_start === null) return;
+
+	const { org, settings } = await loadContext(orgId);
+	if (!org || !settings) return;
+
+	const contact = await loadContact(orgId, appointment.contact_id);
+	if (!contact) return;
+
+	const formatted = formatAppointmentForOrg(appointment.scheduled_start, org.timezone);
+	const apptType = appointment.type.replaceAll('_', ' ');
+	const location = appointment.location ?? '';
+	const locationBlock = location ? `Where: ${location}\n\n` : '';
+	const templateVars = {
+		contact_name: contact.full_name,
+		org_name: org.name,
+		appointment_datetime: formatted.datetime,
+		appointment_date: formatted.date,
+		appointment_time: formatted.time,
+		appointment_type: apptType,
+		location,
+		location_block: locationBlock,
+		manage_link: buildManageLink({
+			appointmentId: appointment.id,
+			updatedAt: appointment.updated_at,
+			scheduledStart: appointment.scheduled_start
+		})
+	};
+	const wantsSms = channel === 'sms' || channel === 'both';
+	const wantsEmail = channel === 'email' || channel === 'both';
+
+	// SMS — best-effort. Skip when opted out, no phone, or org has no Twilio number.
+	if (wantsSms && contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+		try {
+			const smsBody = interpolate(
+				customSms ?? settings.appointment_confirmation_sms_message,
+				templateVars
+			);
+			await queueAutomationSms(db, {
+				orgId,
+				contactId: contact.id,
+				body: smsBody,
+				source: 'automation.appointment_reschedule_confirmation'
+			});
+		} catch (err) {
+			console.error('[automation] appointment reschedule confirmation SMS failed:', err);
+		}
+	}
+
+	// Email — also best-effort; .ics attachment is added downstream via appointmentId.
+	if (wantsEmail && contact.email) {
+		try {
+			const subject = interpolate(
+				customSubject ?? settings.appointment_confirmation_email_subject,
+				templateVars
+			);
+			const body = interpolate(
+				customBody ?? settings.appointment_confirmation_email_message,
+				templateVars
+			);
+			await queueAutomationEmail(db, {
+				orgId,
+				contactId: contact.id,
+				contactEmail: contact.email,
+				subject,
+				body,
+				source: 'automation.appointment_reschedule_confirmation',
+				appointmentId
+			});
+		} catch (err) {
+			console.error('[automation] appointment reschedule confirmation email failed:', err);
+		}
+	}
+}
+
 // Reschedule → re-anchor the live reminder enrollment to the new scheduled_start
 // (preserving already-sent steps so a later move never resends the 24h reminder).
 // If no active enrollment exists (booked while the feature was off, or its
@@ -1214,6 +1482,20 @@ async function handleAppointmentRescheduled(data: EventJobData) {
 			'appointment',
 			data.resource_id,
 			'appointment_rescheduled_closed'
+		);
+		return;
+	}
+	// A 'scheduled' visit always has a date; this guard just narrows the nullable column
+	// (an unscheduled visit would already have returned at the status check above).
+	if (appointment.scheduled_start === null) return;
+	// Toggled to an "Anytime" visit (no clock time): stop any live timed reminder and
+	// don't re-anchor — there's no time to remind before.
+	if (appointment.all_day) {
+		await stopEnrollmentsForResource(
+			data.org_id,
+			'appointment',
+			data.resource_id,
+			'appointment_became_anytime'
 		);
 		return;
 	}
@@ -1272,6 +1554,8 @@ async function handleAppointmentQuoteNudge(data: EventJobData) {
 		.from(appointments)
 		.where(and(eq(appointments.id, data.resource_id), isNull(appointments.deleted_at)));
 	if (!appointment || appointment.status !== 'completed') return;
+	// A completed but never-dated (unscheduled) visit has no time to anchor the offset nudge to.
+	if (appointment.scheduled_start === null) return;
 	await enroll({
 		orgId: data.org_id,
 		sequenceKey: 'appointment_quote_nudge',
@@ -1469,6 +1753,8 @@ export const automationWorker = new Worker<EventJobData>(
 				return handleQuoteDeclinedLost(data);
 			case 'invoice_dispatch':
 				return handleInvoiceDispatch(data);
+			case 'invoice_reminders_toggle':
+				return handleInvoiceRemindersToggle(data);
 			case 'quote_followup':
 				// Only ever enqueued for quote.sent now; follow-ups run on the engine
 				// (automation.advance). Stage 3.c.2.
@@ -1488,8 +1774,12 @@ export const automationWorker = new Worker<EventJobData>(
 				return handleAppointmentReminderSetup(data);
 			case 'appointment_confirmation':
 				return handleAppointmentConfirmation(data);
+			case 'job_scheduled_confirmation':
+				return handleJobScheduledConfirmation(data);
 			case 'appointment_reschedule':
 				return handleAppointmentRescheduled(data);
+			case 'appointment_reschedule_confirmation':
+				return handleAppointmentRescheduleConfirmation(data);
 			case 'appointment_cancel_reminders':
 				return handleAppointmentCancelReminders(data);
 			case 'appointment_no_show_followup':

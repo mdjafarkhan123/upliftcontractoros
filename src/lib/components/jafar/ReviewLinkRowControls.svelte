@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { ExternalLink } from '@lucide/svelte';
 	import { jafarDashboardStore, type OrgRow } from '$lib/stores/jafarDashboard.svelte';
 
 	let { org }: { org: OrgRow } = $props();
@@ -138,70 +137,87 @@
 	const busy = $derived(mode !== 'idle');
 </script>
 
-{#if !org.google_review_link}
-	<form onsubmit={saveLink} class="flex w-full flex-col gap-1.5 sm:flex-row sm:items-center">
-		<input
-			type="url"
-			placeholder="https://g.page/r/…/review"
-			bind:value={linkInput}
-			disabled={busy}
-			required
-			class="h-8 min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-50"
-		/>
-		<button
-			type="submit"
-			disabled={busy}
-			class="inline-flex h-8 shrink-0 items-center rounded-lg bg-slate-800/60 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-		>
-			{mode === 'saving' ? 'Saving…' : 'Set link'}
-		</button>
-	</form>
-{:else}
-	<form onsubmit={reconcileCount} class="flex w-full flex-col gap-1.5 sm:flex-row sm:items-center">
-		<a
-			href={org.google_review_link}
-			target="_blank"
-			rel="noopener noreferrer"
-			class="inline-flex h-8 shrink-0 items-center rounded-lg border border-slate-800 bg-slate-900/50 px-2.5 text-xs font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 transition-colors"
-			title={org.google_review_link}
-		>
-			<ExternalLink class="h-3.5 w-3.5" />
-		</a>
-		<input
-			type="number"
-			min="0"
-			step="1"
-			inputmode="numeric"
-			bind:value={countInput}
-			disabled={busy}
-			aria-label="Total Google reviews"
-			class="h-8 w-20 shrink-0 rounded-lg border border-slate-800 bg-slate-950 px-2 text-xs text-slate-200 focus:border-slate-500 focus:outline-none disabled:opacity-50"
-		/>
-		<button
-			type="submit"
-			disabled={busy}
-			class="inline-flex h-8 shrink-0 items-center rounded-lg bg-slate-800/60 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-		>
-			{mode === 'reconciling' ? 'Updating…' : 'Update'}
-		</button>
-		<button
-			type="button"
-			disabled={busy}
-			onclick={clearLink}
-			class="inline-flex h-8 shrink-0 items-center rounded-lg border border-slate-800 px-2 text-[11px] font-medium text-slate-400 hover:border-slate-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-			title="Clear link"
-		>
-			{mode === 'clearing' ? '…' : 'Clear'}
-		</button>
-	</form>
-{/if}
+<div class="jafar-review">
+	{#if !org.google_review_link}
+		<form onsubmit={saveLink} class="review-form">
+			<input
+				type="url"
+				placeholder="https://g.page/r/…/review"
+				bind:value={linkInput}
+				disabled={busy}
+				required
+				class="jafar-input jafar-input--sm jafar-input--compact review-url-input"
+			/>
+			<button type="submit" disabled={busy} class="jafar-btn jafar-btn--sm">
+				{mode === 'saving' ? 'Saving…' : 'Set link'}
+			</button>
+		</form>
+	{:else}
+		<form onsubmit={reconcileCount} class="review-form">
+			<a
+				href={org.google_review_link}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="jafar-btn jafar-btn--sm"
+				title={org.google_review_link}
+			>
+				<i class="ri-external-link-line" aria-hidden="true"></i>
+			</a>
+			<input
+				type="number"
+				min="0"
+				step="1"
+				inputmode="numeric"
+				bind:value={countInput}
+				disabled={busy}
+				aria-label="Total Google reviews"
+				class="jafar-input jafar-input--sm jafar-input--compact review-count-input"
+			/>
+			<button type="submit" disabled={busy} class="jafar-btn jafar-btn--sm">
+				{mode === 'reconciling' ? 'Updating…' : 'Update'}
+			</button>
+			<button
+				type="button"
+				disabled={busy}
+				onclick={clearLink}
+				class="jafar-btn jafar-btn--sm"
+				title="Clear link"
+			>
+				{mode === 'clearing' ? '…' : 'Clear'}
+			</button>
+		</form>
+	{/if}
 
-{#if errorMsg}
-	<p class="mt-1 text-[11px] text-red-300">{errorMsg}</p>
-{:else if okMsg}
-	<p class="mt-1 text-[11px] text-emerald-300">{okMsg}</p>
-{:else if org.google_review_link && org.last_review_check_at}
-	<p class="mt-1 text-[11px] text-slate-400">
-		Last checked {new Date(org.last_review_check_at).toLocaleString()}
-	</p>
-{/if}
+	{#if errorMsg}
+		<p class="jafar-review__msg jafar-review__msg--err">{errorMsg}</p>
+	{:else if okMsg}
+		<p class="jafar-review__msg jafar-review__msg--ok">{okMsg}</p>
+	{:else if org.google_review_link && org.last_review_check_at}
+		<p class="jafar-review__msg jafar-review__msg--sub">
+			Last checked {new Date(org.last_review_check_at).toLocaleString()}
+		</p>
+	{/if}
+</div>
+
+<style lang="scss">
+	.review-form {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+		width: 100%;
+		@media (min-width: 640px) {
+			flex-wrap: nowrap;
+		}
+	}
+
+	.review-url-input {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.review-count-input {
+		width: 5rem;
+		flex-shrink: 0;
+	}
+</style>

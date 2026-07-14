@@ -5,20 +5,10 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		ArrowLeft,
-		Pencil,
-		MapPin,
-		User,
-		Calendar,
-		Briefcase,
-		Globe,
-		Crown
-	} from '@lucide/svelte';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { formatDateTimeInOrgTz } from '$lib/utils/formatInOrgTz';
+	import { formatDateTimeInOrgTz, formatInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { AppointmentDetail, AppointmentStatus } from '$lib/types/appointments';
@@ -150,203 +140,238 @@
 <svelte:head><title>Appointment</title></svelte:head>
 
 <PageWrapper>
-	<Button variant="ghost" href="/appointments" class="mb-4">
-		<ArrowLeft class="h-4 w-4" /> Back to appointments
-	</Button>
+	<a href="/appointments" class="btn btn--ghost btn--sm appt-back">
+		<i class="ri-arrow-left-line" aria-hidden="true"></i>
+		<span>Back to appointments</span>
+	</a>
 
 	{#if showSkeleton}
 		<SkeletonLoader lines={6} height="92px" label="Loading appointment" />
 	{:else if !appointment}
 		<EmptyState title="Couldn't load appointment" description={detailError ?? 'Not found.'} />
 	{:else if appointment}
-		<div class="space-y-4">
-			<header class="rounded-xl border border-border bg-card p-4">
-				<div class="flex items-start justify-between gap-3">
-					<div class="min-w-0">
-						<p class="text-xs font-medium text-muted-foreground">{appointment.contact_name}</p>
-						<div class="mt-0.5 flex items-center gap-2">
-							<h1 class="text-xl font-semibold leading-tight text-foreground">
-								{appointment.title}
-							</h1>
-							{#if appointment.booking_source === 'booking_link'}
-								<span
-									class="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
-								>
-									Self-booked
-								</span>
-							{/if}
-						</div>
-					</div>
-					<AppointmentStatusBadge status={appointment.status} />
-				</div>
-
-				{#if canEdit && !isTerminal}
-					<div class="mt-3">
-						<Button variant="outline" class="w-full" onclick={() => (editOpen = true)}>
-							<Pencil class="h-4 w-4" /> Edit / reschedule
-						</Button>
-					</div>
-				{/if}
-			</header>
-
-			<section class="rounded-xl border border-border bg-card p-4">
-				<dl class="space-y-3 text-sm">
-					<div class="flex items-start gap-2">
-						<Calendar class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-						<div>
-							<dt class="text-xs font-medium text-muted-foreground">When</dt>
-							<dd class="text-foreground">
-								{formatDateTimeInOrgTz(appointment.scheduled_start, orgTz)}
-								{#if appointment.scheduled_end}
-									– {formatDateTimeInOrgTz(appointment.scheduled_end, orgTz)}
-								{/if}
-							</dd>
-						</div>
-					</div>
-
-					<div class="flex items-start gap-2">
-						<User class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-						<div class="min-w-0 flex-1">
-							<dt class="text-xs font-medium text-muted-foreground">Crew</dt>
-							<dd class="mt-1">
-								{#if appointment.assignees.length === 0}
-									<span class="text-sm italic text-muted-foreground">Unassigned</span>
-								{:else}
-									<ul class="flex flex-wrap gap-1.5">
-										{#each appointment.assignees as a (a.id)}
-											<li
-												class={[
-													'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
-													a.is_lead
-														? 'bg-primary/10 text-primary'
-														: 'bg-secondary text-secondary-foreground'
-												].join(' ')}
-											>
-												{#if a.is_lead}<Crown class="h-3 w-3" />{/if}
-												<span>{a.full_name}</span>
-												{#if a.is_lead}<span class="text-[10px] opacity-70">· Lead</span>{/if}
-											</li>
-										{/each}
-									</ul>
-								{/if}
-							</dd>
-						</div>
-					</div>
-
-					{#if appointment.location}
-						<div class="flex items-start gap-2">
-							<MapPin class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Location</dt>
-								<dd class="text-foreground">{appointment.location}</dd>
-							</div>
-						</div>
+		<!-- Title + status header -->
+		<div class="appt-detail-header">
+			<div class="appt-detail-header__main">
+				<p class="appt-detail-header__eyebrow">{appointment.contact_name}</p>
+				<div class="appt-detail-header__title-row">
+					<h1 class="appt-detail-header__title">{appointment.title}</h1>
+					{#if appointment.booking_source === 'booking_link'}
+						<span class="appt-detail-header__tag">Self-booked</span>
 					{/if}
+				</div>
+			</div>
+			<AppointmentStatusBadge status={appointment.status} />
+		</div>
 
-					{#if appointment.job_id && appointment.job_title}
-						<div class="flex items-start gap-2">
-							<Briefcase class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Linked job</dt>
-								<dd>
-									<a class="text-primary hover:underline" href={`/jobs/${appointment.job_id}`}>
-										{appointment.job_title}
-									</a>
+		<!-- Two-column layout -->
+		<div class="appt-detail">
+			<!-- ── LEFT COLUMN ─────────────────────────────────────────────────── -->
+			<div class="appt-detail__left">
+				<section class="appt-section">
+					<div class="appt-section__head">
+						<i class="appt-section__icon ri-information-line" aria-hidden="true"></i>
+						<h2 class="appt-section__title">Details</h2>
+					</div>
+
+					<dl class="appt-meta">
+						<div class="appt-meta__row">
+							<i class="appt-meta__icon ri-calendar-line" aria-hidden="true"></i>
+							<div class="appt-meta__content">
+								<dt class="appt-meta__term">When</dt>
+								<dd class="appt-meta__desc">
+									{#if appointment.all_day}
+										{formatInOrgTz(appointment.scheduled_start, orgTz, {
+											weekday: 'short',
+											month: 'short',
+											day: 'numeric',
+											year: 'numeric'
+										})}
+										<span class="appt-meta__muted"> · Anytime</span>
+									{:else}
+										{formatDateTimeInOrgTz(appointment.scheduled_start, orgTz)}
+										{#if appointment.scheduled_end}
+											&ndash; {formatDateTimeInOrgTz(appointment.scheduled_end, orgTz)}
+										{/if}
+									{/if}
 								</dd>
 							</div>
 						</div>
-					{/if}
-				</dl>
 
-				{#if appointment.notes}
-					<div class="mt-3 border-t border-border pt-3">
-						<p class="text-xs font-medium text-muted-foreground">Notes</p>
-						<p class="mt-1 whitespace-pre-wrap text-sm text-foreground">{appointment.notes}</p>
-					</div>
-				{/if}
-			</section>
+						<div class="appt-meta__row">
+							<i class="appt-meta__icon ri-user-line" aria-hidden="true"></i>
+							<div class="appt-meta__content">
+								<dt class="appt-meta__term">Crew</dt>
+								<dd class="appt-meta__desc">
+									{#if appointment.assignees.length === 0}
+										<span class="appt-meta__muted">Unassigned</span>
+									{:else}
+										<ul class="appt-crew">
+											{#each appointment.assignees as a (a.id)}
+												<li
+													class={['appt-crew__chip', a.is_lead && 'appt-crew__chip--lead']
+														.filter(Boolean)
+														.join(' ')}
+												>
+													{#if a.is_lead}
+														<i class="ri-vip-crown-line" aria-hidden="true"></i>
+													{/if}
+													<span>{a.full_name}</span>
+													{#if a.is_lead}<span class="appt-crew__role">· Lead</span>{/if}
+												</li>
+											{/each}
+										</ul>
+									{/if}
+								</dd>
+							</div>
+						</div>
 
-			{#if appointment.booking_source === 'booking_link'}
-				{@const referrerLabel = (() => {
-					const r = appointment.booking_referrer;
-					if (!r) return null;
-					const map: Record<string, string> = {
-						sms: 'SMS',
-						email: 'Email',
-						webchat: 'Web chat',
-						direct: 'Direct',
-						qr: 'QR code'
-					};
-					return map[r] ?? r.replace(/_/g, ' ');
-				})()}
-				<section class="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4">
-					<div class="mb-3 flex items-center gap-2">
-						<Globe class="h-4 w-4 text-muted-foreground" />
-						<h2 class="text-sm font-semibold text-foreground">Booking Details</h2>
-					</div>
-					<p class="mb-3 text-xs text-muted-foreground">
-						Submitted by the customer through your booking link.
-					</p>
-					<dl class="space-y-2 text-sm">
-						{#if appointment.customer_name}
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Submitted name</dt>
-								<dd class="text-foreground">{appointment.customer_name}</dd>
+						{#if appointment.location}
+							<div class="appt-meta__row">
+								<i class="appt-meta__icon ri-map-pin-line" aria-hidden="true"></i>
+								<div class="appt-meta__content">
+									<dt class="appt-meta__term">Location</dt>
+									<dd class="appt-meta__desc">{appointment.location}</dd>
+								</div>
 							</div>
 						{/if}
-						{#if appointment.customer_phone}
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Submitted phone</dt>
-								<dd class="text-foreground">{appointment.customer_phone}</dd>
-							</div>
-						{/if}
-						{#if appointment.customer_email}
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Submitted email</dt>
-								<dd class="text-foreground">{appointment.customer_email}</dd>
-							</div>
-						{/if}
-						{#if appointment.customer_notes}
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Notes</dt>
-								<dd class="whitespace-pre-wrap text-foreground">{appointment.customer_notes}</dd>
-							</div>
-						{/if}
-						{#if referrerLabel}
-							<div>
-								<dt class="text-xs font-medium text-muted-foreground">Source</dt>
-								<dd class="text-foreground">{referrerLabel}</dd>
+
+						{#if appointment.job_id && appointment.job_title}
+							<div class="appt-meta__row">
+								<i class="appt-meta__icon ri-briefcase-line" aria-hidden="true"></i>
+								<div class="appt-meta__content">
+									<dt class="appt-meta__term">Linked job</dt>
+									<dd class="appt-meta__desc">
+										<a class="appt-meta__link" href={`/jobs/${appointment.job_id}`}>
+											{appointment.job_title}
+										</a>
+									</dd>
+								</div>
 							</div>
 						{/if}
 					</dl>
-				</section>
-			{/if}
 
-			{#if canEdit && !isTerminal}
-				<section class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-					<Button variant="default" disabled={actionLoading} onclick={() => (completeOpen = true)}>
-						Complete
-					</Button>
-					<Button variant="outline" disabled={actionLoading} onclick={() => (noShowOpen = true)}>
-						No-show
-					</Button>
-					<Button
-						variant="destructive"
-						disabled={actionLoading}
-						onclick={() => (cancelOpen = true)}
-					>
-						Cancel
-					</Button>
+					{#if appointment.notes}
+						<div class="appt-section__notes">
+							<p class="appt-section__notes-label">Notes</p>
+							<p class="appt-section__notes-body">{appointment.notes}</p>
+						</div>
+					{/if}
 				</section>
-			{/if}
+
+				{#if appointment.booking_source === 'booking_link'}
+					{@const referrerLabel = (() => {
+						const r = appointment.booking_referrer;
+						if (!r) return null;
+						const map: Record<string, string> = {
+							sms: 'SMS',
+							email: 'Email',
+							webchat: 'Web chat',
+							direct: 'Direct',
+							qr: 'QR code'
+						};
+						return map[r] ?? r.replace(/_/g, ' ');
+					})()}
+					<section class="appt-section appt-section--booking">
+						<div class="appt-section__head">
+							<i class="appt-section__icon ri-global-line" aria-hidden="true"></i>
+							<h2 class="appt-section__title">Booking details</h2>
+						</div>
+						<p class="appt-section__subtitle">
+							Submitted by the customer through your booking link.
+						</p>
+						<dl class="appt-submitted">
+							{#if appointment.customer_name}
+								<div class="appt-submitted__row">
+									<dt class="appt-submitted__term">Submitted name</dt>
+									<dd class="appt-submitted__desc">{appointment.customer_name}</dd>
+								</div>
+							{/if}
+							{#if appointment.customer_phone}
+								<div class="appt-submitted__row">
+									<dt class="appt-submitted__term">Submitted phone</dt>
+									<dd class="appt-submitted__desc">{appointment.customer_phone}</dd>
+								</div>
+							{/if}
+							{#if appointment.customer_email}
+								<div class="appt-submitted__row">
+									<dt class="appt-submitted__term">Submitted email</dt>
+									<dd class="appt-submitted__desc">{appointment.customer_email}</dd>
+								</div>
+							{/if}
+							{#if appointment.customer_notes}
+								<div class="appt-submitted__row">
+									<dt class="appt-submitted__term">Notes</dt>
+									<dd class="appt-submitted__desc appt-submitted__desc--wrap">
+										{appointment.customer_notes}
+									</dd>
+								</div>
+							{/if}
+							{#if referrerLabel}
+								<div class="appt-submitted__row">
+									<dt class="appt-submitted__term">Source</dt>
+									<dd class="appt-submitted__desc">{referrerLabel}</dd>
+								</div>
+							{/if}
+						</dl>
+					</section>
+				{/if}
+			</div>
+
+			<!-- ── RIGHT SIDEBAR ───────────────────────────────────────────────── -->
+			<aside class="appt-detail__sidebar">
+				<div class="appt-side-card">
+					<p class="appt-side-card__label">Status</p>
+					<div class="appt-side-card__status">
+						<AppointmentStatusBadge status={appointment.status} />
+					</div>
+
+					{#if canEdit && !isTerminal}
+						<div class="appt-side-card__actions">
+							<Button variant="outline" class="btn--full" onclick={() => (editOpen = true)}>
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span>Edit / reschedule</span>
+							</Button>
+							<button
+								type="button"
+								class="btn btn--success btn--full"
+								disabled={actionLoading}
+								onclick={() => (completeOpen = true)}
+							>
+								Mark complete
+							</button>
+							<Button
+								variant="secondary"
+								class="btn--full"
+								disabled={actionLoading}
+								onclick={() => (noShowOpen = true)}
+							>
+								Mark no-show
+							</Button>
+							<Button
+								variant="danger-outline"
+								class="btn--full"
+								disabled={actionLoading}
+								onclick={() => (cancelOpen = true)}
+							>
+								Cancel appointment
+							</Button>
+						</div>
+					{:else}
+						<p class="appt-side-card__terminal">
+							This appointment is {appointment.status.replace(/_/g, '-')} and can no longer be changed.
+						</p>
+					{/if}
+				</div>
+			</aside>
 		</div>
 
 		<Sheet.Root bind:open={editOpen}>
-			<Sheet.Content side="bottom" class="max-h-[92vh] overflow-y-auto">
+			<Sheet.Content side="right">
 				<Sheet.Header>
 					<Sheet.Title>Edit appointment</Sheet.Title>
 				</Sheet.Header>
-				<div class="mt-4">
+				<div class="appt-edit-sheet__body">
 					{#if AppointmentForm}
 						<AppointmentForm
 							mode="edit"
@@ -401,3 +426,49 @@
 		{/if}
 	{/if}
 </PageWrapper>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.appt-back {
+		margin-bottom: $space-4;
+	}
+
+	/* 2-column grid: left main content / right sticky sidebar */
+	.appt-detail {
+		display: grid;
+		gap: $space-6;
+
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: 1fr 320px;
+			align-items: start;
+		}
+	}
+
+	.appt-detail__left {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		min-width: 0;
+	}
+
+	.appt-detail__sidebar {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+
+		@media (min-width: $bp-tablet) {
+			position: sticky;
+			top: calc(var(--header-height) + 16px);
+			align-self: flex-start;
+		}
+	}
+
+	/* Edit sheet body — scrolls inside the fixed right panel */
+	.appt-edit-sheet__body {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		margin-top: $space-4;
+	}
+</style>

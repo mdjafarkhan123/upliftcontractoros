@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { Dialog as DialogPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils/cn';
 
 	let {
-		class: className,
+		class: className = '',
 		ref = $bindable(null),
 		children,
 		...rest
@@ -12,7 +11,7 @@
 
 <DialogPrimitive.Description
 	bind:ref
-	class={cn('text-sm text-muted-foreground', className)}
+	class={['dialog-content__description', className].filter(Boolean).join(' ')}
 	{...rest}
 >
 	{@render children?.()}

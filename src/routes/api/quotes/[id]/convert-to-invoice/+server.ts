@@ -15,6 +15,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice } from '$lib/server/invoices/permissions';
 import { generateToken } from '$lib/server/quotes/token';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
+import { orgLateFeeSnapshot } from '$lib/server/invoices/lateFee';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/events';
@@ -39,13 +40,20 @@ export const POST: RequestHandler = async (event) => {
 			quote_number: number;
 			status: string;
 			notes: string | null;
+			terms: string | null;
+			discount_type: string;
+			discount_value: string | null;
+			discount_label: string | null;
 			deposit_paid_amount: number;
 			deposit_stripe_payment_intent_id: string | null;
 			deposit_applied_invoice_id: string | null;
+			accepted_package_id: string | null;
 		}>(sql`
 			SELECT id, org_id, contact_id, opportunity_id, title, tax_rate, total,
-			       quote_number, status, notes, deposit_paid_amount,
-			       deposit_stripe_payment_intent_id, deposit_applied_invoice_id
+			       quote_number, status, notes, terms, discount_type, discount_value,
+			       discount_label, deposit_paid_amount,
+			       deposit_stripe_payment_intent_id, deposit_applied_invoice_id,
+			       accepted_package_id
 			FROM quotes
 			WHERE id = ${quoteId} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
@@ -88,6 +96,9 @@ export const POST: RequestHandler = async (event) => {
 		// Generate public token.
 		const rawToken = generateToken();
 
+		// Seed the invoice's late-fee terms from the company default (M8 Phase 2).
+		const lf = await orgLateFeeSnapshot(tx, auth.orgId);
+
 		// Create invoice as a snapshot of the accepted quote.
 		const [inserted] = await tx
 			.insert(invoices)
@@ -102,6 +113,16 @@ export const POST: RequestHandler = async (event) => {
 				status: 'draft',
 				tax_rate: quote.tax_rate,
 				notes: quote.notes,
+				// Carry the accepted quote's agreed T&C + discount so the invoice bills the same
+				// price the customer signed off on. recalcInvoiceTotals recomputes discount_amount
+				// from the snapshot lines (a fixed discount clamps to the new subtotal).
+				terms: quote.terms,
+				discount_type: quote.discount_type,
+				discount_value: quote.discount_value,
+				discount_label: quote.discount_label,
+				late_fee_enabled: lf.late_fee_enabled,
+				late_fee_type: lf.late_fee_type,
+				late_fee_value: lf.late_fee_value,
 				public_token: rawToken
 			})
 			.returning();
@@ -112,7 +133,11 @@ export const POST: RequestHandler = async (event) => {
 				description: quoteLineItems.description,
 				details: quoteLineItems.details,
 				quantity: quoteLineItems.quantity,
+				unit: quoteLineItems.unit,
 				unit_price: quoteLineItems.unit_price,
+				taxable: quoteLineItems.taxable,
+				unit_cost: quoteLineItems.unit_cost,
+				source_catalog_item_id: quoteLineItems.source_catalog_item_id,
 				total: quoteLineItems.total,
 				position: quoteLineItems.position
 			})
@@ -123,7 +148,12 @@ export const POST: RequestHandler = async (event) => {
 					eq(quoteLineItems.org_id, auth.orgId),
 					isNull(quoteLineItems.deleted_at),
 					// Bill required lines plus only the optional add-ons the customer accepted.
-					or(eq(quoteLineItems.is_optional, false), eq(quoteLineItems.accepted_selected, true))
+					or(eq(quoteLineItems.is_optional, false), eq(quoteLineItems.accepted_selected, true)),
+					// Good-Better-Best: on a tiered quote, bill ONLY the accepted tier's lines
+					// (not all three packages). Null on a simple quote → no extra filter.
+					quote.accepted_package_id
+						? eq(quoteLineItems.package_id, quote.accepted_package_id)
+						: undefined
 				)
 			)
 			.orderBy(asc(quoteLineItems.position));
@@ -138,7 +168,13 @@ export const POST: RequestHandler = async (event) => {
 						? `${li.description}\n${li.details.trim()}`
 						: li.description,
 					quantity: li.quantity,
+					unit: li.unit,
 					unit_price: li.unit_price,
+					// Carry the quote line's tax flag so a labor line stays untaxed on the invoice.
+					taxable: li.taxable,
+					// Carry cost snapshot + catalog link for invoice-side margin visibility.
+					unit_cost: li.unit_cost,
+					source_catalog_item_id: li.source_catalog_item_id,
 					total: li.total,
 					position: li.position
 				}))

@@ -21,140 +21,81 @@
 </svelte:head>
 
 {#if isSuspended}
-	<div
-		class="relative flex min-h-[calc(100vh-env(safe-area-inset-top))] items-center justify-center overflow-hidden bg-background px-4 py-10"
-	>
+	<div class="suspended">
 		<!-- Background grid -->
-		<div
-			class="pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,hsl(var(--border)/0.5)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.5)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
-			aria-hidden="true"
-		></div>
-
+		<div class="suspended__grid" aria-hidden="true"></div>
 		<!-- Ambient brand glow -->
-		<div
-			class="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[680px] -translate-x-1/2 rounded-full bg-[hsl(var(--brand-primary)/0.18)] blur-3xl"
-			aria-hidden="true"
-		></div>
+		<div class="suspended__glow" aria-hidden="true"></div>
 
-		<div class="relative z-10 w-full max-w-[460px]">
+		<div class="suspended__col">
 			<!-- Org brand mark -->
-			<div class="mb-8 flex items-center justify-center gap-2.5">
+			<div class="suspended__brand">
 				{#if org().logo_url}
-					<img
-						src={org().logo_url}
-						alt={org().name}
-						class="h-8 w-8 rounded-md object-cover ring-1 ring-border"
-					/>
+					<img src={org().logo_url} alt={org().name} class="suspended__logo" />
 				{:else}
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-[12px] font-bold text-primary-foreground"
-						aria-hidden="true"
-					>
+					<div class="suspended__logo suspended__logo--fallback" aria-hidden="true">
 						{org().name.charAt(0).toUpperCase()}
 					</div>
 				{/if}
-				<span class="text-[14px] font-semibold tracking-tight text-foreground">
-					{org().name}
-				</span>
+				<span class="suspended__org">{org().name}</span>
 			</div>
 
 			<!-- Main card -->
-			<div
-				class="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_0_hsl(var(--foreground)/0.04),0_8px_24px_-12px_hsl(0_0%_0%/0.5)]"
-			>
-				<!-- Top accent line -->
-				<div
-					class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--status-pending)/0.7)] to-transparent"
-					aria-hidden="true"
-				></div>
+			<div class="suspended__card">
+				<div class="suspended__accent" aria-hidden="true"></div>
 
-				<div class="px-7 pb-7 pt-9 sm:px-9 sm:pb-9 sm:pt-11">
+				<div class="suspended__body">
 					<!-- Status pill -->
-					<div class="flex items-center justify-center">
-						<div
-							class="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--status-pending)/0.35)] bg-[hsl(var(--status-pending)/0.12)] px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--status-pending))]"
-						>
-							<span class="relative flex h-1.5 w-1.5">
-								<span
-									class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(var(--status-pending))] opacity-60"
-								></span>
-								<span
-									class="relative inline-flex h-1.5 w-1.5 rounded-full bg-[hsl(var(--status-pending))]"
-								></span>
+					<div class="suspended__pill-row">
+						<div class="suspended__pill">
+							<span class="suspended__ping">
+								<span class="suspended__ping-wave"></span>
+								<span class="suspended__ping-dot"></span>
 							</span>
 							Suspended
 						</div>
 					</div>
 
 					<!-- Headline -->
-					<h1
-						class="mt-6 text-center text-[26px] font-semibold leading-[1.15] tracking-[-0.02em] text-foreground sm:text-[28px]"
-					>
-						Account temporarily suspended
-					</h1>
-					<p
-						class="mx-auto mt-4 max-w-[360px] text-center text-[14px] leading-relaxed text-muted-foreground"
-					>
+					<h1 class="suspended__title">Account temporarily suspended</h1>
+					<p class="suspended__lead">
 						Your organization's access has been temporarily restricted. Please contact support or
 						resolve your billing issue to restore access.
 					</p>
-					<p class="mt-2 text-center text-[12px] text-muted-foreground/80">
-						Your data has not been deleted.
-					</p>
+					<p class="suspended__sub">Your data has not been deleted.</p>
 
 					<!-- Metadata block -->
-					<div class="mt-8 overflow-hidden rounded-xl border border-border bg-muted/40">
-						<dl class="divide-y divide-border text-[13px]">
-							<div class="flex items-center justify-between px-4 py-3">
-								<dt class="text-muted-foreground">Workspace</dt>
-								<dd class="font-medium text-foreground">{org().name}</dd>
-							</div>
-							<div class="flex items-center justify-between px-4 py-3">
-								<dt class="text-muted-foreground">Status</dt>
-								<dd
-									class="font-mono text-[12px] font-medium uppercase tracking-wide text-[hsl(var(--status-pending))]"
-								>
-									suspended
+					<dl class="suspended__meta">
+						<div class="suspended__row">
+							<dt>Workspace</dt>
+							<dd class="suspended__val">{org().name}</dd>
+						</div>
+						<div class="suspended__row">
+							<dt>Status</dt>
+							<dd class="suspended__val suspended__val--mono suspended__val--warn">suspended</dd>
+						</div>
+						{#if deletionDate}
+							<div class="suspended__row">
+								<dt>Scheduled deletion</dt>
+								<dd class="suspended__val suspended__val--mono suspended__val--danger">
+									{formatDate(deletionDate)}
 								</dd>
 							</div>
-							{#if deletionDate}
-								<div class="flex items-center justify-between px-4 py-3">
-									<dt class="text-muted-foreground">Scheduled deletion</dt>
-									<dd class="font-mono text-[12px] font-medium text-destructive">
-										{formatDate(deletionDate)}
-									</dd>
-								</div>
-							{/if}
-							<div class="flex items-center justify-between px-4 py-3">
-								<dt class="text-muted-foreground">Data retention</dt>
-								<dd class="text-[12.5px] font-medium text-[hsl(var(--status-active))]">
-									Preserved
-								</dd>
-							</div>
-						</dl>
-					</div>
+						{/if}
+						<div class="suspended__row">
+							<dt>Data retention</dt>
+							<dd class="suspended__val suspended__val--ok">Preserved</dd>
+						</div>
+					</dl>
 
 					{#if deletionDate}
-						<div
-							class="mt-4 flex items-start gap-2.5 rounded-lg border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--destructive)/0.1)] px-3.5 py-3 text-[12.5px] leading-relaxed text-[hsl(var(--destructive))]"
-						>
-							<svg
-								class="mt-0.5 h-4 w-4 flex-shrink-0"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								aria-hidden="true"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-									clip-rule="evenodd"
-								/>
-							</svg>
+						<div class="suspended__warn">
+							<i class="ri-error-warning-fill suspended__warn-icon" aria-hidden="true"></i>
 							<div>
-								<p class="font-semibold">Scheduled for deletion</p>
-								<p class="mt-1 opacity-90">
+								<p class="suspended__warn-title">Scheduled for deletion</p>
+								<p class="suspended__warn-body">
 									Your organization is scheduled for deletion on
-									<span class="font-medium">{formatDate(deletionDate)}</span>
+									<strong>{formatDate(deletionDate)}</strong>
 									if the suspension is not resolved.
 								</p>
 							</div>
@@ -162,40 +103,330 @@
 					{/if}
 
 					<!-- Actions -->
-					<div class="mt-7 flex flex-col gap-2">
-						<a
-							href="mailto:support@contractoros.com"
-							class="group inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-[13.5px] font-medium text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.12)] transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-						>
+					<div class="suspended__actions">
+						<a href="mailto:support@contractoros.com" class="btn btn--primary suspended__support">
 							Contact support
-							<svg
-								class="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-								viewBox="0 0 16 16"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.75"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true"
-							>
-								<path d="M3 8h10M9 4l4 4-4 4" />
-							</svg>
+							<i class="ri-arrow-right-line" aria-hidden="true"></i>
 						</a>
 						<form method="POST" action="/auth/logout">
-							<button
-								type="submit"
-								class="inline-flex h-11 w-full items-center justify-center rounded-lg border border-border bg-secondary text-[13.5px] font-medium text-secondary-foreground transition-all duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-							>
-								Log out
-							</button>
+							<button type="submit" class="btn btn--secondary suspended__logout">Log out</button>
 						</form>
 					</div>
 				</div>
 			</div>
 
-			<p class="mt-6 text-center text-[12px] text-muted-foreground/70">
-				© {new Date().getFullYear()} Contractor OS
-			</p>
+			<p class="suspended__copyright">© {new Date().getFullYear()} Contractor OS</p>
 		</div>
 	</div>
 {/if}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.suspended {
+		position: relative;
+		display: flex;
+		min-height: 100vh;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		background: var(--color-bg-app);
+		padding: $space-10 $space-4;
+	}
+
+	.suspended__grid {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		opacity: 0.5;
+		background-image:
+			linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+			linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+		background-size: 36px 36px;
+		mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+	}
+
+	.suspended__glow {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 680px;
+		height: 420px;
+		pointer-events: none;
+		border-radius: $radius-full;
+		background: radial-gradient(closest-side, rgba(34, 125, 83, 0.18), transparent 70%);
+		filter: blur(64px);
+	}
+
+	.suspended__col {
+		position: relative;
+		z-index: 1;
+		width: 100%;
+		max-width: 460px;
+	}
+
+	// ── Brand mark ────────────────────────────────────────────────────────────
+
+	.suspended__brand {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		margin-bottom: $space-8;
+	}
+
+	.suspended__logo {
+		width: 32px;
+		height: 32px;
+		border-radius: $radius-md;
+		object-fit: cover;
+		box-shadow: 0 0 0 1px var(--color-border);
+
+		&--fallback {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: var(--color-brand);
+			color: #fff;
+			font-size: 12px;
+			font-weight: $weight-bold;
+		}
+	}
+
+	.suspended__org {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+
+	// ── Card ──────────────────────────────────────────────────────────────────
+
+	.suspended__card {
+		position: relative;
+		overflow: hidden;
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xl);
+	}
+
+	.suspended__accent {
+		position: absolute;
+		inset-inline: 0;
+		top: 0;
+		height: 1px;
+		background: linear-gradient(90deg, transparent, var(--warning-solid), transparent);
+		opacity: 0.7;
+	}
+
+	.suspended__body {
+		padding: $space-8 $space-7 $space-7;
+
+		@media (min-width: $bp-mobile) {
+			padding: $space-10 $space-8 $space-8;
+		}
+	}
+
+	// ── Status pill ─────────────────────────────────────────────────────────
+
+	.suspended__pill-row {
+		display: flex;
+		justify-content: center;
+	}
+
+	.suspended__pill {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		border-radius: $radius-full;
+		border: 1px solid rgba(245, 158, 11, 0.35);
+		background: var(--warning-bg);
+		padding: $space-1 $space-3;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--warning-text);
+	}
+
+	.suspended__ping {
+		position: relative;
+		display: flex;
+		width: 6px;
+		height: 6px;
+	}
+
+	.suspended__ping-wave {
+		position: absolute;
+		inset: 0;
+		border-radius: $radius-full;
+		background: var(--warning-solid);
+		opacity: 0.6;
+		animation: suspended-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+	}
+
+	.suspended__ping-dot {
+		position: relative;
+		width: 6px;
+		height: 6px;
+		border-radius: $radius-full;
+		background: var(--warning-solid);
+	}
+
+	// ── Copy ──────────────────────────────────────────────────────────────────
+
+	.suspended__title {
+		margin-top: $space-6;
+		text-align: center;
+		font-size: $fs-h2;
+		font-weight: $weight-semibold;
+		line-height: 1.15;
+		letter-spacing: -0.02em;
+		color: var(--color-text-primary);
+	}
+
+	.suspended__lead {
+		margin: $space-4 auto 0;
+		max-width: 360px;
+		text-align: center;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+
+	.suspended__sub {
+		margin-top: $space-2;
+		text-align: center;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	// ── Metadata block ─────────────────────────────────────────────────────────
+
+	.suspended__meta {
+		margin-top: $space-8;
+		overflow: hidden;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+	}
+
+	.suspended__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: $space-3 $space-4;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+
+		dt {
+			color: var(--color-text-secondary);
+		}
+	}
+
+	.suspended__val {
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+
+		&--mono {
+			font-family: ui-monospace, 'SF Mono', monospace;
+			font-size: $fs-caption;
+		}
+
+		&--warn {
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--warning-text);
+		}
+
+		&--danger {
+			color: var(--danger-text);
+		}
+
+		&--ok {
+			color: var(--success-text);
+		}
+	}
+
+	// ── Deletion warning ─────────────────────────────────────────────────────
+
+	.suspended__warn {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		margin-top: $space-4;
+		border-radius: $radius-md;
+		border: 1px solid rgba(225, 29, 72, 0.3);
+		background: var(--danger-bg);
+		padding: $space-3 $space-4;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--danger-text);
+	}
+
+	.suspended__warn-icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 16px;
+		line-height: 1;
+	}
+
+	.suspended__warn-title {
+		font-weight: $weight-semibold;
+	}
+
+	.suspended__warn-body {
+		margin-top: $space-1;
+		opacity: 0.9;
+	}
+
+	// ── Actions ────────────────────────────────────────────────────────────────
+
+	.suspended__actions {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin-top: $space-7;
+	}
+
+	.suspended__support {
+		width: 100%;
+		height: 44px;
+
+		i {
+			font-size: 16px;
+			line-height: 1;
+			transition: transform $duration-base $ease-standard;
+		}
+
+		&:hover i {
+			transform: translateX(2px);
+		}
+	}
+
+	.suspended__logout {
+		width: 100%;
+		height: 44px;
+	}
+
+	.suspended__copyright {
+		margin-top: $space-6;
+		text-align: center;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		opacity: 0.7;
+	}
+
+	@keyframes suspended-ping {
+		75%,
+		100% {
+			transform: scale(2.2);
+			opacity: 0;
+		}
+	}
+</style>

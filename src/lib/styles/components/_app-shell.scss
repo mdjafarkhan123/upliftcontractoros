@@ -1,0 +1,59 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// APP SHELL — root layout wrapper for the authenticated app.
+// Used once in src/routes/(app)/+layout.svelte.
+// Sidebar is fixed on the left; content area offsets to stay clear.
+// =============================================================================
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--color-bg-app);
+
+  // Suspended state: simple pass-through column
+  &--suspended {
+    display: flex;
+    flex-direction: column;
+  }
+
+  // Content column that sits to the right of the fixed sidebar
+  &__content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 100vh;
+
+    // Tablet+: offset for icon-only sidebar (72px)
+    @media (min-width: #{$bp-mobile + 1px}) {
+      padding-left: 72px;
+    }
+
+    // Desktop: offset for full-width sidebar
+    @media (min-width: #{$bp-tablet + 1px}) {
+      padding-left: var(--sidebar-width);
+    }
+  }
+
+  // Topbar slot — visible on all breakpoints.
+  // On mobile it shows the compact brand+icons bar; on desktop the full 3-column bar.
+  &__topbar {
+    // always visible — topbar SCSS handles responsive differences internally
+  }
+
+  // Legacy alias — kept so any existing class references don't break
+  &__mobile-header {
+    @media (min-width: #{$bp-mobile + 1px}) {
+      display: none;
+    }
+  }
+
+  // Page content — fills remaining height, clears the bottom nav on mobile
+  &__main {
+    flex: 1;
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+
+    @media (min-width: #{$bp-mobile + 1px}) {
+      padding-bottom: 0;
+    }
+  }
+}

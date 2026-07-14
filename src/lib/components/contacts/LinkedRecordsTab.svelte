@@ -1,17 +1,6 @@
 <script lang="ts">
-	import {
-		GitBranch,
-		Briefcase,
-		FileText,
-		Receipt,
-		MessageSquare,
-		ChevronRight,
-		ChevronDown,
-		UserPlus
-	} from '@lucide/svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
-	import type { Component } from 'svelte';
 
 	type Counts = {
 		opportunities: number;
@@ -27,28 +16,23 @@
 		referralCount = 0
 	}: { contactId: string; counts: Counts; referralCount?: number } = $props();
 
-	type Row = { label: string; href: string; count: number; icon: Component };
+	type Row = { label: string; href: string; count: number; icon: string };
 
 	const rows: Row[] = $derived([
 		{
 			label: 'Opportunities',
 			href: `/pipeline?contact=${contactId}`,
 			count: counts.opportunities,
-			icon: GitBranch
+			icon: 'ri-git-branch-line'
 		},
-		{ label: 'Jobs', href: `/jobs?contact_id=${contactId}`, count: counts.jobs, icon: Briefcase },
-		{ label: 'Quotes', href: `/quotes?contact=${contactId}`, count: counts.quotes, icon: FileText },
-		{
-			label: 'Invoices',
-			href: `/invoices?contact=${contactId}`,
-			count: counts.invoices,
-			icon: Receipt
-		},
+		{ label: 'Jobs', href: `/jobs?contact_id=${contactId}`, count: counts.jobs, icon: 'ri-briefcase-line' },
+		{ label: 'Quotes', href: `/quotes?contact=${contactId}`, count: counts.quotes, icon: 'ri-file-text-line' },
+		{ label: 'Invoices', href: `/invoices?contact=${contactId}`, count: counts.invoices, icon: 'ri-receipt-line' },
 		{
 			label: 'Conversations',
 			href: `/inbox?contact=${contactId}`,
 			count: counts.conversations,
-			icon: MessageSquare
+			icon: 'ri-message-2-line'
 		}
 	]);
 
@@ -82,75 +66,67 @@
 	}
 </script>
 
-<ul class="space-y-2">
+<ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:0.5rem;">
 	{#each rows as row (row.label)}
 		<li>
-			<a
-				href={row.href}
-				class="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-accent/40"
-			>
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-					>
-						<row.icon class="h-4 w-4" />
-					</div>
-					<div>
-						<p class="text-sm font-medium text-foreground">{row.label}</p>
-						<p class="text-xs text-muted-foreground">
-							{row.count}
-							{row.count === 1 ? 'record' : 'records'}
-						</p>
-					</div>
-				</div>
-				<ChevronRight class="h-4 w-4 text-muted-foreground" />
+			<a href={row.href} class="contact-linked__row">
+				<span class="contact-linked__label">
+					<i class={row.icon} aria-hidden="true"></i>
+					{row.label}
+				</span>
+				<span class="contact-linked__right">
+					<span class="contact-linked__count {row.count > 0 ? 'contact-linked__count--active' : ''}">
+						{row.count}
+					</span>
+					{#if row.count > 0}
+						<i class="ri-arrow-right-s-line contact-linked__chevron" aria-hidden="true"></i>
+					{/if}
+				</span>
 			</a>
 		</li>
 	{/each}
 </ul>
 
 {#if referralCount > 0}
-	<div class="mt-4 rounded-xl border border-border bg-card">
+	<div style="margin-top:1rem; border:1px solid var(--color-border); border-radius:var(--radius-lg, 12px); overflow:hidden;">
 		<button
 			type="button"
-			class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
+			class="contact-linked__row"
+			style="width:100%; border:none; background:transparent; cursor:pointer;"
 			onclick={toggleReferrals}
 		>
-			<div class="flex items-center gap-3">
-				<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-					<UserPlus class="h-4 w-4" />
-				</div>
-				<div>
-					<p class="text-sm font-medium text-foreground">Referrals</p>
-					<p class="text-xs text-muted-foreground">
-						{referralCount}
-						{referralCount === 1 ? 'person' : 'people'} referred
-					</p>
-				</div>
-			</div>
-			<ChevronDown
-				class="h-4 w-4 text-muted-foreground transition-transform {referralsOpen
-					? 'rotate-180'
-					: ''}"
-			/>
+			<span class="contact-linked__label">
+				<i class="ri-user-add-line" aria-hidden="true"></i>
+				Referrals
+			</span>
+			<span class="contact-linked__right">
+				<span class="contact-linked__count contact-linked__count--active">{referralCount}</span>
+				<i
+					class="ri-arrow-down-s-line contact-linked__chevron"
+					aria-hidden="true"
+					style="transition:transform 0.2s; transform:{referralsOpen ? 'rotate(180deg)' : 'none'}"
+				></i>
+			</span>
 		</button>
 		{#if referralsOpen}
-			<div class="border-t border-border px-4 py-3">
+			<div style="border-top:1px solid var(--color-border); padding:0.75rem 1rem;">
 				{#if referralsLoading}
-					<p class="text-sm text-muted-foreground">Loading…</p>
+					<p class="contact-linked__note">Loading…</p>
 				{:else if referrals.length === 0}
-					<p class="text-sm text-muted-foreground">No referrals found.</p>
+					<p class="contact-linked__note">No referrals found.</p>
 				{:else}
-					<ul class="space-y-2">
+					<ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:0.5rem;">
 						{#each referrals as ref (ref.id)}
 							<li>
 								<a
 									href={`/contacts/${ref.id}`}
-									class="flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-accent/40"
+									style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem; border-radius:0.5rem; text-decoration:none; transition:background-color 0.15s;"
+									onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface-sunk)')}
+									onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.background = '')}
 								>
 									<div>
-										<p class="text-sm font-medium text-foreground">{ref.full_name}</p>
-										<p class="text-xs text-muted-foreground">{formatPhoneDisplay(ref.phone)}</p>
+										<p class="contact-linked__ref-name">{ref.full_name}</p>
+										<p class="contact-linked__ref-phone">{formatPhoneDisplay(ref.phone)}</p>
 									</div>
 									<Badge
 										variant={ref.status === 'customer'
@@ -174,6 +150,31 @@
 	</div>
 {/if}
 
-<p class="mt-3 text-xs text-muted-foreground">
+<p class="contact-linked__hint">
 	Linked records are read-only here for now. Open each module to manage them.
 </p>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.contact-linked {
+		&__note {
+			font-size: $fs-body;
+			color: var(--color-text-secondary);
+		}
+		&__ref-name {
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+		&__ref-phone {
+			font-size: $fs-caption;
+			color: var(--color-text-secondary);
+		}
+		&__hint {
+			margin-top: $space-3;
+			font-size: $fs-caption;
+			color: var(--color-text-muted);
+		}
+	}
+</style>

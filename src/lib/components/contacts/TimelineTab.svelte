@@ -4,37 +4,8 @@
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { cn } from '$lib/utils/cn';
 	import { getMemberContext } from '$lib/context/member';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import {
-		Search,
-		X,
-		Clock,
-		MessageSquare,
-		MessageCircle,
-		FileText,
-		Eye,
-		CheckCircle2,
-		XCircle,
-		Receipt,
-		DollarSign,
-		Calendar,
-		CalendarCheck,
-		CalendarX,
-		Briefcase,
-		BriefcaseBusiness,
-		Star,
-		Send,
-		AlertTriangle,
-		StickyNote,
-		Zap,
-		PhoneMissed,
-		Trash2,
-		ExternalLink
-	} from '@lucide/svelte';
-	import type { Component } from 'svelte';
 
 	type Tone = 'neutral' | 'positive' | 'attention' | 'negative';
 
@@ -52,21 +23,21 @@
 	type FilterCategory = {
 		key: string;
 		label: string;
-		icon: Component;
+		icon: string;
 	};
 
 	const FILTER_CATEGORIES: FilterCategory[] = [
-		{ key: 'messages', label: 'Messages', icon: MessageCircle },
-		{ key: 'quotes', label: 'Quotes', icon: FileText },
-		{ key: 'invoices', label: 'Invoices', icon: Receipt },
-		{ key: 'appointments', label: 'Appts', icon: Calendar },
-		{ key: 'jobs', label: 'Jobs', icon: Briefcase },
-		{ key: 'reviews', label: 'Reviews', icon: Star },
-		{ key: 'notes', label: 'Notes', icon: StickyNote },
-		{ key: 'automations', label: 'Auto', icon: Zap }
+		{ key: 'messages', label: 'Messages', icon: 'ri-chat-1-line' },
+		{ key: 'quotes', label: 'Quotes', icon: 'ri-file-text-line' },
+		{ key: 'invoices', label: 'Invoices', icon: 'ri-receipt-line' },
+		{ key: 'appointments', label: 'Appts', icon: 'ri-calendar-line' },
+		{ key: 'jobs', label: 'Jobs', icon: 'ri-briefcase-line' },
+		{ key: 'reviews', label: 'Reviews', icon: 'ri-star-line' },
+		{ key: 'notes', label: 'Notes', icon: 'ri-sticky-note-line' },
+		{ key: 'automations', label: 'Auto', icon: 'ri-flashlight-line' }
 	];
 
-	let { contactId }: { contactId: string } = $props();
+	let { contactId, compact = false }: { contactId: string; compact?: boolean } = $props();
 
 	const member = getMemberContext();
 	const canEdit = $derived(member().can_edit_contacts);
@@ -77,8 +48,13 @@
 	let loadingMore = $state(false);
 	let errorMsg = $state<string | null>(null);
 
-	// Free-text search. `searchInput` is the raw field value; `appliedSearch` is
-	// the debounced term that actually drives the server query.
+	// Compact mode: show only the latest few entries with a "Show more" that
+	// expands into the full timeline (search, filters, and pagination).
+	const COMPACT_LIMIT = 3;
+	let expanded = $state(false);
+	const collapsed = $derived(compact && !expanded);
+	const visibleItems = $derived(collapsed ? items.slice(0, COMPACT_LIMIT) : items);
+
 	let searchInput = $state('');
 	let appliedSearch = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,51 +72,30 @@
 		activeFilters = next;
 	}
 
-	function chipClass(active: boolean): string {
-		return active
-			? 'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary bg-primary/10 text-primary px-3 py-1.5 text-xs font-medium transition-colors'
-			: 'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground px-3 py-1.5 text-xs font-medium transition-colors';
-	}
-
-	const ICONS: Record<string, Component> = {
-		'message-in': MessageCircle,
-		'message-out': MessageSquare,
-		'quote-sent': FileText,
-		'quote-viewed': Eye,
-		'quote-accepted': CheckCircle2,
-		'quote-declined': XCircle,
-		'invoice-sent': Receipt,
-		'invoice-paid': CheckCircle2,
-		payment: DollarSign,
-		appointment: Calendar,
-		'appointment-completed': CalendarCheck,
-		'appointment-cancelled': CalendarX,
-		'job-created': Briefcase,
-		'job-completed': BriefcaseBusiness,
-		'job-cancelled': XCircle,
-		'review-request': Send,
-		review: Star,
-		feedback: AlertTriangle,
-		note: StickyNote,
-		'automation-missed-call': PhoneMissed,
-		'automation-quote-followup': Zap,
-		'automation-invoice-reminder': Zap
-	};
-
-	const TONE_CLASSES: Record<Tone, string> = {
-		neutral: 'bg-muted text-muted-foreground',
-		positive: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-		attention: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-		negative: 'bg-destructive/10 text-destructive'
-	};
-
-	// Left accent bar color for typed activity cards — driven by tone so a
-	// contractor scans good/bad at a glance (paid = green edge, declined = amber).
-	const ACCENT: Record<Tone, string> = {
-		neutral: 'border-l-primary/30',
-		positive: 'border-l-emerald-500',
-		attention: 'border-l-amber-500',
-		negative: 'border-l-destructive'
+	// Remix icon class map (replaces Lucide component map)
+	const ICONS: Record<string, string> = {
+		'message-in': 'ri-chat-1-line',
+		'message-out': 'ri-message-2-line',
+		'quote-sent': 'ri-file-text-line',
+		'quote-viewed': 'ri-eye-line',
+		'quote-accepted': 'ri-checkbox-circle-line',
+		'quote-declined': 'ri-close-circle-line',
+		'invoice-sent': 'ri-receipt-line',
+		'invoice-paid': 'ri-checkbox-circle-line',
+		payment: 'ri-money-dollar-circle-line',
+		appointment: 'ri-calendar-line',
+		'appointment-completed': 'ri-calendar-check-line',
+		'appointment-cancelled': 'ri-calendar-close-line',
+		'job-created': 'ri-briefcase-line',
+		'job-completed': 'ri-briefcase-4-line',
+		'job-cancelled': 'ri-close-circle-line',
+		'review-request': 'ri-send-plane-line',
+		review: 'ri-star-line',
+		feedback: 'ri-alert-line',
+		note: 'ri-sticky-note-line',
+		'automation-missed-call': 'ri-phone-missed-line',
+		'automation-quote-followup': 'ri-flashlight-line',
+		'automation-invoice-reminder': 'ri-flashlight-line'
 	};
 
 	async function load(cursor: string | null, term: string, filters: Set<string>) {
@@ -190,9 +145,6 @@
 		const then = new Date(iso).getTime();
 		const now = Date.now();
 		const diffMs = now - then;
-		// Clock skew between server/client can produce small future drift;
-		// any future or sub-minute timestamp collapses to "Just now" instead
-		// of rendering nonsense like "in -3 minutes" or "-60m ago".
 		const sec = Math.round(diffMs / 1000);
 		if (sec < 60) return 'Just now';
 		const min = Math.round(sec / 60);
@@ -210,17 +162,10 @@
 		});
 	}
 
-	function getIcon(key: string): Component {
-		return ICONS[key] ?? Clock;
+	function getIcon(key: string): string {
+		return ICONS[key] ?? 'ri-time-line';
 	}
 
-	// Precise wall-clock time for chat bubbles (the day separator carries the date).
-	function formatClock(iso: string): string {
-		return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-	}
-
-	// Day-separator grouping. Items arrive newest-first; a header is emitted before
-	// the first entry of each calendar day.
 	function isNewDay(curr: string, prev: string | null): boolean {
 		if (!prev) return true;
 		return new Date(curr).toDateString() !== new Date(prev).toDateString();
@@ -272,123 +217,87 @@
 	}
 </script>
 
-{#if items.length > 0 || appliedSearch || activeFilters.size > 0}
-	<div class="relative mb-3">
-		<Search
-			class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-		/>
-		<Input
-			type="search"
-			inputmode="search"
-			placeholder="Search timeline — quote, invoice, payment…"
-			class="pl-10 pr-12"
-			value={searchInput}
-			oninput={onSearchInput}
-		/>
-		{#if searchInput}
-			<button
-				type="button"
-				onclick={clearSearch}
-				aria-label="Clear search"
-				class="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-			>
-				<X class="h-4 w-4" />
-			</button>
-		{/if}
-	</div>
-
-	<div class="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-		{#each FILTER_CATEGORIES as cat (cat.key)}
-			{@const active = activeFilters.has(cat.key)}
-			{@const FilterIcon = cat.icon}
-			<button type="button" onclick={() => toggleFilter(cat.key)} class={chipClass(active)}>
-				<FilterIcon class="h-3.5 w-3.5" />
-				{cat.label}
-			</button>
-		{/each}
-		{#if activeFilters.size > 0}
-			<button
-				type="button"
-				onclick={() => {
-					activeFilters = new Set();
-				}}
-				class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-			>
-				<X class="h-3 w-3" />
-				Clear
-			</button>
-		{/if}
-	</div>
-{/if}
-
-{#if loading}
-	<SkeletonLoader lines={5} label="Loading timeline" />
-{:else if errorMsg}
-	<p class="text-sm text-destructive">{errorMsg}</p>
-{:else if items.length === 0}
-	{@const hasFilter = appliedSearch.length > 0 || activeFilters.size > 0}
-	{@const emptyTitle = hasFilter ? 'No matching activity' : 'No activity yet'}
-	{@const emptyDesc = hasFilter
-		? appliedSearch
-			? `Nothing in this contact's timeline matches “${appliedSearch}”. Try another word or clear the filters.`
-			: 'No activity matches the selected filters. Try adding more types or clearing them.'
-		: 'Customer activity will appear here as your team communicates, schedules work, sends quotes, and records payments.'}
-	<EmptyState title={emptyTitle} description={emptyDesc} icon={hasFilter ? Search : Clock} />
-{:else}
-	<ol class="space-y-2.5">
-		{#each items as entry, i (entry.id)}
-			{@const Icon = getIcon(entry.icon_key)}
-			{@const clickable = !!entry.link}
-			{@const isNote = entry.type === 'notes'}
-			{@const isMessage = entry.type === 'messages'}
-			{@const outbound = entry.metadata?.direction === 'sent'}
-			{@const bubbleText =
-				(entry.metadata?.preview as string | undefined)?.trim() || entry.description}
-
-			{#if isNewDay(entry.created_at, items[i - 1]?.created_at ?? null)}
-				<li class="flex items-center justify-center pb-1 pt-2 first:pt-0">
-					<span
-						class="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/40"
-					>
-						{dayLabel(entry.created_at)}
-					</span>
-				</li>
-			{/if}
-
-			{#if isMessage}
-				<!-- Chat-style bubble: outbound right/green, inbound left/gray -->
-				<li class={cn('flex flex-col', outbound ? 'items-end' : 'items-start')}>
-					<button
-						type="button"
-						onclick={() => onEntryClick(entry)}
-						aria-label={outbound
-							? 'Message you sent — open conversation'
-							: 'Message received — open conversation'}
-						class={cn(
-							'max-w-[82%] rounded-2xl px-3.5 py-2.5 text-left text-sm leading-relaxed shadow-sm transition-colors sm:max-w-[70%]',
-							outbound
-								? 'rounded-br-sm bg-primary text-primary-foreground hover:bg-primary/90'
-								: 'rounded-bl-sm bg-secondary text-foreground hover:bg-secondary/70'
-						)}
-					>
-						<p class="whitespace-pre-wrap break-words">{bubbleText}</p>
-					</button>
-					<span class="mt-1 px-1 text-[11px] text-muted-foreground">
-						{outbound ? 'Sent' : 'Received'} · {formatClock(entry.created_at)}
-					</span>
-				</li>
-			{:else}
-				<!-- Typed activity card: tone-colored left accent + icon badge -->
-				<li
-					class={cn(
-						'rounded-xl border-y border-r border-l-[3px] border-border/70 bg-card p-4 shadow-card transition-all',
-						ACCENT[entry.tone],
-						clickable && 'cursor-pointer hover:bg-card-raised hover:shadow-dropdown'
-					)}
+<div class="timeline">
+	{#if !collapsed && (items.length > 0 || appliedSearch || activeFilters.size > 0)}
+		<!-- Search -->
+		<div class="timeline__search-wrap">
+			<i class="ri-search-line timeline__search-icon" aria-hidden="true"></i>
+			<input
+				type="search"
+				inputmode="search"
+				placeholder="Search timeline — quote, invoice, payment…"
+				class="timeline__search-input"
+				value={searchInput}
+				oninput={onSearchInput}
+			/>
+			{#if searchInput}
+				<button
+					type="button"
+					onclick={clearSearch}
+					aria-label="Clear search"
+					class="timeline__search-clear"
 				>
+					<i class="ri-close-line" aria-hidden="true"></i>
+				</button>
+			{/if}
+		</div>
+
+		<!-- Filter chips -->
+		<div class="timeline__filters">
+			{#each FILTER_CATEGORIES as cat (cat.key)}
+				{@const active = activeFilters.has(cat.key)}
+				<button
+					type="button"
+					onclick={() => toggleFilter(cat.key)}
+					class="timeline__filter-chip {active ? 'timeline__filter-chip--active' : ''}"
+				>
+					<i class={cat.icon} aria-hidden="true"></i>
+					{cat.label}
+				</button>
+			{/each}
+			{#if activeFilters.size > 0}
+				<button
+					type="button"
+					onclick={() => { activeFilters = new Set(); }}
+					class="timeline__filter-chip timeline__filter-chip--clear"
+				>
+					<i class="ri-close-line" aria-hidden="true"></i>
+					Clear
+				</button>
+			{/if}
+		</div>
+	{/if}
+
+	{#if loading}
+		<SkeletonLoader lines={5} label="Loading timeline" />
+	{:else if errorMsg}
+		<p class="field__error">{errorMsg}</p>
+	{:else if items.length === 0}
+		{@const hasFilter = appliedSearch.length > 0 || activeFilters.size > 0}
+		{@const emptyTitle = hasFilter ? 'No matching activity' : 'No activity yet'}
+		{@const emptyDesc = hasFilter
+			? appliedSearch
+				? `Nothing in this contact's timeline matches "${appliedSearch}". Try another word or clear the filters.`
+				: 'No activity matches the selected filters. Try adding more types or clearing them.'
+			: 'Customer activity will appear here as your team communicates, schedules work, sends quotes, and records payments.'}
+		<EmptyState title={emptyTitle} description={emptyDesc} iconClass="ri-time-line" />
+	{:else}
+		<ol class="timeline__list">
+			{#each visibleItems as entry, i (entry.id)}
+				{@const iconClass = getIcon(entry.icon_key)}
+				{@const clickable = !!entry.link}
+				{@const isNote = entry.type === 'notes'}
+
+				{#if isNewDay(entry.created_at, visibleItems[i - 1]?.created_at ?? null)}
+					<li class="timeline__day-sep">
+						<span>{dayLabel(entry.created_at)}</span>
+					</li>
+				{/if}
+
+				<li class="timeline__entry timeline__entry--{entry.tone} {clickable ? 'timeline__entry--clickable' : ''}">
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<div
-						class="flex items-start gap-3"
+						class="timeline__entry-inner"
 						role={clickable ? 'button' : undefined}
 						tabindex={clickable ? 0 : undefined}
 						onclick={() => onEntryClick(entry)}
@@ -399,47 +308,74 @@
 							}
 						}}
 					>
-						<span
-							class={cn(
-								'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-								TONE_CLASSES[entry.tone]
-							)}
-							aria-hidden="true"
-						>
-							<Icon class="h-4 w-4" />
+						<span class="timeline__entry-icon timeline__entry-icon--{entry.tone}" aria-hidden="true">
+							<i class={iconClass}></i>
 						</span>
-						<div class="min-w-0 flex-1">
-							<p class="text-sm text-foreground">{entry.description}</p>
-							<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+						<div class="timeline__entry-body">
+							<p class="timeline__entry-desc">{entry.description}</p>
+							<div class="timeline__entry-meta">
 								<time title={entry.created_at}>{formatRelative(entry.created_at)}</time>
 								{#if entry.link}
-									<ExternalLink class="h-3 w-3" aria-hidden="true" />
+									<i class="ri-external-link-line" aria-hidden="true"></i>
 								{/if}
 							</div>
 						</div>
 						{#if isNote && canEdit}
 							<button
 								type="button"
-								class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+								class="timeline__entry-delete"
 								aria-label="Delete note"
 								onclick={(e) => askDelete(entry, e)}
 							>
-								<Trash2 class="h-4 w-4" />
+								<i class="ri-delete-bin-line" aria-hidden="true"></i>
 							</button>
 						{/if}
 					</div>
 				</li>
+			{/each}
+		</ol>
+
+		{#if compact}
+			<!-- Toggle stays visible after expanding, flipping to "Show less" -->
+			{#if items.length > COMPACT_LIMIT || nextCursor}
+				<div class="timeline__load-more">
+					<Button type="button" variant="ghost" size="sm" onclick={() => (expanded = !expanded)}>
+						{collapsed ? 'Show more' : 'Show less'}
+						<i
+							class={collapsed ? 'ri-arrow-down-s-line' : 'ri-arrow-up-s-line'}
+							aria-hidden="true"
+						></i>
+					</Button>
+					{#if !collapsed && nextCursor}
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							loading={loadingMore}
+							loadingLabel="Loading…"
+							onclick={loadMore}
+						>
+							Load more
+						</Button>
+					{/if}
+				</div>
 			{/if}
-		{/each}
-	</ol>
-	{#if nextCursor}
-		<div class="mt-4 flex justify-center">
-			<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
-				{loadingMore ? 'Loading…' : 'Load more'}
-			</Button>
-		</div>
+		{:else if nextCursor}
+			<div class="timeline__load-more">
+				<Button
+					type="button"
+					variant="secondary"
+					size="sm"
+					loading={loadingMore}
+					loadingLabel="Loading…"
+					onclick={loadMore}
+				>
+					Load more
+				</Button>
+			</div>
+		{/if}
 	{/if}
-{/if}
+</div>
 
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}

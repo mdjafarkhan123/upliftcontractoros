@@ -1,11 +1,10 @@
 <script lang="ts">
-	import * as Popover from '$lib/components/ui/popover';
-	import { Button } from '$lib/components/ui/button';
+	import { Popover } from 'bits-ui';
 	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
 	import { getOrgContext } from '$lib/context/org';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { fromZonedTime } from 'date-fns-tz';
-	import { CalendarClock } from '@lucide/svelte';
 	import { formatDateTime } from '$lib/utils/format';
 
 	let {
@@ -24,22 +23,18 @@
 	let open = $state(false);
 	let saving = $state(false);
 	let mode = $state<'presets' | 'custom'>('presets');
-	let customValue = $state(''); // local datetime string from DateTimePicker
+	let customValue = $state('');
 
 	function pad(n: number): string {
 		return n.toString().padStart(2, '0');
 	}
 
-	// Build a "YYYY-MM-DDTHH:mm" string representing wall-clock time in the org TZ.
-	// fromZonedTime() converts that wall time (in `tz`) into the correct UTC Date.
 	function presetIso(daysAhead: number, hour: number, dayOfWeek?: number): string {
-		// Compute the target wall-clock date by starting from "now in org TZ".
 		const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
 		const target = new Date(nowInTz);
 		target.setHours(hour, 0, 0, 0);
 
 		if (dayOfWeek !== undefined) {
-			// Next occurrence of dayOfWeek (0=Sun..6=Sat). If today and past hour, jump 7.
 			const current = target.getDay();
 			let delta = (dayOfWeek - current + 7) % 7;
 			if (delta === 0 && nowInTz.getTime() >= target.getTime()) delta = 7;
@@ -84,47 +79,47 @@
 </script>
 
 <Popover.Root bind:open>
-	<Popover.Trigger
-		class="inline-flex h-11 shrink-0 snap-start items-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
-	>
-		<CalendarClock class="h-4 w-4" /> Follow-up
+	<Popover.Trigger class="btn btn--secondary">
+		<i class="ri-calendar-schedule-line" aria-hidden="true"></i> Follow-up
 	</Popover.Trigger>
-	<Popover.Content class="w-72 space-y-2" align="end">
+	<Popover.Content class="follow-up-popover__panel" align="end">
 		{#if mode === 'presets'}
-			<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Set follow-up</p>
+			<p class="follow-up-popover__label">Set follow-up</p>
 			{#if currentValue}
-				<p class="text-xs text-muted-foreground">
-					Currently: {formatDateTime(currentValue)}
-				</p>
+				<p class="follow-up-popover__current">Currently: {formatDateTime(currentValue)}</p>
 			{/if}
-			<div class="grid gap-1.5">
+			<div class="follow-up-popover__presets">
 				<Button
-					variant="outline"
-					class="h-10 justify-start"
+					type="button"
+					variant="secondary"
+					style="justify-content:flex-start; width:100%;"
 					disabled={saving}
 					onclick={() => patch(presetIso(1, 9))}
 				>
 					Tomorrow · 9:00 AM
 				</Button>
 				<Button
-					variant="outline"
-					class="h-10 justify-start"
+					type="button"
+					variant="secondary"
+					style="justify-content:flex-start; width:100%;"
 					disabled={saving}
 					onclick={() => patch(presetIso(3, 9))}
 				>
 					In 3 days · 9:00 AM
 				</Button>
 				<Button
-					variant="outline"
-					class="h-10 justify-start"
+					type="button"
+					variant="secondary"
+					style="justify-content:flex-start; width:100%;"
 					disabled={saving}
 					onclick={() => patch(presetIso(0, 9, 1))}
 				>
 					Next Monday · 9:00 AM
 				</Button>
 				<Button
+					type="button"
 					variant="ghost"
-					class="h-10 justify-start"
+					style="justify-content:flex-start; width:100%;"
 					disabled={saving}
 					onclick={() => (mode = 'custom')}
 				>
@@ -132,8 +127,9 @@
 				</Button>
 				{#if currentValue}
 					<Button
+						type="button"
 						variant="ghost"
-						class="h-10 justify-start text-destructive hover:text-destructive"
+						style="justify-content:flex-start; width:100%; color:var(--danger-solid);"
 						disabled={saving}
 						onclick={() => patch(null)}
 					>
@@ -141,18 +137,16 @@
 					</Button>
 				{/if}
 			</div>
-			<p class="pt-1 text-[11px] leading-snug text-muted-foreground">
+			<p class="follow-up-popover__tz-note">
 				Times in {tz}. We'll remind the assigned member when it's due.
 			</p>
 		{:else}
-			<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				Custom follow-up
-			</p>
+			<p class="follow-up-popover__label">Custom follow-up</p>
 			<DateTimePicker bind:value={customValue} placeholder="Pick date & time" />
-			<div class="flex justify-between gap-2 pt-1">
+			<div class="follow-up-popover__custom-actions">
 				<Button
+					type="button"
 					variant="ghost"
-					class="h-10"
 					disabled={saving}
 					onclick={() => {
 						mode = 'presets';
@@ -161,13 +155,18 @@
 				>
 					Back
 				</Button>
-				<Button class="h-10" disabled={saving || !customValue} onclick={applyCustom}>
-					{saving ? 'Saving…' : 'Set follow-up'}
+				<Button
+					type="button"
+					variant="default"
+					disabled={!customValue}
+					loading={saving}
+					loadingLabel="Saving…"
+					onclick={applyCustom}
+				>
+					Set follow-up
 				</Button>
 			</div>
-			<p class="pt-1 text-[11px] leading-snug text-muted-foreground">
-				Time will be saved in {tz}.
-			</p>
+			<p class="follow-up-popover__tz-note">Time will be saved in {tz}.</p>
 		{/if}
 	</Popover.Content>
 </Popover.Root>

@@ -1,30 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Switch } from '$lib/components/ui/switch';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { getMemberContext } from '$lib/context/member';
 	import { getFeatureFlagsContext } from '$lib/context/featureFlags';
 	import { getOrgContext } from '$lib/context/org';
 	import { bookingPublicUrl } from '$lib/components/booking/publicUrl';
 	import { toast } from '$lib/stores/toast.svelte';
-	import {
-		ArrowLeft,
-		ArrowRight,
-		Check,
-		Copy,
-		ExternalLink,
-		Link2,
-		Loader2,
-		Plus,
-		Settings,
-		X
-	} from '@lucide/svelte';
 
 	const member = getMemberContext();
 	const flags = getFeatureFlagsContext();
@@ -462,75 +449,59 @@
 		back="/settings/booking"
 	>
 		<!-- Stepper -->
-		<ol class="mb-6 flex items-center gap-2 text-xs sm:text-sm">
+		<ol class="book-stepper">
 			{#each STEP_LABELS as label, i (label)}
 				{@const n = (i + 1) as Step}
 				{@const done = step > n}
 				{@const active = step === n}
-				<li class="flex items-center gap-2">
+				<li class="book-stepper__step">
 					<span
-						class={[
-							'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors',
-							done
-								? 'border-primary bg-primary text-primary-foreground'
-								: active
-									? 'border-primary bg-primary/10 text-primary'
-									: 'border-border bg-muted/40 text-muted-foreground'
-						].join(' ')}
+						class="book-stepper__bullet"
+						class:book-stepper__bullet--done={done}
+						class:book-stepper__bullet--active={active}
 					>
 						{#if done}
-							<Check class="h-3.5 w-3.5" />
+							<i class="ri-check-line" aria-hidden="true"></i>
 						{:else}
 							{n}
 						{/if}
 					</span>
-					<span
-						class={[
-							'whitespace-nowrap',
-							active ? 'font-semibold text-foreground' : 'text-muted-foreground'
-						].join(' ')}
-					>
-						{label}{#if n === 3}<span class="ml-1 text-muted-foreground/70">(Optional)</span>{/if}
+					<span class="book-stepper__label" class:book-stepper__label--active={active}>
+						{label}{#if n === 3}<span class="book-stepper__optional">(Optional)</span>{/if}
 					</span>
 				</li>
 				{#if i < STEP_LABELS.length - 1}
-					<li class="h-px flex-1 bg-border" aria-hidden="true"></li>
+					<li class="book-stepper__line" aria-hidden="true"></li>
 				{/if}
 			{/each}
 		</ol>
 
 		{#if errorMsg}
-			<div
-				class="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-			>
-				{errorMsg}
-			</div>
+			<div class="book-error">{errorMsg}</div>
 		{/if}
 
 		<!-- ============================================================ -->
 		<!-- STEP 1: Booking Details                                       -->
 		<!-- ============================================================ -->
 		{#if step === 1}
-			<div class="space-y-4">
-				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-					<div class="border-b border-border/60 px-5 py-3.5">
-						<p class="text-sm font-semibold text-foreground">Link Details</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							What customers see on your booking page
-						</p>
+			<div class="book-form">
+				<div class="settings-card">
+					<div class="settings-card__header">
+						<div class="settings-card__head-text">
+							<p class="settings-card__title">Link Details</p>
+							<p class="settings-card__desc">What customers see on your booking page</p>
+						</div>
 					</div>
-					<div class="space-y-4 px-5 py-5">
-						<div class="space-y-1.5">
-							<Label for="title">Title <span class="text-destructive">*</span></Label>
+					<div class="settings-card__body">
+						<div class="field">
+							<Label for="title" class="field__label field__label--required">Title</Label>
 							<Input id="title" bind:value={title} required maxlength={120} />
-							<p class="text-xs text-muted-foreground">Shown to customers on the booking page.</p>
-							{#if fieldErrors.title}
-								<p class="text-xs text-destructive">{fieldErrors.title}</p>
-							{/if}
+							<p class="field__hint">Shown to customers on the booking page.</p>
+							{#if fieldErrors.title}<p class="field__error">{fieldErrors.title}</p>{/if}
 						</div>
 
-						<div class="space-y-1.5">
-							<Label for="slug">URL slug <span class="text-destructive">*</span></Label>
+						<div class="field">
+							<Label for="slug" class="field__label field__label--required">URL slug</Label>
 							<Input
 								id="slug"
 								value={slug}
@@ -542,55 +513,51 @@
 								autocomplete="off"
 								spellcheck={false}
 							/>
-							<div
-								class="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
-							>
-								<Link2 class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-								<span class="break-all font-mono text-xs text-muted-foreground">{previewUrl}</span>
+							<div class="book-urlchip">
+								<i class="ri-link" aria-hidden="true"></i>
+								<span>{previewUrl}</span>
 							</div>
 							{#if normalizedSlug && slugState === 'checking'}
-								<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-									<Loader2 class="h-3 w-3 animate-spin" /> Checking availability…
+								<p class="book-slug-status">
+									<i class="ri-loader-4-line book-spin" aria-hidden="true"></i> Checking availability…
 								</p>
 							{:else if slugState === 'available'}
-								<p class="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-									<Check class="h-3 w-3" /> Available
+								<p class="book-slug-status book-slug-status--ok">
+									<i class="ri-check-line" aria-hidden="true"></i> Available
 								</p>
 							{:else if slugState === 'taken'}
-								<p class="flex items-center gap-1.5 text-xs text-destructive">
-									<X class="h-3 w-3" /> Already in use — try another.
+								<p class="book-slug-status book-slug-status--bad">
+									<i class="ri-close-line" aria-hidden="true"></i> Already in use — try another.
 								</p>
 							{:else if slugState === 'too_short' && normalizedSlug}
-								<p class="text-xs text-muted-foreground">
+								<p class="book-slug-status">
 									{3 - normalizedSlug.length} more character{3 - normalizedSlug.length === 1
 										? ''
 										: 's'} to check availability.
 								</p>
 							{:else if slugState === 'invalid'}
-								<p class="text-xs text-destructive">
+								<p class="book-slug-status book-slug-status--bad">
 									Use lowercase letters, numbers, and hyphens only.
 								</p>
 							{:else if slugState === 'error'}
-								<p class="text-xs text-muted-foreground">
+								<p class="book-slug-status">
 									Couldn't check availability — we'll verify on submit.
 								</p>
 							{/if}
-							{#if fieldErrors.slug}
-								<p class="text-xs text-destructive">{fieldErrors.slug}</p>
-							{/if}
+							{#if fieldErrors.slug}<p class="field__error">{fieldErrors.slug}</p>{/if}
 						</div>
 
-						<div class="space-y-1.5">
-							<Label for="description">Description</Label>
+						<div class="field">
+							<Label for="description" class="field__label">Description</Label>
 							<Textarea id="description" bind:value={description} maxlength={2000} rows={3} />
 						</div>
 
-						<div class="space-y-1.5">
-							<Label for="appointment_type"
-								>Appointment type <span class="text-destructive">*</span></Label
-							>
+						<div class="field">
+							<Label for="appointment_type" class="field__label field__label--required">
+								Appointment type
+							</Label>
 							<Select.Root bind:value={appointment_type}>
-								<Select.Trigger class="h-11 w-full">
+								<Select.Trigger>
 									<Select.Value />
 								</Select.Trigger>
 								<Select.Content>
@@ -605,19 +572,19 @@
 					</div>
 				</div>
 
-				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-					<div class="border-b border-border/60 px-5 py-3.5">
-						<p class="text-sm font-semibold text-foreground">Schedule Settings</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							Control timing and availability rules
-						</p>
+				<div class="settings-card">
+					<div class="settings-card__header">
+						<div class="settings-card__head-text">
+							<p class="settings-card__title">Schedule Settings</p>
+							<p class="settings-card__desc">Control timing and availability rules</p>
+						</div>
 					</div>
-					<div class="px-5 py-5">
-						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-							<div class="space-y-1.5">
-								<Label for="slot">Slot duration <span class="text-destructive">*</span></Label>
+					<div class="settings-card__body">
+						<div class="book-grid">
+							<div class="field">
+								<Label for="slot" class="field__label field__label--required">Slot duration</Label>
 								<Select.Root bind:value={slot_duration_minutes}>
-									<Select.Trigger class="h-11 w-full">
+									<Select.Trigger>
 										<Select.Value />
 									</Select.Trigger>
 									<Select.Content>
@@ -630,12 +597,12 @@
 								</Select.Root>
 							</div>
 
-							<div class="space-y-1.5">
-								<Label for="buffer"
-									>Buffer between bookings <span class="text-destructive">*</span></Label
-								>
+							<div class="field">
+								<Label for="buffer" class="field__label field__label--required">
+									Buffer between bookings
+								</Label>
 								<Select.Root bind:value={buffer_minutes}>
-									<Select.Trigger class="h-11 w-full">
+									<Select.Trigger>
 										<Select.Value />
 									</Select.Trigger>
 									<Select.Content>
@@ -646,12 +613,12 @@
 								</Select.Root>
 							</div>
 
-							<div class="space-y-1.5">
-								<Label for="advance"
-									>Minimum advance notice <span class="text-destructive">*</span></Label
-								>
+							<div class="field">
+								<Label for="advance" class="field__label field__label--required">
+									Minimum advance notice
+								</Label>
 								<Select.Root bind:value={min_advance_hours}>
-									<Select.Trigger class="h-11 w-full">
+									<Select.Trigger>
 										<Select.Value />
 									</Select.Trigger>
 									<Select.Content>
@@ -663,10 +630,12 @@
 								</Select.Root>
 							</div>
 
-							<div class="space-y-1.5">
-								<Label for="horizon">Booking horizon <span class="text-destructive">*</span></Label>
+							<div class="field">
+								<Label for="horizon" class="field__label field__label--required"
+									>Booking horizon</Label
+								>
 								<Select.Root bind:value={max_future_days}>
-									<Select.Trigger class="h-11 w-full">
+									<Select.Trigger>
 										<Select.Value />
 									</Select.Trigger>
 									<Select.Content>
@@ -680,27 +649,25 @@
 					</div>
 				</div>
 
-				<div class="flex justify-between gap-2 pt-2">
-					<Button
-						variant="outline"
-						type="button"
-						onclick={() => goto('/settings/booking')}
-						disabled={submitting}
-					>
-						Cancel
-					</Button>
-					<Button
-						type="button"
-						onclick={goNext}
-						disabled={submitting ||
-							slugState === 'checking' ||
-							slugState === 'taken' ||
-							slugState === 'invalid' ||
-							slugState === 'too_short' ||
-							slugState === 'idle'}
-					>
-						Next <ArrowRight class="h-4 w-4" />
-					</Button>
+				<div class="book-actions">
+				<Button
+					variant="outline"
+					onclick={() => goto('/settings/booking')}
+					disabled={submitting}
+				>
+					Cancel
+				</Button>
+				<Button
+					onclick={goNext}
+					disabled={submitting ||
+						slugState === 'checking' ||
+						slugState === 'taken' ||
+						slugState === 'invalid' ||
+						slugState === 'too_short' ||
+						slugState === 'idle'}
+				>
+					Next <i class="ri-arrow-right-line" aria-hidden="true"></i>
+				</Button>
 				</div>
 			</div>
 		{/if}
@@ -709,64 +676,52 @@
 		<!-- STEP 2: Availability                                          -->
 		<!-- ============================================================ -->
 		{#if step === 2}
-			<div class="space-y-3">
-				<p class="text-sm text-muted-foreground">
-					Choose the days and time windows when customers can book.
-				</p>
+			<div class="book-form">
+				<p class="book-lead">Choose the days and time windows when customers can book.</p>
 
-				{#each days as d (d.day_of_week)}
-					<div class="rounded-xl border border-border bg-card p-4">
-						<div class="flex items-center justify-between gap-3">
-							<div>
-								<p class="text-sm font-semibold text-foreground">{DAY_NAMES[d.day_of_week]}</p>
-								<p class="text-xs text-muted-foreground">
-									{d.enabled ? 'Available' : 'Unavailable'}
-								</p>
+				<div class="book-list">
+					{#each days as d (d.day_of_week)}
+						<div class="book-day">
+							<div class="book-day__head">
+								<div>
+									<p class="book-day__name">{DAY_NAMES[d.day_of_week]}</p>
+									<p class="book-day__status">{d.enabled ? 'Available' : 'Unavailable'}</p>
+								</div>
+								<Switch checked={d.enabled} onCheckedChange={(v: boolean) => toggleDay(d, v)} />
 							</div>
-							<Switch checked={d.enabled} onCheckedChange={(v: boolean) => toggleDay(d, v)} />
+
+							{#if d.enabled}
+								<div class="book-day__windows">
+									{#each d.windows as w, i (i)}
+										<div class="book-day__window">
+											<input type="time" bind:value={w.start} class="book-time" />
+											<span class="book-day__sep">–</span>
+											<input type="time" bind:value={w.end} class="book-time" />
+											<button
+												type="button"
+												class="book-iconbtn"
+												onclick={() => removeWindow(d, i)}
+												aria-label="Remove window"
+											>
+												<i class="ri-close-line" aria-hidden="true"></i>
+											</button>
+										</div>
+									{/each}
+									<Button variant="outline" size="sm" onclick={() => addWindow(d)}>
+										<i class="ri-add-line" aria-hidden="true"></i> Add window
+									</Button>
+								</div>
+							{/if}
 						</div>
+					{/each}
+				</div>
 
-						{#if d.enabled}
-							<div class="mt-4 space-y-2">
-								{#each d.windows as w, i (i)}
-									<div class="flex items-center gap-2">
-										<input
-											type="time"
-											bind:value={w.start}
-											class="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
-										/>
-										<span class="text-sm text-muted-foreground">–</span>
-										<input
-											type="time"
-											bind:value={w.end}
-											class="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
-										/>
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon"
-											class="h-11 w-11"
-											onclick={() => removeWindow(d, i)}
-											aria-label="Remove window"
-										>
-											<X class="h-4 w-4" />
-										</Button>
-									</div>
-								{/each}
-								<Button type="button" variant="outline" size="sm" onclick={() => addWindow(d)}>
-									<Plus class="h-3.5 w-3.5" /> Add window
-								</Button>
-							</div>
-						{/if}
-					</div>
-				{/each}
-
-				<div class="flex justify-between gap-2 pt-2">
-					<Button variant="outline" type="button" onclick={goBack} disabled={submitting}>
-						<ArrowLeft class="h-4 w-4" /> Back
+				<div class="book-actions">
+					<Button variant="outline" onclick={goBack} disabled={submitting}>
+						<i class="ri-arrow-left-line" aria-hidden="true"></i> Back
 					</Button>
-					<Button type="button" onclick={goNext} disabled={submitting}>
-						Next <ArrowRight class="h-4 w-4" />
+					<Button onclick={goNext} disabled={submitting}>
+						Next <i class="ri-arrow-right-line" aria-hidden="true"></i>
 					</Button>
 				</div>
 			</div>
@@ -776,43 +731,37 @@
 		<!-- STEP 3: Blocked Dates (optional)                              -->
 		<!-- ============================================================ -->
 		{#if step === 3}
-			<div class="space-y-4">
-				<div class="rounded-xl border border-border/60 bg-muted/30 p-4">
-					<p class="text-sm font-semibold text-foreground">Blocked dates are optional</p>
-					<p class="mt-1 text-xs text-muted-foreground">
+			<div class="book-form">
+				<div class="book-info">
+					<p class="book-info__title">Blocked dates are optional</p>
+					<p class="book-info__text">
 						Block specific days (holidays, vacations) or set custom hours for one-off dates. You can
 						also add these later.
 					</p>
 				</div>
 
 				{#if !showOverrideForm}
-					<Button type="button" onclick={() => (showOverrideForm = true)}>
-						<Plus class="h-4 w-4" /> Block a date
-					</Button>
+					<div>
+						<Button onclick={() => (showOverrideForm = true)}>
+							<i class="ri-add-line" aria-hidden="true"></i> Block a date
+						</Button>
+					</div>
 				{:else}
-					<form
-						class="space-y-4 rounded-xl border border-border bg-card p-4"
-						onsubmit={addOverride}
-					>
-						<div class="space-y-1.5">
-							<Label for="ov-date">Date <span class="text-destructive">*</span></Label>
+					<form class="book-ovform" onsubmit={addOverride}>
+						<div class="field">
+							<Label for="ov-date" class="field__label field__label--required">Date</Label>
 							{#if Calendar}
 								<Calendar bind:value={ovDate} placeholder="Pick a date" min={today} />
 							{/if}
 							{#if ovErrors.override_date}
-								<p class="text-xs text-destructive">{ovErrors.override_date}</p>
+								<p class="field__error">{ovErrors.override_date}</p>
 							{/if}
 						</div>
 
-						<div class="space-y-2">
-							<Label>Type <span class="text-destructive">*</span></Label>
-							<div class="grid grid-cols-2 gap-2">
-								<label
-									class={[
-										'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm',
-										ovBlocked ? 'border-primary bg-primary/5' : 'border-border'
-									].join(' ')}
-								>
+						<div class="field">
+							<Label class="field__label field__label--required">Type</Label>
+							<div class="book-ovform__types">
+								<label class="book-radio" class:book-radio--active={ovBlocked}>
 									<input
 										type="radio"
 										name="block-type"
@@ -821,12 +770,7 @@
 									/>
 									Block all day
 								</label>
-								<label
-									class={[
-										'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm',
-										!ovBlocked ? 'border-primary bg-primary/5' : 'border-border'
-									].join(' ')}
-								>
+								<label class="book-radio" class:book-radio--active={!ovBlocked}>
 									<input
 										type="radio"
 										name="block-type"
@@ -839,41 +783,34 @@
 						</div>
 
 						{#if !ovBlocked}
-							<div class="grid grid-cols-2 gap-2">
-								<div class="space-y-1.5">
-									<Label for="ov-start">Start <span class="text-destructive">*</span></Label>
-									<input
-										id="ov-start"
-										type="time"
-										bind:value={ovStart}
-										required
-										class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-									/>
+							<div class="field">
+								<div class="book-ovform__times">
+									<div class="field">
+										<Label for="ov-start" class="field__label field__label--required">Start</Label>
+										<input
+											id="ov-start"
+											type="time"
+											bind:value={ovStart}
+											required
+											class="book-time"
+										/>
+									</div>
+									<div class="field">
+										<Label for="ov-end" class="field__label field__label--required">End</Label>
+										<input id="ov-end" type="time" bind:value={ovEnd} required class="book-time" />
+									</div>
 								</div>
-								<div class="space-y-1.5">
-									<Label for="ov-end">End <span class="text-destructive">*</span></Label>
-									<input
-										id="ov-end"
-										type="time"
-										bind:value={ovEnd}
-										required
-										class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-									/>
-								</div>
-								{#if ovErrors.end_time}
-									<p class="col-span-2 text-xs text-destructive">{ovErrors.end_time}</p>
-								{/if}
+								{#if ovErrors.end_time}<p class="field__error">{ovErrors.end_time}</p>{/if}
 							</div>
 						{/if}
 
-						<div class="space-y-1.5">
-							<Label for="ov-reason">Reason (internal)</Label>
+						<div class="field">
+							<Label for="ov-reason" class="field__label">Reason (internal)</Label>
 							<Input id="ov-reason" bind:value={ovReason} maxlength={500} placeholder="Optional" />
 						</div>
 
-						<div class="flex justify-end gap-2">
+						<div class="book-ovform__actions">
 							<Button
-								type="button"
 								variant="outline"
 								onclick={() => {
 									resetOverrideForm();
@@ -888,16 +825,12 @@
 				{/if}
 
 				{#if overrides.length > 0}
-					<ul class="grid gap-2">
+					<ul class="book-overrides">
 						{#each overrides as o (o.key)}
-							<li
-								class="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3"
-							>
-								<div class="min-w-0 flex-1">
-									<p class="text-sm font-semibold text-foreground">
-										{formatOverrideDate(o.override_date)}
-									</p>
-									<p class="mt-0.5 text-xs text-muted-foreground">
+							<li class="book-override">
+								<div class="book-override__main">
+									<p class="book-override__date">{formatOverrideDate(o.override_date)}</p>
+									<p class="book-override__detail">
 										{#if o.is_blocked}
 											Blocked all day
 										{:else}
@@ -908,36 +841,36 @@
 										{/if}
 									</p>
 								</div>
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-9 w-9"
+								<button
+									type="button"
+									class="book-iconbtn book-iconbtn--sm"
 									onclick={() => removeOverride(o.key)}
 									aria-label="Remove from list"
 								>
-									<X class="h-4 w-4" />
-								</Button>
+									<i class="ri-close-line" aria-hidden="true"></i>
+								</button>
 							</li>
 						{/each}
 					</ul>
-					<p class="text-xs text-muted-foreground">
+					<p class="book-overrides-note">
 						{overrides.length}
 						{overrides.length === 1 ? 'date' : 'dates'} will be blocked.
 					</p>
 				{/if}
 
-				<div class="flex flex-wrap justify-between gap-2 pt-2">
-					<Button variant="outline" type="button" onclick={goBack} disabled={submitting}>
-						<ArrowLeft class="h-4 w-4" /> Back
+				<div class="book-actions">
+					<Button variant="outline" onclick={goBack} disabled={submitting}>
+						<i class="ri-arrow-left-line" aria-hidden="true"></i> Back
 					</Button>
-					<JetEngineButton
+					<Button
 						type="button"
-						label="Create Booking Page"
 						loadingLabel="Creating…"
 						successLabel="Created"
-						state={submitting ? 'loading' : 'idle'}
+						loading={submitting}
 						onclick={() => submit(false)}
-					/>
+					>
+						Create Booking Page
+					</Button>
 				</div>
 			</div>
 		{/if}
@@ -947,69 +880,70 @@
 	<!-- SUCCESS SCREEN                                                -->
 	<!-- ============================================================ -->
 	<PageWrapper title="Booking page created" subtitle={created.title} back="/settings/booking">
-		<div class="space-y-4">
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Public booking URL</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">Share this link with customers.</p>
-				</div>
-				<div class="space-y-3 px-5 py-5">
-					<div
-						class="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5"
-					>
-						<Link2 class="h-4 w-4 shrink-0 text-muted-foreground/70" />
-						<span class="flex-1 break-all font-mono text-xs text-foreground">{publicUrl}</span>
+		<div class="book-form">
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Public booking URL</p>
+						<p class="settings-card__desc">Share this link with customers.</p>
 					</div>
-					<div class="flex flex-wrap gap-2">
-						<Button type="button" onclick={copyUrl}>
-							<Copy class="h-4 w-4" /> Copy link
+				</div>
+				<div class="settings-card__body">
+					<div class="book-urlchip book-urlchip--strong">
+						<i class="ri-link" aria-hidden="true"></i>
+						<span>{publicUrl}</span>
+					</div>
+					<div class="book-card__actions">
+						<Button onclick={copyUrl}>
+							<i class="ri-file-copy-line" aria-hidden="true"></i> Copy link
 						</Button>
-						<Button type="button" variant="outline" href={publicUrl} target="_blank" rel="noopener">
-							<ExternalLink class="h-4 w-4" /> View booking page
+						<Button href={publicUrl} variant="outline" target="_blank" rel="noopener">
+							<i class="ri-external-link-line" aria-hidden="true"></i> View booking page
 						</Button>
 						<Button
-							type="button"
 							variant="outline"
 							onclick={() => goto(`/settings/booking/${created!.id}`)}
 						>
-							<Settings class="h-4 w-4" /> Edit settings
+							<i class="ri-settings-3-line" aria-hidden="true"></i> Edit settings
 						</Button>
 					</div>
 				</div>
 			</div>
 
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Summary</p>
-				</div>
-				<dl class="divide-y divide-border/60 text-sm">
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Slot duration</dt>
-						<dd class="font-medium text-foreground">{created.slot_duration_minutes} min</dd>
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Summary</p>
 					</div>
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Buffer between bookings</dt>
-						<dd class="font-medium text-foreground">
+				</div>
+				<dl class="book-summary">
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Slot duration</dt>
+						<dd class="book-summary__val">{created.slot_duration_minutes} min</dd>
+					</div>
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Buffer between bookings</dt>
+						<dd class="book-summary__val">
 							{created.buffer_minutes === 0 ? 'None' : `${created.buffer_minutes} min`}
 						</dd>
 					</div>
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Minimum advance</dt>
-						<dd class="font-medium text-foreground">
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Minimum advance</dt>
+						<dd class="book-summary__val">
 							{created.min_advance_hours === 1 ? '1 hour' : `${created.min_advance_hours} hours`}
 						</dd>
 					</div>
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Booking horizon</dt>
-						<dd class="font-medium text-foreground">{created.max_future_days} days</dd>
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Booking horizon</dt>
+						<dd class="book-summary__val">{created.max_future_days} days</dd>
 					</div>
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Weekly availability</dt>
-						<dd class="text-right font-medium text-foreground">{availabilitySummary}</dd>
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Weekly availability</dt>
+						<dd class="book-summary__val">{availabilitySummary}</dd>
 					</div>
-					<div class="flex items-start justify-between gap-3 px-5 py-3">
-						<dt class="text-muted-foreground">Blocked dates</dt>
-						<dd class="font-medium text-foreground">
+					<div class="book-summary__row">
+						<dt class="book-summary__term">Blocked dates</dt>
+						<dd class="book-summary__val">
 							{overrides.length}
 							{overrides.length === 1 ? 'date' : 'dates'}
 						</dd>
@@ -1017,10 +951,10 @@
 				</dl>
 			</div>
 
-			<div class="flex justify-end">
-				<Button variant="outline" type="button" onclick={() => goto('/settings/booking')}>
-					Done
-				</Button>
+			<div class="book-actions book-actions--end">
+			<Button variant="outline" onclick={() => goto('/settings/booking')}>
+				Done
+			</Button>
 			</div>
 		</div>
 	</PageWrapper>

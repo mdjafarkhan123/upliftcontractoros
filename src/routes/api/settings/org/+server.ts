@@ -30,6 +30,8 @@ const orgPatchSchema = z
 		signature_title: z.string().max(120).trim().nullable().optional(),
 		signature_statement: z.string().max(300).trim().nullable().optional(),
 		signature_image_url: z.string().uuid().nullable().optional(), // media row id
+		// Org-default quote Terms & Conditions. Snapshot-copied into new quotes at create.
+		default_quote_terms: z.string().max(8000).trim().nullable().optional(),
 		google_review_link: z
 			.string()
 			.url()
@@ -41,7 +43,19 @@ const orgPatchSchema = z
 		calendar_day_end_hour: z.number().int().min(1).max(24).optional(),
 		quiet_hours_enabled: z.boolean().optional(),
 		quiet_hours_start_hour: z.number().int().min(0).max(23).optional(),
-		quiet_hours_end_hour: z.number().int().min(0).max(23).optional()
+		quiet_hours_end_hour: z.number().int().min(0).max(23).optional(),
+		// Target profit-margin floor (%). Null clears it (disables the color signal).
+		target_margin_pct: z.number().min(0).max(100).nullable().optional(),
+		// Invoice tips (M7). Master toggle + 1–4 integer percent presets shown on the pay page.
+		tips_enabled: z.boolean().optional(),
+		tip_preset_percents: z.array(z.number().int().min(1).max(100)).min(1).max(4).optional(),
+		// Invoice late fees (M8). Master toggle + fee type + the flat $ / percent value.
+		late_fee_enabled: z.boolean().optional(),
+		late_fee_type: z.enum(['flat', 'percent']).optional(),
+		late_fee_flat_amount: z.number().min(0).max(1_000_000).nullable().optional(),
+		late_fee_percent: z.number().min(0).max(100).nullable().optional(),
+		// Grace period (M8 Phase 2): days past due before a late fee auto-applies. 0–60.
+		late_fee_grace_days: z.number().int().min(0).max(60).optional()
 	})
 	.strict();
 
@@ -83,11 +97,20 @@ export const GET: RequestHandler = async (event) => {
 			signature_title: organizations.signature_title,
 			signature_statement: organizations.signature_statement,
 			signature_image_url: organizations.signature_image_url,
+			default_quote_terms: organizations.default_quote_terms,
 			calendar_day_start_hour: organizations.calendar_day_start_hour,
 			calendar_day_end_hour: organizations.calendar_day_end_hour,
 			quiet_hours_enabled: organizations.quiet_hours_enabled,
 			quiet_hours_start_hour: organizations.quiet_hours_start_hour,
 			quiet_hours_end_hour: organizations.quiet_hours_end_hour,
+			target_margin_pct: organizations.target_margin_pct,
+			tips_enabled: organizations.tips_enabled,
+			tip_preset_percents: organizations.tip_preset_percents,
+			late_fee_enabled: organizations.late_fee_enabled,
+			late_fee_type: organizations.late_fee_type,
+			late_fee_flat_amount: organizations.late_fee_flat_amount,
+			late_fee_percent: organizations.late_fee_percent,
+			late_fee_grace_days: organizations.late_fee_grace_days,
 			google_review_link: automationSettings.google_review_link
 		})
 		.from(organizations)
@@ -144,6 +167,31 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 	}
 
+	// Margin floor: store with 2-decimal precision; null clears it.
+	if (input.target_margin_pct !== undefined) {
+		updates.target_margin_pct =
+			input.target_margin_pct === null ? null : input.target_margin_pct.toFixed(2);
+	}
+
+	// Invoice tips (M7): master toggle + presets (dedup + sort ascending for a clean UI).
+	if (input.tips_enabled !== undefined) updates.tips_enabled = input.tips_enabled;
+	if (input.tip_preset_percents !== undefined) {
+		updates.tip_preset_percents = [...new Set(input.tip_preset_percents)].sort((a, b) => a - b);
+	}
+
+	// Invoice late fees (M8): master toggle + type + the value for whichever type is active.
+	// Amounts store as numeric strings (2-decimal); null clears them.
+	if (input.late_fee_enabled !== undefined) updates.late_fee_enabled = input.late_fee_enabled;
+	if (input.late_fee_type !== undefined) updates.late_fee_type = input.late_fee_type;
+	if (input.late_fee_flat_amount !== undefined)
+		updates.late_fee_flat_amount =
+			input.late_fee_flat_amount === null ? null : input.late_fee_flat_amount.toFixed(2);
+	if (input.late_fee_percent !== undefined)
+		updates.late_fee_percent =
+			input.late_fee_percent === null ? null : input.late_fee_percent.toFixed(2);
+	if (input.late_fee_grace_days !== undefined)
+		updates.late_fee_grace_days = input.late_fee_grace_days;
+
 	if (input.address !== undefined) updates.address = input.address;
 	if (input.city !== undefined) updates.city = input.city;
 	if (input.state !== undefined) updates.state = input.state;
@@ -156,6 +204,8 @@ export const PATCH: RequestHandler = async (event) => {
 	if (input.signature_title !== undefined) updates.signature_title = input.signature_title || null;
 	if (input.signature_statement !== undefined)
 		updates.signature_statement = input.signature_statement || null;
+	if (input.default_quote_terms !== undefined)
+		updates.default_quote_terms = input.default_quote_terms || null;
 
 	if (input.primary_color !== undefined) {
 		if (input.primary_color === null) {
@@ -323,11 +373,20 @@ export const PATCH: RequestHandler = async (event) => {
 		signature_title: organizations.signature_title,
 		signature_statement: organizations.signature_statement,
 		signature_image_url: organizations.signature_image_url,
+		default_quote_terms: organizations.default_quote_terms,
 		calendar_day_start_hour: organizations.calendar_day_start_hour,
 		calendar_day_end_hour: organizations.calendar_day_end_hour,
 		quiet_hours_enabled: organizations.quiet_hours_enabled,
 		quiet_hours_start_hour: organizations.quiet_hours_start_hour,
-		quiet_hours_end_hour: organizations.quiet_hours_end_hour
+		quiet_hours_end_hour: organizations.quiet_hours_end_hour,
+		target_margin_pct: organizations.target_margin_pct,
+		tips_enabled: organizations.tips_enabled,
+		tip_preset_percents: organizations.tip_preset_percents,
+		late_fee_enabled: organizations.late_fee_enabled,
+		late_fee_type: organizations.late_fee_type,
+		late_fee_flat_amount: organizations.late_fee_flat_amount,
+		late_fee_percent: organizations.late_fee_percent,
+		late_fee_grace_days: organizations.late_fee_grace_days
 	};
 
 	const updated = await db.transaction(async (tx) => {

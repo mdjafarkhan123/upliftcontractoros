@@ -9,8 +9,6 @@
 </script>
 
 <script lang="ts">
-	import { Search, X } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 	import type { Assignee } from '$lib/stores/pipeline.svelte';
 	import {
 		SelectRoot,
@@ -51,35 +49,26 @@
 	}
 </script>
 
-<div
-	class="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card p-2"
->
-	<div class="relative w-full min-w-0 sm:w-64 sm:flex-none">
-		<span
-			class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground"
-		>
-			<Search class="size-4" />
-		</span>
+<div class="pipeline-filters">
+	<div class="pipeline-filters__search">
+		<i class="ri-search-line" aria-hidden="true"></i>
 		<input
 			type="search"
 			inputmode="search"
 			placeholder="Search title or contact"
 			value={filters.q}
 			oninput={(e) => update('q', e.currentTarget.value)}
-			class="h-11 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground shadow-sm focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/10 dark:bg-card-raised/70"
+			class="pipeline-filters__input"
 		/>
 	</div>
 
 	{#if showAssignee}
-		<div class={cn('w-full sm:w-56', filters.assignee !== 'all' && '[--filter-active:1]')}>
+		<div class="pipeline-filters__select-wrap">
 			<SelectRoot
 				value={filters.assignee}
 				onValueChange={(v) => update('assignee', v as AssigneeFilter)}
 			>
-				<SelectTrigger
-					aria-label="Assignee"
-					class={cn(filters.assignee !== 'all' && 'border-primary/50 text-primary')}
-				>
+				<SelectTrigger aria-label="Assignee">
 					<SelectValue placeholder="All assignees">
 						{assigneeLabel(filters.assignee, assignees)}
 					</SelectValue>
@@ -96,12 +85,9 @@
 		</div>
 	{/if}
 
-	<div class="w-full sm:w-48">
+	<div class="pipeline-filters__select-wrap">
 		<SelectRoot value={filters.close} onValueChange={(v) => update('close', v as CloseRange)}>
-			<SelectTrigger
-				aria-label="Expected close"
-				class={cn(filters.close !== 'all' && 'border-primary/50 text-primary')}
-			>
+			<SelectTrigger aria-label="Expected close">
 				<SelectValue placeholder="Any close date">
 					{CLOSE_LABELS[filters.close]}
 				</SelectValue>
@@ -117,17 +103,9 @@
 	</div>
 
 	{#if activeCount > 0}
-		<span
-			class="inline-flex h-7 items-center rounded-full bg-primary/10 px-2 text-xs font-medium text-primary"
-		>
-			{activeCount} active
-		</span>
-		<button
-			type="button"
-			onclick={onClear}
-			class="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-		>
-			<X class="size-3.5" /> Clear
+		<span class="pipeline-filters__active-badge">{activeCount} active</span>
+		<button type="button" onclick={onClear} class="pipeline-filters__clear">
+			<i class="ri-close-line" aria-hidden="true"></i> Clear
 		</button>
 	{/if}
 </div>

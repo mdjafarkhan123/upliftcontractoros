@@ -7,6 +7,7 @@ import {
 	organizations,
 	outboxEvents,
 	quoteLineItems,
+	quotePackages,
 	quoteViews,
 	quotes
 } from '$lib/server/db/schema';
@@ -100,6 +101,8 @@ export const GET: RequestHandler = async (event) => {
 			unit: quoteLineItems.unit,
 			section_label: quoteLineItems.section_label,
 			is_optional: quoteLineItems.is_optional,
+			taxable: quoteLineItems.taxable,
+			package_id: quoteLineItems.package_id,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
@@ -107,6 +110,22 @@ export const GET: RequestHandler = async (event) => {
 		.from(quoteLineItems)
 		.where(and(eq(quoteLineItems.quote_id, quote.id), sql`${quoteLineItems.deleted_at} IS NULL`))
 		.orderBy(quoteLineItems.position);
+
+	// Good-Better-Best tiers (empty on a simple quote). Ordered so the customer sees them
+	// left→right / top→bottom as the contractor arranged them.
+	const packages = await db
+		.select({
+			id: quotePackages.id,
+			package_key: quotePackages.package_key,
+			name: quotePackages.name,
+			is_recommended: quotePackages.is_recommended,
+			position: quotePackages.position,
+			subtotal: quotePackages.subtotal,
+			total: quotePackages.total
+		})
+		.from(quotePackages)
+		.where(and(eq(quotePackages.quote_id, quote.id), sql`${quotePackages.deleted_at} IS NULL`))
+		.orderBy(quotePackages.position);
 
 	// Per-line photos, grouped by line_key, each with a signed thumbnail + full-res URL so the
 	// customer sees a thumbnail inline and the high-res image in the lightbox.
@@ -181,6 +200,7 @@ export const GET: RequestHandler = async (event) => {
 			deposit_paid_at: quote.deposit_paid_at?.toISOString() ?? null,
 			deposit_payment_available: Boolean(orgRow?.stripe_secret_key),
 			notes: quote.notes,
+			terms: quote.terms,
 			expires_at: quote.expires_at?.toISOString() ?? null,
 			org_name: quote.org_name,
 			org_logo_url: orgLogoUrl,
@@ -194,6 +214,9 @@ export const GET: RequestHandler = async (event) => {
 			contact_name: quote.contact_name,
 			issued_by_name: quote.issued_by_name,
 			service_address: quote.service_address,
+			packages,
+			accepted_package_id: quote.accepted_package_id,
+			accepted_total: quote.accepted_total,
 			line_items: lineItems
 		}
 	});

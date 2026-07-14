@@ -50,15 +50,23 @@ export const GET: RequestHandler = async (event) => {
 			description: invoiceLineItems.description,
 			quantity: invoiceLineItems.quantity,
 			unit_price: invoiceLineItems.unit_price,
-			total: invoiceLineItems.total
+			total: invoiceLineItems.total,
+			taxable: invoiceLineItems.taxable
 		})
 		.from(invoiceLineItems)
-		.where(and(eq(invoiceLineItems.invoice_id, invoice.id), isNull(invoiceLineItems.deleted_at)))
+		.where(
+			and(
+				eq(invoiceLineItems.invoice_id, invoice.id),
+				eq(invoiceLineItems.is_late_fee, false),
+				isNull(invoiceLineItems.deleted_at)
+			)
+		)
 		.orderBy(asc(invoiceLineItems.position), asc(invoiceLineItems.created_at));
 
 	const paymentRows = await db
 		.select({
 			amount: payments.amount,
+			tip_amount: payments.tip_amount,
 			payment_method: payments.payment_method,
 			paid_at: payments.paid_at,
 			notes: payments.notes
@@ -82,12 +90,19 @@ export const GET: RequestHandler = async (event) => {
 			title: row.invoice_row.title,
 			status: row.invoice_row.status,
 			subtotal: row.invoice_row.subtotal,
+			discount_type: row.invoice_row.discount_type,
+			discount_value: row.invoice_row.discount_value,
+			discount_amount: row.invoice_row.discount_amount,
+			discount_label: row.invoice_row.discount_label,
 			tax_rate: row.invoice_row.tax_rate,
 			tax_amount: row.invoice_row.tax_amount,
 			total: row.invoice_row.total,
 			amount_paid: row.invoice_row.amount_paid,
 			amount_due: row.invoice_row.amount_due,
+			tip_total: row.invoice_row.tip_total,
+			late_fee_total: row.invoice_row.late_fee_total,
 			notes: row.invoice_row.notes,
+			terms: row.invoice_row.terms,
 			due_date: row.invoice_row.due_date,
 			created_at: row.invoice_row.created_at
 		},

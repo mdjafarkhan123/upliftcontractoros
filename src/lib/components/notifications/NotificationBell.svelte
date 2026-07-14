@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Bell } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import * as Popover from '$lib/components/ui/popover';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
@@ -36,29 +35,15 @@
 	}
 </script>
 
-{#snippet bellButton(label: string)}
-	<span
-		class="relative inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		aria-label={label}
-	>
-		<Bell class="h-5 w-5" />
-		{#if unreadCount > 0}
-			<span
-				class="absolute right-1.5 top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
-			>
-				{unreadCount > 99 ? '99+' : unreadCount}
-			</span>
-		{/if}
-	</span>
-{/snippet}
-
 {#if isDesktop}
 	<Popover.Root bind:open={popoverOpen}>
-		<Popover.Trigger
-			class="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			aria-label="Notifications"
-		>
-			{@render bellButton('Notifications')}
+		<Popover.Trigger class="topbar__icon-btn" aria-label="Notifications">
+			<i class="ri-notification-3-line" aria-hidden="true"></i>
+			{#if unreadCount > 0}
+				<span class="topbar__icon-btn-badge" aria-label="{unreadCount} unread">
+					{unreadCount > 99 ? '99+' : unreadCount}
+				</span>
+			{/if}
 		</Popover.Trigger>
 		<Popover.Content align="end" sideOffset={8} class="w-[22rem] p-0">
 			<NotificationPanel onNavigate={closeAll} />
@@ -68,10 +53,15 @@
 	<button
 		type="button"
 		onclick={openBell}
-		class="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+		class="topbar__icon-btn"
 		aria-label="Notifications"
 	>
-		{@render bellButton('Notifications')}
+		<i class="ri-notification-3-line" aria-hidden="true"></i>
+		{#if unreadCount > 0}
+			<span class="topbar__icon-btn-badge" aria-label="{unreadCount} unread">
+				{unreadCount > 99 ? '99+' : unreadCount}
+			</span>
+		{/if}
 	</button>
 	<BottomSheet bind:open={sheetOpen}>
 		<div class="-mx-6 -mb-6">

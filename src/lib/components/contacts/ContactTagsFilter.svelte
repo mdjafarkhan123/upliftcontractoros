@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
 	import { SUGGESTED_CONTACT_TAGS, formatTagLabel, isDestructiveTag } from '$lib/contacts/tags';
 
 	let {
@@ -16,11 +15,7 @@
 	}
 </script>
 
-<div
-	class="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-	role="group"
-	aria-label="Filter by tag"
->
+<div class="tags-filter" role="group" aria-label="Filter by tag">
 	{#each SUGGESTED_CONTACT_TAGS as tag (tag)}
 		{@const active = value === tag}
 		{@const destructive = isDestructiveTag(tag)}
@@ -28,18 +23,86 @@
 			type="button"
 			onclick={() => set(tag)}
 			aria-pressed={active}
-			class={cn(
-				'inline-flex h-9 shrink-0 snap-start items-center rounded-full border px-3 text-xs font-medium transition-colors',
-				active
-					? destructive
-						? 'border-destructive bg-destructive text-destructive-foreground'
-						: 'border-primary bg-primary text-primary-foreground'
-					: destructive
-						? 'border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10'
-						: 'border-border bg-card text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-			)}
+			class="tags-filter__tag"
+			class:tags-filter__tag--active={active}
+			class:tags-filter__tag--danger={destructive}
 		>
 			{formatTagLabel(tag)}
 		</button>
 	{/each}
 </div>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.tags-filter {
+		display: flex;
+		gap: $space-2;
+		margin: 0 (-$space-1);
+		padding: 0 $space-1 $space-1;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+
+		&__tag {
+			display: inline-flex;
+			align-items: center;
+			flex-shrink: 0;
+			scroll-snap-align: start;
+			height: 36px;
+			padding: 0 $space-3;
+			border: 1px solid var(--color-border);
+			border-radius: $radius-full;
+			background: var(--color-bg-surface);
+			font-size: $fs-caption;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+			white-space: nowrap;
+			cursor: pointer;
+			transition:
+				background-color $duration-fast $ease-standard,
+				color $duration-fast $ease-standard,
+				border-color $duration-fast $ease-standard;
+
+			&:hover {
+				background: var(--color-bg-surface-sunk);
+				color: var(--color-text-primary);
+			}
+
+			&--danger {
+				border-color: var(--danger-bg);
+				background: var(--danger-bg);
+				color: var(--danger-text);
+
+				&:hover {
+					background: var(--danger-bg);
+				}
+			}
+
+			&--active {
+				border-color: var(--color-brand);
+				background: var(--color-brand);
+				color: var(--color-text-on-brand);
+
+				&:hover {
+					background: var(--color-brand);
+					color: var(--color-text-on-brand);
+				}
+			}
+
+			&--active.tags-filter__tag--danger {
+				border-color: var(--danger-solid);
+				background: var(--danger-solid);
+				color: #fff;
+
+				&:hover {
+					background: var(--danger-solid);
+				}
+			}
+		}
+	}
+</style>

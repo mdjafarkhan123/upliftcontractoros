@@ -14,7 +14,11 @@ function readInitial(): Theme {
 function applyToDocument(theme: Theme) {
 	if (!browser) return;
 	const root = document.documentElement;
-	root.classList.toggle('dark', theme === 'dark');
+	if (theme === 'dark') {
+		root.setAttribute('data-theme', 'dark');
+	} else {
+		root.setAttribute('data-theme', 'light');
+	}
 	root.style.colorScheme = theme;
 }
 

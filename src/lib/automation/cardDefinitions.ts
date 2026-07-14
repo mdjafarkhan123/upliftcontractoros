@@ -52,6 +52,14 @@ export type AutomationCardDef = {
 	// 'offset' → steps fire relative to the resource anchor (offset_minutes;
 	//            negative = before, e.g. an appointment reminder).
 	timingMode: TimingMode;
+	// For offset cards only: which anchor the offsets hang off, and therefore
+	// which sign(s) are allowed.
+	//   'appointment' → before-only (negative offsets; the reminder must land
+	//                   before the visit). This is the appointment_reminder card.
+	//   'due'         → mixed before/after (negative = before the due date, 0 =
+	//                   on the due date, positive = after). Invoice reminders.
+	// Undefined for delay cards and the staff nudge (which is after-only).
+	offsetAnchor?: 'appointment' | 'due';
 	audience: Audience;
 	channelEditable: boolean;
 	allowedChannels: StepChannel[];
@@ -152,7 +160,8 @@ export const AUTOMATION_CARDS: AutomationCardDef[] = [
 		description: 'Remind customers about unpaid invoices on a schedule until they pay.',
 		category: 'Follow-ups',
 		resourceType: 'invoice',
-		timingMode: 'delay',
+		timingMode: 'offset',
+		offsetAnchor: 'due',
 		audience: 'contact',
 		channelEditable: true,
 		allowedChannels: ['sms_first', 'email_first', 'both', 'sms_only', 'email_only'],
@@ -173,6 +182,7 @@ export const AUTOMATION_CARDS: AutomationCardDef[] = [
 		category: 'Appointments',
 		resourceType: 'appointment',
 		timingMode: 'offset',
+		offsetAnchor: 'appointment',
 		audience: 'contact',
 		channelEditable: true,
 		allowedChannels: ['sms_first', 'email_first', 'both', 'sms_only', 'email_only'],
@@ -309,6 +319,19 @@ export const BEFORE_OFFSET_PRESETS: { minutes: number; label: string }[] = [
 	{ minutes: -2880, label: '2 days before' }
 ];
 
+// Offset presets for invoice payment reminders, anchored to the DUE DATE. Mixed
+// sign: negative = before due, 0 = on the due date, positive = after due. Matches
+// the Jobber/QuickBooks/Housecall cadence (nudge early, then chase after).
+export const INVOICE_DUE_OFFSET_PRESETS: { minutes: number; label: string }[] = [
+	{ minutes: -10080, label: '1 week before due' },
+	{ minutes: -4320, label: '3 days before due' },
+	{ minutes: -1440, label: '1 day before due' },
+	{ minutes: 0, label: 'On the due date' },
+	{ minutes: 4320, label: '3 days after due' },
+	{ minutes: 10080, label: '1 week after due' },
+	{ minutes: 20160, label: '2 weeks after due' }
+];
+
 // Offset presets for the post-appointment staff nudge (POSITIVE = after the
 // appointment ends).
 export const AFTER_OFFSET_PRESETS: { minutes: number; label: string }[] = [
@@ -341,6 +364,9 @@ export type SequenceConfig = {
 };
 
 export const STEP_DELAY_MAX = 43200; // 30 days in minutes
-export const STEP_OFFSET_ABS_MAX = 20160; // 14 days in minutes
+// Max magnitude of an anchor offset. 30 days each way — covers invoice reminders
+// out to a month after the due date (Jobber/QuickBooks go this far) and matches
+// the delay cap. Appointment reminders only ever use the before-side (negative).
+export const STEP_OFFSET_ABS_MAX = 43200; // 30 days in minutes
 export const BODY_MAX = 1000;
 export const SUBJECT_MAX = 200;

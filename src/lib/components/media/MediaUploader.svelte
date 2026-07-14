@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Upload } from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { LocalMediaItem } from './types';
 
@@ -55,6 +54,7 @@
 			status: 'uploading',
 			progress: 0,
 			previewUrl,
+			purpose_tag: purposeTag,
 			original_filename: file.name,
 			file_size_bytes: file.size
 		};
@@ -136,13 +136,8 @@
 	}
 </script>
 
-<button
-	type="button"
-	onclick={pickFile}
-	{disabled}
-	class="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:border-primary/50 hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
->
-	<Upload class="h-4 w-4" />
+<button type="button" onclick={pickFile} {disabled} class="media-uploader">
+	<i class="ri-upload-2-line" aria-hidden="true"></i>
 	{label}
 </button>
 
@@ -151,6 +146,6 @@
 	type="file"
 	multiple
 	accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf"
-	class="hidden"
+	class="media-uploader__input"
 	onchange={handleFileChange}
 />

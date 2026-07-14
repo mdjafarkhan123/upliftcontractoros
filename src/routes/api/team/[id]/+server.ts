@@ -39,7 +39,11 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!member) error(404, 'Not found');
 
-	return json({ data: member });
+	// Hourly cost rate is private financial data (job-costing labor input) — strip it for
+	// viewers who can't see revenue, same gate as job/quote cost.
+	const data = auth.member.can_view_revenue ? member : { ...member, hourly_cost_rate: null };
+
+	return json({ data });
 };
 
 export const PATCH: RequestHandler = async (event) => {
@@ -86,9 +90,30 @@ export const PATCH: RequestHandler = async (event) => {
 	// Reject any unrecognised keys up front
 	for (const key of Object.keys(body)) {
 		if (key === 'full_name') continue;
+		if (key === 'hourly_cost_rate') continue;
 		if ((NOTIFICATION_FIELD_KEYS as readonly string[]).includes(key)) continue;
 		if (!isKnownPermissionKey(key)) {
 			fieldErrors[key] = 'Unknown field';
+		}
+	}
+
+	// Job-costing labor input — private financial data. Requires can_view_revenue on TOP of the
+	// can_edit_team_members gate already enforced above (same double-gate as job expenses).
+	if ('hourly_cost_rate' in body) {
+		if (!auth.member.can_view_revenue) {
+			fieldErrors.hourly_cost_rate = 'Forbidden';
+		} else {
+			const raw = body.hourly_cost_rate;
+			if (raw === null || raw === '') {
+				updates.hourly_cost_rate = null;
+			} else {
+				const n = Number(raw);
+				if (!Number.isFinite(n) || n < 0 || n > 9999999.99) {
+					fieldErrors.hourly_cost_rate = 'Enter a valid hourly rate.';
+				} else {
+					updates.hourly_cost_rate = String(n);
+				}
+			}
 		}
 	}
 
@@ -160,5 +185,6 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (!updated) error(404, 'Not found');
 
-	return json({ data: updated });
+	const data = auth.member.can_view_revenue ? updated : { ...updated, hourly_cost_rate: null };
+	return json({ data });
 };

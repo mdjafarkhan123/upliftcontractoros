@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { Clock, Send, Eye, RefreshCw, PartyPopper, XCircle, ChevronDown } from '@lucide/svelte';
 	import { formatCurrency, formatCurrencyExact } from '$lib/utils/format';
-	import { cn } from '$lib/utils/cn';
 	import type {
 		QuoteTimelineEvent,
 		QuoteTimelineEventType,
@@ -71,22 +69,22 @@
 
 	const versionByNumber = $derived(new Map(versions.map((v) => [v.version, v])));
 
-	const icons: Record<QuoteTimelineEventType, typeof Send> = {
-		sent: Send,
-		viewed: Eye,
-		revision_requested: RefreshCw,
-		accepted: PartyPopper,
-		declined: XCircle
+	// RI icon class per event type
+	const icons: Record<QuoteTimelineEventType, string> = {
+		sent: 'ri-send-plane-line',
+		viewed: 'ri-eye-line',
+		revision_requested: 'ri-refresh-line',
+		accepted: 'ri-emotion-happy-line',
+		declined: 'ri-close-circle-line'
 	};
 
-	// Chip colors mirror the status color rules: gray sent, blue viewed, amber revision,
-	// green accepted, red declined.
-	const chipClass: Record<QuoteTimelineEventType, string> = {
-		sent: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
-		viewed: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-		revision_requested: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-		accepted: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-		declined: 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+	// BEM dot modifier per event type
+	const dotMod: Record<QuoteTimelineEventType, string> = {
+		sent: 'quote-timeline__dot--sent',
+		viewed: 'quote-timeline__dot--viewed',
+		revision_requested: 'quote-timeline__dot--revision',
+		accepted: 'quote-timeline__dot--accepted',
+		declined: 'quote-timeline__dot--declined'
 	};
 
 	function labelFor(e: QuoteTimelineEvent): string {
@@ -143,128 +141,112 @@
 </script>
 
 {#if loaded && events.length > 0}
-	<div class="rounded-xl border border-border bg-card p-4">
-		<div class="mb-3 flex items-center gap-2">
-			<Clock class="h-3.5 w-3.5 text-muted-foreground" />
-			<h2 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">History</h2>
+	<div class="quote-timeline">
+		<div class="quote-timeline__header">
+			<i class="ri-time-line" aria-hidden="true"></i>
+			<h2 class="quote-timeline__heading">History</h2>
 		</div>
-		<ol>
+		<ol class="quote-timeline__list">
 			{#each events as e, i (e.at + e.type + e.version)}
-				{@const Icon = icons[e.type]}
 				{@const meta = metaFor(e)}
 				{@const expandable = e.type === 'sent'}
 				{@const isOpen = expandable && expandedVersion === e.version}
 				{@const detail = expandable ? versionByNumber.get(e.version) : undefined}
-				<li class="relative flex gap-3 pb-4 last:pb-0">
+				<li class="quote-timeline__item">
 					{#if i < events.length - 1}
-						<span
-							class="absolute left-[13px] top-7 h-[calc(100%-1.25rem)] w-px bg-border"
-							aria-hidden="true"
-						></span>
+						<span class="quote-timeline__connector" aria-hidden="true"></span>
 					{/if}
-					<span
-						class="z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {chipClass[
-							e.type
-						]}"
-					>
-						<Icon class="h-3.5 w-3.5" />
+					<span class="quote-timeline__dot {dotMod[e.type]}" aria-hidden="true">
+						<i class={icons[e.type]}></i>
 					</span>
-					<div class="min-w-0 flex-1 pt-1">
+					<div class="quote-timeline__body">
 						{#if expandable}
 							<button
 								type="button"
 								onclick={() => toggleVersion(e.version)}
 								aria-expanded={isOpen}
-								class="group flex w-full items-center gap-1.5 text-left"
+								class="quote-timeline__expand-btn"
 							>
-								<span class="min-w-0 flex-1">
-									<span class="text-sm font-medium text-foreground">
-										{labelFor(e)}{#if meta}<span class="font-normal text-muted-foreground">
-												&nbsp;· {meta}</span
-											>{/if}
+								<span class="quote-timeline__expand-text">
+									<span class="quote-timeline__label">
+										{labelFor(e)}{#if meta}<span class="quote-timeline__meta">&nbsp;· {meta}</span>{/if}
 									</span>
-									<span class="block text-xs text-muted-foreground">{whenFor(e.at)}</span>
+									<span class="quote-timeline__time">{whenFor(e.at)}</span>
 								</span>
-								<ChevronDown
-									class={cn(
-										'h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:text-foreground',
-										isOpen && 'rotate-180'
-									)}
-								/>
+								<i
+									class="quote-timeline__expand-icon ri-arrow-down-s-line{isOpen
+										? ' quote-timeline__expand-icon--open'
+										: ''}"
+									aria-hidden="true"
+								></i>
 							</button>
 
 							{#if isOpen}
-								<div class="mt-2 rounded-lg border border-border bg-muted/30 p-3">
+								<div class="quote-timeline__detail">
 									{#if versionsLoading && !detail}
-										<p class="text-xs text-muted-foreground">Loading version…</p>
+										<p class="quote-timeline__change-summary">Loading version…</p>
 									{:else if detail}
 										{#if detail.change}
-											<p class="mb-2 text-xs font-medium text-muted-foreground">
+											<p class="quote-timeline__change-summary">
 												Changed since v{detail.change.prev_version}:
-												<span class="text-foreground">{changeSummary(detail.change)}</span>
+												<span>{changeSummary(detail.change)}</span>
 											</p>
 										{:else}
-											<p class="mb-2 text-xs font-medium text-muted-foreground">Initial version</p>
+											<p class="quote-timeline__change-summary">Initial version</p>
 										{/if}
 
-										<ul class="divide-y divide-border/60">
+										<ul class="quote-timeline__line-list">
 											{#each detail.line_items as li (li.position)}
-												<li class="flex items-start justify-between gap-3 py-1.5">
-													<div class="min-w-0">
-														<p class="truncate text-sm text-foreground">{li.description}</p>
+												<li class="quote-timeline__line-item">
+													<div style="min-width:0;flex:1;">
+														<p class="quote-timeline__line-desc">{li.description}</p>
 														{#if li.details}
-															<p class="truncate text-xs text-muted-foreground">{li.details}</p>
+															<p class="quote-timeline__line-sub">{li.details}</p>
 														{/if}
-														<p class="text-xs text-muted-foreground">
+														<p class="quote-timeline__line-qty">
 															{formatQty(li.quantity)}{#if li.unit}&nbsp;{li.unit}{/if} ×
 															{formatCurrencyExact(li.unit_price)}
 														</p>
 													</div>
-													<span class="shrink-0 text-sm tabular-nums text-foreground">
+													<span class="quote-timeline__line-total">
 														{formatCurrencyExact(li.total)}
 													</span>
 												</li>
 											{/each}
 										</ul>
 
-										<div class="mt-2 space-y-0.5 border-t border-border pt-2 text-xs">
-											<div class="flex justify-between text-muted-foreground">
+										<div class="quote-timeline__totals">
+											<div class="quote-timeline__total-row">
 												<span>Subtotal</span>
-												<span class="tabular-nums">{formatCurrencyExact(detail.subtotal)}</span>
+												<span>{formatCurrencyExact(detail.subtotal)}</span>
 											</div>
 											{#if detail.discount_amount && Number(detail.discount_amount) > 0}
-												<div class="flex justify-between text-emerald-600 dark:text-emerald-400">
+												<div class="quote-timeline__total-row quote-timeline__total-row--discount">
 													<span>Discount</span>
-													<span class="tabular-nums"
-														>−{formatCurrencyExact(detail.discount_amount)}</span
-													>
+													<span>−{formatCurrencyExact(detail.discount_amount)}</span>
 												</div>
 											{/if}
 											{#if Number(detail.tax_amount) > 0}
-												<div class="flex justify-between text-muted-foreground">
+												<div class="quote-timeline__total-row">
 													<span>Tax</span>
-													<span class="tabular-nums">{formatCurrencyExact(detail.tax_amount)}</span>
+													<span>{formatCurrencyExact(detail.tax_amount)}</span>
 												</div>
 											{/if}
-											<div
-												class="flex justify-between pt-0.5 text-sm font-semibold text-foreground"
-											>
+											<div class="quote-timeline__total-row quote-timeline__total-row--grand">
 												<span>Total</span>
-												<span class="tabular-nums">{formatCurrencyExact(detail.total)}</span>
+												<span>{formatCurrencyExact(detail.total)}</span>
 											</div>
 										</div>
 									{:else}
-										<p class="text-xs text-muted-foreground">Version detail unavailable.</p>
+										<p class="quote-timeline__change-summary">Version detail unavailable.</p>
 									{/if}
 								</div>
 							{/if}
 						{:else}
-							<p class="text-sm font-medium text-foreground">
-								{labelFor(e)}{#if meta}<span class="font-normal text-muted-foreground">
-										&nbsp;· {meta}</span
-									>{/if}
+							<p class="quote-timeline__label">
+								{labelFor(e)}{#if meta}<span class="quote-timeline__meta">&nbsp;· {meta}</span>{/if}
 							</p>
-							<p class="text-xs text-muted-foreground">{whenFor(e.at)}</p>
+							<span class="quote-timeline__time">{whenFor(e.at)}</span>
 						{/if}
 					</div>
 				</li>

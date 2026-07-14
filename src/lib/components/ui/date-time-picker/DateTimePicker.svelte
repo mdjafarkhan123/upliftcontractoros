@@ -1,34 +1,28 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { Calendar, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import * as Popover from '$lib/components/ui/popover';
-	import { cn } from '$lib/utils/cn';
 
 	let {
 		value = $bindable(''),
 		placeholder = 'Select date & time',
 		disabled = false,
-		class: className
+		min = ''
 	}: {
 		value?: string;
 		placeholder?: string;
 		disabled?: boolean;
-		class?: string;
+		// Earliest selectable date/time as a local `YYYY-MM-DDTHH:mm` string. Days before the
+		// min date are disabled; on the min date itself, time slots before the min time are too.
+		// Empty string = no lower bound. Used to keep an end never earlier than its start.
+		min?: string;
 	} = $props();
 
+	let minDateStr = $derived(min ? min.split('T')[0] : '');
+	let minTimeStr = $derived(min && min.includes('T') ? min.split('T')[1].slice(0, 5) : '');
+
 	const MONTH_NAMES = [
-		'January',
-		'February',
-		'March',
-		'April',
-		'May',
-		'June',
-		'July',
-		'August',
-		'September',
-		'October',
-		'November',
-		'December'
+		'January', 'February', 'March', 'April', 'May', 'June',
+		'July', 'August', 'September', 'October', 'November', 'December'
 	];
 	const DAY_HEADERS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -64,12 +58,10 @@
 				const targetTime = timeStr || '08:00';
 				const el = timeListEl.querySelector<HTMLElement>(`[data-time="${targetTime}"]`);
 				if (!el) return;
-				// Scroll only the time-list container — avoid scrollIntoView,
-				// which also scrolls ancestor/window and causes the page to jump.
 				const center = timeStr
-					? el.offsetTop - timeListEl.clientHeight / 2 + el.clientHeight / 2
+					? el.offsetTop - timeListEl!.clientHeight / 2 + el.clientHeight / 2
 					: el.offsetTop;
-				timeListEl.scrollTop = Math.max(0, center);
+				timeListEl!.scrollTop = Math.max(0, center);
 			});
 		}
 	});
@@ -77,7 +69,7 @@
 	let calendarDays = $derived.by(() => {
 		const firstDay = new Date(viewYear, viewMonth, 1);
 		let dow = firstDay.getDay();
-		dow = dow === 0 ? 6 : dow - 1; // Mon=0 … Sun=6
+		dow = dow === 0 ? 6 : dow - 1;
 
 		const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 		const prevM = viewMonth === 0 ? 11 : viewMonth - 1;
@@ -133,25 +125,22 @@
 	})();
 
 	function prevMonth() {
-		if (viewMonth === 0) {
-			viewMonth = 11;
-			viewYear--;
-		} else {
-			viewMonth--;
-		}
+		if (viewMonth === 0) { viewMonth = 11; viewYear--; }
+		else { viewMonth--; }
 	}
 
 	function nextMonth() {
-		if (viewMonth === 11) {
-			viewMonth = 0;
-			viewYear++;
-		} else {
-			viewMonth++;
-		}
+		if (viewMonth === 11) { viewMonth = 0; viewYear++; }
+		else { viewMonth++; }
 	}
 
 	function pickDate(dateStr: string) {
-		const time = untrack(() => selectedTimeStr) || '09:00';
+		let time = untrack(() => selectedTimeStr) || '09:00';
+		// Keep the composed value at or after `min`: if landing on the min date with an
+		// earlier time carried over, snap the time up to the min time.
+		if (minDateStr && dateStr === minDateStr && minTimeStr && time < minTimeStr) {
+			time = minTimeStr;
+		}
 		value = `${dateStr}T${time}`;
 	}
 
@@ -163,16 +152,11 @@
 
 	let displayLabel = $derived.by(() => {
 		if (!value) return '';
-		// datetime-local format: "YYYY-MM-DDTHH:mm"
 		const [datePart, timePart] = value.split('T');
 		if (!datePart) return '';
 		const d = new Date(datePart + 'T' + (timePart ?? '00:00'));
 		if (isNaN(d.getTime())) return '';
-		const dateLabel = d.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
+		const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 		const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 		return `${dateLabel} · ${timeLabel}`;
 	});
@@ -185,16 +169,11 @@
 				{...props}
 				type="button"
 				{disabled}
-				class={cn(
-					'flex h-11 w-full items-center gap-2.5 rounded-md border border-input bg-background px-3 text-sm transition-all duration-150',
-					'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-					disabled && 'cursor-not-allowed opacity-50',
-					!value && 'text-muted-foreground',
-					className
-				)}
+				class="dtp__trigger"
+				class:dtp__trigger--empty={!value}
 			>
-				<Calendar class="h-4 w-4 shrink-0 text-muted-foreground" />
-				<span class="flex-1 text-left">{displayLabel || placeholder}</span>
+				<i class="ri-calendar-line" aria-hidden="true"></i>
+				<span>{displayLabel || placeholder}</span>
 			</button>
 		{/snippet}
 	</Popover.Trigger>
@@ -204,91 +183,66 @@
 		side="bottom"
 		sideOffset={8}
 		collisionPadding={12}
-		class="w-auto max-w-[calc(100vw-32px)] overflow-hidden p-0 shadow-[var(--shadow-dropdown)]"
+		class="dtp__popover"
 	>
-		<div
-			class="flex flex-col sm:flex-row sm:h-[326px] divide-y sm:divide-y-0 sm:divide-x divide-border/50"
-		>
+		<div class="dtp__panels">
 			<!-- Calendar panel -->
-			<div class="flex flex-col p-4">
-				<!-- Month navigation -->
-				<div class="mb-3 flex items-center justify-between gap-2">
-					<button
-						type="button"
-						onclick={prevMonth}
-						class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-					>
-						<ChevronLeft class="h-3.5 w-3.5" />
+			<div class="dtp__cal">
+				<div class="dtp__nav">
+					<button type="button" class="dtp__nav-btn" onclick={prevMonth} aria-label="Previous month">
+						<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 					</button>
-					<span class="min-w-[138px] text-center text-sm font-semibold text-foreground">
-						{MONTH_NAMES[viewMonth]}
-						{viewYear}
-					</span>
-					<button
-						type="button"
-						onclick={nextMonth}
-						class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-					>
-						<ChevronRight class="h-3.5 w-3.5" />
+					<span class="dtp__month-label">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+					<button type="button" class="dtp__nav-btn" onclick={nextMonth} aria-label="Next month">
+						<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 					</button>
 				</div>
 
-				<!-- Day-of-week headers -->
-				<div class="mb-1 grid grid-cols-7">
+				<div class="dtp__day-headers">
 					{#each DAY_HEADERS as hdr}
-						<div
-							class="flex h-8 w-9 items-center justify-center text-[11px] font-medium tracking-wide text-muted-foreground"
-						>
-							{hdr}
-						</div>
+						<div class="dtp__day-hdr">{hdr}</div>
 					{/each}
 				</div>
 
-				<!-- Days grid -->
-				<div class="grid grid-cols-7">
+				<div class="dtp__days">
 					{#each calendarDays as cell (cell.dateStr)}
 						{@const isSelected = cell.dateStr === selectedDateStr}
 						{@const isToday = cell.dateStr === todayStr}
+						{@const belowMin = !!minDateStr && cell.dateStr < minDateStr}
 						<button
 							type="button"
 							onclick={() => pickDate(cell.dateStr)}
-							disabled={!cell.current}
-							class={cn(
-								'relative flex h-9 w-9 items-center justify-center rounded-full text-sm transition-all duration-150',
-								!cell.current && 'pointer-events-none text-muted-foreground/25',
-								cell.current && !isSelected && 'text-foreground hover:bg-muted',
-								isSelected && 'bg-primary text-primary-foreground font-medium hover:bg-primary/90',
-								isToday && !isSelected && 'font-semibold'
-							)}
+							disabled={!cell.current || belowMin}
+							class="dtp__day"
+							class:dtp__day--out={!cell.current}
+							class:dtp__day--disabled={cell.current && belowMin}
+							class:dtp__day--today={isToday && !isSelected}
+							class:dtp__day--selected={isSelected}
 						>
 							{cell.day}
 							{#if isToday && !isSelected}
-								<span
-									class="absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-primary"
-								></span>
+								<span class="dtp__today-dot"></span>
 							{/if}
 						</button>
 					{/each}
 				</div>
 			</div>
 
+			<div class="dtp__divider" aria-hidden="true"></div>
+
 			<!-- Time slots panel -->
-			<div
-				bind:this={timeListEl}
-				class="flex w-full sm:w-[116px] flex-col overflow-y-auto py-2 max-h-[220px] sm:max-h-none [scrollbar-width:thin]"
-			>
+			<div class="dtp__times" bind:this={timeListEl}>
 				{#each TIME_SLOTS as slot}
 					{@const isSelected = slot.value === selectedTimeStr}
+					{@const belowMin =
+						!!minDateStr && selectedDateStr === minDateStr && !!minTimeStr && slot.value < minTimeStr}
 					<button
 						type="button"
 						data-time={slot.value}
 						onclick={() => pickTime(slot.value)}
-						class={cn(
-							'flex h-9 w-full shrink-0 items-center px-4 text-sm transition-all duration-150',
-							isSelected
-								? 'bg-muted font-semibold text-foreground'
-								: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-						)}
+						disabled={belowMin}
+						class="dtp__time"
+						class:dtp__time--selected={isSelected}
 					>
 						{slot.label}
 					</button>

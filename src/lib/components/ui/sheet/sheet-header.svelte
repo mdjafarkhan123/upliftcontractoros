@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-
-	let { class: className, children }: { class?: string; children?: import('svelte').Snippet } =
+	let { class: className = '', children }: { class?: string; children?: import('svelte').Snippet } =
 		$props();
 </script>
 
-<div class={cn('flex flex-col gap-1.5 text-left', className)}>
+<div class={['dialog-sheet__header', className].filter(Boolean).join(' ')}>
 	{@render children?.()}
 </div>

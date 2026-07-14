@@ -119,6 +119,26 @@ export const pipelineStore = {
 		opportunities = opportunities.map((o) => (o.id === id ? { ...o, stage_id: toStageId } : o));
 	},
 
+	// Optimistic cross-stage move that mirrors what the server returns on the next
+	// refetch: the card gets a fresh stage_entered_at and moves to the END of the
+	// list, so it lands at the BOTTOM of the destination column (the board sorts by
+	// stage_entered_at asc). Keeping optimistic order == server order is what stops
+	// the card from jumping after a background revalidate.
+	moveToStage(id: string, toStageId: string): void {
+		const idx = opportunities.findIndex((o) => o.id === id);
+		if (idx === -1) return;
+		const moved = {
+			...opportunities[idx]!,
+			stage_id: toStageId,
+			stage_entered_at: new Date().toISOString()
+		};
+		opportunities = [
+			...opportunities.slice(0, idx),
+			...opportunities.slice(idx + 1),
+			moved
+		];
+	},
+
 	setOpportunities(next: OpportunityRow[]): void {
 		opportunities = next;
 	},

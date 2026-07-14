@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-
 	type Variant = 'default' | 'destructive' | 'success';
 
 	let {
@@ -9,20 +7,17 @@
 		children
 	}: { class?: string; variant?: Variant; children?: import('svelte').Snippet } = $props();
 
-	const variantClasses: Record<Variant, string> = {
-		default: 'border-border bg-background text-foreground',
-		destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
-		success: 'border-green-200 bg-green-50 text-green-700'
+	const variantModifier: Record<Variant, string> = {
+		default: '',
+		destructive: 'ui-alert--destructive',
+		success: 'ui-alert--success'
 	};
+
+	const classes = $derived(
+		['ui-alert', variantModifier[variant], className].filter(Boolean).join(' ')
+	);
 </script>
 
-<div
-	role="alert"
-	class={cn(
-		'relative w-full rounded-lg border px-4 py-3 text-sm',
-		variantClasses[variant],
-		className
-	)}
->
+<div role="alert" class={classes}>
 	{@render children?.()}
 </div>

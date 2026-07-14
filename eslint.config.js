@@ -7,6 +7,7 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
+import localPlugin from './eslint-rules/local-plugin.js';
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
@@ -34,6 +35,16 @@ export default defineConfig(
 				parser: ts.parser,
 				svelteConfig
 			}
+		}
+	},
+	{
+		// Project UI-consistency rules. `warn` on purpose: ~20 native date/time
+		// inputs already exist and there's no time-only primitive yet, so this
+		// guides new work without breaking `npm run lint` on existing debt.
+		files: ['**/*.svelte'],
+		plugins: { local: localPlugin },
+		rules: {
+			'local/no-native-datetime-input': 'warn'
 		}
 	},
 	{

@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ContactTagsEditor from '$lib/components/contacts/ContactTagsEditor.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { cn } from '$lib/utils/cn';
-	import { UserPlus, Tag, Archive, X, Check, RotateCcw, Trash2, Download } from '@lucide/svelte';
 
 	let {
 		ids,
@@ -208,64 +206,54 @@
 	}
 </script>
 
-<div
-	class={cn(
-		'fixed inset-x-0 z-40 px-3',
-		'bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] md:bottom-6'
-	)}
->
-	<div
-		class="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl border border-border bg-card p-2 shadow-dropdown"
-	>
-		<button
-			type="button"
-			aria-label="Cancel selection"
-			class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted"
-			onclick={onCancel}
-		>
-			<X class="h-5 w-5" />
+<div class="bulk-bar">
+	<div class="bulk-bar__inner">
+		<button type="button" aria-label="Cancel selection" class="bulk-bar__cancel" onclick={onCancel}>
+			<i class="ri-close-line" aria-hidden="true"></i>
 		</button>
-		<span class="shrink-0 px-1 text-sm font-semibold tabular-nums">{count} selected</span>
-		<div class="flex flex-1 items-center justify-end gap-1">
-			<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={exportSelected}>
-				<Download class="h-4 w-4" /> Export
+		<span class="bulk-bar__count">{count} selected</span>
+		<div class="bulk-bar__actions">
+			<Button type="button" variant="ghost" size="sm" disabled={busy} onclick={exportSelected}>
+				<i class="ri-download-line" aria-hidden="true"></i> Export
 			</Button>
 			{#if mode === 'archived'}
-				<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={applyRestore}>
-					<RotateCcw class="h-4 w-4" /> Restore
+				<Button type="button" variant="ghost" size="sm" disabled={busy} onclick={applyRestore}>
+					<i class="ri-arrow-go-back-line" aria-hidden="true"></i> Restore
 				</Button>
 				{#if canDelete}
 					<Button
+						type="button"
 						variant="ghost"
 						size="sm"
-						class="h-11 text-destructive hover:text-destructive"
+						style="color: var(--danger-solid);"
 						disabled={busy}
 						onclick={() => (deleteOpen = true)}
 					>
-						<Trash2 class="h-4 w-4" /> Delete
+						<i class="ri-delete-bin-line" aria-hidden="true"></i> Delete
 					</Button>
 				{/if}
 			{:else}
-				<Button variant="ghost" size="sm" class="h-11" disabled={busy} onclick={openAssign}>
-					<UserPlus class="h-4 w-4" /> Assign
+				<Button type="button" variant="ghost" size="sm" disabled={busy} onclick={openAssign}>
+					<i class="ri-user-add-line" aria-hidden="true"></i> Assign
 				</Button>
 				<Button
+					type="button"
 					variant="ghost"
 					size="sm"
-					class="h-11"
 					disabled={busy}
 					onclick={() => (tagOpen = true)}
 				>
-					<Tag class="h-4 w-4" /> Tag
+					<i class="ri-price-tag-3-line" aria-hidden="true"></i> Tag
 				</Button>
 				<Button
+					type="button"
 					variant="ghost"
 					size="sm"
-					class="h-11 text-amber-700 dark:text-amber-400"
+					style="color: var(--warning-text);"
 					disabled={busy}
 					onclick={() => (archiveOpen = true)}
 				>
-					<Archive class="h-4 w-4" /> Archive
+					<i class="ri-archive-line" aria-hidden="true"></i> Archive
 				</Button>
 			{/if}
 		</div>
@@ -273,19 +261,19 @@
 </div>
 
 <BottomSheet bind:open={assignOpen} title="Assign {count} contact{count === 1 ? '' : 's'}">
-	<div class="mt-2 space-y-1 pb-2">
+	<div class="bulk-bar__assign-list">
 		<button
 			type="button"
-			class="flex min-h-[44px] w-full items-center rounded-lg px-3 text-left text-sm hover:bg-muted disabled:opacity-50"
+			class="bulk-bar__assign-item"
 			disabled={busy}
 			onclick={() => applyAssign(null)}
 		>
-			<span class="italic text-muted-foreground">Unassign</span>
+			<em>Unassign</em>
 		</button>
 		{#each assignees as a (a.id)}
 			<button
 				type="button"
-				class="flex min-h-[44px] w-full items-center rounded-lg px-3 text-left text-sm hover:bg-muted disabled:opacity-50"
+				class="bulk-bar__assign-item"
 				disabled={busy}
 				onclick={() => applyAssign(a.id)}
 			>
@@ -293,7 +281,7 @@
 			</button>
 		{/each}
 		{#if assigneesLoaded && assignees.length === 0}
-			<p class="px-3 py-2 text-sm text-muted-foreground">No active team members.</p>
+			<p class="bulk-bar__assign-empty">No active team members.</p>
 		{/if}
 	</div>
 </BottomSheet>
@@ -303,23 +291,26 @@
 	title="Tag {count} contact{count === 1 ? '' : 's'}"
 	description="Pick one or more tags, then add or remove them across the selection."
 >
-	<div class="mt-2 space-y-4 pb-2">
+	<div class="bulk-bar__tag-body">
 		<ContactTagsEditor bind:value={tagValues} />
-		<div class="flex gap-2">
+		<div class="bulk-bar__tag-actions">
 			<Button
-				class="flex-1"
+				type="button"
+				variant="default"
+				style="flex: 1;"
 				disabled={busy || tagValues.length === 0}
 				onclick={() => applyTags('tag_add')}
 			>
-				<Check class="h-4 w-4" /> Add to selection
+				<i class="ri-check-line" aria-hidden="true"></i> Add to selection
 			</Button>
 			<Button
-				variant="outline"
-				class="flex-1"
+				type="button"
+				variant="secondary"
+				style="flex: 1;"
 				disabled={busy || tagValues.length === 0}
 				onclick={() => applyTags('tag_remove')}
 			>
-				<X class="h-4 w-4" /> Remove from selection
+				<i class="ri-close-line" aria-hidden="true"></i> Remove from selection
 			</Button>
 		</div>
 	</div>

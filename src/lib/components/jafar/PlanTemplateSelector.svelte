@@ -15,32 +15,39 @@
 	}
 </script>
 
-<div class="grid gap-3 sm:grid-cols-3">
+<div class="plan-grid">
 	{#each PLAN_TEMPLATE_LIST as template (template.plan)}
 		{@const active = value === template.plan}
 		<button
 			type="button"
 			onclick={() => apply(template)}
-			class="group flex flex-col items-start gap-1.5 rounded-xl border px-4 py-3 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40
-				{active
-				? 'border-red-500/50 bg-red-500/5 ring-1 ring-red-500/30'
-				: 'border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/60'}"
+			class="jafar-plan-chip {active ? 'jafar-plan-chip--active' : ''}"
 		>
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="text-sm font-semibold text-white">{template.label}</span>
+			<div class="jafar-plan-chip__header">
+				<span class="jafar-plan-chip__name">{template.label}</span>
 				{#if active}
-					<span
-						class="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300"
-					>
-						Applied
-					</span>
+					<span class="jafar-plan-chip__applied">Applied</span>
 				{/if}
 			</div>
-			<span class="text-[11px] leading-snug text-slate-400">{template.tagline}</span>
+			<span class="jafar-plan-chip__tagline">{template.tagline}</span>
 		</button>
 	{/each}
 </div>
 
-<p class="mt-3 text-[11px] text-slate-500">
-	Templates pre-fill flags and limits. Every value below stays manually overridable.
-</p>
+<p class="plan-note">Templates pre-fill flags and limits. Every value below stays manually overridable.</p>
+
+<style lang="scss">
+	.plan-grid {
+		display: grid;
+		gap: 0.75rem;
+		@media (min-width: 640px) {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+
+	.plan-note {
+		margin-top: 0.75rem;
+		font-size: 0.6875rem;
+		color: #64748b;
+	}
+</style>

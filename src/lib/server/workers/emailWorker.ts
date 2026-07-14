@@ -236,7 +236,8 @@ async function processEmailSend(job: Job<EmailJobData>) {
 				.from(appointments)
 				.where(eq(appointments.id, appointmentId))
 				.limit(1);
-			if (appt) {
+			// A dateless (unscheduled) visit has no time window to put in a calendar invite.
+			if (appt && appt.scheduled_start) {
 				const end = appt.scheduled_end ?? new Date(appt.scheduled_start.getTime() + 60 * 60_000);
 				const ics = generateIcs({
 					uid: `appointment-${appt.id}@${org.slug}`,

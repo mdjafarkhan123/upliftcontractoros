@@ -1,11 +1,8 @@
 <script lang="ts">
+	import { Dialog } from 'bits-ui';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { Plus, Trash2, StickyNote } from '@lucide/svelte';
 
 	type Note = {
 		id: string;
@@ -88,12 +85,17 @@
 			return String(v);
 		}
 	}
+
+	// Reset draft when dialog closes
+	$effect(() => {
+		if (!composerOpen) { draft = ''; errorMsg = null; }
+	});
 </script>
 
-<div class="flex flex-col gap-4">
+<div class="contact-notes">
 	{#if canEdit}
-		<Button onclick={() => (composerOpen = true)} class="w-full md:w-auto">
-			<Plus class="h-4 w-4" /> Add note
+		<Button onclick={() => (composerOpen = true)}>
+			<i class="ri-add-line" aria-hidden="true"></i> Add note
 		</Button>
 	{/if}
 
@@ -103,26 +105,26 @@
 			description={canEdit
 				? 'Add a note to keep context handy for your team.'
 				: 'Notes added to this contact will appear here.'}
-			icon={StickyNote}
+			iconClass="ri-sticky-note-line"
 		/>
 	{:else}
-		<ul class="space-y-3">
+		<ul class="contact-notes__list">
 			{#each notes as note (note.id)}
-				<li class="rounded-xl border border-border bg-card p-4">
-					<div class="flex items-start justify-between gap-2">
-						<p class="whitespace-pre-wrap text-sm text-foreground">{note.content}</p>
+				<li class="contact-notes__card">
+					<div class="contact-notes__card-head">
+						<p class="contact-notes__content">{note.content}</p>
 						{#if canEdit}
 							<button
 								type="button"
-								class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+								class="contact-notes__delete"
 								aria-label="Delete note"
 								onclick={() => askDelete(note.id)}
 							>
-								<Trash2 class="h-4 w-4" />
+								<i class="ri-delete-bin-line" aria-hidden="true"></i>
 							</button>
 						{/if}
 					</div>
-					<div class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+					<div class="contact-notes__meta">
 						{#if note.author_name}<span>{note.author_name}</span>{/if}
 						<time>{formatWhen(note.created_at)}</time>
 					</div>
@@ -132,27 +134,53 @@
 	{/if}
 </div>
 
-<BottomSheet bind:open={composerOpen} title="Add note">
-	<div class="space-y-3 px-1 pb-2 pt-3">
-		<Textarea bind:value={draft} placeholder="Write a note…" rows={5} />
-		{#if errorMsg}
-			<p class="text-sm text-destructive">{errorMsg}</p>
-		{/if}
-		<div class="flex justify-end gap-2">
-			<Button variant="outline" disabled={saving} onclick={() => (composerOpen = false)}>
-				Cancel
-			</Button>
-			<JetEngineButton
-				label="Save note"
-				loadingLabel="Saving…"
-				successLabel="Saved"
-				state={saving ? 'loading' : 'idle'}
-				disabled={draft.trim().length === 0}
-				onclick={save}
-			/>
-		</div>
-	</div>
-</BottomSheet>
+<!-- Add note dialog -->
+<Dialog.Root bind:open={composerOpen}>
+	<Dialog.Portal>
+		<Dialog.Overlay class="dialog-overlay" />
+		<Dialog.Content class="dialog-content">
+			<div class="dialog-content__header">
+				<div>
+					<h2 class="dialog-content__title">Add note</h2>
+				</div>
+				<Dialog.Close class="dialog-content__close">
+					<i class="ri-close-line contact-notes__close-icon" aria-hidden="true"></i>
+				</Dialog.Close>
+			</div>
+			<div class="contact-notes__composer">
+				<div class="field">
+					<textarea
+						class="field__textarea"
+						bind:value={draft}
+						placeholder="Write a note…"
+						rows={5}
+					></textarea>
+				</div>
+				{#if errorMsg}
+					<p class="field__error">{errorMsg}</p>
+				{/if}
+				<div class="contact-notes__composer-actions">
+					<Button
+						variant="secondary"
+						disabled={saving}
+						onclick={() => (composerOpen = false)}
+					>
+						Cancel
+					</Button>
+					<Button
+						loadingLabel="Saving…"
+						successLabel="Saved"
+						loading={saving}
+						disabled={draft.trim().length === 0}
+						onclick={save}
+					>
+						Save note
+					</Button>
+				</div>
+			</div>
+		</Dialog.Content>
+	</Dialog.Portal>
+</Dialog.Root>
 
 <ConfirmDialog
 	bind:open={confirmOpen}
@@ -163,3 +191,11 @@
 	loading={deleting}
 	onConfirm={confirmDelete}
 />
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.contact-notes__close-icon {
+		font-size: $fs-body;
+	}
+</style>

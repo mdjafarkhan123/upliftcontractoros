@@ -1,0 +1,1 @@
+ALTER TYPE "public"."job_status" ADD VALUE 'on_hold' BEFORE 'completed';

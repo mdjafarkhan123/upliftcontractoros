@@ -97,23 +97,30 @@ export const GET: RequestHandler = async (event) => {
 			quantity: invoiceLineItems.quantity,
 			unit_price: invoiceLineItems.unit_price,
 			total: invoiceLineItems.total,
+			taxable: invoiceLineItems.taxable,
 			position: invoiceLineItems.position
 		})
 		.from(invoiceLineItems)
 		.where(
-			and(eq(invoiceLineItems.invoice_id, invoice.id), sql`${invoiceLineItems.deleted_at} IS NULL`)
+			and(
+				eq(invoiceLineItems.invoice_id, invoice.id),
+				eq(invoiceLineItems.is_late_fee, false),
+				sql`${invoiceLineItems.deleted_at} IS NULL`
+			)
 		)
 		.orderBy(invoiceLineItems.position);
 
 	// Derive actual balance from payments table — never trust denormalized amount_paid.
 	const paymentRows = await db
-		.select({ amount: payments.amount, paid_at: payments.paid_at })
+		.select({ amount: payments.amount, tip_amount: payments.tip_amount, paid_at: payments.paid_at })
 		.from(payments)
 		.where(eq(payments.invoice_id, invoice.id))
 		.orderBy(payments.paid_at);
 
 	const totalPaid = paymentRows.reduce((s, p) => s + Number(p.amount), 0);
 	const totalDue = Math.max(0, Number(invoice.total) - totalPaid);
+	// M7: tips are extra money, summed independently — never affects totalDue/totalPaid.
+	const totalTip = paymentRows.reduce((s, p) => s + Number(p.tip_amount), 0);
 
 	return json({
 		data: {
@@ -121,15 +128,26 @@ export const GET: RequestHandler = async (event) => {
 			title: invoice.title,
 			status: invoice.status,
 			subtotal: invoice.subtotal,
+			discount_type: invoice.discount_type,
+			discount_value: invoice.discount_value,
+			discount_amount: invoice.discount_amount,
+			discount_label: invoice.discount_label,
 			tax_rate: invoice.tax_rate,
 			tax_amount: invoice.tax_amount,
 			total: invoice.total,
 			amount_paid: totalPaid.toFixed(2),
 			amount_due: totalDue.toFixed(2),
+			tip_total: totalTip.toFixed(2),
+			late_fee_total: invoice.late_fee_total,
 			notes: invoice.notes,
+			terms: invoice.terms,
 			due_date: invoice.due_date,
 			org_name: invoice.org_name,
 			has_stripe: Boolean(invoice.stripe_secret_key),
+			// M7: gate + presets for the tip selector on the pay page. Only online (Stripe) tips
+			// are collectable here; manual tips are logged by the contractor in the app.
+			tips_enabled: invoice.tips_enabled,
+			tip_presets: invoice.tip_preset_percents,
 			line_items: lineItems
 		}
 	});

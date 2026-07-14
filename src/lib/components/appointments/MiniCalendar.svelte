@@ -1,12 +1,20 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
-	import { cn } from '$lib/utils/cn';
 	import { addDays, dayKey, startOfWeekMonday } from '$lib/utils/calendar';
 
 	const MONTH_NAMES = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
+		'January',
+		'February',
+		'March',
+		'April',
+		'May',
+		'June',
+		'July',
+		'August',
+		'September',
+		'October',
+		'November',
+		'December'
 	];
 	const DAY_HEADERS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -35,13 +43,17 @@
 	});
 
 	function prevMonth() {
-		if (viewMonth === 0) { viewMonth = 11; viewYear--; }
-		else viewMonth--;
+		if (viewMonth === 0) {
+			viewMonth = 11;
+			viewYear--;
+		} else viewMonth--;
 	}
 
 	function nextMonth() {
-		if (viewMonth === 11) { viewMonth = 0; viewYear++; }
-		else viewMonth++;
+		if (viewMonth === 11) {
+			viewMonth = 0;
+			viewYear++;
+		} else viewMonth++;
 	}
 
 	// Week keys for the anchor week (Mo–Su) for highlighting
@@ -51,6 +63,9 @@
 		for (let i = 0; i < 7; i++) keys.add(dayKey(addDays(monday, i)));
 		return keys;
 	});
+
+	// Ordered Mon→Sun keys for the anchor week — used to round the band edges.
+	const anchorWeekKeyList = $derived([...anchorWeekKeys]);
 
 	function fmtKey(y: number, m: number, d: number): string {
 		return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -92,55 +107,46 @@
 	}
 </script>
 
-<div class="select-none px-3 py-3">
+<div class="mini-cal">
 	<!-- Month navigation -->
-	<div class="mb-2 flex items-center justify-between">
-		<button
-			type="button"
-			onclick={prevMonth}
-			class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-		>
-			<ChevronLeft class="h-3 w-3" />
+	<div class="mini-cal__nav">
+		<button type="button" onclick={prevMonth} class="mini-cal__nav-btn" aria-label="Previous month">
+			<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 		</button>
-		<span class="text-xs font-semibold text-foreground">
-			{MONTH_NAMES[viewMonth]} {viewYear}
+		<span class="mini-cal__title">
+			{MONTH_NAMES[viewMonth]}
+			{viewYear}
 		</span>
-		<button
-			type="button"
-			onclick={nextMonth}
-			class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-		>
-			<ChevronRight class="h-3 w-3" />
+		<button type="button" onclick={nextMonth} class="mini-cal__nav-btn" aria-label="Next month">
+			<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 		</button>
 	</div>
 
 	<!-- Day-of-week headers -->
-	<div class="mb-0.5 grid grid-cols-7">
+	<div class="mini-cal__dow">
 		{#each DAY_HEADERS as hdr}
-			<div class="flex h-6 items-center justify-center text-[10px] font-medium text-muted-foreground">
-				{hdr}
-			</div>
+			<div class="mini-cal__dow-cell">{hdr}</div>
 		{/each}
 	</div>
 
 	<!-- Day cells — 6 rows × 7 cols -->
-	<div class="grid grid-cols-7">
+	<div class="mini-cal__grid">
 		{#each calendarDays as cell (cell.key)}
 			{@const isToday = cell.key === todayKey}
 			{@const inAnchorWeek = anchorWeekKeys.has(cell.key)}
 			<button
 				type="button"
 				onclick={() => handleDayClick(cell)}
-				class={cn(
-					'relative flex h-7 w-full items-center justify-center rounded-full text-[11px] transition-colors',
-					!cell.current && 'text-muted-foreground/40',
-					cell.current && !isToday && !inAnchorWeek && 'text-foreground hover:bg-muted',
-					inAnchorWeek && !isToday && 'bg-primary/10 text-primary rounded-none hover:bg-primary/20',
-					// Round the left/right edges of the week band
-					inAnchorWeek && cell.key === [...anchorWeekKeys][0] && 'rounded-l-full',
-					inAnchorWeek && cell.key === [...anchorWeekKeys][6] && 'rounded-r-full',
-					isToday && 'bg-primary text-primary-foreground font-semibold hover:bg-primary/90 rounded-full z-10'
-				)}
+				class="mini-cal__day"
+				class:mini-cal__day--muted={!cell.current}
+				class:mini-cal__day--in-week={inAnchorWeek && !isToday}
+				class:mini-cal__day--week-start={inAnchorWeek &&
+					!isToday &&
+					cell.key === anchorWeekKeyList[0]}
+				class:mini-cal__day--week-end={inAnchorWeek &&
+					!isToday &&
+					cell.key === anchorWeekKeyList[6]}
+				class:mini-cal__day--today={isToday}
 			>
 				{cell.day}
 			</button>

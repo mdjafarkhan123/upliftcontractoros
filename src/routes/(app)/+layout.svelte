@@ -184,8 +184,11 @@
 			const hrefs = [...visibleNav.map((i) => i.href), '/settings'];
 			for (const href of hrefs) void preloadCode(href).catch(() => {});
 		};
-		const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
-			.requestIdleCallback;
+		const ric = (
+			window as unknown as {
+				requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
+			}
+		).requestIdleCallback;
 		if (ric) ric(warmRoutes, { timeout: 3000 });
 		else setTimeout(warmRoutes, 1500);
 	});
@@ -204,17 +207,15 @@
 </script>
 
 {#if isSuspended}
-	<div class="min-h-screen bg-background">
+	<div class="app-shell app-shell--suspended">
 		{@render children()}
 		<Toaster />
 	</div>
 {:else}
-	<div class="flex min-h-screen flex-col bg-background">
+	<div class="app-shell">
 		<DesktopSidebar items={visibleNav} member={session.member} org={session.org} />
-		<div class="flex min-h-screen flex-1 flex-col md:pl-[var(--sidebar-width)]">
-			<!-- Brand lives in the desktop sidebar; the per-page header (PageWrapper) hosts
-			     global controls at md+. So the global brand bar is mobile-only. -->
-			<div class="md:hidden">
+		<div class="app-shell__content">
+			<div class="app-shell__topbar">
 				<AppHeader org={session.org} member={session.member} />
 			</div>
 			{#if showSetupBanner}
@@ -236,7 +237,7 @@
 						? Boolean(session.org.legal_business_name && session.org.business_number)
 						: false}
 			/>
-			<main class="flex-1 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
+			<main class="app-shell__main">
 				{@render children()}
 			</main>
 		</div>
@@ -250,3 +251,10 @@
 		<Toaster />
 	</div>
 {/if}
+
+<style>
+	main.app-shell__main {
+		background-color: var(--color-bg-surface-sunk);
+		padding-inline: 16px;
+	}
+</style>

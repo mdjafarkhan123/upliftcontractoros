@@ -1,0 +1,931 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// MEDIA SUBSYSTEM — BEM blocks for the photo/attachment components.
+// Covers: MediaTile (grid thumbnail w/ upload+error+delete overlays),
+// AttachmentList (file rows), MediaUploader (dashed pick button),
+// MediaGallery (job photo grid + before/after filter). Shared section
+// chrome lives in .media-panel.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// MEDIA PANEL — shared section card (AttachmentList + MediaGallery)
+// -----------------------------------------------------------------------------
+.media-panel {
+	border-radius: $radius-lg;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	padding: $space-4;
+	box-shadow: var(--shadow-sm);
+
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		margin-bottom: $space-3;
+
+		// Underlined variant (MediaGallery)
+		&--bordered {
+			border-bottom: 1px solid var(--color-border);
+			padding-bottom: $space-3;
+		}
+	}
+
+	&__heading {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	// "Share Before/After" pill — opens the branded composite dialog (B2).
+	&__share {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition: all $duration-fast $ease-standard;
+
+		i {
+			color: var(--color-brand);
+			font-size: 1.1rem;
+		}
+
+		&:hover {
+			border-color: var(--color-brand);
+		}
+	}
+
+	&__icon {
+		color: var(--color-text-muted);
+		font-size: 1.6rem;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__count {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__skeletons {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__skeleton-row {
+		height: 56px;
+		border-radius: $radius-md;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA TILE — square thumbnail with upload/error/delete overlays
+// -----------------------------------------------------------------------------
+.media-tile {
+	position: relative;
+	aspect-ratio: 1 / 1;
+	overflow: hidden;
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+	transition: box-shadow $duration-fast $ease-standard;
+
+	&--clickable {
+		cursor: pointer;
+	}
+	&--uploading {
+		cursor: wait;
+	}
+
+	&__img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		transition: transform $duration-fast $ease-standard;
+	}
+	&:hover &__img {
+		transform: scale(1.05);
+	}
+
+	&__placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 3.2rem;
+		}
+	}
+
+	// Full-cover scrim shared by uploading/error/delete states
+	&__overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+
+		&--uploading {
+			background: rgba(0, 0, 0, 0.5);
+		}
+		&--error {
+			background: rgba(0, 0, 0, 0.6);
+			padding: $space-2;
+		}
+		&--delete {
+			background: rgba(0, 0, 0, 0.5);
+		}
+	}
+
+	&__spinner {
+		color: #fff;
+		font-size: 2.4rem;
+	}
+
+	&__progress {
+		margin-top: $space-2;
+		height: 4px;
+		width: 75%;
+		overflow: hidden;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.3);
+	}
+	&__progress-bar {
+		height: 100%;
+		border-radius: $radius-full;
+		background: #fff;
+		transition: width $duration-fast $ease-standard;
+	}
+
+	&__pct {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: #fff;
+	}
+
+	&__error-msg {
+		text-align: center;
+		font-size: $fs-caption;
+		color: #fff;
+	}
+
+	&__retry {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		border: none;
+		border-radius: $radius-sm;
+		background: rgba(255, 255, 255, 0.2);
+		padding: $space-1 $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: #fff;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.3);
+		}
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	// Mobile long-press delete (centered)
+	&__delete-mobile {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		border: none;
+		border-radius: $radius-full;
+		background: var(--danger-solid);
+		color: #fff;
+		cursor: pointer;
+		box-shadow: var(--shadow-lg);
+
+		i {
+			font-size: 2rem;
+		}
+	}
+
+	// Before/After tag chip (top-left corner)
+	&__badge {
+		position: absolute;
+		top: $space-2;
+		left: $space-2;
+		border-radius: $radius-full;
+		padding: 2px $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		line-height: 1.4;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.6);
+		pointer-events: none;
+
+		&--before {
+			background: rgba(15, 23, 42, 0.78);
+		}
+		&--after {
+			background: var(--color-brand);
+		}
+	}
+
+	// Desktop delete (corner, fades in on hover)
+	&__delete-desktop {
+		position: absolute;
+		top: $space-2;
+		right: $space-2;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: $radius-full;
+		background: rgba(0, 0, 0, 0.6);
+		color: #fff;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+	&:hover &__delete-desktop {
+		opacity: 1;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ATTACHMENT LIST — file rows (icon/preview, name, size, actions)
+// -----------------------------------------------------------------------------
+.attachment-list {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		padding: $space-3;
+		transition: background-color $duration-fast $ease-standard;
+
+		&--uploading {
+			opacity: 0.6;
+		}
+	}
+
+	&__thumb {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		overflow: hidden;
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2rem;
+		}
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+
+		&--pdf {
+			background: rgba(244, 63, 94, 0.1);
+			color: var(--danger-solid);
+		}
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__meta {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__progress {
+		margin-top: $space-1;
+		height: 2px;
+		width: 100%;
+		overflow: hidden;
+		border-radius: $radius-full;
+		background: var(--color-border);
+	}
+	&__progress-bar {
+		height: 100%;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+		transition: width $duration-fast $ease-standard;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__action {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		i {
+			font-size: 1.6rem;
+		}
+
+		&--danger:hover:not(:disabled) {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA UPLOADER — dashed file-pick button
+// -----------------------------------------------------------------------------
+.media-uploader {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-2;
+	min-height: 44px;
+	border: 1px dashed var(--color-border-strong);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+	padding: $space-2 $space-4;
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background-color $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover:not(:disabled) {
+		border-color: var(--color-brand);
+		color: var(--color-text-primary);
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	i {
+		font-size: 1.6rem;
+	}
+
+	&__input {
+		display: none;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA GALLERY — job photo grid + before/after filter
+// -----------------------------------------------------------------------------
+.media-gallery {
+	&__filter {
+		display: inline-flex;
+		margin-bottom: $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		padding: 2px;
+	}
+
+	&__filter-btn {
+		min-height: 28px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: $space-2;
+	}
+
+	&__skeleton {
+		aspect-ratio: 1 / 1;
+		border-radius: $radius-md;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA LIGHTBOX — full-screen photo viewer (backdrop, nav, counter)
+// -----------------------------------------------------------------------------
+.media-lightbox {
+	position: fixed;
+	inset: 0;
+	z-index: $z-modal;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.95);
+
+	// Circular control buttons (close / prev / next)
+	&__btn {
+		position: absolute;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		border: none;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.1);
+		color: #fff;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.2);
+		}
+		i {
+			font-size: 2rem;
+		}
+	}
+
+	&__btn--close {
+		top: $space-4;
+		right: $space-4;
+	}
+	&__btn--prev {
+		top: 50%;
+		left: $space-4;
+		transform: translateY(-50%);
+	}
+	&__btn--next {
+		top: 50%;
+		right: $space-4;
+		transform: translateY(-50%);
+	}
+
+	&__stage {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		padding: $space-4;
+	}
+
+	&__loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__spinner {
+		font-size: 3.2rem;
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	&__loading-text {
+		font-size: $fs-caption;
+		color: rgba(255, 255, 255, 0.4);
+	}
+
+	&__img {
+		max-width: 100%;
+		max-height: 90vh;
+		border-radius: $radius-md;
+		object-fit: contain;
+		box-shadow: var(--shadow-lg);
+
+		// Blurred low-res preview shown while the full image loads
+		&--preview {
+			max-height: 70vh;
+			opacity: 0.6;
+			filter: blur(8px);
+			box-shadow: none;
+		}
+	}
+
+	&__counter {
+		position: absolute;
+		bottom: $space-6;
+		left: 50%;
+		transform: translateX(-50%);
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.1);
+		padding: $space-1 $space-3;
+		font-size: $fs-caption;
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	// Before / After / General re-tag control (top center)
+	&__retag {
+		position: absolute;
+		top: $space-4;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1;
+		display: inline-flex;
+		gap: 2px;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.12);
+		padding: 3px;
+	}
+
+	&__retag-btn {
+		min-height: 32px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: rgba(255, 255, 255, 0.75);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			color: #fff;
+		}
+
+		&--active {
+			background: #fff;
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA COMPARE — full-screen on-screen Before/After viewer (B1).
+// Slider (draggable reveal) + side-by-side modes, with picker strips.
+// -----------------------------------------------------------------------------
+.media-compare {
+	position: fixed;
+	inset: 0;
+	z-index: $z-modal;
+	display: flex;
+	flex-direction: column;
+	background: rgba(0, 0, 0, 0.95);
+
+	&__bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-4;
+		flex-shrink: 0;
+	}
+
+	// Slider / Side-by-side toggle (pill group)
+	&__modes {
+		display: inline-flex;
+		gap: 2px;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.12);
+		padding: 3px;
+	}
+
+	&__mode-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 32px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: rgba(255, 255, 255, 0.75);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.1rem;
+		}
+
+		&:hover {
+			color: #fff;
+		}
+
+		&--active {
+			background: #fff;
+			color: var(--color-text-primary);
+			font-weight: $weight-semibold;
+		}
+	}
+
+	&__close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		border: none;
+		border-radius: $radius-full;
+		background: rgba(255, 255, 255, 0.1);
+		color: #fff;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.2);
+		}
+		i {
+			font-size: 2rem;
+		}
+	}
+
+	&__stage-wrap {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0 $space-4;
+	}
+
+	&__loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-3;
+		color: rgba(255, 255, 255, 0.6);
+		font-size: $fs-caption;
+	}
+
+	&__spin {
+		font-size: 3.2rem;
+		animation: media-compare-spin 0.8s linear infinite;
+	}
+
+	// --- Slider mode ---
+	&__slider {
+		position: relative;
+		display: inline-block;
+		line-height: 0;
+		max-width: 100%;
+		max-height: 100%;
+		cursor: ew-resize;
+		user-select: none;
+		touch-action: none; // let pointer drag own the gesture
+
+		&--dragging {
+			cursor: grabbing;
+		}
+	}
+
+	// First image defines the box; the After layer fills the same box on top.
+	&__layer {
+		display: block;
+		max-width: 90vw;
+		max-height: 78vh;
+		width: auto;
+		height: auto;
+		object-fit: contain;
+		border-radius: $radius-md;
+
+		&--after {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+		}
+	}
+
+	&__handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background: #fff;
+		transform: translateX(-1px);
+		pointer-events: none;
+	}
+
+	&__handle-grip {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: $radius-full;
+		background: #fff;
+		color: var(--color-text-primary);
+		box-shadow: var(--shadow-lg);
+
+		i {
+			font-size: 1.2rem;
+			margin: 0 -4px;
+		}
+	}
+
+	// --- Side-by-side mode ---
+	&__side {
+		display: flex;
+		gap: $space-3;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+	}
+
+	&__side-pane {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	&__side-img {
+		max-width: 100%;
+		max-height: 78vh;
+		object-fit: contain;
+		border-radius: $radius-md;
+	}
+
+	// Before / After corner labels (shared by both modes)
+	&__tag {
+		position: absolute;
+		top: $space-3;
+		border-radius: $radius-full;
+		padding: 2px $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		line-height: 1.5;
+		color: #fff;
+		pointer-events: none;
+
+		&--before {
+			right: $space-3;
+			background: rgba(15, 23, 42, 0.78);
+		}
+		&--after {
+			left: $space-3;
+			background: var(--color-brand);
+		}
+	}
+
+	// --- Picker strips ---
+	&__pickers {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: $space-5;
+		padding: $space-4;
+		flex-shrink: 0;
+	}
+
+	&__picker {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__picker-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: rgba(255, 255, 255, 0.75);
+	}
+
+	&__picker-row {
+		display: flex;
+		gap: $space-2;
+	}
+
+	&__chip {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		padding: 0;
+		border: 2px solid rgba(255, 255, 255, 0.25);
+		border-radius: $radius-md;
+		overflow: hidden;
+		background: rgba(255, 255, 255, 0.08);
+		color: rgba(255, 255, 255, 0.6);
+		cursor: pointer;
+		transition: border-color $duration-fast $ease-standard;
+
+		&--active {
+			border-color: var(--color-brand);
+		}
+	}
+
+	&__chip-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+}
+
+@keyframes media-compare-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

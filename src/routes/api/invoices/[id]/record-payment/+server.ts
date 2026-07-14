@@ -45,8 +45,12 @@ export const POST: RequestHandler = async (event) => {
 			total: string;
 			amount_due: string;
 			invoice_number: number;
+			tips_enabled: boolean;
+			accept_tips: boolean;
 		}>(sql`
-			SELECT id, status, total, amount_due, invoice_number FROM invoices
+			SELECT id, status, total, amount_due, invoice_number, accept_tips,
+			       (SELECT tips_enabled FROM organizations WHERE id = ${auth.orgId}) AS tips_enabled
+			FROM invoices
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
@@ -61,6 +65,10 @@ export const POST: RequestHandler = async (event) => {
 			throw error(422, 'Payment exceeds amount due');
 		}
 
+		// Tip (M7) is EXTRA money on top of the balance — never checked against amount_due, and
+		// only honored when the org has tips enabled (a stale client can't sneak one in).
+		const tipStr = (existing.tips_enabled && existing.accept_tips ? (input.tip_amount ?? 0) : 0).toFixed(2);
+
 		const paidAt = input.paid_at ? new Date(input.paid_at) : new Date();
 
 		const [payment] = await tx
@@ -69,6 +77,7 @@ export const POST: RequestHandler = async (event) => {
 				org_id: auth.orgId,
 				invoice_id: id,
 				amount: amountStr,
+				tip_amount: tipStr,
 				payment_method: input.payment_method,
 				notes: input.notes ?? null,
 				recorded_by: auth.member.id,

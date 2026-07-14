@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
 	import { formatCurrency } from '$lib/utils/format';
-	import { DollarSign, FileText, Hammer, Clock, CalendarClock, Flame } from '@lucide/svelte';
 
 	let {
 		lifetime_revenue,
@@ -57,91 +55,62 @@
 		{
 			label: 'Lifetime',
 			value: formatCurrency(lifetime_revenue),
-			icon: DollarSign,
-			iconClass: 'bg-primary/10 text-primary',
-			valueClass: lifetime_revenue > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground',
+			icon: 'ri-money-dollar-circle-line',
+			iconTone: 'brand',
+			valueTone: lifetime_revenue > 0 ? 'brand' : '',
 			href: null as string | null
 		},
 		{
 			label: open_quotes_count === 1 ? '1 Open Quote' : `${open_quotes_count} Open Quotes`,
 			value: open_quotes_count > 0 ? formatCurrency(open_quotes_value) : '—',
-			icon: FileText,
-			iconClass: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-			valueClass: open_quotes_count > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+			icon: 'ri-file-text-line',
+			iconTone: 'amber',
+			valueTone: open_quotes_count > 0 ? 'amber' : 'muted',
 			href: open_quotes_count > 0 ? `/quotes?contact=${contactId}` : null
 		},
 		{
 			label: 'Active Jobs',
 			value: String(active_jobs_count),
-			icon: Hammer,
-			iconClass: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400',
-			valueClass: active_jobs_count > 0 ? 'text-blue-700 dark:text-blue-400' : 'text-muted-foreground',
+			icon: 'ri-hammer-line',
+			iconTone: 'blue',
+			valueTone: active_jobs_count > 0 ? 'blue' : 'muted',
 			href: active_jobs_count > 0 ? `/jobs?contact_id=${contactId}` : null
 		},
 		{
 			label: 'Last Contact',
 			value: relativeDate(last_contacted_at),
-			icon: Clock,
-			iconClass: 'bg-muted text-muted-foreground',
-			valueClass: 'text-foreground',
+			icon: 'ri-time-line',
+			iconTone: 'muted',
+			valueTone: '',
 			href: null as string | null
 		},
 		{
 			label: 'Next Follow-up',
 			value: futureDate(next_follow_up_at),
-			icon: CalendarClock,
-			iconClass: followUpOverdue
-				? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'
-				: 'bg-muted text-muted-foreground',
-			valueClass: followUpOverdue
-				? 'text-orange-700 dark:text-orange-400'
-				: next_follow_up_at
-					? 'text-foreground'
-					: 'text-muted-foreground',
+			icon: followUpOverdue ? 'ri-fire-line' : 'ri-calendar-schedule-line',
+			iconTone: followUpOverdue ? 'warn' : 'muted',
+			valueTone: followUpOverdue ? 'warn' : next_follow_up_at ? '' : 'muted',
 			href: null as string | null
 		}
 	]);
 </script>
 
 <!-- Mobile: horizontal scroll strip; Desktop: 5-col grid -->
-<div
-	class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-5 md:overflow-visible md:pb-0"
-	aria-label="Contact KPIs"
->
+<div class="contact-kpis" aria-label="Contact KPIs">
 	{#each kpis as kpi (kpi.label)}
-		{#if kpi.href}
-			<a
-				href={kpi.href}
-				class="group flex min-w-[130px] shrink-0 snap-start flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 shadow-card transition-all duration-150 hover:border-primary/30 hover:shadow-dropdown md:min-w-0"
-			>
-				<div class="flex items-center justify-between gap-2">
-					<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-						{kpi.label}
-					</p>
-					<div class={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', kpi.iconClass)}>
-						<kpi.icon class="h-3.5 w-3.5" />
-					</div>
+		<svelte:element
+			this={kpi.href ? 'a' : 'div'}
+			href={kpi.href}
+			class="contact-kpis__tile"
+			class:contact-kpis__tile--link={kpi.href}
+		>
+			<div class="contact-kpis__top">
+				<p class="contact-kpis__label">{kpi.label}</p>
+				<div class="contact-kpis__icon contact-kpis__icon--{kpi.iconTone}">
+					<i class={kpi.icon} aria-hidden="true"></i>
 				</div>
-				<p class={cn('text-lg font-bold tracking-tight', kpi.valueClass)}>{kpi.value}</p>
-			</a>
-		{:else}
-			<div
-				class="flex min-w-[130px] shrink-0 snap-start flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 shadow-card md:min-w-0"
-			>
-				<div class="flex items-center justify-between gap-2">
-					<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-						{kpi.label}
-					</p>
-					<div class={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', kpi.iconClass)}>
-						{#if kpi.label === 'Next Follow-up' && followUpOverdue}
-							<Flame class="h-3.5 w-3.5" />
-						{:else}
-							<kpi.icon class="h-3.5 w-3.5" />
-						{/if}
-					</div>
-				</div>
-				<p class={cn('text-lg font-bold tracking-tight', kpi.valueClass)}>{kpi.value}</p>
 			</div>
-		{/if}
+			<p class="contact-kpis__value contact-kpis__value--{kpi.valueTone || 'default'}">{kpi.value}</p>
+		</svelte:element>
 	{/each}
 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Loader2, Check } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import AuthCard from '$lib/components/auth/AuthCard.svelte';
 	import AuthAlert from '$lib/components/auth/AuthAlert.svelte';
 	import * as Select from '$lib/components/ui/select';
@@ -13,7 +13,6 @@
 		isSmsSupportedCountry,
 		smsCountrySupport
 	} from '$lib/utils/countries';
-	import { cn } from '$lib/utils/cn';
 
 	type Phase = 'loading' | 'password' | 'business' | 'phone' | 'carrier' | 'branding';
 
@@ -148,10 +147,6 @@
 	}
 
 	const selectedCountryName = $derived(countryName(country));
-
-	const inputClass =
-		'flex h-11 w-full rounded-xl border border-border/70 bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-all duration-150 focus:border-primary/60 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50';
-	const labelClass = 'block text-xs font-semibold uppercase tracking-wide text-muted-foreground';
 
 	onMount(async () => {
 		try {
@@ -541,59 +536,42 @@
 </svelte:head>
 
 {#if phase === 'loading'}
-	<div class="flex min-h-screen items-center justify-center bg-background">
-		<Loader2 class="h-8 w-8 animate-spin text-primary" />
+	<div class="onb-loading">
+		<i class="ri-loader-4-line animate-spin onb-loading__spinner" aria-hidden="true"></i>
 	</div>
 {:else}
 	<AuthCard title={cardTitle} description={cardDescription}>
 		{#snippet children()}
 			<!-- Step progress -->
-			<ol class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-2">
+			<ol class="onb-steps">
 				{#each steps as label, i (label)}
 					{@const status = stepStatus(i)}
-					<li class="flex items-center gap-1.5">
-						<span
-							class="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold {status ===
-							'done'
-								? 'bg-primary text-white'
-								: status === 'active'
-									? 'border border-primary text-primary'
-									: 'border border-border/70 text-muted-foreground/60'}"
-						>
+					<li class="onb-steps__item">
+						<span class="onb-steps__bullet onb-steps__bullet--{status}">
 							{#if status === 'done'}
-								<Check class="h-3 w-3" />
+								<i class="ri-check-line" aria-hidden="true"></i>
 							{:else}
 								{i + 1}
 							{/if}
 						</span>
-						<span
-							class="text-xs font-medium {status === 'active'
-								? 'text-foreground'
-								: status === 'done'
-									? 'text-muted-foreground'
-									: 'text-muted-foreground/60'}"
-						>
-							{label}
-						</span>
+						<span class="onb-steps__label onb-steps__label--{status}">{label}</span>
 						{#if i < steps.length - 1}
-							<span class="mx-0.5 text-muted-foreground/30">·</span>
+							<span class="onb-steps__sep" aria-hidden="true">·</span>
 						{/if}
 					</li>
 				{/each}
 			</ol>
 
 			{#if formError}
-				<div class="mb-5">
+				<div class="onb-alert">
 					<AuthAlert message={formError} variant="destructive" />
 				</div>
 			{/if}
 
 			{#if phase === 'password'}
-				<form class="space-y-5" onsubmit={submitPassword}>
-					<div class="space-y-1.5">
-						<label for="password" class={labelClass}>
-							New password<span class="ml-0.5 text-destructive">*</span>
-						</label>
+				<form class="onb-form" onsubmit={submitPassword}>
+					<div class="field">
+						<label for="password" class="field__label field__label--required">New password</label>
 						<input
 							id="password"
 							name="password"
@@ -604,16 +582,17 @@
 							required
 							bind:value={password}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
+							class:field__input--error={fieldErrors.password}
 						/>
 						{#if fieldErrors.password}
-							<p class="text-xs text-destructive">{fieldErrors.password}</p>
+							<p class="field__error">{fieldErrors.password}</p>
 						{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<label for="confirm_password" class={labelClass}>
-							Confirm password<span class="ml-0.5 text-destructive">*</span>
+					<div class="field">
+						<label for="confirm_password" class="field__label field__label--required">
+							Confirm password
 						</label>
 						<input
 							id="confirm_password"
@@ -625,32 +604,22 @@
 							required
 							bind:value={confirmPassword}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
+							class:field__input--error={fieldErrors.confirm_password}
 						/>
 						{#if fieldErrors.confirm_password}
-							<p class="text-xs text-destructive">{fieldErrors.confirm_password}</p>
+							<p class="field__error">{fieldErrors.confirm_password}</p>
 						{/if}
 					</div>
 
-					<button
-						type="submit"
-						disabled={submitting}
-						class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-					>
-						{#if submitting}
-							<Loader2 class="h-4 w-4 animate-spin" />
-							Updating…
-						{:else}
-							Set password & continue
-						{/if}
-					</button>
+					<Button type="submit" class="btn--full" loading={submitting} loadingLabel="Updating…">
+						Set password & continue
+					</Button>
 				</form>
 			{:else if phase === 'business'}
-				<form class="space-y-5" onsubmit={submitBusinessProfile}>
-					<div class="space-y-1.5">
-						<label for="biz_name" class={labelClass}>
-							Company name<span class="ml-0.5 text-destructive">*</span>
-						</label>
+				<form class="onb-form" onsubmit={submitBusinessProfile}>
+					<div class="field">
+						<label for="biz_name" class="field__label field__label--required">Company name</label>
 						<input
 							id="biz_name"
 							type="text"
@@ -659,17 +628,16 @@
 							required
 							bind:value={bizName}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
+							class:field__input--error={fieldErrors.name}
 						/>
 						{#if fieldErrors.name}
-							<p class="text-xs text-destructive">{fieldErrors.name}</p>
+							<p class="field__error">{fieldErrors.name}</p>
 						{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<label for="trade_type" class={labelClass}>
-							Trade type<span class="ml-0.5 text-destructive">*</span>
-						</label>
+					<div class="field">
+						<label for="trade_type" class="field__label field__label--required">Trade type</label>
 						<input
 							id="trade_type"
 							type="text"
@@ -677,19 +645,18 @@
 							required
 							bind:value={tradeType}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
+							class:field__input--error={fieldErrors.trade_type}
 						/>
 						{#if fieldErrors.trade_type}
-							<p class="text-xs text-destructive">{fieldErrors.trade_type}</p>
+							<p class="field__error">{fieldErrors.trade_type}</p>
 						{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<label for="country" class={labelClass}>
-							Country<span class="ml-0.5 text-destructive">*</span>
-						</label>
+					<div class="field">
+						<label for="country" class="field__label field__label--required">Country</label>
 						<Select.Root bind:value={country} disabled={submitting}>
-							<Select.Trigger id="country" class="h-11 w-full rounded-xl">
+							<Select.Trigger id="country" class="field__input">
 								{selectedCountryName ?? 'Select your country'}
 							</Select.Trigger>
 							<Select.Content>
@@ -698,32 +665,30 @@
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<p class="text-[11px] text-muted-foreground/70">
-							Determines phone number availability and messaging compliance.
-						</p>
 						{#if fieldErrors.country}
-							<p class="text-xs text-destructive">{fieldErrors.country}</p>
+							<p class="field__error">{fieldErrors.country}</p>
+						{:else}
+							<p class="field__hint">
+								Determines phone number availability and messaging compliance.
+							</p>
 						{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<label for="timezone" class={labelClass}>
-							Timezone<span class="ml-0.5 text-destructive">*</span>
-						</label>
+					<div class="field">
+						<label for="timezone" class="field__label field__label--required">Timezone</label>
 						<TimezoneCombobox
 							id="timezone"
 							bind:value={timezone}
 							disabled={submitting}
 							invalid={Boolean(fieldErrors.timezone)}
-							class="rounded-xl"
 						/>
 						{#if fieldErrors.timezone}
-							<p class="text-xs text-destructive">{fieldErrors.timezone}</p>
+							<p class="field__error">{fieldErrors.timezone}</p>
 						{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<label for="address" class={labelClass}>Street address</label>
+					<div class="field">
+						<label for="address" class="field__label">Street address</label>
 						<input
 							id="address"
 							type="text"
@@ -731,13 +696,13 @@
 							placeholder="123 Main St"
 							bind:value={address}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
 						/>
 					</div>
 
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-						<div class="space-y-1.5">
-							<label for="city" class={labelClass}>City</label>
+					<div class="onb-grid">
+						<div class="field">
+							<label for="city" class="field__label">City</label>
 							<input
 								id="city"
 								type="text"
@@ -745,11 +710,11 @@
 								placeholder="Austin"
 								bind:value={city}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
 							/>
 						</div>
-						<div class="space-y-1.5">
-							<label for="state" class={labelClass}>State / Region</label>
+						<div class="field">
+							<label for="state" class="field__label">State / Region</label>
 							<input
 								id="state"
 								type="text"
@@ -757,11 +722,11 @@
 								placeholder="TX"
 								bind:value={stateRegion}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
 							/>
 						</div>
-						<div class="space-y-1.5">
-							<label for="zip" class={labelClass}>ZIP / Postal</label>
+						<div class="field">
+							<label for="zip" class="field__label">ZIP / Postal</label>
 							<input
 								id="zip"
 								type="text"
@@ -769,29 +734,20 @@
 								placeholder="78701"
 								bind:value={zip}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
 							/>
 						</div>
 					</div>
 
-					<button
-						type="submit"
-						disabled={submitting}
-						class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-					>
-						{#if submitting}
-							<Loader2 class="h-4 w-4 animate-spin" />
-							Saving…
-						{:else}
-							Save & continue
-						{/if}
-					</button>
+					<Button type="submit" class="btn--full" loading={submitting} loadingLabel="Saving…">
+						Save & continue
+					</Button>
 				</form>
 			{:else if phase === 'phone'}
-				<div class="space-y-5">
-					<form class="flex items-end gap-3" onsubmit={searchNumbers}>
-						<div class="flex-1 space-y-1.5">
-							<label for="postal_code" class={labelClass}>ZIP / Postal code</label>
+				<div class="onb-form">
+					<form class="onb-search" onsubmit={searchNumbers}>
+						<div class="field onb-search__field">
+							<label for="postal_code" class="field__label">ZIP / Postal code</label>
 							<input
 								id="postal_code"
 								type="text"
@@ -800,16 +756,16 @@
 								placeholder="78701"
 								bind:value={postalCode}
 								disabled={searching || submitting}
-								class={inputClass}
+								class="field__input"
 							/>
 						</div>
 						<button
 							type="submit"
 							disabled={searching || submitting || postalCode.trim().length < 2}
-							class="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border/70 bg-card px-4 text-sm font-semibold text-foreground transition-all duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+							class="btn btn--secondary onb-search__btn"
 						>
 							{#if searching}
-								<Loader2 class="h-4 w-4 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 								Searching…
 							{:else}
 								Search
@@ -817,22 +773,20 @@
 						</button>
 					</form>
 					{#if fieldErrors.postalCode}
-						<p class="text-xs text-destructive">{fieldErrors.postalCode}</p>
+						<p class="field__error">{fieldErrors.postalCode}</p>
 					{/if}
 
 					{#if searched && numbers.length === 0}
-						<p class="text-sm text-muted-foreground">
+						<p class="onb-empty">
 							No numbers available for that area. Try a different ZIP / postal code.
 						</p>
 					{:else if numbers.length > 0}
-						<fieldset class="space-y-2">
-							<legend class="sr-only">Available numbers</legend>
+						<fieldset class="onb-numbers">
+							<legend class="onb-sr">Available numbers</legend>
 							{#each numbers as num (num.phoneNumber)}
 								<label
-									class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-all duration-150 {selectedNumber ===
-									num.phoneNumber
-										? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-										: 'border-border/70 hover:bg-muted/40'}"
+									class="onb-number"
+									class:onb-number--selected={selectedNumber === num.phoneNumber}
 								>
 									<input
 										type="radio"
@@ -840,14 +794,12 @@
 										value={num.phoneNumber}
 										bind:group={selectedNumber}
 										disabled={submitting}
-										class="h-4 w-4 accent-primary"
+										class="onb-number__radio"
 									/>
-									<span class="flex-1">
-										<span class="block text-sm font-semibold text-foreground">
-											{num.friendlyName}
-										</span>
+									<span class="onb-number__main">
+										<span class="onb-number__name">{num.friendlyName}</span>
 										{#if num.locality || num.region}
-											<span class="block text-xs text-muted-foreground">
+											<span class="onb-number__loc">
 												{[num.locality, num.region].filter(Boolean).join(', ')}
 											</span>
 										{/if}
@@ -857,15 +809,15 @@
 						</fieldset>
 					{/if}
 
-					<div class="space-y-3">
+					<div class="onb-actions">
 						<button
 							type="button"
 							onclick={purchaseNumber}
 							disabled={submitting || !selectedNumber}
-							class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+							class="btn btn--primary btn--full"
 						>
 							{#if submitting}
-								<Loader2 class="h-4 w-4 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 								Setting up your number…
 							{:else}
 								Get this number
@@ -875,22 +827,20 @@
 							type="button"
 							onclick={skipPhone}
 							disabled={submitting}
-							class="flex h-11 w-full items-center justify-center rounded-xl text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+							class="btn btn--ghost btn--full"
 						>
 							Skip for now
 						</button>
 					</div>
-					<p class="text-[11px] leading-relaxed text-muted-foreground/70">
+					<p class="onb-note">
 						You can set up a number later from Settings → Integrations. One number per organization.
 					</p>
 				</div>
 			{:else if phase === 'carrier'}
-				<form class="space-y-5" onsubmit={submitCarrier}>
-					<div class="space-y-1.5">
-						<label for="legal_business_name" class={labelClass}>
-							{country === 'CA' ? 'Business name' : 'Legal business name'}<span
-								class="ml-0.5 text-destructive">*</span
-							>
+				<form class="onb-form" onsubmit={submitCarrier}>
+					<div class="field">
+						<label for="legal_business_name" class="field__label field__label--required">
+							{country === 'CA' ? 'Business name' : 'Legal business name'}
 						</label>
 						<input
 							id="legal_business_name"
@@ -900,18 +850,17 @@
 							required
 							bind:value={legalBusinessName}
 							disabled={submitting}
-							class={inputClass}
+							class="field__input"
+							class:field__input--error={fieldErrors.legal_business_name}
 						/>
 						{#if fieldErrors.legal_business_name}
-							<p class="text-xs text-destructive">{fieldErrors.legal_business_name}</p>
+							<p class="field__error">{fieldErrors.legal_business_name}</p>
 						{/if}
 					</div>
 
 					{#if country === 'US'}
-						<div class="space-y-1.5">
-							<label for="ein" class={labelClass}>
-								EIN<span class="ml-0.5 text-destructive">*</span>
-							</label>
+						<div class="field">
+							<label for="ein" class="field__label field__label--required">EIN</label>
 							<input
 								id="ein"
 								type="text"
@@ -920,17 +869,16 @@
 								required
 								bind:value={ein}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
+								class:field__input--error={fieldErrors.ein}
 							/>
 							{#if fieldErrors.ein}
-								<p class="text-xs text-destructive">{fieldErrors.ein}</p>
+								<p class="field__error">{fieldErrors.ein}</p>
 							{/if}
 						</div>
 
-						<div class="space-y-1.5">
-							<label for="website" class={labelClass}>
-								Website<span class="ml-0.5 text-destructive">*</span>
-							</label>
+						<div class="field">
+							<label for="website" class="field__label field__label--required">Website</label>
 							<input
 								id="website"
 								type="text"
@@ -940,16 +888,17 @@
 								required
 								bind:value={website}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
+								class:field__input--error={fieldErrors.website}
 							/>
 							{#if fieldErrors.website}
-								<p class="text-xs text-destructive">{fieldErrors.website}</p>
+								<p class="field__error">{fieldErrors.website}</p>
 							{/if}
 						</div>
 
-						<div class="space-y-1.5">
-							<label for="messaging_use_case" class={labelClass}>
-								Messaging use case<span class="ml-0.5 text-destructive">*</span>
+						<div class="field">
+							<label for="messaging_use_case" class="field__label field__label--required">
+								Messaging use case
 							</label>
 							<textarea
 								id="messaging_use_case"
@@ -958,16 +907,17 @@
 								required
 								bind:value={messagingUseCase}
 								disabled={submitting}
-								class="{inputClass} h-auto py-2.5"
+								class="field__textarea"
+								class:field__textarea--error={fieldErrors.messaging_use_case}
 							></textarea>
 							{#if fieldErrors.messaging_use_case}
-								<p class="text-xs text-destructive">{fieldErrors.messaging_use_case}</p>
+								<p class="field__error">{fieldErrors.messaging_use_case}</p>
 							{/if}
 						</div>
 					{:else}
-						<div class="space-y-1.5">
-							<label for="business_number" class={labelClass}>
-								Business Number<span class="ml-0.5 text-destructive">*</span>
+						<div class="field">
+							<label for="business_number" class="field__label field__label--required">
+								Business Number
 							</label>
 							<input
 								id="business_number"
@@ -977,48 +927,41 @@
 								required
 								bind:value={businessNumber}
 								disabled={submitting}
-								class={inputClass}
+								class="field__input"
+								class:field__input--error={fieldErrors.business_number}
 							/>
 							{#if fieldErrors.business_number}
-								<p class="text-xs text-destructive">{fieldErrors.business_number}</p>
+								<p class="field__error">{fieldErrors.business_number}</p>
 							{/if}
 						</div>
 					{/if}
 
-					<p class="text-[11px] leading-relaxed text-muted-foreground/70">
+					<p class="onb-note">
 						Your number works for calls and incoming texts right away. Outbound texting turns on
 						once carrier registration is approved ({country === 'CA' ? '3–5' : '3–7'} business days).
 					</p>
 
-					<div class="space-y-3">
-						<button
-							type="submit"
-							disabled={submitting}
-							class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-						>
-							{#if submitting}
-								<Loader2 class="h-4 w-4 animate-spin" />
-								Saving…
-							{:else}
-								Save & continue
-							{/if}
-						</button>
-						<button
+					<div class="onb-actions">
+						<Button type="submit" class="btn--full" loading={submitting} loadingLabel="Saving…">
+							Save & continue
+						</Button>
+						<Button
 							type="button"
+							variant="ghost"
+							class="btn--full"
 							onclick={skipCarrier}
 							disabled={submitting}
-							class="flex h-11 w-full items-center justify-center rounded-xl text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							Skip for now
-						</button>
+						</Button>
 					</div>
 				</form>
 			{:else if phase === 'branding'}
-				<div class="space-y-6">
+				<div class="onb-form onb-form--lg">
 					<!-- Brand color -->
-					<div class="space-y-1.5">
-						<span class={labelClass}>Brand color</span>
-						<div class="flex items-center gap-2">
+					<div class="field">
+						<span class="field__label">Brand color</span>
+						<div class="onb-color">
 							<input
 								id="primary_color"
 								type="text"
@@ -1026,63 +969,52 @@
 								maxlength={7}
 								bind:value={primaryColor}
 								disabled={submitting}
-								class="{inputClass} font-mono"
+								class="field__input onb-color__input"
 							/>
 							<Popover.Root>
 								<Popover.Trigger
 									type="button"
 									aria-label="Open color picker"
 									disabled={submitting}
-									class={cn(
-										'h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-border/70 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50'
-									)}
+									class="onb-swatch-trigger"
 									style={`background-color: ${primaryColor || 'transparent'}`}
 								>
 									{#if !primaryColor}
-										<span
-											class="block h-full w-full bg-gradient-to-br from-rose-400 via-amber-300 to-sky-400 opacity-60"
-										></span>
+										<span class="onb-swatch-trigger__rainbow"></span>
 									{/if}
 								</Popover.Trigger>
-								<Popover.Content class="w-64 p-3">
-									<div class="grid grid-cols-5 gap-2">
+								<Popover.Content class="onb-color-pop">
+									<div class="onb-swatches">
 										{#each SWATCHES as swatch (swatch)}
 											<button
 												type="button"
 												aria-label={swatch}
-												class={cn(
-													'h-8 w-8 rounded-md border transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-popover',
-													primaryColor.toLowerCase() === swatch
-														? 'border-foreground ring-2 ring-ring'
-														: 'border-border'
-												)}
+												class="onb-swatch"
+												class:onb-swatch--active={primaryColor.toLowerCase() === swatch}
 												style:background-color={swatch}
 												onclick={() => (primaryColor = swatch)}
 											></button>
 										{/each}
 									</div>
-									<div class="mt-3 flex items-center gap-2 border-t border-border pt-3">
-										<label
-											class="relative h-8 w-8 cursor-pointer overflow-hidden rounded-md border border-border"
-											aria-label="Pick a custom color"
-										>
+									<div class="onb-custom">
+										<label class="onb-custom__well" aria-label="Pick a custom color">
 											<input
 												type="color"
-												class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+												class="onb-custom__native"
 												value={primaryColor || '#3b82f6'}
 												oninput={(e) =>
 													(primaryColor = (e.currentTarget as HTMLInputElement).value)}
 											/>
 											<span
-												class="block h-full w-full"
+												class="onb-custom__swatch"
 												style:background-color={primaryColor || '#3b82f6'}
 											></span>
 										</label>
-										<span class="text-xs text-muted-foreground">Custom hex</span>
+										<span class="onb-custom__label">Custom hex</span>
 										{#if primaryColor}
 											<button
 												type="button"
-												class="ml-auto text-xs text-muted-foreground hover:text-foreground"
+												class="onb-custom__clear"
 												onclick={() => (primaryColor = '')}
 											>
 												Clear
@@ -1093,51 +1025,52 @@
 							</Popover.Root>
 						</div>
 						{#if fieldErrors.primary_color}
-							<p class="text-xs text-destructive">{fieldErrors.primary_color}</p>
+							<p class="field__error">{fieldErrors.primary_color}</p>
 						{:else}
-							<p class="text-[11px] text-muted-foreground/70">
+							<p class="field__hint">
 								Used on customer-facing assets like invoices, quotes, and reminders.
 							</p>
 						{/if}
 					</div>
 
 					<!-- Working hours -->
-					<div class="space-y-1.5">
-						<span class={labelClass}>Working hours</span>
-						<div class="grid grid-cols-2 gap-3">
-							<select id="day_start" bind:value={dayStart} disabled={submitting} class={inputClass}>
+					<div class="field">
+						<span class="field__label">Working hours</span>
+						<div class="onb-hours">
+							<select
+								id="day_start"
+								bind:value={dayStart}
+								disabled={submitting}
+								class="field__select"
+							>
 								{#each HOUR_OPTIONS.slice(0, 24) as opt (opt.value)}
 									<option value={opt.value}>{opt.label}</option>
 								{/each}
 							</select>
-							<select id="day_end" bind:value={dayEnd} disabled={submitting} class={inputClass}>
+							<select id="day_end" bind:value={dayEnd} disabled={submitting} class="field__select">
 								{#each HOUR_OPTIONS.slice(1) as opt (opt.value)}
 									<option value={opt.value}>{opt.label}</option>
 								{/each}
 							</select>
 						</div>
 						{#if fieldErrors.calendar_day_end_hour}
-							<p class="text-xs text-destructive">{fieldErrors.calendar_day_end_hour}</p>
+							<p class="field__error">{fieldErrors.calendar_day_end_hour}</p>
 						{:else}
-							<p class="text-[11px] text-muted-foreground/70">
-								Sets the time range shown on your Appointments calendar.
-							</p>
+							<p class="field__hint">Sets the time range shown on your Appointments calendar.</p>
 						{/if}
 					</div>
 
-					<p class="text-[11px] leading-relaxed text-muted-foreground/70">
-						You can add your logo anytime in Settings → Organization.
-					</p>
+					<p class="onb-note">You can add your logo anytime in Settings → Organization.</p>
 
-					<div class="space-y-3">
+					<div class="onb-actions">
 						<button
 							type="button"
 							onclick={saveBrandingAndFinish}
 							disabled={submitting}
-							class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 transition-all duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+							class="btn btn--primary btn--full"
 						>
 							{#if submitting}
-								<Loader2 class="h-4 w-4 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 								Finishing…
 							{:else}
 								Finish setup & go to dashboard
@@ -1147,7 +1080,7 @@
 							type="button"
 							onclick={skipBranding}
 							disabled={submitting}
-							class="flex h-11 w-full items-center justify-center rounded-xl text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+							class="btn btn--ghost btn--full"
 						>
 							Skip & finish
 						</button>
@@ -1157,3 +1090,351 @@
 		{/snippet}
 	</AuthCard>
 {/if}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	// ── Loading ────────────────────────────────────────────────────────────────
+
+	.onb-loading {
+		display: flex;
+		min-height: 100vh;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-bg-app);
+	}
+
+	.onb-loading__spinner {
+		font-size: 32px;
+		line-height: 1;
+		color: var(--color-brand);
+	}
+
+	// ── Step progress ────────────────────────────────────────────────────────
+
+	.onb-steps {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-6;
+	}
+
+	.onb-steps__item {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	.onb-steps__bullet {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: $radius-full;
+		font-size: 10px;
+		font-weight: $weight-semibold;
+		border: 1px solid var(--color-border-strong);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 12px;
+			line-height: 1;
+		}
+
+		&--done {
+			background: var(--color-brand);
+			border-color: var(--color-brand);
+			color: #fff;
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			color: var(--color-brand);
+		}
+	}
+
+	.onb-steps__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+
+		&--active {
+			color: var(--color-text-primary);
+		}
+
+		&--done {
+			color: var(--color-text-secondary);
+		}
+	}
+
+	.onb-steps__sep {
+		margin: 0 2px;
+		color: var(--color-text-muted);
+		opacity: 0.5;
+	}
+
+	// ── Forms ────────────────────────────────────────────────────────────────
+
+	.onb-alert {
+		margin-bottom: $space-5;
+	}
+
+	.onb-form {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+
+		&--lg {
+			gap: $space-6;
+		}
+	}
+
+	.onb-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: $space-4;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+
+	.onb-actions {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	.onb-note {
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+
+	.onb-empty {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	.onb-sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	// ── Phone search ───────────────────────────────────────────────────────────
+
+	.onb-search {
+		display: flex;
+		align-items: flex-end;
+		gap: $space-3;
+	}
+
+	.onb-search__field {
+		flex: 1;
+	}
+
+	.onb-search__btn {
+		flex-shrink: 0;
+		height: 44px;
+	}
+
+	// ── Available numbers ────────────────────────────────────────────────────
+
+	.onb-numbers {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		border: 0;
+		padding: 0;
+		margin: 0;
+	}
+
+	.onb-number {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		cursor: pointer;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		padding: $space-3 $space-4;
+		transition:
+			border-color $duration-fast $ease-standard,
+			background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--selected {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			box-shadow: 0 0 0 1px var(--color-brand);
+		}
+	}
+
+	.onb-number__radio {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--color-brand);
+	}
+
+	.onb-number__main {
+		flex: 1;
+	}
+
+	.onb-number__name {
+		display: block;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	.onb-number__loc {
+		display: block;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	// ── Brand color picker ─────────────────────────────────────────────────────
+
+	.onb-color {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	.onb-color__input {
+		font-family: ui-monospace, 'SF Mono', monospace;
+	}
+
+	.onb-swatch-trigger {
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		overflow: hidden;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border-strong);
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.05);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.5;
+		}
+	}
+
+	.onb-swatch-trigger__rainbow {
+		display: block;
+		width: 100%;
+		height: 100%;
+		opacity: 0.6;
+		background: linear-gradient(135deg, #fb7185, #fcd34d, #38bdf8);
+	}
+
+	:global(.onb-color-pop) {
+		width: 256px;
+		padding: $space-3;
+	}
+
+	.onb-swatches {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: $space-2;
+	}
+
+	.onb-swatch {
+		width: 32px;
+		height: 32px;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:hover {
+			transform: scale(1.1);
+		}
+
+		&--active {
+			border-color: var(--color-text-primary);
+			box-shadow: 0 0 0 2px var(--color-brand);
+		}
+	}
+
+	.onb-custom {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: $space-3;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.onb-custom__well {
+		position: relative;
+		width: 32px;
+		height: 32px;
+		overflow: hidden;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+	}
+
+	.onb-custom__native {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	.onb-custom__swatch {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	.onb-custom__label {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	.onb-custom__clear {
+		margin-left: auto;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		background: none;
+		border: 0;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+
+	// ── Working hours ────────────────────────────────────────────────────────
+
+	.onb-hours {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: $space-3;
+	}
+</style>

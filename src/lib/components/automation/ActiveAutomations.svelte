@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { Zap, CircleStop } from '@lucide/svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -29,9 +27,7 @@
 
 	async function load(id: string) {
 		try {
-			const res = await fetch(
-				`/api/automation/enrollments?contact_id=${encodeURIComponent(id)}`
-			);
+			const res = await fetch(`/api/automation/enrollments?contact_id=${encodeURIComponent(id)}`);
 			if (!res.ok) return;
 			const body = await res.json();
 			enrollments = body.data ?? [];
@@ -102,40 +98,35 @@
 </script>
 
 {#if loaded && enrollments.length > 0}
-	<div class="rounded-xl border border-border/60 bg-card shadow-card">
-		<div class="flex items-center gap-2 border-b border-border/50 px-4 py-3">
-			<Zap class="h-3.5 w-3.5 text-primary" />
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Active automations
-			</p>
+	<div class="active-auto">
+		<div class="active-auto__head">
+			<i class="ri-flashlight-line active-auto__head-icon" aria-hidden="true"></i>
+			<p class="active-auto__head-label">Active automations</p>
 		</div>
-		<ul class="divide-y divide-border/40">
+		<ul class="active-auto__list">
 			{#each enrollments as e (e.id)}
-				<li class="flex items-center justify-between gap-3 px-4 py-3">
-					<div class="min-w-0">
-						<div class="flex items-center gap-2">
-							<span class="truncate text-sm font-medium text-foreground">
-								{titleFor(e.sequence_key)}
-							</span>
+				<li class="active-auto__row">
+					<div class="active-auto__info">
+						<div class="active-auto__title-row">
+							<span class="active-auto__title">{titleFor(e.sequence_key)}</span>
 							{#if e.status === 'paused'}
 								<Badge label="Paused" variant="warning" />
 							{:else}
 								<Badge label="Active" variant="success" />
 							{/if}
 						</div>
-						<p class="mt-0.5 truncate text-xs text-muted-foreground">{metaFor(e)}</p>
+						<p class="active-auto__meta">{metaFor(e)}</p>
 					</div>
 					{#if canStop}
-						<Button
-							variant="ghost"
-							size="sm"
-							class="h-8 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+						<button
+							type="button"
+							class="active-auto__stop"
 							onclick={() => requestStop(e)}
 							aria-label={`Stop ${titleFor(e.sequence_key)} automation`}
 						>
-							<CircleStop class="mr-1 h-3.5 w-3.5" />
+							<i class="ri-stop-circle-line" aria-hidden="true"></i>
 							Stop
-						</Button>
+						</button>
 					{/if}
 				</li>
 			{/each}

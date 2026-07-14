@@ -1,24 +1,24 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Button } from '$lib/components/ui/button';
+	import {
+		SelectRoot,
+		SelectTrigger,
+		SelectValue,
+		SelectContent,
+		SelectItem
+	} from '$lib/components/ui/select';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { cn } from '$lib/utils/cn';
+	import { Button } from '$lib/components/ui/button';
 	import { createRealtimeManager, type RealtimeManager } from '$lib/stores/realtimeReconnect';
 	import {
-		HEADER_MAP,
-		normalizeKey,
-		CANONICAL_FIELD_LABELS
+		CANONICAL_FIELDS,
+		CANONICAL_FIELD_LABELS,
+		guessCanonical
 	} from '$lib/contacts/csvHeaders';
-	import {
-		Upload,
-		FileSpreadsheet,
-		CheckCircle,
-		AlertCircle,
-		X,
-		Download,
-		Ban,
-		Check
-	} from '@lucide/svelte';
+
+	// Sentinel value for the "Don't import" option — bits-ui Select values are strings,
+	// so a real null can't be an option value; we translate to/from null at the edges.
+	const NO_IMPORT = '__none__';
 
 	// The contact_imports row shape we care about (snake_case, straight from the
 	// DB via the GET fallback and Realtime UPDATE payloads).
@@ -35,7 +35,7 @@
 		last_error: string | null;
 	};
 
-	type Stage = 'idle' | 'parsed' | 'uploading' | 'processing' | 'done';
+	type Stage = 'idle' | 'mapping' | 'parsed' | 'uploading' | 'processing' | 'done';
 
 	// Survives a page refresh: lets the modal re-attach to an in-flight import.
 	const ACTIVE_KEY = 'contactImport:active';
@@ -49,6 +49,10 @@
 	let previewHeaders = $state<string[]>([]);
 	let previewRows = $state<string[][]>([]);
 	let totalRows = $state(0);
+	// User's column mapping, aligned by index with previewHeaders. Each entry is a
+	// canonical field name (e.g. 'phone') or null for "don't import". Seeded from the
+	// auto-guess when a file is parsed; editable on the "Map columns" step.
+	let columnMap = $state<(string | null)[]>([]);
 	// What to do with a row that matches an existing contact (by phone or email).
 	let onDuplicate = $state<'skip' | 'update'>('skip');
 
@@ -82,27 +86,36 @@
 	// valid phone. Drives the downloadable report on the done step.
 	const flaggedCount = $derived(progress?.error_rows?.length ?? 0);
 
-	// Which uploaded columns we recognize vs silently drop. Uses the SAME HEADER_MAP
-	// the server imports with (shared module), so the hint never lies. `mapped` is the
-	// set of friendly field labels detected; `ignored` is the user's original header
-	// text for columns we won't import — surfaced so nothing is lost without warning.
-	const headerMapping = $derived.by(() => {
+	// Canonical fields currently assigned to some column — drives duplicate blocking
+	// (a field already mapped elsewhere is disabled in every OTHER column's dropdown,
+	// the HubSpot/Jobber pattern) and the Continue-gate below.
+	const mappedSet = $derived(new Set(columnMap.filter((c): c is string => !!c)));
+	// The importer needs a name and at least one way to reach the contact.
+	const hasNameMapped = $derived(mappedSet.has('full_name') || mappedSet.has('first_name'));
+	const hasContactMapped = $derived(mappedSet.has('phone') || mappedSet.has('email'));
+	const canContinueMapping = $derived(hasNameMapped && hasContactMapped);
+
+	// Review-step summary of the final mapping: friendly labels for mapped columns and
+	// the original header text for columns the user chose not to import.
+	const mappingSummary = $derived.by(() => {
 		const mapped: string[] = [];
-		const seenCanonical: string[] = [];
 		const ignored: string[] = [];
-		for (const h of previewHeaders) {
-			const canonical = HEADER_MAP[normalizeKey(h)];
-			if (canonical) {
-				if (!seenCanonical.includes(canonical)) {
-					seenCanonical.push(canonical);
-					mapped.push(CANONICAL_FIELD_LABELS[canonical] ?? canonical);
-				}
-			} else if (h.trim()) {
-				ignored.push(h);
-			}
+		for (let i = 0; i < previewHeaders.length; i++) {
+			const canonical = columnMap[i];
+			if (canonical) mapped.push(CANONICAL_FIELD_LABELS[canonical] ?? canonical);
+			else if (previewHeaders[i]?.trim()) ignored.push(previewHeaders[i]);
 		}
 		return { mapped, ignored };
 	});
+
+	function fieldLabel(canonical: string | null): string {
+		if (!canonical) return "Don't import";
+		return CANONICAL_FIELD_LABELS[canonical] ?? canonical;
+	}
+
+	function setColumn(i: number, value: string) {
+		columnMap[i] = value === NO_IMPORT ? null : value;
+	}
 
 	function stopTracking() {
 		manager?.destroy();
@@ -122,6 +135,7 @@
 		previewHeaders = [];
 		previewRows = [];
 		totalRows = 0;
+		columnMap = [];
 		onDuplicate = 'skip';
 		importId = null;
 		progress = null;
@@ -236,6 +250,17 @@
 		previewHeaders = parseLine(lines[0]);
 		previewRows = lines.slice(1, 6).map(parseLine);
 		totalRows = Math.max(0, lines.length - 1);
+		// Seed the mapping with the auto-guess, respecting "first column wins" so the
+		// same field is never pre-assigned to two columns (duplicates block below).
+		const used = new Set<string>();
+		columnMap = previewHeaders.map((h) => {
+			const g = guessCanonical(h);
+			if (g && !used.has(g)) {
+				used.add(g);
+				return g;
+			}
+			return null;
+		});
 	}
 
 	function selectFile(f: File) {
@@ -252,7 +277,7 @@
 		const reader = new FileReader();
 		reader.onload = (e) => {
 			loadPreview((e.target?.result as string) ?? '');
-			stage = 'parsed';
+			stage = 'mapping';
 		};
 		reader.readAsText(f);
 	}
@@ -277,6 +302,7 @@
 			const fd = new FormData();
 			fd.append('file', file);
 			fd.append('on_duplicate', onDuplicate);
+			fd.append('column_map', JSON.stringify(columnMap));
 			const res = await fetch('/api/contacts/import', { method: 'POST', body: fd });
 			const body = await res.json();
 			if (!res.ok) throw new Error(body.error ?? 'Import failed');
@@ -371,10 +397,12 @@
 		});
 	});
 
-	// Wizard steps for the header progress rail. parsed = Review; everything from
-	// upload onward (uploading/processing/done) sits on the final Import step.
-	const STEPS = ['Upload', 'Review', 'Import'];
-	const currentStep = $derived(stage === 'idle' ? 0 : stage === 'parsed' ? 1 : 2);
+	// Wizard steps for the header progress rail. mapping = Map, parsed = Review;
+	// everything from upload onward (uploading/processing/done) sits on final Import.
+	const STEPS = ['Upload', 'Map', 'Review', 'Import'];
+	const currentStep = $derived(
+		stage === 'idle' ? 0 : stage === 'mapping' ? 1 : stage === 'parsed' ? 2 : 3
+	);
 
 	function stepState(i: number): 'done' | 'active' | 'todo' {
 		if (stage === 'done') return 'done';
@@ -396,106 +424,72 @@
 		if (!v) handleClose();
 	}}
 >
-	<Dialog.Content
-		class="grid max-h-[88vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 p-0 sm:max-w-2xl"
-	>
-		<Dialog.Header class="space-y-3 border-b border-border/60 px-6 pt-6 pb-4">
-			<div class="space-y-1">
-				<Dialog.Title class="text-base font-semibold">Import Contacts</Dialog.Title>
-				<Dialog.Description class="text-sm">
-					Upload a CSV and we'll import your contacts in the background.
+	<Dialog.Content class="contact-import__dialog">
+		<Dialog.Header class="contact-import__header">
+			<div class="contact-import__titles">
+				<Dialog.Title><span class="contact-import__title">Import Contacts</span></Dialog.Title>
+				<Dialog.Description>
+					<span class="contact-import__desc">
+						Upload a CSV and we'll import your contacts in the background.
+					</span>
 				</Dialog.Description>
 			</div>
 
 			<!-- Step rail -->
-			<div class="flex items-center gap-2 pt-1">
+			<div class="contact-import__steps">
 				{#each STEPS as label, i (label)}
 					{@const state = stepState(i)}
-					<div class="flex items-center gap-2">
+					<div class="contact-import__step">
 						<div
-							class={cn(
-								'flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-150',
-								state === 'done' && 'bg-primary text-primary-foreground',
-								state === 'active' && 'bg-primary/10 text-primary ring-1 ring-primary/30',
-								state === 'todo' && 'bg-muted text-muted-foreground'
-							)}
+							class="contact-import__step-num"
+							class:contact-import__step-num--done={state === 'done'}
+							class:contact-import__step-num--active={state === 'active'}
 						>
 							{#if state === 'done'}
-								<Check class="h-3.5 w-3.5" />
+								<i class="ri-check-line" aria-hidden="true"></i>
 							{:else}
 								{i + 1}
 							{/if}
 						</div>
 						<span
-							class={cn(
-								'text-xs font-medium transition-colors duration-150',
-								state === 'active' ? 'text-foreground' : 'text-muted-foreground'
-							)}
+							class="contact-import__step-label"
+							class:contact-import__step-label--active={state === 'active'}
 						>
 							{label}
 						</span>
 						{#if i < STEPS.length - 1}
-							<div class="h-px w-5 bg-border sm:w-8"></div>
+							<div class="contact-import__step-line"></div>
 						{/if}
 					</div>
 				{/each}
 			</div>
 		</Dialog.Header>
 
-		<div class="min-h-0 overflow-y-auto px-6 py-4">
+		<div class="contact-import__scroll">
 			{#snippet statTiles(imported: number, skipped: number, failed: number, updated = 0)}
-				<div class={cn('grid gap-2', updated > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
-					<div class="rounded-xl border border-border/60 bg-card px-3 py-3 text-center">
-						<p class="text-xl font-semibold tracking-tight text-foreground">
-							{imported.toLocaleString()}
-						</p>
-						<p
-							class="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-						>
-							Imported
-						</p>
+				<div class="contact-import__stats" class:contact-import__stats--4={updated > 0}>
+					<div class="contact-import__stat">
+						<p class="contact-import__stat-value">{imported.toLocaleString()}</p>
+						<p class="contact-import__stat-label">Imported</p>
 					</div>
 					{#if updated > 0}
-						<div class="rounded-xl border border-border/60 bg-card px-3 py-3 text-center">
-							<p class="text-xl font-semibold tracking-tight text-foreground">
-								{updated.toLocaleString()}
-							</p>
-							<p
-								class="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-							>
-								Updated
-							</p>
+						<div class="contact-import__stat">
+							<p class="contact-import__stat-value">{updated.toLocaleString()}</p>
+							<p class="contact-import__stat-label">Updated</p>
 						</div>
 					{/if}
-					<div class="rounded-xl border border-border/60 bg-card px-3 py-3 text-center">
-						<p class="text-xl font-semibold tracking-tight text-foreground">
-							{skipped.toLocaleString()}
-						</p>
-						<p
-							class="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-						>
-							Skipped
-						</p>
+					<div class="contact-import__stat">
+						<p class="contact-import__stat-value">{skipped.toLocaleString()}</p>
+						<p class="contact-import__stat-label">Skipped</p>
 					</div>
-					<div
-						class={cn(
-							'rounded-xl border px-3 py-3 text-center',
-							failed > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border/60 bg-card'
-						)}
-					>
+					<div class="contact-import__stat" class:contact-import__stat--danger={failed > 0}>
 						<p
-							class={cn(
-								'text-xl font-semibold tracking-tight',
-								failed > 0 ? 'text-destructive' : 'text-foreground'
-							)}
+							class="contact-import__stat-value"
+							class:contact-import__stat-value--danger={failed > 0}
 						>
 							{failed.toLocaleString()}
 						</p>
-						<p
-							class="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-						>
-							Failed
-						</p>
+						<p class="contact-import__stat-label">Failed</p>
 					</div>
 				</div>
 			{/snippet}
@@ -505,12 +499,8 @@
 				<div
 					role="button"
 					tabindex="0"
-					class={cn(
-						'flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-150',
-						dragging
-							? 'border-primary bg-primary/5 ring-4 ring-primary/10'
-							: 'border-border/70 hover:border-primary/40 hover:bg-muted/40'
-					)}
+					class="contact-import__dropzone"
+					class:contact-import__dropzone--drag={dragging}
 					ondragover={(e) => {
 						e.preventDefault();
 						dragging = true;
@@ -525,24 +515,14 @@
 							document.getElementById('csv-file-input')?.click();
 					}}
 				>
-					<div
-						class={cn(
-							'flex h-14 w-14 items-center justify-center rounded-2xl transition-colors duration-150',
-							dragging ? 'bg-primary/15' : 'bg-muted'
-						)}
-					>
-						<Upload
-							class={cn(
-								'h-6 w-6 transition-colors duration-150',
-								dragging ? 'text-primary' : 'text-muted-foreground'
-							)}
-						/>
+					<div class="contact-import__drop-icon">
+						<i class="ri-upload-2-line" aria-hidden="true"></i>
 					</div>
 					<div>
-						<p class="text-sm font-medium text-foreground">
+						<p class="contact-import__drop-title">
 							{dragging ? 'Drop to upload' : 'Drop your CSV here, or click to browse'}
 						</p>
-						<p class="mt-1 text-xs text-muted-foreground">
+						<p class="contact-import__drop-hint">
 							CSV files only · up to 10 MB · max 10,000 contacts
 						</p>
 					</div>
@@ -550,47 +530,30 @@
 						id="csv-file-input"
 						type="file"
 						accept=".csv"
-						class="sr-only"
+						class="contact-import__file-input"
 						onchange={onFileInput}
 					/>
 				</div>
 
-				<div class="mt-3 flex items-center justify-between">
-					<button
-						type="button"
-						class="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:underline"
-						onclick={downloadTemplate}
-					>
-						<Download class="h-4 w-4" />
+				<div class="contact-import__template-row">
+					<button type="button" class="contact-import__link" onclick={downloadTemplate}>
+						<i class="ri-download-line" aria-hidden="true"></i>
 						Download template
 					</button>
-					<p class="text-xs text-muted-foreground">
+					<p class="contact-import__template-cols">
 						Need columns? Name, Phone, Email, Status, Source, Tags, Notes
 					</p>
 				</div>
-			{:else if stage === 'parsed'}
-				<!-- File chip + scrollable preview -->
-				<div class="space-y-4">
-					{#if uploadError}
-						<div
-							class="flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3"
-						>
-							<AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-							<div class="min-w-0">
-								<p class="text-sm font-medium text-destructive">Couldn't import this file</p>
-								<p class="mt-0.5 text-xs text-muted-foreground">{uploadError}</p>
-							</div>
+			{:else if stage === 'mapping'}
+				<!-- Step 2: Map columns. Each uploaded column → a contact field (or skip). -->
+				<div class="contact-import__stack">
+					<div class="contact-import__file">
+						<div class="contact-import__file-icon">
+							<i class="ri-file-excel-2-line" aria-hidden="true"></i>
 						</div>
-					{/if}
-					<div
-						class="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 px-3.5 py-3"
-					>
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-							<FileSpreadsheet class="h-4.5 w-4.5 text-primary" />
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="truncate text-sm font-medium text-foreground">{file?.name}</p>
-							<p class="text-xs text-muted-foreground">
+						<div class="contact-import__file-body">
+							<p class="contact-import__file-name">{file?.name}</p>
+							<p class="contact-import__file-size">
 								{totalRows.toLocaleString()} contact{totalRows !== 1 ? 's' : ''}
 								{#if file}&nbsp;· {humanSize(file.size)}{/if}
 							</p>
@@ -599,119 +562,148 @@
 							type="button"
 							onclick={reset}
 							aria-label="Remove file"
-							class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							class="contact-import__file-remove"
 						>
-							<X class="h-4 w-4" />
+							<i class="ri-close-line" aria-hidden="true"></i>
 						</button>
 					</div>
 
-					{#if previewHeaders.length > 0}
-						<div class="space-y-2">
-							<div class="flex items-center justify-between">
-								<p class="text-xs font-medium text-muted-foreground">
-									Preview{#if totalRows > previewRows.length}&nbsp;· first {previewRows.length} of {totalRows.toLocaleString()}
-										rows{/if}
-								</p>
-								{#if previewHeaders.length > 4}
-									<p class="text-xs text-muted-foreground/70">Scroll to see all columns →</p>
-								{/if}
-							</div>
-							<!-- min-w-0 lets the wrapper actually scroll instead of stretching the modal -->
-							<div
-								class="min-w-0 max-h-64 overflow-auto rounded-xl border border-border/60 bg-card"
-							>
-								<table class="w-full border-collapse text-xs">
-									<thead class="sticky top-0 z-10">
-										<tr>
-											{#each previewHeaders as h (h)}
-												<th
-													class="whitespace-nowrap border-b border-border/60 bg-muted/80 px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground backdrop-blur"
-												>
-													{h}
-												</th>
+					<p class="contact-import__map-lead">
+						Match each column from your file to a contact field. We've guessed where we can — change
+						any that look wrong, or set columns you don't need to <em>Don't import</em>.
+					</p>
+
+					<div class="contact-import__maplist">
+						<div class="contact-import__maplist-head">
+							<span>Column in your file</span>
+							<span>Import as</span>
+						</div>
+						{#each previewHeaders as header, i (i)}
+							<div class="contact-import__maprow">
+								<div class="contact-import__maprow-src">
+									<span class="contact-import__maprow-name">{header || `Column ${i + 1}`}</span>
+									{#if previewRows[0]?.[i]}
+										<span class="contact-import__maprow-sample">e.g. {previewRows[0][i]}</span>
+									{/if}
+								</div>
+								<div class="contact-import__maprow-field">
+									<SelectRoot
+										value={columnMap[i] ?? NO_IMPORT}
+										onValueChange={(v) => setColumn(i, v)}
+									>
+										<SelectTrigger aria-label={`Map column ${header || i + 1}`}>
+											<SelectValue>{fieldLabel(columnMap[i])}</SelectValue>
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value={NO_IMPORT} label="Don't import" />
+											{#each CANONICAL_FIELDS as f (f.value)}
+												<SelectItem
+													value={f.value}
+													label={f.label}
+													disabled={mappedSet.has(f.value) && columnMap[i] !== f.value}
+												/>
 											{/each}
-										</tr>
-									</thead>
-									<tbody>
-										{#each previewRows as r, i (i)}
-											<tr class={cn('transition-colors', i % 2 === 1 && 'bg-muted/30')}>
-												{#each previewHeaders as _, j (j)}
-													<td
-														class="max-w-[180px] truncate whitespace-nowrap border-b border-border/40 px-3 py-2 text-foreground"
-													>
-														{r[j] ?? ''}
-													</td>
-												{/each}
-											</tr>
-										{/each}
-									</tbody>
-								</table>
+										</SelectContent>
+									</SelectRoot>
+								</div>
+							</div>
+						{/each}
+					</div>
+
+					<div
+						class="contact-import__map-hint"
+						class:contact-import__map-hint--ok={canContinueMapping}
+					>
+						{#if canContinueMapping}
+							<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+							<span>A name and a way to reach each contact are mapped — you're good to continue.</span>
+						{:else}
+							<i class="ri-information-line" aria-hidden="true"></i>
+							<span>
+								Map a <strong>Name</strong> column and at least a
+								<strong>Phone</strong> or <strong>Email</strong> to continue.
+							</span>
+						{/if}
+					</div>
+				</div>
+			{:else if stage === 'parsed'}
+				<!-- Step 3: Review — confirm the mapping summary + duplicate handling. -->
+				<div class="contact-import__stack">
+					{#if uploadError}
+						<div class="contact-import__alert contact-import__alert--danger">
+							<i class="ri-error-warning-line contact-import__alert-icon-danger" aria-hidden="true"></i>
+							<div class="contact-import__alert-body">
+								<p class="contact-import__alert-title contact-import__alert-icon-danger">
+									Couldn't import this file
+								</p>
+								<p class="contact-import__alert-text">{uploadError}</p>
 							</div>
 						</div>
 					{/if}
+					<div class="contact-import__file">
+						<div class="contact-import__file-icon">
+							<i class="ri-file-excel-2-line" aria-hidden="true"></i>
+						</div>
+						<div class="contact-import__file-body">
+							<p class="contact-import__file-name">{file?.name}</p>
+							<p class="contact-import__file-size">
+								{totalRows.toLocaleString()} contact{totalRows !== 1 ? 's' : ''}
+								{#if file}&nbsp;· {humanSize(file.size)}{/if}
+							</p>
+						</div>
+						<button
+							type="button"
+							onclick={reset}
+							aria-label="Remove file"
+							class="contact-import__file-remove"
+						>
+							<i class="ri-close-line" aria-hidden="true"></i>
+						</button>
+					</div>
 
-					<!-- Column mapping hint: what we recognize vs silently drop -->
-					{#if previewHeaders.length > 0 && (headerMapping.mapped.length > 0 || headerMapping.ignored.length > 0)}
-						<div class="space-y-2 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-3">
-							{#if headerMapping.mapped.length > 0}
-								<div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-									<span class="text-xs font-medium text-muted-foreground">Mapped:</span>
-									{#each headerMapping.mapped as label (label)}
-										<span
-											class="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary"
-										>
-											{label}
-										</span>
+					<!-- Mapping summary: the fields we'll import vs the columns being skipped -->
+					{#if mappingSummary.mapped.length > 0 || mappingSummary.ignored.length > 0}
+						<div class="contact-import__mapping">
+							{#if mappingSummary.mapped.length > 0}
+								<div class="contact-import__mapping-row">
+									<span class="contact-import__mapping-label">Importing:</span>
+									{#each mappingSummary.mapped as label (label)}
+										<span class="contact-import__mapping-pill">{label}</span>
 									{/each}
 								</div>
 							{/if}
-							{#if headerMapping.ignored.length > 0}
-								<div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-									<span class="text-xs font-medium text-amber-600 dark:text-amber-400">Ignored:</span>
-									{#each headerMapping.ignored as h (h)}
-										<span
-											class="inline-flex items-center rounded-md bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
-										>
+							{#if mappingSummary.ignored.length > 0}
+								<div class="contact-import__mapping-row">
+									<span class="contact-import__mapping-label contact-import__mapping-label--warn">
+										Skipping:
+									</span>
+									{#each mappingSummary.ignored as h (h)}
+										<span class="contact-import__mapping-pill contact-import__mapping-pill--warn">
 											{h}
 										</span>
 									{/each}
-									<span class="text-xs text-muted-foreground/70"
-										>— {headerMapping.ignored.length === 1 ? 'this column' : 'these columns'} won't be
-										imported</span
-									>
 								</div>
 							{/if}
 						</div>
 					{/if}
 
 					<!-- Duplicate handling: a row matches an existing contact on phone OR email -->
-					<div class="space-y-2">
-						<p class="text-xs font-medium text-muted-foreground">If a contact already exists</p>
-						<div class="grid gap-2 sm:grid-cols-2">
+					<div>
+						<p class="contact-import__field-label">If a contact already exists</p>
+						<div class="contact-import__dup-grid">
 							{#each [{ value: 'skip', title: 'Skip duplicates', desc: "Keep the existing contact as-is. Don't import the matching row." }, { value: 'update', title: 'Update existing', desc: 'Overwrite the existing contact with the values from your file.' }] as opt (opt.value)}
 								<button
 									type="button"
 									onclick={() => (onDuplicate = opt.value as 'skip' | 'update')}
-									class={cn(
-										'flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors',
-										onDuplicate === opt.value
-											? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-											: 'border-border/60 hover:bg-muted/40'
-									)}
+									class="contact-import__dup-option"
+									class:contact-import__dup-option--active={onDuplicate === opt.value}
 								>
-									<span
-										class={cn(
-											'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-											onDuplicate === opt.value ? 'border-primary' : 'border-muted-foreground/40'
-										)}
-									>
-										{#if onDuplicate === opt.value}
-											<span class="h-2 w-2 rounded-full bg-primary"></span>
-										{/if}
+									<span class="contact-import__dup-radio">
+										{#if onDuplicate === opt.value}<span></span>{/if}
 									</span>
-									<span class="min-w-0">
-										<span class="block text-sm font-medium text-foreground">{opt.title}</span>
-										<span class="mt-0.5 block text-xs text-muted-foreground">{opt.desc}</span>
+									<span>
+										<span class="contact-import__dup-title">{opt.title}</span>
+										<span class="contact-import__dup-desc">{opt.desc}</span>
 									</span>
 								</button>
 							{/each}
@@ -719,46 +711,39 @@
 					</div>
 				</div>
 			{:else if stage === 'uploading'}
-				<div class="flex flex-col items-center gap-4 py-10">
-					<div
-						class="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary"
-					></div>
-					<p class="text-sm text-muted-foreground">Uploading file…</p>
+				<div class="contact-import__loading">
+					<div class="contact-import__spinner"></div>
+					<p class="contact-import__loading-text">Uploading file…</p>
 				</div>
 			{:else if stage === 'processing'}
-				<div class="space-y-5 py-2">
-					<div class="space-y-2.5">
-						<div class="flex items-end justify-between">
+				<div class="contact-import__progress">
+					<div>
+						<div class="contact-import__progress-head">
 							<div>
-								<p class="text-sm font-medium text-foreground">
+								<p class="contact-import__progress-title">
 									{#if cancelling || progress?.status === 'cancelling'}
 										Cancelling…
 									{:else}
 										Importing contacts…
 									{/if}
 								</p>
-								<p class="text-xs text-muted-foreground">
+								<p class="contact-import__progress-sub">
 									{(progress?.processed_rows ?? 0).toLocaleString()} of {(
 										progress?.total_rows ?? totalRows
 									).toLocaleString()} rows
 								</p>
 							</div>
 							{#if indeterminate}
-								<span class="text-sm font-medium text-muted-foreground">Working…</span>
+								<span class="contact-import__progress-working">Working…</span>
 							{:else}
-								<span class="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-									{percent}%
-								</span>
+								<span class="contact-import__progress-pct">{percent}%</span>
 							{/if}
 						</div>
-						<div class="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+						<div class="contact-import__bar">
 							{#if indeterminate}
-								<div class="progress-indeterminate h-full w-full rounded-full"></div>
+								<div class="progress-indeterminate contact-import__bar-fill" style:width="100%"></div>
 							{:else}
-								<div
-									class="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-									style:width={`${percent}%`}
-								></div>
+								<div class="contact-import__bar-fill" style:width={`${percent}%`}></div>
 							{/if}
 						</div>
 					</div>
@@ -770,28 +755,22 @@
 						progress?.updated ?? 0
 					)}
 
-					<p
-						class="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground"
-					>
-						<CheckCircle class="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+					<p class="contact-import__note">
+						<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
 						You can safely close this window — the import keeps running and you can reopen it any time
 						to check progress.
 					</p>
 				</div>
 			{:else if stage === 'done' && progress}
-				<div class="space-y-4">
+				<div class="contact-import__stack">
 					{#if finalStatus === 'failed'}
-						<div
-							class="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4"
-						>
-							<div
-								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive/10"
-							>
-								<AlertCircle class="h-5 w-5 text-destructive" />
+						<div class="contact-import__alert contact-import__alert--danger">
+							<div class="contact-import__result-icon" style:background="var(--danger-bg)">
+								<i class="ri-error-warning-line contact-import__alert-icon-danger" aria-hidden="true"></i>
 							</div>
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-destructive">Import failed</p>
-								<p class="mt-0.5 text-sm text-muted-foreground">
+							<div class="contact-import__alert-body">
+								<p class="contact-import__alert-title contact-import__alert-icon-danger">Import failed</p>
+								<p class="contact-import__alert-text">
 									{progress.last_error ?? 'Something went wrong while importing.'}
 									{#if progress.imported > 0}
 										{progress.imported.toLocaleString()} contact{progress.imported !== 1
@@ -802,37 +781,27 @@
 							</div>
 						</div>
 					{:else if finalStatus === 'cancelled'}
-						<div
-							class="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4"
-						>
-							<div
-								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10"
-							>
-								<Ban class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+						<div class="contact-import__alert contact-import__alert--warn">
+							<div class="contact-import__result-icon" style:background="var(--warning-bg)">
+								<i class="ri-forbid-line contact-import__alert-icon-warn" aria-hidden="true"></i>
 							</div>
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-amber-700 dark:text-amber-400">
-									Import cancelled
-								</p>
-								<p class="mt-0.5 text-sm text-muted-foreground">
+							<div class="contact-import__alert-body">
+								<p class="contact-import__alert-title contact-import__alert-icon-warn">Import cancelled</p>
+								<p class="contact-import__alert-text">
 									Stopped at your request. Everything imported so far has been kept.
 								</p>
 							</div>
 						</div>
 					{:else}
-						<div
-							class="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4"
-						>
-							<div
-								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10"
-							>
-								<CheckCircle class="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+						<div class="contact-import__alert contact-import__alert--success">
+							<div class="contact-import__result-icon" style:background="var(--success-bg)">
+								<i class="ri-checkbox-circle-line contact-import__alert-icon-success" aria-hidden="true"></i>
 							</div>
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+							<div class="contact-import__alert-body">
+								<p class="contact-import__alert-title contact-import__alert-icon-success">
 									Import complete
 								</p>
-								<p class="mt-0.5 text-sm text-muted-foreground">
+								<p class="contact-import__alert-text">
 									Your contacts are now in your list.{#if progress.updated > 0}&nbsp;{progress.updated.toLocaleString()}
 										existing contact{progress.updated !== 1 ? 's were' : ' was'} updated.{/if}{#if progress.skipped > 0}&nbsp;{progress.skipped.toLocaleString()}
 										duplicate{progress.skipped !== 1 ? 's were' : ' was'} skipped (matched by phone or email).{/if}
@@ -844,40 +813,54 @@
 					{@render statTiles(progress.imported, progress.skipped, progress.failed, progress.updated)}
 
 					{#if flaggedCount > 0 && importId}
-						<div class="space-y-2">
-							<p class="text-xs text-muted-foreground">
+						<div class="contact-import__flag">
+							<p class="contact-import__progress-sub">
 								{flaggedCount.toLocaleString()} row{flaggedCount !== 1 ? 's' : ''} need{flaggedCount ===
 								1
 									? 's'
 									: ''} your attention (e.g. imported without a valid phone number).
 							</p>
-							<button
-								type="button"
-								onclick={downloadErrors}
-								class="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							>
-								<Download class="h-4 w-4 text-muted-foreground" />
+							<Button type="button" variant="secondary" size="sm" onclick={downloadErrors}>
+								<i class="ri-download-line" aria-hidden="true"></i>
 								Download flagged rows ({flaggedCount.toLocaleString()})
-							</button>
+							</Button>
 						</div>
 					{/if}
 				</div>
 			{/if}
 		</div>
 
-		<Dialog.Footer class="border-t border-border/60 px-6 py-4">
+		<Dialog.Footer class="contact-import__footer">
 			{#if stage === 'idle'}
-				<Button variant="outline" onclick={handleClose}>Cancel</Button>
+				<Button type="button" variant="secondary" onclick={handleClose}>Cancel</Button>
+			{:else if stage === 'mapping'}
+				<Button type="button" variant="secondary" onclick={reset}>Back</Button>
+				<Button
+					type="button"
+					variant="default"
+					onclick={() => (stage = 'parsed')}
+					disabled={!canContinueMapping}
+				>
+					Continue
+				</Button>
 			{:else if stage === 'parsed'}
-				<Button variant="outline" onclick={reset}>Back</Button>
-				<Button onclick={runImport} disabled={!file || totalRows === 0}>
+				<Button type="button" variant="secondary" onclick={() => (stage = 'mapping')}>
+					Back
+				</Button>
+				<Button
+					type="button"
+					variant="default"
+					onclick={runImport}
+					disabled={!file || totalRows === 0}
+				>
 					Import {totalRows} contact{totalRows !== 1 ? 's' : ''}
 				</Button>
 			{:else if stage === 'uploading'}
-				<Button variant="outline" disabled>Cancel</Button>
+				<Button type="button" variant="secondary" disabled>Cancel</Button>
 			{:else if stage === 'processing'}
-				<Button variant="outline" onclick={handleClose}>Close</Button>
+				<Button type="button" variant="secondary" onclick={handleClose}>Close</Button>
 				<Button
+					type="button"
 					variant="destructive"
 					onclick={cancelImport}
 					disabled={cancelling || progress?.status === 'cancelling'}
@@ -885,7 +868,7 @@
 					{cancelling || progress?.status === 'cancelling' ? 'Cancelling…' : 'Cancel import'}
 				</Button>
 			{:else if stage === 'done'}
-				<Button onclick={handleClose}>Done</Button>
+				<Button type="button" variant="default" onclick={handleClose}>Done</Button>
 			{/if}
 		</Dialog.Footer>
 	</Dialog.Content>

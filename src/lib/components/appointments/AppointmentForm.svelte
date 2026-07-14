@@ -1,14 +1,13 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import { DateTimePicker } from '$lib/components/ui/date-time-picker';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Calendar } from '$lib/components/ui/calendar';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Button } from '$lib/components/ui/button';
+	import ContactPicker from '$lib/components/shared/ContactPicker.svelte';
+	import type { ContactHit } from '$lib/components/shared/contactPicker';
+	import CrewPicker from './CrewPicker.svelte';
 	import { dateTimeLocalValue } from '$lib/utils/calendar';
-	import { cn } from '$lib/utils/cn';
-	import { Check, Crown } from '@lucide/svelte';
 	import type { AppointmentDetail, AppointmentType } from '$lib/types/appointments';
 
 	type Assignee = { id: string; full_name: string };
@@ -32,6 +31,7 @@
 		initialJob,
 		initialStart,
 		initialEnd,
+		initialAllDay = false,
 		submitLabel,
 		onCancel,
 		onSubmit
@@ -44,6 +44,8 @@
 		initialJob?: JobOption | null;
 		initialStart?: string | null;
 		initialEnd?: string | null;
+		// Seed the Anytime toggle on (create-from-Anytime-lane). Ignored in edit mode.
+		initialAllDay?: boolean;
 		submitLabel?: string;
 		onCancel: () => void;
 		onSubmit: (
@@ -51,12 +53,19 @@
 		) => Promise<{ ok: boolean; error?: string; field_errors?: Record<string, string> }>;
 	} = $props();
 
-	let contactId = $derived(appointment?.contact_id ?? initialContact?.id ?? '');
-	let contactName = $derived(appointment?.contact_name ?? initialContact?.full_name ?? '');
-	let contactQuery = $state('');
-	let contactResults = $state<ContactOption[]>([]);
-	let contactSearching = $state(false);
+	// Selected client — the shared ContactPicker owns the search UI/state. Seeded from
+	// initialContact (create-from-contact); in edit mode the contact is locked and shown
+	// read-only, so the picker never mounts and `appointment` drives the derived name.
+	let selectedContact = $state<ContactHit | null>(
+		initialContact
+			? { id: initialContact.id, full_name: initialContact.full_name, phone: null, email: null }
+			: null
+	);
+	const contactId = $derived(appointment?.contact_id ?? selectedContact?.id ?? '');
+	const contactName = $derived(appointment?.contact_name ?? selectedContact?.full_name ?? '');
 
+	// Derived from props but reassignable (Svelte 5 override) — the contact-pick handlers
+	// reset the linked job and refill its options, exactly as the pre-migration form did.
 	let jobId = $derived(appointment?.job_id ?? initialJob?.id ?? '');
 	let jobOptions = $derived<JobOption[]>(
 		initialJob
@@ -72,6 +81,13 @@
 		dateTimeLocalValue(appointment?.scheduled_start ?? initialStart ?? null)
 	);
 	let scheduledEnd = $state(dateTimeLocalValue(appointment?.scheduled_end ?? initialEnd ?? null));
+
+	// "Anytime" visit — a date with no clock time (Jobber/Housecall Pro). When on, the
+	// Start/End pickers are replaced by a single date picker and the API stores no end time.
+	let allDay = $state(appointment?.all_day ?? initialAllDay);
+	let anytimeDate = $state(
+		(dateTimeLocalValue(appointment?.scheduled_start ?? initialStart ?? null) || '').split('T')[0]
+	);
 	let location = $derived(appointment?.location ?? '');
 	let notes = $derived(appointment?.notes ?? '');
 
@@ -84,64 +100,18 @@
 		initialAssignees.find((a) => a.is_lead)?.id ?? initialAssignees[0]?.id ?? null
 	);
 
-	function toggleAssignee(memberId: string) {
-		if (selectedIds.includes(memberId)) {
-			selectedIds = selectedIds.filter((id) => id !== memberId);
-			if (leadId === memberId) leadId = selectedIds[0] ?? null;
-		} else {
-			selectedIds = [...selectedIds, memberId];
-			if (leadId === null) leadId = memberId;
-		}
-	}
-
-	function setLead(memberId: string) {
-		if (!selectedIds.includes(memberId)) {
-			selectedIds = [...selectedIds, memberId];
-		}
-		leadId = memberId;
-	}
-
 	let saving = $state(false);
 	let errorMsg = $state<string | null>(null);
 	let fieldErrors = $state<Record<string, string>>({});
 
-	let searchAbort: AbortController | null = null;
-
-	async function searchContacts() {
-		const q = contactQuery.trim();
-		if (q.length < 2) {
-			contactResults = [];
-			return;
-		}
-		if (searchAbort) searchAbort.abort();
-		const ctrl = new AbortController();
-		searchAbort = ctrl;
-		contactSearching = true;
-		try {
-			const params = new URLSearchParams({ q });
-			const res = await fetch(`/api/contacts?${params.toString()}`, { signal: ctrl.signal });
-			if (!res.ok) return;
-			const body = (await res.json()) as { items: ContactOption[] };
-			contactResults = body.items.slice(0, 8);
-		} catch {
-			// noop
-		} finally {
-			contactSearching = false;
-		}
-	}
-
-	async function selectContact(c: ContactOption) {
-		contactId = c.id;
-		contactName = c.full_name;
-		contactQuery = '';
-		contactResults = [];
+	// ContactPicker callbacks: on pick, reset any linked job and reload the client's jobs;
+	// on clear, drop the job link and its options.
+	async function onSelectContact(c: ContactHit) {
 		jobId = '';
 		await loadJobsForContact(c.id);
 	}
 
-	function clearContact() {
-		contactId = '';
-		contactName = '';
+	function onClearContact() {
 		jobId = '';
 		jobOptions = [];
 	}
@@ -169,16 +139,29 @@
 			fieldErrors.title = 'Title is required.';
 			return;
 		}
-		if (!scheduledStart || !scheduledEnd) {
-			fieldErrors.scheduled_end = 'Start and end times are required.';
-			return;
-		}
 
-		const startDate = new Date(scheduledStart);
-		const endDate = new Date(scheduledEnd);
-		if (endDate.getTime() <= startDate.getTime()) {
-			fieldErrors.scheduled_end = 'End time must be after start time.';
-			return;
+		let payloadStart: string;
+		let payloadEnd: string | null = null;
+		if (allDay) {
+			if (!anytimeDate) {
+				fieldErrors.scheduled_start = 'Pick a date.';
+				return;
+			}
+			// Anchor at noon so the visit's calendar day is timezone-safe when bucketed.
+			payloadStart = new Date(`${anytimeDate}T12:00:00`).toISOString();
+		} else {
+			if (!scheduledStart || !scheduledEnd) {
+				fieldErrors.scheduled_end = 'Start and end times are required.';
+				return;
+			}
+			const startDate = new Date(scheduledStart);
+			const endDate = new Date(scheduledEnd);
+			if (endDate.getTime() <= startDate.getTime()) {
+				fieldErrors.scheduled_end = 'End time must be after start time.';
+				return;
+			}
+			payloadStart = startDate.toISOString();
+			payloadEnd = endDate.toISOString();
 		}
 
 		saving = true;
@@ -186,8 +169,9 @@
 			const payload: Record<string, unknown> = {
 				type,
 				title: title.trim(),
-				scheduled_start: startDate.toISOString(),
-				scheduled_end: endDate.toISOString(),
+				all_day: allDay,
+				scheduled_start: payloadStart,
+				scheduled_end: payloadEnd,
 				location: location.trim() || null,
 				notes: notes.trim() || null
 			};
@@ -212,57 +196,33 @@
 </script>
 
 <form
-	class="space-y-4"
+	class="appt-form"
 	onsubmit={(e) => {
 		e.preventDefault();
 		void submit();
 	}}
 >
 	<!-- Contact -->
-	<div class="space-y-1.5">
-		<Label for="a-contact">
-			Contact <span class="text-destructive">*</span>
-		</Label>
+	<div class="field">
+		<label class="field__label field__label--required" for="a-contact">Contact</label>
 		{#if mode === 'edit'}
-			<Input id="a-contact" value={contactName} disabled />
-		{:else if contactId}
-			<div class="flex items-center gap-2 rounded-md border border-input bg-muted/30 px-3 py-2">
-				<span class="flex-1 text-sm font-medium text-foreground">{contactName}</span>
-				<Button type="button" variant="ghost" size="sm" onclick={clearContact}>Change</Button>
-			</div>
+			<input id="a-contact" class="field__input" value={contactName} disabled />
 		{:else}
-			<Input
-				id="a-contact"
+			<ContactPicker
+				bind:selected={selectedContact}
 				placeholder="Search contacts by name, phone, or email…"
-				bind:value={contactQuery}
-				oninput={() => void searchContacts()}
+				onSelect={onSelectContact}
+				onClear={onClearContact}
 			/>
-			{#if contactResults.length > 0}
-				<ul class="rounded-md border border-border bg-popover">
-					{#each contactResults as c (c.id)}
-						<li>
-							<button
-								type="button"
-								class="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent"
-								onclick={() => void selectContact(c)}
-							>
-								{c.full_name}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			{:else if contactSearching}
-				<p class="text-xs text-muted-foreground">Searching…</p>
-			{/if}
 		{/if}
 	</div>
 
 	<!-- Job (optional) -->
 	{#if mode === 'create' && contactId && jobOptions.length > 0}
-		<div class="space-y-1.5">
-			<Label for="a-job">Linked job (optional)</Label>
+		<div class="field">
+			<label class="field__label" for="a-job">Linked job (optional)</label>
 			<Select.Root bind:value={jobId}>
-				<Select.Trigger class="h-11 w-full">
+				<Select.Trigger>
 					<Select.Value />
 				</Select.Trigger>
 				<Select.Content>
@@ -272,17 +232,15 @@
 					{/each}
 				</Select.Content>
 			</Select.Root>
-			<p class="text-xs text-muted-foreground">
-				If a job is linked, the location auto-fills from the job address.
-			</p>
+			<p class="field__hint">If a job is linked, the location auto-fills from the job address.</p>
 		</div>
 	{/if}
 
 	<!-- Type -->
-	<div class="space-y-1.5">
-		<Label for="a-type">Type <span class="text-destructive">*</span></Label>
+	<div class="field">
+		<span class="field__label field__label--required">Type</span>
 		<Select.Root bind:value={type}>
-			<Select.Trigger class="h-11 w-full">
+			<Select.Trigger>
 				<Select.Value />
 			</Select.Trigger>
 			<Select.Content>
@@ -294,136 +252,91 @@
 	</div>
 
 	<!-- Title -->
-	<div class="space-y-1.5">
-		<Label for="a-title">Title <span class="text-destructive">*</span></Label>
-		<Input id="a-title" bind:value={title} maxlength={200} />
+	<div class="field">
+		<label class="field__label field__label--required" for="a-title">Title</label>
+		<input id="a-title" class="field__input" bind:value={title} maxlength={200} />
 		{#if fieldErrors.title}
-			<p class="text-xs text-destructive">{fieldErrors.title}</p>
+			<p class="field__error">{fieldErrors.title}</p>
 		{/if}
 	</div>
 
-	<!-- Times -->
-	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-		<div class="space-y-1.5">
-			<Label>Start <span class="text-destructive">*</span></Label>
-			<DateTimePicker bind:value={scheduledStart} placeholder="Pick start date & time" />
-			{#if fieldErrors.scheduled_start}
-				<p class="text-xs text-destructive">{fieldErrors.scheduled_start}</p>
-			{/if}
+	<!-- Anytime toggle: date-only visit with no specific clock time -->
+	<div class="appt-form__anytime">
+		<div class="appt-form__anytime-text">
+			<label class="appt-form__anytime-label" for="a-anytime">Anytime</label>
+			<span class="appt-form__anytime-hint">
+				No specific time — sits in the calendar's Anytime row for that day.
+			</span>
 		</div>
-		<div class="space-y-1.5">
-			<Label>End <span class="text-destructive">*</span></Label>
-			<DateTimePicker bind:value={scheduledEnd} placeholder="Pick end date & time" />
-			{#if fieldErrors.scheduled_end}
-				<p class="text-xs text-destructive">{fieldErrors.scheduled_end}</p>
-			{/if}
-		</div>
+		<Switch id="a-anytime" bind:checked={allDay} />
 	</div>
 
+	<!-- Times (or date-only for Anytime) -->
+	{#if allDay}
+		<div class="field">
+			<span class="field__label field__label--required">Date</span>
+			<Calendar bind:value={anytimeDate} placeholder="Pick a date" />
+			{#if fieldErrors.scheduled_start}
+				<p class="field__error">{fieldErrors.scheduled_start}</p>
+			{/if}
+		</div>
+	{:else}
+		<div class="appt-form__times">
+			<div class="field">
+				<span class="field__label field__label--required">Start</span>
+				<DateTimePicker bind:value={scheduledStart} placeholder="Pick start date & time" />
+				{#if fieldErrors.scheduled_start}
+					<p class="field__error">{fieldErrors.scheduled_start}</p>
+				{/if}
+			</div>
+			<div class="field">
+				<span class="field__label field__label--required">End</span>
+				<DateTimePicker bind:value={scheduledEnd} placeholder="Pick end date & time" />
+				{#if fieldErrors.scheduled_end}
+					<p class="field__error">{fieldErrors.scheduled_end}</p>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
 	<!-- Location -->
-	<div class="space-y-1.5">
-		<Label for="a-location">Location</Label>
-		<Input id="a-location" bind:value={location} maxlength={500} />
+	<div class="field">
+		<label class="field__label" for="a-location">Location</label>
+		<input id="a-location" class="field__input" bind:value={location} maxlength={500} />
 	</div>
 
 	<!-- Crew (multi-assignee + lead) -->
 	{#if canEditAssignee}
-		<div class="space-y-1.5">
-			<Label>Crew</Label>
-			<p class="text-xs text-muted-foreground">
-				Tap a member to add them. Tap the crown to set the lead.
-			</p>
-			{#if assignees.length === 0}
-				<p
-					class="rounded-md border border-dashed border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground"
-				>
-					No team members available.
-				</p>
-			{:else}
-				<ul class="divide-y divide-border rounded-md border border-border bg-card">
-					{#each assignees as a (a.id)}
-						{@const selected = selectedIds.includes(a.id)}
-						{@const isLead = leadId === a.id && selected}
-						<li class="flex items-center gap-2 px-2 py-1.5">
-							<button
-								type="button"
-								onclick={() => toggleAssignee(a.id)}
-								class={cn(
-									'flex min-h-11 flex-1 items-center gap-3 rounded-md px-2 text-left transition-colors',
-									selected ? 'bg-primary/5' : 'hover:bg-accent/40 active:bg-accent/60'
-								)}
-								aria-pressed={selected}
-							>
-								<span
-									class={cn(
-										'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors',
-										selected
-											? 'border-primary bg-primary text-primary-foreground'
-											: 'border-input bg-background'
-									)}
-								>
-									{#if selected}
-										<Check class="h-4 w-4" />
-									{/if}
-								</span>
-								<span class="flex-1 text-sm text-foreground">{a.full_name}</span>
-								{#if isLead}
-									<span
-										class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
-									>
-										<Crown class="h-3 w-3" /> Lead
-									</span>
-								{/if}
-							</button>
-							<button
-								type="button"
-								onclick={() => setLead(a.id)}
-								disabled={isLead}
-								aria-label={isLead ? `${a.full_name} is lead` : `Make ${a.full_name} the lead`}
-								class={cn(
-									'flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition-colors',
-									isLead
-										? 'border-primary bg-primary text-primary-foreground'
-										: 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent/80'
-								)}
-							>
-								<Crown class="h-4 w-4" />
-							</button>
-						</li>
-					{/each}
-				</ul>
-				<p class="text-xs text-muted-foreground">
-					{selectedIds.length === 0
-						? 'No crew assigned.'
-						: selectedIds.length === 1
-							? '1 member · lead set'
-							: `${selectedIds.length} members · lead set`}
-				</p>
-			{/if}
+		<div class="field">
+			<span class="field__label">Crew</span>
+			<p class="field__hint">Tap a member to add them. Tap the crown to set the lead.</p>
+			<CrewPicker {assignees} bind:selectedIds bind:leadId />
 		</div>
 	{/if}
 
 	<!-- Notes -->
-	<div class="space-y-1.5">
-		<Label for="a-notes">Notes</Label>
-		<Textarea id="a-notes" bind:value={notes} rows={3} maxlength={5000} />
+	<div class="field">
+		<label class="field__label" for="a-notes">Notes</label>
+		<textarea id="a-notes" class="field__textarea" bind:value={notes} rows={3} maxlength={5000}
+		></textarea>
 	</div>
 
 	{#if errorMsg}
-		<p class="text-sm text-destructive">{errorMsg}</p>
+		<p class="appt-form__error">{errorMsg}</p>
 	{/if}
 
-	<div class="flex gap-2 pt-2">
-		<Button type="button" variant="outline" class="flex-1" disabled={saving} onclick={onCancel}>
+	<div class="appt-form__actions">
+		<Button variant="outline" class="btn--full" disabled={saving} onclick={onCancel}>
 			Cancel
 		</Button>
-		<JetEngineButton
-			class="flex-1"
-			label={submitLabel ?? (mode === 'create' ? 'Create appointment' : 'Save changes')}
+		<Button
+			class="btn--full"
 			loadingLabel="Saving…"
 			successLabel="Saved"
-			state={saving ? 'loading' : 'idle'}
+			loading={saving}
 			onclick={() => void submit()}
-		/>
+		>
+			{submitLabel ?? (mode === 'create' ? 'Create appointment' : 'Save changes')}
+		</Button>
 	</div>
 </form>

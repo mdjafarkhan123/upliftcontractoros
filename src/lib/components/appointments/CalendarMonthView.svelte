@@ -4,27 +4,36 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
-	import { cn } from '$lib/utils/cn';
 	import type { AppointmentListItem } from '$lib/types/appointments';
+	import type { EventListItem } from '$lib/types/events';
 
 	let {
 		anchor,
 		items,
+		events = [],
 		onDayClick
 	}: {
 		anchor: Date; // start of the displayed month
 		items: AppointmentListItem[];
+		// Non-billable calendar Events (Jobber `Event`) — rendered as neutral grey pills.
+		events?: EventListItem[];
 		onDayClick: (d: Date) => void;
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
 
-	const MAX_VISIBLE = 3; // event pills shown per cell before "+N more"
+	const MAX_VISIBLE = 3; // pills shown per cell before "+N more"
 	const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 	const today = new Date();
 
-	// Resolve an appointment to its calendar day in the org's timezone so an event
-	// at 11pm org-time lands on the correct cell regardless of the viewer's browser tz.
+	// One unified pill so visits and events share a cell, sort together, and count
+	// toward the same "+N more" overflow (they occupy the same visual grid).
+	type MonthPill =
+		| { kind: 'appt'; id: string; all_day: boolean; start: string; item: AppointmentListItem }
+		| { kind: 'event'; id: string; all_day: boolean; start: string; event: EventListItem };
+
+	// Resolve an item to its calendar day in the org's timezone so an 11pm org-time
+	// item lands on the correct cell regardless of the viewer's browser tz.
 	function tzDateKey(d: Date, tz: string | undefined): string {
 		try {
 			return new Intl.DateTimeFormat('en-CA', {
@@ -39,15 +48,37 @@
 	}
 
 	const eventsByDay = $derived.by(() => {
-		const map = new Map<string, AppointmentListItem[]>();
-		for (const item of items) {
-			const key = tzDateKey(new Date(item.scheduled_start), orgTz);
+		const map = new Map<string, MonthPill[]>();
+		const push = (key: string, pill: MonthPill) => {
 			const arr = map.get(key);
-			if (arr) arr.push(item);
-			else map.set(key, [item]);
+			if (arr) arr.push(pill);
+			else map.set(key, [pill]);
+		};
+		for (const item of items) {
+			push(tzDateKey(new Date(item.scheduled_start), orgTz), {
+				kind: 'appt',
+				id: item.id,
+				all_day: item.all_day,
+				start: item.scheduled_start,
+				item
+			});
+		}
+		for (const ev of events) {
+			if (!ev.start_at) continue;
+			push(tzDateKey(new Date(ev.start_at), orgTz), {
+				kind: 'event',
+				id: ev.id,
+				all_day: ev.all_day,
+				start: ev.start_at,
+				event: ev
+			});
 		}
 		for (const arr of map.values()) {
-			arr.sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start));
+			// All-day/anytime sit at the top of each cell (Housecall Pro), then timed by start.
+			arr.sort((a, b) => {
+				if (a.all_day !== b.all_day) return a.all_day ? -1 : 1;
+				return a.start.localeCompare(b.start);
+			});
 		}
 		return map;
 	});
@@ -65,77 +96,74 @@
 	});
 
 	function pillClasses(s: AppointmentListItem['status']): string {
-		if (s === 'cancelled' || s === 'no_show')
-			return 'bg-destructive/15 text-destructive line-through';
-		if (s === 'completed') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-		return 'bg-primary/15 text-foreground';
+		if (s === 'cancelled' || s === 'no_show') return 'cal-month__pill--cancelled';
+		if (s === 'completed') return 'cal-month__pill--completed';
+		return 'cal-month__pill--default';
 	}
 </script>
 
-<div class="flex h-full flex-col bg-card">
+<div class="cal-month">
 	<!-- Weekday header row -->
-	<div class="grid shrink-0 grid-cols-7 border-b border-border bg-background/95">
+	<div class="cal-month__dow">
 		{#each WEEKDAYS as wd (wd)}
-			<div
-				class="border-r border-border py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground last:border-r-0"
-			>
-				{wd}
-			</div>
+			<div class="cal-month__dow-cell">{wd}</div>
 		{/each}
 	</div>
 
 	<!-- 6-week grid -->
-	<div class="grid flex-1 grid-cols-7 grid-rows-6">
+	<div class="cal-month__grid">
 		{#each cells as cell (cell.key)}
 			{@const dayItems = eventsByDay.get(cell.key) ?? []}
 			{@const isToday = isSameDay(cell.date, today)}
 			{@const overflow = dayItems.length - MAX_VISIBLE}
-			<div
-				class={cn(
-					'flex min-h-0 flex-col gap-0.5 border-b border-r border-border p-1 last:border-r-0',
-					!cell.inMonth && 'bg-muted/20'
-				)}
-			>
+			<div class={['cal-month__cell', !cell.inMonth && 'cal-month__cell--out']}>
 				<!-- Date number -->
 				<button
 					type="button"
 					onclick={() => onDayClick(cell.date)}
-					class={cn(
-						'mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center self-end rounded-full text-[11px] font-medium tabular-nums transition-colors',
-						isToday
-							? 'bg-primary font-semibold text-primary-foreground hover:bg-primary/90'
-							: cell.inMonth
-								? 'text-foreground hover:bg-muted'
-								: 'text-muted-foreground/50 hover:bg-muted'
-					)}
+					class={[
+						'cal-month__date',
+						isToday && 'cal-month__date--today',
+						!isToday && !cell.inMonth && 'cal-month__date--out'
+					]}
 					aria-label={`View ${cell.date.toDateString()}`}
 				>
 					{cell.date.getDate()}
 				</button>
 
-				<!-- Event pills -->
-				<div class="flex min-h-0 flex-col gap-0.5 overflow-hidden">
-					{#each dayItems.slice(0, MAX_VISIBLE) as ev (ev.id)}
-						<a
-							href={`/appointments/${ev.id}`}
-							use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.id)}
-							class={cn(
-								'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] leading-tight transition-opacity hover:opacity-80',
-								pillClasses(ev.status)
-							)}
-						>
-							<span class="shrink-0 font-medium tabular-nums opacity-80">
-								{formatTimeInOrgTz(ev.scheduled_start, orgTz)}
-							</span>
-							<span class="truncate">{ev.title}</span>
-						</a>
+				<!-- Pills: visits (colored by type/status) + Events (neutral grey) -->
+				<div class="cal-month__pills">
+					{#each dayItems.slice(0, MAX_VISIBLE) as pill (pill.id)}
+						{#if pill.kind === 'appt'}
+							{@const ev = pill.item}
+							<a
+								href={`/appointments/${ev.id}`}
+								use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.id)}
+								class={[
+									'cal-month__pill',
+									pillClasses(ev.status),
+									`cal-month__pill--type-${ev.type}`
+								]}
+							>
+								<span class="cal-month__pill-time">
+									{ev.all_day ? 'Anytime' : formatTimeInOrgTz(ev.scheduled_start, orgTz)}
+								</span>
+								<span class="cal-month__pill-title">{ev.title}</span>
+							</a>
+						{:else}
+							{@const evt = pill.event}
+							<div class="cal-month__pill cal-month__pill--event" title={evt.title}>
+								<span class="cal-month__pill-time">
+									{evt.all_day || !evt.start_at
+										? 'All day'
+										: formatTimeInOrgTz(evt.start_at, orgTz)}
+								</span>
+								<span class="cal-month__pill-title">{evt.title}</span>
+							</div>
+						{/if}
 					{/each}
 					{#if overflow > 0}
-						<button
-							type="button"
-							onclick={() => onDayClick(cell.date)}
-							class="px-1 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-						>
+						<button type="button" onclick={() => onDayClick(cell.date)} class="cal-month__more">
 							+{overflow} more
 						</button>
 					{/if}

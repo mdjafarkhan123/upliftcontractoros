@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { db as DbClient } from '$lib/server/db/client';
-import { quoteLineItems, quoteVersions, quotes } from '$lib/server/db/schema';
+import { quoteLineItems, quotePackages, quoteVersions, quotes } from '$lib/server/db/schema';
 import type { QuoteVersionLineItem } from '$lib/server/db/schema';
 
 type Tx = Parameters<Parameters<typeof DbClient.transaction>[0]>[0];
@@ -29,6 +29,8 @@ export async function snapshotQuoteVersion(
 		.limit(1);
 	if (!q) return;
 
+	// Left-join the tier so a Good-Better-Best snapshot freezes which package each line was in
+	// (name + stable key). Both are null on a simple quote.
 	const items = await tx
 		.select({
 			description: quoteLineItems.description,
@@ -37,11 +39,15 @@ export async function snapshotQuoteVersion(
 			unit: quoteLineItems.unit,
 			section_label: quoteLineItems.section_label,
 			is_optional: quoteLineItems.is_optional,
+			taxable: quoteLineItems.taxable,
+			package_key: quotePackages.package_key,
+			package_name: quotePackages.name,
 			unit_price: quoteLineItems.unit_price,
 			total: quoteLineItems.total,
 			position: quoteLineItems.position
 		})
 		.from(quoteLineItems)
+		.leftJoin(quotePackages, eq(quotePackages.id, quoteLineItems.package_id))
 		.where(and(eq(quoteLineItems.quote_id, args.quoteId), isNull(quoteLineItems.deleted_at)))
 		.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));
 
@@ -52,6 +58,9 @@ export async function snapshotQuoteVersion(
 		unit: li.unit,
 		section_label: li.section_label,
 		is_optional: li.is_optional,
+		taxable: li.taxable,
+		package_key: li.package_key,
+		package_name: li.package_name,
 		unit_price: li.unit_price,
 		total: li.total,
 		position: li.position

@@ -1,29 +1,25 @@
 <script lang="ts">
-	import { MessageSquare, Plus } from '@lucide/svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { getMemberContext } from '$lib/context/member';
 
 	const member = getMemberContext();
 	const canSend = $derived(member().can_send_messages);
 </script>
 
-<div class="flex flex-1 items-center justify-center bg-muted/20 p-8">
-	<div class="max-w-sm text-center">
-		<div
-			class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"
-		>
-			<MessageSquare class="h-7 w-7" />
+<div class="thread-empty">
+	<div class="thread-empty__inner">
+		<div class="thread-empty__icon">
+			<i class="ri-chat-3-line" aria-hidden="true"></i>
 		</div>
-		<h3 class="text-base font-semibold tracking-tight text-foreground">Select a conversation</h3>
-		<p class="mt-1.5 text-sm text-muted-foreground">
+		<h3 class="thread-empty__title">Select a conversation</h3>
+		<p class="thread-empty__text">
 			Choose a thread on the left to read and reply. Or start a new one.
 		</p>
 		{#if canSend}
-			<div class="mt-4">
-				<Button href="/inbox/compose">
-					<Plus class="h-4 w-4" />
+			<div class="thread-empty__action">
+				<a href="/inbox/compose" class="btn btn--primary">
+					<i class="ri-add-line" aria-hidden="true"></i>
 					New message
-				</Button>
+				</a>
 			</div>
 		{/if}
 	</div>

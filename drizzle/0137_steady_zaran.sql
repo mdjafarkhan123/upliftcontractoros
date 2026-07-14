@@ -1,0 +1,1 @@
+ALTER TABLE "contact_imports" ADD COLUMN "column_map" jsonb;

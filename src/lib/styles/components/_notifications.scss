@@ -1,0 +1,340 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// NOTIFICATION CENTER (S13c) — bell popover / sheet panel + page list.
+// Namespaced `.noti` to avoid collision with settings `.notif-*` (S12d).
+// =============================================================================
+
+// --- Page wrapper card --------------------------------------------------------
+.noti-page-card {
+	overflow: hidden;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+}
+
+// --- Panel (NotificationPanel) -----------------------------------------------
+.noti-panel {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__head-main {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 $space-1;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+		color: var(--color-text-on-brand);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+	}
+
+	&__body {
+		flex: 1;
+		overflow-y: auto;
+		padding: $space-2;
+
+		&--panel {
+			max-height: 60vh;
+		}
+	}
+
+	&__loading,
+	&__empty {
+		padding: $space-2;
+	}
+
+	&__group {
+		margin-bottom: $space-1;
+	}
+
+	&__group-label {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		padding: $space-2 $space-3;
+		background: var(--color-bg-surface);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	&__foot {
+		padding: $space-2 $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__view-all {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		min-height: 44px;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// --- Single notification (NotificationItem) ----------------------------------
+.noti {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	border-radius: $radius-md;
+	border-left: 2px solid transparent;
+	text-align: left;
+	transition: background $duration-fast $ease-standard;
+	cursor: pointer;
+
+	&:hover {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		width: 100%;
+		padding: $space-3;
+	}
+
+	&__icon {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		margin-top: 2px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title-row {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__priority {
+		flex-shrink: 0;
+		padding: 1px $space-1;
+		border-radius: $radius-full;
+		border: 1px solid var(--danger-border, var(--danger-bg));
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		line-height: 1.3;
+	}
+
+	&__title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__sub-row {
+		margin-top: 2px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__body {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__meta {
+		margin-left: auto;
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__time {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__dot {
+		width: 8px;
+		height: 8px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+	}
+
+	&__cta-row {
+		display: flex;
+		justify-content: flex-end;
+		padding: 0 $space-3 $space-2;
+	}
+
+	&__cta {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: $space-1 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: var(--color-brand);
+		color: var(--color-text-on-brand);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition: opacity $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			opacity: 0.9;
+		}
+	}
+
+	// --- Unread + colour scheme accents ----------------------------------------
+	&--unread {
+		background: var(--state-active-tint);
+
+		&:hover {
+			background: var(--state-active-tint);
+		}
+	}
+
+	// primary scheme (default)
+	&--unread.noti--primary {
+		border-left-color: var(--color-brand);
+		.noti__icon {
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+	}
+
+	// semantic schemes — solid border, tinted icon, solid cta
+	&--unread.noti--success {
+		border-left-color: var(--success-solid);
+		.noti__icon {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		.noti__cta {
+			background: var(--success-solid);
+		}
+	}
+
+	&--unread.noti--warning {
+		border-left-color: var(--warning-solid);
+		.noti__icon {
+			background: var(--warning-bg);
+			color: var(--warning-text);
+		}
+		.noti__cta {
+			background: var(--warning-solid);
+		}
+	}
+
+	&--unread.noti--danger {
+		border-left-color: var(--danger-solid);
+		.noti__icon {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+		.noti__cta {
+			background: var(--danger-solid);
+		}
+	}
+
+	&--unread.noti--info {
+		border-left-color: var(--info-solid);
+		.noti__icon {
+			background: var(--info-bg);
+			color: var(--info-text);
+		}
+		.noti__cta {
+			background: var(--info-solid);
+		}
+	}
+}

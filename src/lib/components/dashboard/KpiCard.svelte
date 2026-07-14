@@ -1,8 +1,4 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
-	import { cn } from '$lib/utils/cn';
-	import { Lock, ArrowUpRight, TrendingUp, TrendingDown, Minus } from '@lucide/svelte';
-
 	type Trend = { label: string; direction: 'up' | 'down' | 'flat'; positive: boolean };
 
 	let {
@@ -10,7 +6,7 @@
 		value,
 		hint,
 		trend,
-		icon: Icon,
+		iconClass,
 		tone = 'default',
 		featured = false,
 		locked = false,
@@ -21,11 +17,10 @@
 		label: string;
 		value: string;
 		hint?: string;
-		/** Optional delta-vs-last-month chip. Colour follows `positive`, arrow follows `direction`. */
 		trend?: Trend;
-		icon?: Component;
+		/** Remix icon class, e.g. "ri-user-add-line" */
+		iconClass?: string;
 		tone?: 'default' | 'success' | 'warning' | 'danger';
-		/** Featured card — dark green gradient surface, white text. Used for the lead KPI. */
 		featured?: boolean;
 		locked?: boolean;
 		lockedMessage?: string;
@@ -33,30 +28,34 @@
 		class?: string;
 	} = $props();
 
-	const TrendIcon = $derived(
-		trend?.direction === 'up' ? TrendingUp : trend?.direction === 'down' ? TrendingDown : Minus
+	const trendIcon = $derived(
+		trend?.direction === 'up'
+			? 'ri-arrow-up-line'
+			: trend?.direction === 'down'
+				? 'ri-arrow-down-line'
+				: 'ri-subtract-line'
 	);
 
-	const trendPill = $derived(
+	const trendMod = $derived(
 		featured
-			? 'bg-white/10 text-white/90 ring-white/20'
+			? 'kpi-card__trend--featured'
 			: !trend || trend.direction === 'flat'
-				? 'bg-muted text-muted-foreground ring-border/60'
+				? 'kpi-card__trend--neutral'
 				: trend.positive
-					? 'bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
-					: 'bg-rose-50 text-rose-700 ring-rose-200/70 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20'
+					? 'kpi-card__trend--positive'
+					: 'kpi-card__trend--negative'
 	);
 
-	const toneRing = $derived(
+	const iconMod = $derived(
 		featured
-			? 'bg-white/15 text-white ring-white/20'
+			? 'kpi-card__icon--featured'
 			: tone === 'success'
-				? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
+				? 'kpi-card__icon--success'
 				: tone === 'warning'
-					? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20'
+					? 'kpi-card__icon--warning'
 					: tone === 'danger'
-						? 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20'
-						: 'bg-primary/10 text-primary ring-primary/20'
+						? 'kpi-card__icon--danger'
+						: 'kpi-card__icon--brand'
 	);
 
 	const Tag = $derived(href && !locked ? 'a' : 'div');
@@ -65,93 +64,42 @@
 <svelte:element
 	this={Tag}
 	href={Tag === 'a' ? href : undefined}
-	class={cn(
-		'group relative flex min-h-[150px] flex-col justify-between rounded-2xl p-5 shadow-card transition-all duration-200 ease-out md:min-h-[170px] md:p-6',
-		featured
-			? 'border border-[hsl(var(--brand-deep))]/40 bg-gradient-to-br from-[hsl(var(--brand-primary))] via-[hsl(var(--brand-primary))] to-[hsl(var(--brand-deep))] text-white'
-			: 'border border-border/70 bg-card dark:border-white/10',
-		Tag === 'a' &&
-			(featured
-				? 'hover:-translate-y-0.5 hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-				: 'hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card-raised hover:shadow-dropdown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'),
-		className
-	)}
+	class={['kpi-card', featured && 'kpi-card--featured', className].filter(Boolean).join(' ')}
 >
-	<div class="flex items-start justify-between gap-3">
-		<span
-			class={cn(
-				'text-sm font-medium leading-tight',
-				featured ? 'text-white/85' : 'text-muted-foreground'
-			)}
-		>
-			{label}
-		</span>
+	<div class="kpi-card__top">
+		<span class="kpi-card__label">{label}</span>
 		{#if Tag === 'a' && !locked}
-			<span
-				class={cn(
-					'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5',
-					featured
-						? 'bg-white/10 text-white ring-white/25'
-						: 'bg-card text-muted-foreground ring-border/70 group-hover:text-foreground'
-				)}
-			>
-				<ArrowUpRight class="h-4 w-4" />
+			<span class="kpi-card__action-icon">
+				<i class="ri-arrow-right-up-line"></i>
 			</span>
-		{:else if Icon}
-			<span
-				class={cn(
-					'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset',
-					toneRing
-				)}
-			>
-				<Icon class="h-4 w-4" />
+		{:else if iconClass}
+			<span class={['kpi-card__icon', iconMod].join(' ')}>
+				<i class={iconClass}></i>
 			</span>
 		{/if}
 	</div>
-	<div class={cn('mt-3 flex flex-col gap-2', locked && 'select-none blur-sm')}>
-		<span
-			class={cn(
-				'text-3xl font-semibold leading-none tracking-tight md:text-4xl',
-				featured ? 'text-white' : 'text-foreground'
-			)}
-		>
-			{value}
-		</span>
+
+	<div class="kpi-card__body">
+		<span class="kpi-card__value">{value}</span>
 		{#if trend || hint}
-			<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+			<div class="kpi-card__meta-row">
 				{#if trend}
-					<span
-						class={cn(
-							'inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1',
-							trendPill
-						)}
-					>
-						<TrendIcon class="h-3 w-3" />
+					<span class={['kpi-card__trend', trendMod].join(' ')}>
+						<i class={trendIcon}></i>
 						{trend.label}
 					</span>
 				{/if}
 				{#if hint}
-					<span
-						class={cn('text-xs', featured ? 'text-white/70' : 'text-muted-foreground')}
-					>
-						{hint}
-					</span>
+					<span class="kpi-card__hint">{hint}</span>
 				{/if}
 			</div>
 		{/if}
 	</div>
 
 	{#if locked}
-		<div
-			class={cn(
-				'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-2xl text-center',
-				featured ? 'bg-[hsl(var(--brand-deep))]/70 text-white' : 'bg-card/75 text-muted-foreground'
-			)}
-		>
-			<Lock class="h-4 w-4" />
-			<span class="px-3 text-xs">
-				{lockedMessage ?? "You don't have access to this metric"}
-			</span>
+		<div class="kpi-card__lock">
+			<i class="ri-lock-line"></i>
+			<span>{lockedMessage ?? "You don't have access to this metric"}</span>
 		</div>
 	{/if}
 </svelte:element>

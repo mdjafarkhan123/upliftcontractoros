@@ -2,7 +2,8 @@ import { SvelteMap } from 'svelte/reactivity';
 import type {
 	AppointmentDetail,
 	AppointmentListItem,
-	AppointmentsFilters
+	AppointmentsFilters,
+	AppointmentStatus
 } from '$lib/types/appointments';
 
 type Status = 'idle' | 'loading' | 'ready' | 'revalidating' | 'error';
@@ -136,22 +137,56 @@ export const appointmentsStore = {
 	 */
 	optimisticUpdate(
 		id: string,
-		patch: { scheduled_start: string; scheduled_end: string | null }
-	): { scheduled_start: string; scheduled_end: string | null } | null {
-		let prev: { scheduled_start: string; scheduled_end: string | null } | null = null;
+		patch: { scheduled_start: string; scheduled_end: string | null; all_day?: boolean }
+	): { scheduled_start: string; scheduled_end: string | null; all_day: boolean } | null {
+		let prev: { scheduled_start: string; scheduled_end: string | null; all_day: boolean } | null =
+			null;
 		for (const [key, entry] of cache) {
 			let changed = false;
 			const items = entry.items.map((it) => {
 				if (it.id !== id) return it;
 				if (!prev) {
-					prev = { scheduled_start: it.scheduled_start, scheduled_end: it.scheduled_end };
+					prev = {
+						scheduled_start: it.scheduled_start,
+						scheduled_end: it.scheduled_end,
+						all_day: it.all_day
+					};
 				}
 				changed = true;
-				return { ...it, scheduled_start: patch.scheduled_start, scheduled_end: patch.scheduled_end };
+				return {
+					...it,
+					scheduled_start: patch.scheduled_start,
+					scheduled_end: patch.scheduled_end,
+					all_day: patch.all_day ?? it.all_day
+				};
 			});
 			if (changed) cache.set(key, { items, fetchedAt: entry.fetchedAt });
 		}
 		return prev;
+	},
+
+	/**
+	 * Patch an appointment's status in-place across every cached filter slot (and the
+	 * detail cache if present) so a quick status change from the calendar card popover
+	 * restyles the block instantly without a refetch.
+	 */
+	patchStatus(id: string, status: AppointmentStatus): void {
+		for (const [key, entry] of cache) {
+			let changed = false;
+			const items = entry.items.map((it) => {
+				if (it.id !== id) return it;
+				changed = true;
+				return { ...it, status };
+			});
+			if (changed) cache.set(key, { items, fetchedAt: entry.fetchedAt });
+		}
+		const detail = details.get(id);
+		if (detail) {
+			details.set(id, {
+				appointment: { ...detail.appointment, status },
+				fetchedAt: detail.fetchedAt
+			});
+		}
 	},
 
 	/**

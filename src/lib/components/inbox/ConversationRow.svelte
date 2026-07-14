@@ -1,17 +1,5 @@
 <script lang="ts">
-	import {
-		MessageSquare,
-		PhoneMissed,
-		Phone,
-		Mail,
-		MessageCircle,
-		Clock,
-		Lock,
-		AlertCircle,
-		AlertTriangle
-	} from '@lucide/svelte';
 	import type { ConversationListItem, MessageChannel } from '$lib/stores/inbox.svelte';
-	import { cn } from '$lib/utils/cn';
 	import ConversationRowBody from './ConversationRowBody.svelte';
 
 	let {
@@ -28,28 +16,16 @@
 
 	const channel: MessageChannel | null = $derived(c.last_message_channel);
 
-	const ChannelIcon = $derived(
+	const channelIcon = $derived(
 		channel === 'missed_call'
-			? PhoneMissed
+			? 'ri-phone-off-line'
 			: channel === 'call'
-				? Phone
+				? 'ri-phone-line'
 				: channel === 'email'
-					? Mail
+					? 'ri-mail-line'
 					: channel === 'webchat'
-						? MessageCircle
-						: MessageSquare
-	);
-
-	const channelTint = $derived(
-		channel === 'missed_call'
-			? 'text-amber-600'
-			: channel === 'call'
-				? 'text-sky-600'
-				: channel === 'webchat'
-					? 'text-emerald-600'
-					: channel === 'email'
-						? 'text-indigo-500'
-						: 'text-primary'
+						? 'ri-global-line'
+						: 'ri-chat-1-line'
 	);
 
 	const initials = $derived(
@@ -129,13 +105,9 @@
 		return `Until ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 	}
 
-	function metaColorFn(): string {
-		if (hasFailure) return 'text-destructive';
-		if (isWaiting) return 'text-amber-600 dark:text-amber-400';
-		return 'text-muted-foreground';
-	}
-
-	const metaColor = $derived(metaColorFn());
+	const metaState = $derived<'waiting' | 'failed' | 'default'>(
+		hasFailure ? 'failed' : isWaiting ? 'waiting' : 'default'
+	);
 </script>
 
 {#if onSelect}
@@ -143,30 +115,18 @@
 		type="button"
 		onclick={() => onSelect?.(c.id)}
 		aria-current={selected ? 'true' : undefined}
-		class={cn(
-			'group relative flex items-center gap-3 text-left transition-colors duration-150',
-			dense
-				? 'min-h-[60px] px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40'
-				: 'min-h-[72px] overflow-hidden rounded-xl border border-border/60 bg-card px-3 py-2.5 shadow-card hover:border-border hover:bg-muted/30 active:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-			selected && 'bg-primary/[0.05]'
-		)}
+		class="convo-row convo-row--dense"
+		class:convo-row--selected={selected}
 	>
-		{#if hasUnread && !isClosed}
-			<span
-				class={cn(
-					'absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary/80',
-					selected && 'bg-primary'
-				)}
-			></span>
-		{:else if selected}
-			<span class="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary"></span>
+		{#if (hasUnread && !isClosed) || selected}
+			<span class="convo-row__accent"></span>
 		{/if}
 		<ConversationRowBody
 			{c}
 			{dense}
 			{initials}
-			{ChannelIcon}
-			{channelTint}
+			channelKey={channel}
+			{channelIcon}
 			{timeLabel}
 			{hasUnread}
 			{isSnoozed}
@@ -176,32 +136,27 @@
 			{previewText}
 			{meta}
 			{showMeta}
-			{metaColor}
+			{metaState}
 		/>
 	</button>
 {:else}
 	<a
 		href={`/inbox/${c.id}`}
 		aria-current={selected ? 'true' : undefined}
-		class={cn(
-			'group relative flex items-start gap-3 transition-colors duration-150 ease-out',
-			dense
-				? 'min-h-[60px] px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40'
-				: 'min-h-[72px] overflow-hidden rounded-xl border border-border/60 bg-card px-3 py-2.5 shadow-card hover:border-border hover:bg-muted/30 active:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-			hasUnread && !isClosed && !dense && 'border-primary/25 bg-primary/[0.025]',
-			hasFailure && !dense && 'border-destructive/40 bg-destructive/[0.035]',
-			isClosed && !dense && 'opacity-60'
-		)}
+		class="convo-row convo-row--card"
+		class:convo-row--unread={hasUnread && !isClosed}
+		class:convo-row--failed={hasFailure}
+		class:convo-row--closed={isClosed}
 	>
 		{#if hasUnread && !isClosed}
-			<span class="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary/80"></span>
+			<span class="convo-row__accent"></span>
 		{/if}
 		<ConversationRowBody
 			{c}
 			{dense}
 			{initials}
-			{ChannelIcon}
-			{channelTint}
+			channelKey={channel}
+			{channelIcon}
 			{timeLabel}
 			{hasUnread}
 			{isSnoozed}
@@ -211,7 +166,7 @@
 			{previewText}
 			{meta}
 			{showMeta}
-			{metaColor}
+			{metaState}
 		/>
 	</a>
 {/if}

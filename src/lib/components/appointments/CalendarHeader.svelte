@@ -1,28 +1,21 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		ChevronLeft,
-		ChevronRight,
-		CalendarPlus,
-		CalendarDays,
-		List,
-		Filter,
-		Search,
-		X
-	} from '@lucide/svelte';
-	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
-	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
-	import UserMenu from '$lib/components/app-shell/UserMenu.svelte';
-	import { commandPalette } from '$lib/stores/commandPalette.svelte';
-	import { getOrgContext } from '$lib/context/org';
-	import { getMemberContext } from '$lib/context/member';
-	import { cn } from '$lib/utils/cn';
 	import type { AppointmentView, CalendarRange } from '$lib/types/appointments';
 
 	const MONTH_NAMES = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
+		'January',
+		'February',
+		'March',
+		'April',
+		'May',
+		'June',
+		'July',
+		'August',
+		'September',
+		'October',
+		'November',
+		'December'
 	];
 
 	let {
@@ -35,7 +28,8 @@
 		onGoToday,
 		onFilterOpen,
 		onRangeChange,
-		onViewChange
+		onViewChange,
+		onNew
 	}: {
 		view: AppointmentView;
 		range: CalendarRange;
@@ -47,14 +41,9 @@
 		onFilterOpen: () => void;
 		onRangeChange?: (r: CalendarRange) => void;
 		onViewChange?: (v: AppointmentView) => void;
+		// Opens the inline 3-tab quick-create popup (Job · Visit · Event).
+		onNew: () => void;
 	} = $props();
-
-	// Global desktop controls (same as PageWrapper)
-	function readCtx<T>(read: () => () => T): (() => T) | null {
-		try { return read(); } catch { return null; }
-	}
-	const org = readCtx(getOrgContext);
-	const member = readCtx(getMemberContext);
 
 	let searchOpen = $state(false);
 	let searchInputEl = $state<HTMLInputElement | null>(null);
@@ -70,7 +59,10 @@
 		const y = anchor.getFullYear();
 		if (view === 'calendar' && range === 'day') {
 			return anchor.toLocaleDateString('en-US', {
-				weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+				weekday: 'long',
+				month: 'long',
+				day: 'numeric',
+				year: 'numeric'
 			});
 		}
 		return `${m} ${y}`;
@@ -101,172 +93,136 @@
 </script>
 
 <!--
-  Sticky page header — mirrors the PageWrapper header pattern.
-  On desktop: shows page title + calendar controls + global app controls (UserMenu, etc.)
-  On mobile:  compact calendar controls only (global controls live in AppHeader / BottomNav)
+  Slim calendar toolbar. The global app topbar (.topbar) renders search /
+  theme / notifications / user on every page, so this owns only the
+  calendar-specific controls: date nav, view toggles, filters, New.
 -->
-<header
-	class="sticky top-0 z-30 flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 md:min-h-16 md:px-6 md:py-3"
->
-	<!-- LEFT: page title (desktop) + calendar nav -->
-	<div class="flex min-w-0 items-center gap-2">
-		<!-- "Appointments" label — desktop only, acts as page title -->
-		<h1 class="hidden text-xl font-semibold leading-tight tracking-tight text-foreground md:mr-2 md:block md:text-2xl">
-			Appointments
-		</h1>
+<header class="cal-header">
+	<!-- LEFT: page title (desktop) + calendar nav / inline search -->
+	<div class="cal-header__left">
+		<h1 class="cal-header__title">Schedule</h1>
 
 		{#if searchOpen}
 			<!-- Inline search input (replaces nav in search mode) -->
-			<div class="flex items-center gap-2">
-				<Search class="h-4 w-4 shrink-0 text-muted-foreground" />
+			<div class="cal-header__search-inline">
+				<i class="ri-search-line" aria-hidden="true"></i>
 				<input
 					bind:this={searchInputEl}
 					type="search"
 					placeholder="Search appointments…"
 					value={searchValue}
 					oninput={handleSearchInput}
-					class="w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground md:w-64"
+					class="cal-header__search-input"
 				/>
 			</div>
 		{:else if view === 'calendar'}
 			<!-- Calendar navigation -->
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-8 w-8 shrink-0"
+			<button
+				type="button"
+				class="cal-header__nav-btn"
 				onclick={() => onShiftAnchor(-1)}
 				aria-label="Previous"
 			>
-				<ChevronLeft class="h-4 w-4" />
-			</Button>
-			<Button variant="outline" size="sm" class="h-8 shrink-0 px-3 text-xs" onclick={onGoToday}>
+				<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
+			</button>
+			<Button variant="outline" size="sm" class="cal-header__today" onclick={onGoToday}>
 				Today
 			</Button>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-8 w-8 shrink-0"
+			<button
+				type="button"
+				class="cal-header__nav-btn"
 				onclick={() => onShiftAnchor(1)}
 				aria-label="Next"
 			>
-				<ChevronRight class="h-4 w-4" />
-			</Button>
-			<span class="ml-1 hidden truncate text-sm font-medium text-muted-foreground sm:block">
-				{monthLabel}
-			</span>
+				<i class="ri-arrow-right-s-line" aria-hidden="true"></i>
+			</button>
+			<span class="cal-header__month-label">{monthLabel}</span>
 		{/if}
 	</div>
 
-	<!-- RIGHT: calendar controls + global desktop controls -->
-	<div class="flex shrink-0 items-center gap-1.5">
+	<!-- RIGHT: calendar controls -->
+	<div class="cal-header__right">
 		{#if searchOpen}
-			<Button variant="ghost" size="sm" class="h-8" onclick={closeSearch}>
-				Cancel
-			</Button>
+			<Button variant="ghost" size="sm" onclick={closeSearch}>Cancel</Button>
 		{:else}
 			<!-- Search toggle -->
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-8 w-8"
+			<button
+				type="button"
+				class="cal-header__icon-btn"
 				onclick={() => (searchOpen = true)}
 				aria-label="Search appointments"
 			>
-				<Search class="h-4 w-4" />
-			</Button>
+				<i class="ri-search-line" aria-hidden="true"></i>
+			</button>
 
 			<!-- List / Calendar view toggle -->
-			<div class="hidden items-center rounded-md border border-border bg-muted/30 p-0.5 sm:inline-flex">
-				<Button
-					variant={view === 'list' ? 'default' : 'ghost'}
-					size="sm"
-					class="h-7 px-2.5 text-xs"
+			<div class="cal-header__seg">
+				<button
+					type="button"
+					class="cal-header__seg-btn"
+					class:cal-header__seg-btn--active={view === 'list'}
 					onclick={() => setView('list')}
 				>
-					<List class="h-3.5 w-3.5" />
-					<span class="hidden md:inline">List</span>
-				</Button>
-				<Button
-					variant={view === 'calendar' ? 'default' : 'ghost'}
-					size="sm"
-					class="h-7 px-2.5 text-xs"
+					<i class="ri-list-unordered" aria-hidden="true"></i>
+					<span class="cal-header__seg-label">List</span>
+				</button>
+				<button
+					type="button"
+					class="cal-header__seg-btn"
+					class:cal-header__seg-btn--active={view === 'calendar'}
 					onclick={() => setView('calendar')}
 				>
-					<CalendarDays class="h-3.5 w-3.5" />
-					<span class="hidden md:inline">Calendar</span>
-				</Button>
+					<i class="ri-calendar-2-line" aria-hidden="true"></i>
+					<span class="cal-header__seg-label">Calendar</span>
+				</button>
 			</div>
 
-			<!-- Day / Week toggle (calendar view only) -->
+			<!-- Day / Week / Month toggle (calendar view only) -->
 			{#if view === 'calendar'}
-				<div class="hidden items-center rounded-md border border-border bg-muted/30 p-0.5 sm:inline-flex">
-					<Button
-						variant={range === 'day' ? 'default' : 'ghost'}
-						size="sm"
-						class="h-7 px-2.5 text-xs"
+				<div class="cal-header__seg">
+					<button
+						type="button"
+						class="cal-header__seg-btn"
+						class:cal-header__seg-btn--active={range === 'day'}
 						onclick={() => setRange('day')}
 					>
 						Day
-					</Button>
-					<Button
-						variant={range === 'week' ? 'default' : 'ghost'}
-						size="sm"
-						class="h-7 px-2.5 text-xs"
+					</button>
+					<button
+						type="button"
+						class="cal-header__seg-btn"
+						class:cal-header__seg-btn--active={range === 'week'}
 						onclick={() => setRange('week')}
 					>
 						Week
-					</Button>
-					<Button
-						variant={range === 'month' ? 'default' : 'ghost'}
-						size="sm"
-						class="h-7 px-2.5 text-xs"
+					</button>
+					<button
+						type="button"
+						class="cal-header__seg-btn"
+						class:cal-header__seg-btn--active={range === 'month'}
 						onclick={() => setRange('month')}
 					>
 						Month
-					</Button>
+					</button>
 				</div>
 			{/if}
 
 			<!-- Mobile: filter sheet button -->
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-8 w-8 lg:hidden"
+			<button
+				type="button"
+				class="cal-header__icon-btn cal-header__icon-btn--filter"
 				onclick={onFilterOpen}
 				aria-label="Filters"
 			>
-				<Filter class="h-4 w-4" />
-			</Button>
+				<i class="ri-equalizer-line" aria-hidden="true"></i>
+			</button>
 
 			<!-- New appointment -->
 			{#if canCreate}
-				<Button href="/appointments/new" size="sm" class="h-8">
-					<CalendarPlus class="h-4 w-4" />
-					<span class="hidden sm:inline">New</span>
+				<Button size="sm" onclick={onNew}>
+					<i class="ri-calendar-event-line" aria-hidden="true"></i>
+					<span class="cal-header__seg-label">New</span>
 				</Button>
-			{/if}
-
-			<!-- Desktop-only global controls (UserMenu, notifications, theme) —
-			     mirrors what PageWrapper renders at md+, since AppHeader is md:hidden -->
-			{#if org && member}
-				<div class="ml-1 hidden items-center gap-2.5 md:flex">
-					<div class="h-8 w-px bg-border/60" aria-hidden="true"></div>
-					<div class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/70 p-1 shadow-card">
-						<button
-							type="button"
-							onclick={() => (commandPalette.open = true)}
-							class="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							aria-label="Search (⌘K)"
-						>
-							<Search class="h-4 w-4" />
-						</button>
-						<ThemeToggle />
-						<NotificationBell />
-					</div>
-					<div class="flex items-center rounded-full border border-border/60 bg-card-raised/90 p-[3px] shadow-card transition-shadow duration-200 hover:shadow-dropdown">
-						<UserMenu member={member()} org={org()} />
-					</div>
-				</div>
 			{/if}
 		{/if}
 	</div>

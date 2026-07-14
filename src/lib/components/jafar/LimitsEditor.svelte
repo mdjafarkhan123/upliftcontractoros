@@ -17,24 +17,20 @@
 	}
 </script>
 
-<div class="grid gap-4 sm:grid-cols-2">
+<div class="limits-grid">
 	{#each LIMIT_DEFS as def (def.key)}
 		{@const value = limits[def.key]}
 		{@const isZero = value === 0}
-		<div class="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
-			<div class="flex items-start justify-between gap-3">
-				<div class="min-w-0">
-					<label for={`limit-${def.key}`} class="text-sm font-medium text-white">
-						{def.label}
-					</label>
-					<p class="mt-0.5 text-[11px] leading-snug text-slate-500">{def.description}</p>
+		<div class="jafar-limit-card">
+			<div class="jafar-limit-card__header">
+				<div>
+					<label for={`limit-${def.key}`} class="jafar-limit-card__label">{def.label}</label>
+					<p class="jafar-limit-card__desc">{def.description}</p>
 				</div>
-				<span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-					{def.unit}
-				</span>
+				<span class="jafar-limit-card__unit">{def.unit}</span>
 			</div>
 
-			<div class="mt-3 flex items-center gap-2">
+			<div class="jafar-limit-card__input-row">
 				<input
 					id={`limit-${def.key}`}
 					type="number"
@@ -42,19 +38,15 @@
 					max="1000000"
 					step="1"
 					inputmode="numeric"
-					value={value}
+					{value}
 					oninput={(e) => handleInput(def.key, e)}
-					class="block w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm font-mono text-white placeholder:text-slate-600 focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-colors"
+					class="jafar-input jafar-input--mono"
 				/>
 			</div>
 
-			<p class="mt-1.5 text-[11px] text-slate-500">
+			<p class="jafar-limit-card__hint">
 				{#if isZero}
-					<span
-						class="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/60 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-slate-400"
-					>
-						0 = {def.zeroMeans}
-					</span>
+					<span class="jafar-limit-card__zero-pill">0 = {def.zeroMeans}</span>
 				{:else}
 					Tenant capped at {value.toLocaleString()} {def.unit}.
 				{/if}
@@ -62,3 +54,13 @@
 		</div>
 	{/each}
 </div>
+
+<style lang="scss">
+	.limits-grid {
+		display: grid;
+		gap: 1rem;
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+</style>

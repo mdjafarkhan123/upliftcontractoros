@@ -1,24 +1,12 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import {
-		MailCheck,
-		Clock,
-		TriangleAlert,
-		Loader2,
-		Copy,
-		Check,
-		Inbox,
-		ArrowRight,
-		Send
-	} from '@lucide/svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { formatRelativeShort } from '$lib/utils/format';
-	import { cn } from '$lib/utils/cn';
 
 	type ForwardTestState = {
 		status: 'pending' | 'passed' | 'expired' | null;
@@ -89,30 +77,10 @@
 	);
 
 	const STATUS_META = {
-		verified: {
-			label: 'Forwarding ready',
-			icon: MailCheck,
-			class:
-				'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-		},
-		verifying: {
-			label: 'Domain verifying',
-			icon: Loader2,
-			class:
-				'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
-		},
-		pending: {
-			label: 'Setup pending',
-			icon: Clock,
-			class:
-				'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-		},
-		failed: {
-			label: 'Verification failed',
-			icon: TriangleAlert,
-			class:
-				'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
-		}
+		verified: { label: 'Forwarding ready', icon: 'ri-mail-check-line', tone: 'success' },
+		verifying: { label: 'Domain verifying', icon: 'ri-loader-4-line', tone: 'info' },
+		pending: { label: 'Setup pending', icon: 'ri-time-line', tone: 'warning' },
+		failed: { label: 'Verification failed', icon: 'ri-error-warning-line', tone: 'danger' }
 	} as const;
 
 	// Stage 4 — consolidated "is forwarding working?" status. Server computes the value;
@@ -120,20 +88,20 @@
 	const HEALTH_META = {
 		active: {
 			label: 'Active',
-			icon: MailCheck,
-			pill: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+			icon: 'ri-mail-check-line',
+			tone: 'success',
 			body: 'Emails are flowing into your CRM inbox.'
 		},
 		idle: {
 			label: 'Waiting for first email',
-			icon: Clock,
-			pill: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20',
+			icon: 'ri-time-line',
+			tone: 'info',
 			body: 'Forwarding is set up. The moment a new email arrives in your inbox, it’ll show up here.'
 		},
 		needs_attention: {
 			label: 'Needs attention',
-			icon: TriangleAlert,
-			pill: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
+			icon: 'ri-error-warning-line',
+			tone: 'warning',
 			body: 'We sent a test but it never came back. Check your forwarding rule is turned on, then run the test below again.'
 		}
 	} as const;
@@ -276,78 +244,52 @@
 		<SkeletonLoader lines={6} label="Loading forwarding settings" />
 	{:else if data.forwarding_address}
 		{@const meta = STATUS_META.verified}
-		<div class="flex flex-col gap-6">
+		<div class="email-page">
 			<!-- Overall health status (Stage 4) -->
 			{#if data.health}
 				{@const h = HEALTH_META[data.health]}
-				<section
-					class="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-				>
-					<span
-						class={cn(
-							'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border',
-							h.pill
-						)}
-					>
-						<h.icon class="h-4 w-4" />
-					</span>
-					<div class="min-w-0 flex-1">
-						<div class="flex items-center gap-2">
-							<h3 class="text-sm font-semibold text-foreground">Email forwarding</h3>
-							<span
-								class={cn(
-									'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
-									h.pill
-								)}
-							>
-								{h.label}
-							</span>
+				<section class="email-section">
+					<div class="email-health">
+						<span class="email-circle email-circle--{h.tone}">
+							<i class={h.icon} aria-hidden="true"></i>
+						</span>
+						<div class="email-health__body">
+							<div class="email-health__row">
+								<h3 class="email-health__title">Email forwarding</h3>
+								<span class="email-pill email-pill--{h.tone}">{h.label}</span>
+							</div>
+							<p class="email-health__text">{h.body}</p>
 						</div>
-						<p class="mt-0.5 text-xs text-muted-foreground">{h.body}</p>
 					</div>
 				</section>
 			{/if}
 
 			<!-- Forwarding address -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
-				<div class="flex items-start justify-between gap-3">
-					<div class="min-w-0">
-						<h3 class="text-sm font-semibold text-foreground">Your forwarding address</h3>
-						<p class="text-xs text-muted-foreground">
+			<section class="email-section">
+				<div class="email-section__head">
+					<div>
+						<h3 class="email-section__title">Your forwarding address</h3>
+						<p class="email-section__desc">
 							Forward emails from your normal inbox to this address and they'll appear in your CRM
 							inbox automatically.
 						</p>
 					</div>
-					<span
-						class={cn(
-							'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-							meta.class
-						)}
-					>
-						<meta.icon class="h-3 w-3" />
+					<span class="email-pill email-pill--{meta.tone}">
+						<i class={meta.icon} aria-hidden="true"></i>
 						{meta.label}
 					</span>
 				</div>
 
-				<div class="flex items-stretch gap-2">
-					<div
-						class="flex min-w-0 flex-1 items-center rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
-					>
-						<p class="truncate font-mono text-sm text-foreground">{data.forwarding_address}</p>
+				<div class="email-test">
+					<div class="email-mono email-test__field">
+						<p>{data.forwarding_address}</p>
 					</div>
-					<Button
-						type="button"
-						variant="outline"
-						class="shrink-0"
-						onclick={() => void copyAddress()}
-					>
+					<Button variant="secondary" onclick={() => void copyAddress()}>
 						{#if copied}
-							<Check class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+							<i class="ri-check-line" aria-hidden="true"></i>
 							Copied
 						{:else}
-							<Copy class="h-4 w-4" />
+							<i class="ri-file-copy-line" aria-hidden="true"></i>
 							Copy
 						{/if}
 					</Button>
@@ -355,27 +297,21 @@
 			</section>
 
 			<!-- Setup instructions -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
+			<section class="email-section">
 				<div>
-					<h3 class="text-sm font-semibold text-foreground">How to set up forwarding</h3>
-					<p class="text-xs text-muted-foreground">
+					<h3 class="email-section__title">How to set up forwarding</h3>
+					<p class="email-section__desc">
 						Pick your email provider and follow the steps. You only do this once.
 					</p>
 				</div>
 
-				<div class="flex gap-1.5">
+				<div class="email-providers">
 					{#each PROVIDERS as p (p.id)}
 						<button
 							type="button"
 							onclick={() => (provider = p.id)}
-							class={cn(
-								'flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-								provider === p.id
-									? 'border-primary/40 bg-primary/5 text-primary ring-1 ring-primary/20'
-									: 'border-border/60 bg-card text-muted-foreground hover:border-border hover:bg-muted/30'
-							)}
+							class="email-provider"
+							class:email-provider--active={provider === p.id}
 							aria-pressed={provider === p.id}
 						>
 							{p.label}
@@ -383,68 +319,56 @@
 					{/each}
 				</div>
 
-				<ol class="flex flex-col gap-2.5">
+				<ol class="email-steps">
 					{#each steps as step, i (i)}
-						<li class="flex gap-3">
-							<span
-								class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
-							>
-								{i + 1}
-							</span>
-							<p class="pt-0.5 text-sm leading-relaxed text-foreground">{step}</p>
+						<li class="email-step">
+							<span class="email-step__num">{i + 1}</span>
+							<p class="email-step__text">{step}</p>
 						</li>
 					{/each}
 				</ol>
 			</section>
 
 			<!-- Verify forwarding -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
+			<section class="email-section">
 				<div>
-					<h3 class="text-sm font-semibold text-foreground">Verify forwarding</h3>
-					<p class="text-xs text-muted-foreground">
+					<h3 class="email-section__title">Verify forwarding</h3>
+					<p class="email-section__desc">
 						Send a test to the inbox you set up forwarding on. If it's working, the test lands back
 						here and turns green — no junk contact is created.
 					</p>
 				</div>
 
 				{#if data.forward_test.status === 'passed'}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-					>
-						<MailCheck class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-						<p class="text-xs text-emerald-800 dark:text-emerald-300">
+					<div class="email-note email-note--success">
+						<i class="ri-mail-check-line" aria-hidden="true"></i>
+						<p>
 							Forwarding confirmed{data.forward_test.verified_at
 								? ` ${formatRelativeShort(data.forward_test.verified_at)}`
 								: ''}. Emails from {data.forward_test.email ?? 'your inbox'} are flowing into your CRM.
 						</p>
 					</div>
 				{:else if data.forward_test.status === 'pending'}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 dark:border-sky-500/20 dark:bg-sky-500/10"
-					>
-						<Loader2 class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
-						<p class="text-xs text-sky-800 dark:text-sky-300">
+					<div class="email-note email-note--info">
+						<i class="ri-loader-4-line email-spin" aria-hidden="true"></i>
+						<p>
 							Waiting for the test email to forward back{data.forward_test.email
 								? ` from ${data.forward_test.email}`
 								: ''}… This usually takes a few seconds once your forwarding rule is on.
 						</p>
 					</div>
 				{:else if data.forward_test.status === 'expired'}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-500/20 dark:bg-amber-500/10"
-					>
-						<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-						<p class="text-xs text-amber-800 dark:text-amber-300">
+					<div class="email-note email-note--warning">
+						<i class="ri-error-warning-line" aria-hidden="true"></i>
+						<p>
 							We didn't see the test come back. Double-check your forwarding rule is turned on for
 							this inbox, then try again.
 						</p>
 					</div>
 				{/if}
 
-				<div class="flex flex-col gap-2 sm:flex-row sm:items-start">
-					<div class="min-w-0 flex-1">
+				<div class="email-test">
+					<div class="email-test__field">
 						<input
 							type="email"
 							inputmode="email"
@@ -453,69 +377,58 @@
 							disabled={sending}
 							placeholder="you@yourbusiness.com"
 							aria-label="Inbox to verify"
-							class={cn(
-								'w-full rounded-lg border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60',
-								testEmailError ? 'border-rose-300 dark:border-rose-500/40' : 'border-border/60'
-							)}
+							class="field__input email-test__input"
+							class:field__input--error={testEmailError}
 						/>
 						{#if testEmailError}
-							<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{testEmailError}</p>
+							<p class="field__error">{testEmailError}</p>
 						{/if}
 					</div>
 					<Button
-						type="button"
-						class="shrink-0"
-						disabled={sending || !testEmail.trim()}
+						disabled={!testEmail.trim()}
+						loading={sending}
+						loadingLabel="Sending…"
 						onclick={() => void sendTest()}
 					>
-						{#if sending}
-							<Loader2 class="h-4 w-4 animate-spin" />
-							Sending…
-						{:else}
-							<Send class="h-4 w-4" />
-							{data.forward_test.status === 'pending'
-								? 'Resend'
-								: data.forward_test.status
-									? 'Send again'
-									: 'Send verification email'}
-						{/if}
+						<i class="ri-send-plane-line" aria-hidden="true"></i>
+						{data.forward_test.status === 'pending'
+							? 'Resend'
+							: data.forward_test.status
+								? 'Send again'
+								: 'Send verification email'}
 					</Button>
 				</div>
-				<p class="text-xs text-muted-foreground">
+				<p class="email-section__desc">
 					Use the inbox you configured forwarding on — it can be different from your login email.
 				</p>
 			</section>
 
 			<!-- Health summary -->
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
+			<section class="email-section">
 				<div>
-					<h3 class="text-sm font-semibold text-foreground">Forwarding health</h3>
-					<p class="text-xs text-muted-foreground">A quick look at what's coming in.</p>
+					<h3 class="email-section__title">Forwarding health</h3>
+					<p class="email-section__desc">A quick look at what's coming in.</p>
 				</div>
 
-				<div class="grid grid-cols-2 gap-3">
-					<div class="rounded-lg border border-border/50 bg-muted/20 px-3 py-3">
-						<p class="text-xs text-muted-foreground">Last email received</p>
-						<p class="mt-1 text-sm font-semibold text-foreground">
+				<div class="email-stats">
+					<div class="email-stat">
+						<p class="email-stat__label">Last email received</p>
+						<p class="email-stat__value">
 							{data.last_email_received_at
 								? formatRelativeShort(data.last_email_received_at)
 								: 'None yet'}
 						</p>
 					</div>
-					<div class="rounded-lg border border-border/50 bg-muted/20 px-3 py-3">
-						<p class="text-xs text-muted-foreground">Captured this week</p>
-						<p class="mt-1 text-sm font-semibold text-foreground">{data.captured_this_week}</p>
+					<div class="email-stat">
+						<p class="email-stat__label">Captured this week</p>
+						<p class="email-stat__value">{data.captured_this_week}</p>
 					</div>
 				</div>
 
 				{#if !data.last_email_received_at}
-					<div
-						class="flex items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 dark:border-sky-500/20 dark:bg-sky-500/10"
-					>
-						<Inbox class="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
-						<p class="text-xs text-sky-800 dark:text-sky-300">
+					<div class="email-note email-note--info">
+						<i class="ri-inbox-line" aria-hidden="true"></i>
+						<p>
 							No emails captured yet. Once you finish the steps above and a new email arrives in
 							your normal inbox, it'll show up here.
 						</p>
@@ -527,35 +440,27 @@
 		<!-- Domain not verified yet — point to the existing request flow -->
 		{@const status = data.domain_status}
 		{@const meta = status ? STATUS_META[status] : null}
-		<div class="flex flex-col gap-6">
-			<section
-				class="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-card"
-			>
-				<div class="flex items-start justify-between gap-3">
-					<div class="min-w-0">
-						<h3 class="text-sm font-semibold text-foreground">Email forwarding</h3>
-						<p class="text-xs text-muted-foreground">
+		<div class="email-page">
+			<section class="email-section">
+				<div class="email-section__head">
+					<div>
+						<h3 class="email-section__title">Email forwarding</h3>
+						<p class="email-section__desc">
 							Forward your existing inbox into the CRM so customer replies land in one place.
 						</p>
 					</div>
 					{#if meta}
-						<span
-							class={cn(
-								'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-								meta.class
-							)}
-						>
-							<meta.icon class={cn('h-3 w-3', status === 'verifying' && 'animate-spin')} />
+						<span class="email-pill email-pill--{meta.tone}">
+							<i class="{meta.icon}{status === 'verifying' ? ' email-spin' : ''}" aria-hidden="true"
+							></i>
 							{meta.label}
 						</span>
 					{/if}
 				</div>
 
-				<div
-					class="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-500/20 dark:bg-amber-500/10"
-				>
-					<Clock class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-					<p class="text-xs text-amber-800 dark:text-amber-300">
+				<div class="email-note email-note--warning">
+					<i class="ri-time-line" aria-hidden="true"></i>
+					<p>
 						{status === 'verified'
 							? 'Your domain is set up but no forwarding address is available yet — please contact support.'
 							: status
@@ -564,10 +469,10 @@
 					</p>
 				</div>
 
-				<footer class="flex items-center justify-end border-t border-border pt-4">
-					<Button type="button" onclick={() => goto('/settings/email')}>
+				<footer class="email-section__footer">
+					<Button onclick={() => goto('/settings/email')}>
 						Go to Email settings
-						<ArrowRight class="h-4 w-4" />
+						<i class="ri-arrow-right-line" aria-hidden="true"></i>
 					</Button>
 				</footer>
 			</section>

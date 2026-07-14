@@ -1,21 +1,31 @@
 <script lang="ts">
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import type { JobStatus } from '$lib/types/jobs';
+	import { deriveJobScheduleState, jobScheduleStateLabel } from '$lib/jobs/status';
 
-	let { status, class: className }: { status: JobStatus; class?: string } = $props();
+	let {
+		status,
+		scheduledStart = undefined,
+		class: className
+	}: { status: JobStatus; scheduledStart?: string | null; class?: string } = $props();
+
+	// Precise display state derived from the stored status + the job's date. See
+	// $lib/jobs/status — Unscheduled/Upcoming/Today/Overdue are all faces of a 'scheduled' job.
+	const state = $derived(deriveJobScheduleState(status, scheduledStart));
 
 	const variant = $derived(
-		status === 'completed'
+		state === 'completed'
 			? 'success'
-			: status === 'in_progress'
-				? 'info'
-				: status === 'cancelled'
-					? 'danger'
-					: 'warning'
+			: state === 'overdue' || state === 'cancelled'
+				? 'danger'
+				: state === 'today' || state === 'on_hold'
+					? 'warning'
+					: state === 'upcoming' || state === 'in_progress'
+						? 'info'
+						: 'default'
 	);
-	const label = $derived(
-		status === 'in_progress' ? 'In Progress' : status[0].toUpperCase() + status.slice(1)
-	);
+
+	const label = $derived(jobScheduleStateLabel(state));
 </script>
 
 <Badge {variant} {label} class={className} />

@@ -1,0 +1,128 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// GROWTH FEED (S13b) — agency activity feed + monthly summary hero card
+// =============================================================================
+
+.growth {
+	display: flex;
+	flex-direction: column;
+	gap: $space-6;
+
+	&__group {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__more {
+		display: flex;
+		justify-content: center;
+		padding-top: $space-2;
+	}
+}
+
+// --- Regular feed card (GrowthFeedCard) --------------------------------------
+.growth-card {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-5;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__time {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		line-height: $lh-lg;
+		color: var(--color-text-primary);
+	}
+
+	&__body {
+		white-space: pre-line;
+		font-size: $fs-body;
+		line-height: $lh-lg;
+		color: var(--color-text-secondary);
+	}
+
+	&__media {
+		margin-top: $space-1;
+		width: 100%;
+		border-radius: $radius-md;
+		object-fit: cover;
+	}
+}
+
+// --- Monthly summary hero (MonthlySummaryCard) -------------------------------
+.growth-summary {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-6;
+	border-radius: $radius-2xl;
+	background: linear-gradient(135deg, var(--state-active-tint), var(--color-bg-surface) 70%);
+	box-shadow:
+		inset 0 0 0 1px var(--state-active-tint),
+		var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__eyebrow {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-brand);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__time {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__title {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		line-height: $lh-h3;
+		color: var(--color-text-primary);
+	}
+
+	&__body {
+		white-space: pre-line;
+		font-size: $fs-body;
+		line-height: $lh-lg;
+		color: var(--color-text-secondary);
+	}
+
+	&__media {
+		margin-top: $space-1;
+		width: 100%;
+		border-radius: $radius-md;
+		object-fit: cover;
+	}
+}

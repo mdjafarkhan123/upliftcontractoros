@@ -5,6 +5,7 @@ import { db } from '$lib/server/db/client';
 import { catalogItems } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateCatalogItem, canViewCatalog } from '$lib/server/quotes/permissions';
+import { canViewCostMargin } from '$lib/server/finance/permissions';
 import { createCatalogItemSchema } from '$lib/server/quotes/schemas';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 
@@ -15,6 +16,9 @@ export const GET: RequestHandler = async (event) => {
 	assertOrgActive(auth);
 	if (!canViewCatalog(auth.member)) error(403, 'Forbidden');
 
+	// Cost is private: only members with revenue access receive it (others get null).
+	const canCost = canViewCostMargin(auth.member);
+
 	const rows = await db
 		.select({
 			id: catalogItems.id,
@@ -23,6 +27,7 @@ export const GET: RequestHandler = async (event) => {
 			unit_price: catalogItems.unit_price,
 			unit: catalogItems.unit,
 			unit_cost: catalogItems.unit_cost,
+			default_taxable: catalogItems.default_taxable,
 			category: catalogItems.category,
 			image_url: catalogItems.image_url,
 			created_at: catalogItems.created_at,
@@ -35,6 +40,7 @@ export const GET: RequestHandler = async (event) => {
 	const items = await Promise.all(
 		rows.map(async (r) => ({
 			...r,
+			unit_cost: canCost ? r.unit_cost : null,
 			image_url: await resolveLogoUrl(r.image_url),
 			created_at: r.created_at.toISOString(),
 			updated_at: r.updated_at.toISOString()
@@ -102,6 +108,7 @@ export const POST: RequestHandler = async (event) => {
 			unit: input.unit?.trim() || null,
 			unit_cost:
 				input.unit_cost !== undefined && input.unit_cost !== null ? String(input.unit_cost) : null,
+			default_taxable: input.default_taxable ?? true,
 			category: input.category?.trim() || null,
 			image_url: input.image_url ?? null,
 			created_by: auth.member.id

@@ -2,30 +2,79 @@
 	import { addDays, dayKey, isSameDay } from '$lib/utils/calendar';
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
-	import { cn } from '$lib/utils/cn';
-	import type { AppointmentDetail, AppointmentListItem } from '$lib/types/appointments';
+	import type {
+		AppointmentDetail,
+		AppointmentListItem,
+		AppointmentType
+	} from '$lib/types/appointments';
+	import type { EventListItem } from '$lib/types/events';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import { eventsStore } from '$lib/stores/events.svelte';
+	import { jobsStore } from '$lib/stores/jobs.svelte';
+	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import QuickCreatePopover from './QuickCreatePopover.svelte';
+	import CardDetailPopover from './CardDetailPopover.svelte';
+	import NotifyDialog from '$lib/components/shared/NotifyDialog.svelte';
+	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 
 	let {
 		anchor,
 		items,
+		events = [],
 		dayStartHour,
 		dayEndHour,
 		canCreate,
-		canReschedule = false
+		canReschedule = false,
+		assignees = [],
+		canEditAssignee = false,
+		onCreated
 	}: {
 		anchor: Date;
 		items: AppointmentListItem[];
+		// Non-billable calendar Events (Jobber `Event`) — rendered as neutral grey
+		// blocks alongside visits; draggable/resizable to reschedule (saves instantly,
+		// no customer notify) when the viewer has the reschedule permission.
+		events?: EventListItem[];
 		dayStartHour: number;
 		dayEndHour: number;
 		canCreate: boolean;
 		canReschedule?: boolean;
+		assignees?: { id: string; full_name: string }[];
+		canEditAssignee?: boolean;
+		// Fired after an inline quick-create so the page can revalidate the window.
+		onCreated?: () => void;
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
+	const orgName = $derived(sessionStore.data?.org.name ?? '');
+
+	// Default customer-facing reschedule-confirmation copy — mirrors the org's
+	// appointment_confirmation_* templates (orgProvisioning defaults). Shown ONLY as
+	// a read-only preview so the contractor sees roughly what the customer will get.
+	// The real send always uses the org's own (possibly customized) template plus a
+	// server-signed manage link, neither of which is reproducible client-side.
+	const RESCHEDULE_SMS_TEMPLATE =
+		"Hi {contact_name}, your {appointment_type} with {org_name} is confirmed for {appointment_datetime}. We'll text a reminder before. Need to change it? {manage_link}";
+	const RESCHEDULE_EMAIL_SUBJECT = 'Your appointment with {org_name} is confirmed';
+	const RESCHEDULE_EMAIL_BODY =
+		'Hi {contact_name},\n\nYour {appointment_type} with {org_name} is confirmed for {appointment_datetime}.\n\nNeed to reschedule or cancel? {manage_link}\n\nThanks,\n{org_name}';
+
+	// Per-reschedule copy the contractor can edit before sending (mirrors Quotes/Invoices).
+	// Only the fields they actually change ride to the server; untouched fields fall back to
+	// the org's saved appointment template server-side.
+	type NotifyEdited = { sms: string | null; subject: string | null; body: string | null };
+	const RESCHEDULE_MERGE_FIELDS = [
+		{ token: 'contact_name', label: 'Contact name' },
+		{ token: 'appointment_type', label: 'Appointment type' },
+		{ token: 'appointment_datetime', label: 'Date & time' },
+		{ token: 'org_name', label: 'Business name' },
+		{ token: 'manage_link', label: 'Manage link' }
+	];
+	// Representative signed manage-link length for an honest SMS segment estimate. The real
+	// link is injected server-side at send time via the {manage_link} token.
+	const RESCHEDULE_LINK_FOR_COUNT = 'https://yourapp.com/book/manage/' + 'x'.repeat(40);
 
 	const HOUR_HEIGHT = 56; // px
 	const TOP_GUTTER = 10; // px — breathing room so the first hour label clears the sticky day-header
@@ -68,8 +117,14 @@
 
 	const today = new Date();
 
+	// A calendar block is either a visit (colored) or a non-billable Event (neutral grey).
+	// Both are draggable to reschedule and share the grid, so they lay out in the same columns.
+	type CalBlock =
+		| { kind: 'appt'; appt: AppointmentListItem }
+		| { kind: 'event'; event: EventListItem };
+
 	type LaidOut = {
-		item: AppointmentListItem;
+		block: CalBlock;
 		startMin: number;
 		endMin: number;
 		col: number;
@@ -80,11 +135,11 @@
 		date: Date;
 		key: string;
 		laidOut: LaidOut[];
+		// "Anytime"/all-day items for this day — rendered in the top lane, not a time row.
+		anytime: CalBlock[];
 	};
 
-	function layoutDay(
-		dayItems: { item: AppointmentListItem; startMin: number; endMin: number }[]
-	): LaidOut[] {
+	function layoutDay(dayItems: { block: CalBlock; startMin: number; endMin: number }[]): LaidOut[] {
 		const sorted = [...dayItems].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 		const colEnds: number[] = [];
 		const assigned: LaidOut[] = [];
@@ -96,7 +151,7 @@
 			} else {
 				colEnds[col] = ev.endMin;
 			}
-			assigned.push({ item: ev.item, startMin: ev.startMin, endMin: ev.endMin, col, cols: 1 });
+			assigned.push({ block: ev.block, startMin: ev.startMin, endMin: ev.endMin, col, cols: 1 });
 		}
 		// Cluster pass: connected components of time overlap.
 		let i = 0;
@@ -116,44 +171,78 @@
 		return assigned;
 	}
 
-	const days = $derived.by<DayLane[]>(() => {
-		const buckets = new Map<
-			string,
-			{ item: AppointmentListItem; startMin: number; endMin: number }[]
-		>();
+	// Which anchor-relative day-bucket key an instant falls into (org tz). Null if outside the week.
+	function matchDayKey(d: Date): string | null {
+		const tzKey = tzDateKey(d, orgTz);
 		for (let i = 0; i < 7; i++) {
-			buckets.set(dayKey(addDays(anchor, i)), []);
+			const day = addDays(anchor, i);
+			if (tzDateKey(day, orgTz) === tzKey) return dayKey(day);
+		}
+		return null;
+	}
+
+	// Timed start/end minute-of-day for a block, expanding a missing/invalid end to a
+	// default duration so it always has drawable height.
+	function timedMinutes(
+		startIso: string,
+		endIso: string | null
+	): { startMin: number; endMin: number } {
+		const start = new Date(startIso);
+		const { hour: sh, minute: sm } = partsInOrgTz(start, orgTz);
+		const startMin = sh * 60 + sm;
+		let endMin: number;
+		if (endIso) {
+			const { hour: eh, minute: em } = partsInOrgTz(new Date(endIso), orgTz);
+			endMin = eh * 60 + em;
+			if (endMin <= startMin) endMin = startMin + DEFAULT_DURATION_MIN;
+		} else {
+			endMin = startMin + DEFAULT_DURATION_MIN;
+		}
+		return { startMin, endMin };
+	}
+
+	const days = $derived.by<DayLane[]>(() => {
+		const buckets = new Map<string, { block: CalBlock; startMin: number; endMin: number }[]>();
+		const anytimeBuckets = new Map<string, CalBlock[]>();
+		for (let i = 0; i < 7; i++) {
+			const k = dayKey(addDays(anchor, i));
+			buckets.set(k, []);
+			anytimeBuckets.set(k, []);
 		}
 		for (const item of items) {
-			const start = new Date(item.scheduled_start);
-			const end = item.scheduled_end ? new Date(item.scheduled_end) : null;
-			const { hour: sh, minute: sm } = partsInOrgTz(start, orgTz);
-			const startMin = sh * 60 + sm;
-			let endMin: number;
-			if (end) {
-				const { hour: eh, minute: em } = partsInOrgTz(end, orgTz);
-				endMin = eh * 60 + em;
-				if (endMin <= startMin) endMin = startMin + DEFAULT_DURATION_MIN;
-			} else {
-				endMin = startMin + DEFAULT_DURATION_MIN;
+			const matchedKey = matchDayKey(new Date(item.scheduled_start));
+			if (!matchedKey) continue;
+
+			// "Anytime" visits have no clock time — they live in the top lane, not a time row.
+			if (item.all_day) {
+				anytimeBuckets.get(matchedKey)?.push({ kind: 'appt', appt: item });
+				continue;
 			}
-			// Map event to its day in org tz, then match the corresponding anchor-relative bucket key.
-			const tzKey = tzDateKey(start, orgTz);
-			// Find which anchor day this matches.
-			for (let i = 0; i < 7; i++) {
-				const d = addDays(anchor, i);
-				if (tzDateKey(d, orgTz) === tzKey) {
-					const k = dayKey(d);
-					buckets.get(k)?.push({ item, startMin, endMin });
-					break;
-				}
+			const { startMin, endMin } = timedMinutes(item.scheduled_start, item.scheduled_end);
+			buckets.get(matchedKey)?.push({ block: { kind: 'appt', appt: item }, startMin, endMin });
+		}
+		// Events share the grid: all-day → anytime lane, timed → a neutral block.
+		for (const ev of events) {
+			if (!ev.start_at) continue; // unscheduled event — not on the grid
+			const matchedKey = matchDayKey(new Date(ev.start_at));
+			if (!matchedKey) continue;
+			if (ev.all_day) {
+				anytimeBuckets.get(matchedKey)?.push({ kind: 'event', event: ev });
+				continue;
 			}
+			const { startMin, endMin } = timedMinutes(ev.start_at, ev.end_at);
+			buckets.get(matchedKey)?.push({ block: { kind: 'event', event: ev }, startMin, endMin });
 		}
 		const out: DayLane[] = [];
 		for (let i = 0; i < 7; i++) {
 			const d = addDays(anchor, i);
 			const k = dayKey(d);
-			out.push({ date: d, key: k, laidOut: layoutDay(buckets.get(k) ?? []) });
+			out.push({
+				date: d,
+				key: k,
+				laidOut: layoutDay(buckets.get(k) ?? []),
+				anytime: anytimeBuckets.get(k) ?? []
+			});
 		}
 		return out;
 	});
@@ -204,6 +293,21 @@
 	const DRAG_THRESHOLD = 4; // px before a pointerdown becomes a drag
 
 	let gridBodyEl = $state<HTMLDivElement | null>(null);
+	// The pinned "Anytime" lane, used to hit-test whether a drag is over it
+	// (Google Calendar / Jobber all-day row). Drop here → visit becomes untimed.
+	let anytimeEl = $state<HTMLDivElement | null>(null);
+	// Which zone the current move-drag is hovering. 'anytime' hides the time ghost
+	// and, on drop, converts the visit to a date-only (all_day) appointment.
+	let dropZone = $state<'grid' | 'anytime'>('grid');
+
+	// Is a viewport Y inside the pinned Anytime lane? (Column comes from colFromPoint.)
+	function pointZone(clientY: number): 'grid' | 'anytime' {
+		if (anytimeEl) {
+			const r = anytimeEl.getBoundingClientRect();
+			if (clientY >= r.top && clientY <= r.bottom) return 'anytime';
+		}
+		return 'grid';
+	}
 
 	function clampDayMin(min: number): number {
 		return Math.max(0, Math.min(24 * 60, min));
@@ -298,7 +402,8 @@
 		ghostStartMin: number;
 		ghostEndMin: number;
 		anchorMin?: number; // create: where the drag began
-		item?: AppointmentListItem; // move / resize
+		item?: AppointmentListItem; // move / resize — a visit
+		eventItem?: EventListItem; // move / resize — a non-billable Event (mutually exclusive with item)
 		durationMin?: number; // move
 		grabOffsetMin?: number; // move: where in the block the user grabbed
 		origStartMin?: number; // resize: fixed start
@@ -307,15 +412,122 @@
 	let drag = $state<DragState | null>(null);
 	let justDragged = false; // suppress the click that follows a moved event drag
 
-	let popover = $state<{ x: number; y: number; start: Date; end: Date } | null>(null);
+	let popover = $state<{ x: number; y: number; start: Date; end: Date; allDay: boolean } | null>(
+		null
+	);
+
+	// Tentative "being created" block — kept painted behind the quick-create bubble
+	// so the drawn slot never appears to vanish on release (Google Calendar style).
+	let pendingCreate = $state<{ colIndex: number; startMin: number; endMin: number } | null>(null);
+
+	// Click-a-card detail popover (Jobber's visit preview): opens beside the clicked
+	// block with the essentials + quick actions, instead of navigating straight to the
+	// full detail page. `anchorEl` is the clicked card element (Popover customAnchor).
+	let detailPopover = $state<{ item: AppointmentListItem; anchorEl: HTMLElement } | null>(null);
+
+	function openDetail(e: MouseEvent, item: AppointmentListItem) {
+		e.stopPropagation();
+		e.preventDefault();
+		if (justDragged) return; // a drag just ended — that's not a card-open click
+		popover = null; // Jobber-style: only one popup at a time — close the create popup
+		pendingCreate = null;
+		detailPopover = { item, anchorEl: e.currentTarget as HTMLElement };
+	}
+
+	type NotifyChannel = 'sms' | 'email' | 'both' | 'none';
+
+	// A committed-optimistically reschedule awaiting confirmation. The move is already
+	// applied to the UI; the confirm popup decides whether to keep it. Visits (`appt`)
+	// then offer a client-notify step; Events (`event`) just save (no customer).
+	type ApptMove = {
+		kind: 'appt';
+		item: AppointmentListItem;
+		startIso: string;
+		endIso: string | null;
+		allDay: boolean;
+		prev: ReturnType<typeof appointmentsStore.optimisticUpdate>;
+		datetimeLabel: string;
+	};
+	type EventMove = {
+		kind: 'event';
+		event: EventListItem;
+		startIso: string;
+		endIso: string | null;
+		allDay: boolean;
+		prev: ReturnType<typeof eventsStore.optimisticUpdate>;
+		datetimeLabel: string;
+	};
+	type PendingMove = ApptMove | EventMove;
+	let pendingMove = $state<PendingMove | null>(null);
+	// Step 1 of the drag flow: a confirmation popup ("Move to {time}?"). Cancel snaps
+	// the card back; Save persists the move (spinner) then hands off to the notify popup.
+	let confirmRescheduleOpen = $state(false);
+	let rescheduleSaving = $state(false);
+	// Set true the moment Save is chosen so the dialog's own close→onCancel doesn't
+	// mistake the confirm for a dismiss and revert the (already-saved) move.
+	let rescheduleDecided = false;
+	let notifyOpen = $state(false);
+	// pendingMove's lifecycle is owned entirely by the explicit handlers below
+	// (cancel / save / notify). Deliberately NO reactive $effect clears it: an effect
+	// racing the dialog's onCancel callback could null pendingMove first, so Cancel
+	// would read null and skip the revert — leaving the card stuck in the dragged slot.
+
+	function formatDateTimeInOrgTz(iso: string, allDay: boolean): string {
+		try {
+			return new Intl.DateTimeFormat('en-US', {
+				weekday: 'short',
+				month: 'short',
+				day: 'numeric',
+				...(allDay ? {} : { hour: 'numeric', minute: '2-digit' }),
+				timeZone: orgTz || undefined
+			}).format(new Date(iso));
+		} catch {
+			return new Date(iso).toLocaleString();
+		}
+	}
+
+	function firstName(full: string): string {
+		return full.trim().split(/\s+/)[0] || full;
+	}
+
+	// Fill the reschedule preview tokens with this appointment's real values. The
+	// manage link is a server-signed token we can't reproduce, so it renders as the
+	// display text NotifyDialog passes in.
+	function fillReschedule(template: string, link: string): string {
+		const m = pendingMove;
+		if (!m || m.kind !== 'appt') return template;
+		const loc = m.item.location ?? '';
+		return template
+			.replaceAll('{contact_name}', firstName(m.item.contact_name))
+			.replaceAll('{appointment_type}', m.item.type.replaceAll('_', ' '))
+			.replaceAll('{org_name}', orgName)
+			.replaceAll('{appointment_datetime}', m.datetimeLabel)
+			.replaceAll('{location}', loc)
+			.replaceAll('{location_block}', loc ? `Where: ${loc}\n\n` : '')
+			.replaceAll('{manage_link}', link);
+	}
 
 	function addDragListeners() {
 		window.addEventListener('pointermove', onPointerMove);
 		window.addEventListener('pointerup', onPointerUp);
+		window.addEventListener('pointercancel', onPointerCancel);
 	}
 	function removeDragListeners() {
 		window.removeEventListener('pointermove', onPointerMove);
 		window.removeEventListener('pointerup', onPointerUp);
+		window.removeEventListener('pointercancel', onPointerCancel);
+	}
+
+	// Capture the pointer on the element the drag started from so every
+	// subsequent move/up is delivered here even when the cursor passes over
+	// other elements — and so the browser can't start a competing native
+	// gesture (e.g. link drag) that would swallow our pointerup.
+	function capturePointer(e: PointerEvent) {
+		try {
+			(e.currentTarget as Element).setPointerCapture(e.pointerId);
+		} catch {
+			// no-op: pointer capture is best-effort
+		}
 	}
 
 	$effect(() => () => removeDragListeners());
@@ -325,6 +537,7 @@
 		const target = e.target as HTMLElement;
 		if (target.closest('a') || target.closest('[data-resize]')) return;
 		e.preventDefault();
+		capturePointer(e);
 		const startMin = snapMin(clampDayMin(minFromClientY(e.clientY)));
 		drag = {
 			mode: 'create',
@@ -337,14 +550,31 @@
 			ghostStartMin: startMin,
 			ghostEndMin: startMin + DEFAULT_DURATION_MIN
 		};
+		dropZone = 'grid';
 		addDragListeners();
 	}
 
-	function onEventPointerDown(e: PointerEvent, ev: LaidOut, colIndex: number) {
+	// Click an empty spot in the Anytime lane → create a date-only visit for that day.
+	function onAnytimeColumnClick(e: MouseEvent, colIndex: number) {
+		if (!canCreate || justDragged) return;
+		// Clicks on an existing chip are its own navigation / drag — ignore here.
+		if ((e.target as HTMLElement).closest('.cal-week__anytime-chip')) return;
+		const date = days[colIndex]?.date;
+		if (!date) return;
+		// Browser-local noon — the /new form reinterprets the date part (matches create).
+		const start = new Date(date);
+		start.setHours(12, 0, 0, 0);
+		detailPopover = null; // Jobber-style: only one popup at a time — close the detail popup
+		popover = { x: e.clientX, y: e.clientY, start, end: start, allDay: true };
+	}
+
+	// Drag an Anytime chip out of the lane. Reuses the move machine; the drop zone
+	// (grid vs lane) at pointerup decides whether it gains a time or stays untimed.
+	function onAnytimeChipPointerDown(e: PointerEvent, item: AppointmentListItem, colIndex: number) {
 		if (!canReschedule || e.button !== 0) return;
-		// Don't start a move from the resize handle.
-		if ((e.target as HTMLElement).closest('[data-resize]')) return;
 		e.stopPropagation();
+		e.preventDefault();
+		capturePointer(e);
 		drag = {
 			mode: 'move',
 			pointerId: e.pointerId,
@@ -352,19 +582,59 @@
 			startClientY: e.clientY,
 			moved: false,
 			colIndex,
-			item: ev.item,
+			item,
+			durationMin: DEFAULT_DURATION_MIN,
+			grabOffsetMin: 0,
+			ghostStartMin: dayStartHour * 60,
+			ghostEndMin: dayStartHour * 60 + DEFAULT_DURATION_MIN
+		};
+		dropZone = 'anytime';
+		addDragListeners();
+	}
+
+	// Only visits drag — the caller passes the appointment (events are read-only).
+	function onEventPointerDown(
+		e: PointerEvent,
+		ev: LaidOut,
+		appt: AppointmentListItem,
+		colIndex: number
+	) {
+		if (!canReschedule || e.button !== 0) return;
+		// Don't start a move from the resize handle.
+		if ((e.target as HTMLElement).closest('[data-resize]')) return;
+		e.stopPropagation();
+		// Suppress the browser's native link-drag on the <a> card; otherwise it
+		// hijacks the gesture, hides the card behind a link ghost, and eats our
+		// pointerup so the drag state never resets.
+		e.preventDefault();
+		capturePointer(e);
+		drag = {
+			mode: 'move',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			item: appt,
 			durationMin: ev.endMin - ev.startMin,
 			grabOffsetMin: minFromClientY(e.clientY) - ev.startMin,
 			ghostStartMin: ev.startMin,
 			ghostEndMin: ev.endMin
 		};
+		dropZone = 'grid';
 		addDragListeners();
 	}
 
-	function onResizePointerDown(e: PointerEvent, ev: LaidOut, colIndex: number) {
+	function onResizePointerDown(
+		e: PointerEvent,
+		ev: LaidOut,
+		appt: AppointmentListItem,
+		colIndex: number
+	) {
 		if (!canReschedule || e.button !== 0) return;
 		e.preventDefault();
 		e.stopPropagation();
+		capturePointer(e);
 		drag = {
 			mode: 'resize',
 			pointerId: e.pointerId,
@@ -372,11 +642,70 @@
 			startClientY: e.clientY,
 			moved: false,
 			colIndex,
-			item: ev.item,
+			item: appt,
 			origStartMin: ev.startMin,
 			ghostStartMin: ev.startMin,
 			ghostEndMin: ev.endMin
 		};
+		dropZone = 'grid';
+		addDragListeners();
+	}
+
+	// Drag a non-billable Event block (grey time-block). Mirrors onEventPointerDown
+	// (the visit mover) but stashes the Event on `eventItem` so the drop routes to the
+	// event-only save path (no customer notify). The div isn't an <a>, so we stop
+	// propagation to keep the column's create-drag from also firing.
+	function onTimeblockPointerDown(
+		e: PointerEvent,
+		ev: LaidOut,
+		evt: EventListItem,
+		colIndex: number
+	) {
+		if (!canReschedule || e.button !== 0) return;
+		if ((e.target as HTMLElement).closest('[data-resize]')) return;
+		e.stopPropagation();
+		e.preventDefault();
+		capturePointer(e);
+		drag = {
+			mode: 'move',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			eventItem: evt,
+			durationMin: ev.endMin - ev.startMin,
+			grabOffsetMin: minFromClientY(e.clientY) - ev.startMin,
+			ghostStartMin: ev.startMin,
+			ghostEndMin: ev.endMin
+		};
+		dropZone = 'grid';
+		addDragListeners();
+	}
+
+	function onTimeblockResizePointerDown(
+		e: PointerEvent,
+		ev: LaidOut,
+		evt: EventListItem,
+		colIndex: number
+	) {
+		if (!canReschedule || e.button !== 0) return;
+		e.preventDefault();
+		e.stopPropagation();
+		capturePointer(e);
+		drag = {
+			mode: 'resize',
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			moved: false,
+			colIndex,
+			eventItem: evt,
+			origStartMin: ev.startMin,
+			ghostStartMin: ev.startMin,
+			ghostEndMin: ev.endMin
+		};
+		dropZone = 'grid';
 		addDragListeners();
 	}
 
@@ -394,15 +723,20 @@
 			const anchor = d.anchorMin ?? cur;
 			d.ghostStartMin = Math.min(anchor, cur);
 			d.ghostEndMin = Math.max(anchor, cur);
-			if (d.ghostEndMin - d.ghostStartMin < SNAP_MINUTES) d.ghostEndMin = d.ghostStartMin + SNAP_MINUTES;
+			if (d.ghostEndMin - d.ghostStartMin < SNAP_MINUTES)
+				d.ghostEndMin = d.ghostStartMin + SNAP_MINUTES;
 		} else if (d.mode === 'move') {
 			const col = colFromPoint(e.clientX, e.clientY);
 			if (col >= 0) d.colIndex = col;
-			const dur = d.durationMin ?? DEFAULT_DURATION_MIN;
-			let start = snapMin(minFromClientY(e.clientY) - (d.grabOffsetMin ?? 0));
-			start = Math.max(0, Math.min(24 * 60 - dur, start));
-			d.ghostStartMin = start;
-			d.ghostEndMin = start + dur;
+			dropZone = pointZone(e.clientY);
+			// Over the Anytime lane the block has no time — skip the time ghost.
+			if (dropZone === 'grid') {
+				const dur = d.durationMin ?? DEFAULT_DURATION_MIN;
+				let start = snapMin(minFromClientY(e.clientY) - (d.grabOffsetMin ?? 0));
+				start = Math.max(0, Math.min(24 * 60 - dur, start));
+				d.ghostStartMin = start;
+				d.ghostEndMin = start + dur;
+			}
 		} else {
 			const origStart = d.origStartMin ?? 0;
 			let end = snapMin(clampDayMin(minFromClientY(e.clientY)));
@@ -428,111 +762,481 @@
 			start.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
 			const end = new Date(date);
 			end.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
-			popover = { x: e.clientX, y: e.clientY, start, end };
+			// Keep the drawn block visible behind the create bubble until it closes.
+			pendingCreate = { colIndex: d.colIndex, startMin, endMin };
+			detailPopover = null; // Jobber-style: only one popup at a time — close the detail popup
+			popover = { x: e.clientX, y: e.clientY, start, end, allDay: false };
 			return;
 		}
 
-		// move / resize — only commit if the pointer actually moved.
-		if (!d.moved || !d.item) return;
+		// move / resize — only act if the pointer actually moved.
+		if (!d.moved) return;
 		justDragged = true;
 		setTimeout(() => (justDragged = false), 0);
-		void commitReschedule(d);
+		// A move dropped on the Anytime lane converts to a date-only block; resize never does.
+		const zone = d.mode === 'move' ? pointZone(e.clientY) : 'grid';
+		// Events save instantly (internal time-block, no customer notify); visits go
+		// through the confirm → notify pipeline.
+		if (d.eventItem) {
+			void applyEventReschedule(d, zone);
+			return;
+		}
+		if (!d.item) return;
+		applyReschedule(d, zone);
 	}
 
-	async function commitReschedule(d: DragState) {
+	// Pointer interrupted (e.g. touch cancelled by the OS). Abandon the drag
+	// without committing — the optimistic ghost is discarded with the state.
+	function onPointerCancel() {
+		drag = null;
+		removeDragListeners();
+	}
+
+	// On drop: apply the move instantly (optimistic) so the card follows the cursor,
+	// then open the confirmation popup (step 1). Cancel snaps the card back; Save
+	// persists the move (spinner) and hands off to the notify popup (step 2).
+	function applyReschedule(d: DragState, zone: 'grid' | 'anytime') {
 		const item = d.item;
 		if (!item) return;
 		const date = days[d.colIndex]?.date;
 		if (!date) return;
 
-		const startIso = wallClockToUtc(date, d.ghostStartMin, orgTz).toISOString();
-		const endIso = wallClockToUtc(date, d.ghostEndMin, orgTz).toISOString();
-		if (startIso === item.scheduled_start && endIso === (item.scheduled_end ?? '')) return;
+		let startIso: string;
+		let endIso: string | null;
+		let allDay: boolean;
+
+		if (zone === 'anytime') {
+			// Untimed on this day — anchor at noon org-time so the day bucket is DST-safe.
+			startIso = wallClockToUtc(date, 12 * 60, orgTz).toISOString();
+			endIso = null;
+			allDay = true;
+		} else {
+			startIso = wallClockToUtc(date, d.ghostStartMin, orgTz).toISOString();
+			endIso = wallClockToUtc(date, d.ghostEndMin, orgTz).toISOString();
+			allDay = false;
+		}
+
+		// No-op guard: same start, same end, same timed/untimed nature → nothing to do.
+		if (
+			startIso === item.scheduled_start &&
+			(endIso ?? null) === (item.scheduled_end ?? null) &&
+			allDay === item.all_day
+		)
+			return;
 
 		const prev = appointmentsStore.optimisticUpdate(item.id, {
 			scheduled_start: startIso,
-			scheduled_end: endIso
+			scheduled_end: endIso,
+			all_day: allDay
 		});
 
+		// Stage the move and ask for confirmation before touching the server.
+		rescheduleDecided = false;
+		pendingMove = {
+			kind: 'appt',
+			item,
+			startIso,
+			endIso,
+			allDay,
+			prev,
+			datetimeLabel: formatDateTimeInOrgTz(startIso, allDay)
+		};
+		confirmRescheduleOpen = true;
+	}
+
+	// On drop of a non-billable Event: apply the move optimistically, then stage the SAME
+	// confirm popup visits use (step 1). Cancel snaps back; Save persists. There's no
+	// step-2 notify — an Event has no customer to tell.
+	function applyEventReschedule(d: DragState, zone: 'grid' | 'anytime') {
+		const ev = d.eventItem;
+		if (!ev) return;
+		const date = days[d.colIndex]?.date;
+		if (!date) return;
+
+		let startIso: string;
+		let endIso: string | null;
+		let allDay: boolean;
+
+		if (zone === 'anytime') {
+			// Untimed on this day — anchor at noon org-time so the day bucket is DST-safe.
+			startIso = wallClockToUtc(date, 12 * 60, orgTz).toISOString();
+			endIso = null;
+			allDay = true;
+		} else {
+			startIso = wallClockToUtc(date, d.ghostStartMin, orgTz).toISOString();
+			endIso = wallClockToUtc(date, d.ghostEndMin, orgTz).toISOString();
+			allDay = false;
+		}
+
+		// No-op guard: same start, same end, same timed/untimed nature → nothing to do.
+		if (
+			startIso === ev.start_at &&
+			(endIso ?? null) === (ev.end_at ?? null) &&
+			allDay === ev.all_day
+		)
+			return;
+
+		const prev = eventsStore.optimisticUpdate(ev.id, {
+			start_at: startIso,
+			end_at: endIso,
+			all_day: allDay
+		});
+
+		rescheduleDecided = false;
+		pendingMove = {
+			kind: 'event',
+			event: ev,
+			startIso,
+			endIso,
+			allDay,
+			prev,
+			datetimeLabel: formatDateTimeInOrgTz(startIso, allDay)
+		};
+		confirmRescheduleOpen = true;
+	}
+
+	// PATCH an Event move (confirm popup Save path). Reverts the optimistic move on
+	// failure. No notify step — Events don't message a client.
+	async function persistEventReschedule(move: EventMove): Promise<boolean> {
+		const revert = () => {
+			if (move.prev?.start_at)
+				eventsStore.optimisticUpdate(move.event.id, {
+					start_at: move.prev.start_at,
+					end_at: move.prev.end_at,
+					all_day: move.prev.all_day
+				});
+		};
 		try {
-			const res = await fetch(`/api/appointments/${item.id}`, {
+			// All-day events carry no end — omit it so the API forces NULL.
+			const payload: Record<string, unknown> = { start_at: move.startIso, all_day: move.allDay };
+			if (!move.allDay) payload.end_at = move.endIso;
+
+			const res = await fetch(`/api/events/${move.event.id}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ scheduled_start: startIso, scheduled_end: endIso })
+				body: JSON.stringify(payload)
 			});
 			if (!res.ok) {
-				if (prev) appointmentsStore.optimisticUpdate(item.id, prev);
+				revert();
 				const body = (await res.json().catch(() => ({}))) as { error?: string };
-				toast.error(
-					res.status === 409 ? 'Time conflict with another appointment.' : body.error ?? 'Could not reschedule.'
-				);
-				return;
+				toast.error(body.error ?? 'Could not reschedule the event.');
+				return false;
 			}
-			const body = (await res.json()) as { data: AppointmentDetail };
-			appointmentsStore.setDetail(body.data);
-			toast.success('Appointment rescheduled.');
+			// Re-assert the server-confirmed schedule onto the list cache (mirrors the visit path).
+			const body = (await res.json()) as {
+				data: { start_at: string | null; end_at: string | null; all_day: boolean };
+			};
+			eventsStore.optimisticUpdate(move.event.id, {
+				start_at: body.data.start_at ?? move.startIso,
+				end_at: body.data.end_at,
+				all_day: body.data.all_day
+			});
+			return true;
 		} catch {
-			if (prev) appointmentsStore.optimisticUpdate(item.id, prev);
-			toast.error('Could not reschedule.');
+			revert();
+			toast.error('Could not reschedule the event.');
+			return false;
 		}
 	}
 
+	// Confirm popup — Cancel (or dismiss): snap the card back, no server call.
+	function onConfirmRescheduleCancel() {
+		if (rescheduleDecided) {
+			// A Save is in flight / done — this close is not a real cancel. Reset the guard.
+			rescheduleDecided = false;
+			return;
+		}
+		const move = pendingMove;
+		if (move) {
+			if (move.kind === 'appt') {
+				if (move.prev) appointmentsStore.optimisticUpdate(move.item.id, move.prev);
+			} else if (move.prev?.start_at) {
+				eventsStore.optimisticUpdate(move.event.id, {
+					start_at: move.prev.start_at,
+					end_at: move.prev.end_at,
+					all_day: move.prev.all_day
+				});
+			}
+		}
+		pendingMove = null;
+	}
+
+	// Confirm popup — Save: persist the move (button shows a spinner while it saves),
+	// then, if the client is reachable, open the notify popup so the contractor can
+	// tell them; otherwise finish with a plain success toast.
+	async function onConfirmRescheduleSave() {
+		const move = pendingMove;
+		if (!move) return;
+		rescheduleDecided = true; // block the dialog's close→onCancel from reverting
+		rescheduleSaving = true;
+
+		// Events just save (no client to notify) — persist and finish.
+		if (move.kind === 'event') {
+			const ok = await persistEventReschedule(move);
+			rescheduleSaving = false;
+			pendingMove = null;
+			if (ok) toast.success('Event rescheduled.');
+			return;
+		}
+
+		const ok = await persistReschedule(move);
+		rescheduleSaving = false;
+		if (!ok) {
+			// persistReschedule already reverted the optimistic move + toasted.
+			pendingMove = null;
+			return;
+		}
+		if (move.item.contact_phone || move.item.contact_email) {
+			notifyOpen = true; // step 2 — appears as the confirm popup closes
+		} else {
+			pendingMove = null;
+			toast.success('Appointment rescheduled.');
+		}
+	}
+
+	// PATCH the move with notify_channel:'none' — persist ONLY. On failure revert the
+	// optimistic move. No success toast (the caller decides what comes next).
+	async function persistReschedule(move: ApptMove): Promise<boolean> {
+		try {
+			// Anytime visits carry no end — omit it so the API forces NULL.
+			const payload: Record<string, unknown> = {
+				scheduled_start: move.startIso,
+				all_day: move.allDay,
+				notify_channel: 'none'
+			};
+			if (!move.allDay) payload.scheduled_end = move.endIso;
+
+			const res = await fetch(`/api/appointments/${move.item.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			if (!res.ok) {
+				if (move.prev) appointmentsStore.optimisticUpdate(move.item.id, move.prev);
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				toast.error(
+					res.status === 409
+						? 'Time conflict with another appointment.'
+						: (body.error ?? 'Could not reschedule.')
+				);
+				return false;
+			}
+			const body = (await res.json()) as { data: AppointmentDetail };
+			appointmentsStore.setDetail(body.data);
+			// Re-assert the server-confirmed schedule onto the list cache. setDetail only
+			// touches the detail cache; without this a revalidation that raced in with stale
+			// data could leave the calendar card in the old slot until a full reload.
+			appointmentsStore.optimisticUpdate(move.item.id, {
+				// Non-null: this is a drag-reschedule confirm, so the server always returns a dated
+				// visit (a calendar card can't be dragged into the date-less 'unscheduled' state).
+				scheduled_start: body.data.scheduled_start!,
+				scheduled_end: body.data.scheduled_end,
+				all_day: body.data.all_day
+			});
+			// Write-through to the SEPARATE jobs caches. Moving a visit re-pins its parent one-off
+			// job's schedule server-side; the server echoes the fresh date in `affected_job` so the
+			// job's list row + detail (and its Today/Upcoming badge) update in this same tick instead
+			// of showing a stale badge until a reload.
+			const job = body.data.affected_job;
+			if (job) {
+				jobsStore.update({
+					id: job.id,
+					scheduled_start: job.scheduled_start,
+					scheduled_end: job.scheduled_end
+				});
+				jobDetailStore.patch(job.id, (prev) => ({
+					...prev,
+					scheduled_start: job.scheduled_start,
+					scheduled_end: job.scheduled_end
+				}));
+			}
+			return true;
+		} catch {
+			if (move.prev) appointmentsStore.optimisticUpdate(move.item.id, move.prev);
+			toast.error('Could not reschedule.');
+			return false;
+		}
+	}
+
+	// Notify popup — Send: the move is already saved, so this is a follow-up PATCH that
+	// carries ONLY the notify channel + optional edited copy. The server emits the
+	// client "your appointment moved to…" confirmation (time unchanged since the save).
+	async function sendRescheduleNotification(
+		move: ApptMove,
+		channel: NotifyChannel,
+		edited: NotifyEdited | null
+	): Promise<boolean> {
+		try {
+			const payload: Record<string, unknown> = { notify_channel: channel };
+			if (edited?.sms) payload.notify_sms_message = edited.sms;
+			if (edited?.subject) payload.notify_email_subject = edited.subject;
+			if (edited?.body) payload.notify_email_message = edited.body;
+
+			const res = await fetch(`/api/appointments/${move.item.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			if (!res.ok) {
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				toast.error(body.error ?? 'Could not send the update.');
+				return false;
+			}
+			const body = (await res.json()) as { data: AppointmentDetail };
+			appointmentsStore.setDetail(body.data);
+			toast.success('Client notified.');
+			return true;
+		} catch {
+			toast.error('Could not send the update.');
+			return false;
+		}
+	}
+
+	// Notify-dialog handlers. The move is already saved — these only decide whether to
+	// tell the client.
+	async function onNotifyConfirm(
+		channels: ('email' | 'sms')[],
+		edited: NotifyEdited | null
+	): Promise<boolean> {
+		const move = pendingMove;
+		if (!move || move.kind !== 'appt') return true;
+		const channel: NotifyChannel =
+			channels.length === 2 ? 'both' : channels[0] === 'email' ? 'email' : 'sms';
+		await sendRescheduleNotification(move, channel, edited);
+		pendingMove = null;
+		return true; // NotifyDialog then closes
+	}
+
+	function onNotifySkip() {
+		// Move already saved — just close without notifying.
+		pendingMove = null;
+		notifyOpen = false;
+	}
+
+	// Short, human label per appointment type — shown in the card's accent pill.
+	const TYPE_LABELS: Record<AppointmentType, string> = {
+		estimate: 'Estimate',
+		job_start: 'Job',
+		follow_up: 'Follow-up',
+		inspection: 'Inspection',
+		other: 'Visit'
+	};
+
+	// Initials fallback for the contact avatar (no photo is stored).
+	function initials(name: string): string {
+		const parts = name.trim().split(/\s+/).filter(Boolean);
+		if (parts.length === 0) return '?';
+		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+	}
+
 	function statusClasses(s: AppointmentListItem['status']): string {
-		if (s === 'cancelled' || s === 'no_show')
-			return 'bg-destructive/15 text-destructive border-destructive/30 line-through';
-		if (s === 'completed')
-			return 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300';
-		return 'bg-primary/15 text-foreground border-primary/30';
+		if (s === 'cancelled' || s === 'no_show') return 'cal-week__event--cancelled';
+		if (s === 'completed') return 'cal-week__event--completed';
+		return 'cal-week__event--default';
 	}
 </script>
 
-<div class="relative flex h-full flex-col overflow-y-auto bg-card">
+<div class="cal-week">
 	<!-- Day headers — sticky so they stay visible while the grid body scrolls -->
-	<div
-		class="sticky top-0 z-10 grid shrink-0 border-b border-border bg-background/95 backdrop-blur"
-		style="grid-template-columns: 64px repeat(7, 1fr);"
-	>
-		<div class="border-r border-border bg-muted/30"></div>
+	<div class="cal-week__head" style="grid-template-columns: 64px repeat(7, 1fr);">
+		<div class="cal-week__head-gutter"></div>
 		{#each days as day (day.key)}
 			{@const today_ = isSameDay(day.date, today)}
-			<div
-				class={cn(
-					'flex flex-col items-center justify-center gap-0.5 border-r border-border py-2 text-center last:border-r-0',
-					today_ ? 'bg-primary/5' : ''
-				)}
-			>
-				<span
-					class={cn(
-						'text-[11px] font-semibold uppercase tracking-wide',
-						today_ ? 'text-primary' : 'text-muted-foreground'
-					)}
-				>
+			<div class={['cal-week__head-day', today_ && 'cal-week__head-day--today']}>
+				<span class={['cal-week__head-dow', today_ && 'cal-week__head-dow--today']}>
 					{weekdayFmt.format(day.date)}
 				</span>
-				<span
-					class={cn('text-lg font-bold tabular-nums', today_ ? 'text-primary' : 'text-foreground')}
-				>
+				<span class={['cal-week__head-date', today_ && 'cal-week__head-date--today']}>
 					{day.date.getDate()}
 				</span>
 			</div>
 		{/each}
 	</div>
 
+	<!-- Anytime lane: date-only visits, always pinned above the time grid (Jobber/Housecall Pro).
+	     Shown even when empty so it reads as a persistent slot, like the hour rows. -->
+	<div
+		bind:this={anytimeEl}
+		class="cal-week__anytime"
+		style="grid-template-columns: 64px repeat(7, 1fr);"
+	>
+		<div class="cal-week__anytime-gutter">
+			<i class="ri-calendar-event-line" aria-hidden="true"></i>
+			<span>Anytime</span>
+		</div>
+		{#each days as day, i (day.key)}
+			{@const today_ = isSameDay(day.date, today)}
+			<button
+				type="button"
+				data-col-index={i}
+				onclick={(e) => onAnytimeColumnClick(e, i)}
+				class={[
+					'cal-week__anytime-col',
+					today_ && 'cal-week__anytime-col--today',
+					drag?.mode === 'move' &&
+						dropZone === 'anytime' &&
+						drag.colIndex === i &&
+						'cal-week__anytime-col--drop',
+					drag ? 'cal-week__anytime-col--grabbing' : canCreate && 'cal-week__anytime-col--copy'
+				]}
+				aria-label={canCreate ? `New Anytime visit on ${day.date.toDateString()}` : undefined}
+			>
+				{#each day.anytime as blk (blk.kind === 'appt' ? blk.appt.id : blk.event.id)}
+					{#if blk.kind === 'appt'}
+						{@const ev = blk.appt}
+						<a
+							href={`/appointments/${ev.id}`}
+							draggable="false"
+							use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.id)}
+							onpointerdown={(e) => onAnytimeChipPointerDown(e, ev, i)}
+							ondragstart={(e) => e.preventDefault()}
+							onclick={(e) => openDetail(e, ev)}
+							class={[
+								'cal-week__anytime-chip',
+								`cal-week__anytime-chip--type-${ev.type}`,
+								canReschedule && 'cal-week__anytime-chip--draggable',
+								ev.status === 'cancelled' || ev.status === 'no_show'
+									? 'cal-week__anytime-chip--cancelled'
+									: ev.status === 'completed'
+										? 'cal-week__anytime-chip--completed'
+										: ''
+							]}
+						>
+							<span class="cal-week__anytime-chip-title">{ev.title}</span>
+							<span class="cal-week__anytime-chip-sub">{ev.contact_name}</span>
+						</a>
+					{:else}
+						{@const evt = blk.event}
+						<!-- All-day Event: neutral grey chip, read-only. The lane's create-on-click
+						     already ignores clicks that land on a `.cal-week__anytime-chip`. -->
+						<div
+							class="cal-week__anytime-chip cal-week__anytime-chip--event"
+							title={evt.description ?? evt.title}
+						>
+							<span class="cal-week__anytime-chip-title">{evt.title}</span>
+							<!-- An Event is a team block — its "who" is the assignee, never a customer
+							     (Jobber never headlines an event with a client). -->
+							<span class="cal-week__anytime-chip-sub">{evt.assignee_name ?? 'Event'}</span>
+						</div>
+					{/if}
+				{/each}
+			</button>
+		{/each}
+	</div>
+
 	<!-- Body: time rail + 7 day columns -->
 	<div
 		bind:this={gridBodyEl}
-		class="relative grid flex-1"
+		class="cal-week__body"
 		style="grid-template-columns: 64px repeat(7, 1fr); min-height: {range.hours * HOUR_HEIGHT +
 			TOP_GUTTER}px;"
 	>
 		<!-- Time rail -->
-		<div class="relative border-r border-border bg-muted/20">
+		<div class="cal-week__rail">
 			{#each hourLabels as h (h.hour)}
 				<div
-					class={cn(
-						'absolute right-1 -translate-y-1/2 text-[10px] font-medium tabular-nums',
-						h.isOffHours ? 'text-muted-foreground/50' : 'text-muted-foreground'
-					)}
+					class={['cal-week__rail-label', h.isOffHours && 'cal-week__rail-label--off']}
 					style="top: {pxFromMin(h.hour * 60)}px;"
 				>
 					{h.label}
@@ -547,95 +1251,170 @@
 				type="button"
 				data-col-index={i}
 				onpointerdown={(e) => onColumnPointerDown(e, i)}
-				class={cn(
-					'relative touch-none border-r border-border text-left last:border-r-0 focus:outline-none',
-					drag ? 'cursor-grabbing' : canCreate ? 'cursor-copy' : 'cursor-default',
-					today_ ? 'bg-primary/[0.03]' : ''
-				)}
+				class={[
+					'cal-week__col',
+					today_ && 'cal-week__col--today',
+					drag ? 'cal-week__col--grabbing' : canCreate && 'cal-week__col--copy'
+				]}
 				aria-label={canCreate ? `New appointment on ${day.date.toDateString()}` : undefined}
 			>
 				<!-- Hour grid lines & off-hours shading -->
 				{#each hourLabels as h (h.hour)}
 					<div
-						class={cn(
-							'absolute inset-x-0 border-t border-border/60',
-							h.isOffHours ? 'bg-muted/30' : ''
-						)}
+						class={['cal-week__line', h.isOffHours && 'cal-week__line--off']}
 						style="top: {pxFromMin(h.hour * 60)}px; height: {HOUR_HEIGHT}px;"
 					></div>
 					<!-- half-hour subline -->
-					<div
-						class="absolute inset-x-0 border-t border-dashed border-border/30"
-						style="top: {pxFromMin(h.hour * 60 + 30)}px;"
-					></div>
+					<div class="cal-week__subline" style="top: {pxFromMin(h.hour * 60 + 30)}px;"></div>
 				{/each}
 
 				<!-- Now-line: only on today's column -->
 				{#if today_ && nowVisible}
-					<div
-						class="pointer-events-none absolute inset-x-0 z-20 flex items-center"
-						style="top: {pxFromMin(nowMin)}px;"
-					>
-						<span class="-ml-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm"></span>
-						<span class="h-px flex-1 bg-rose-500"></span>
+					<div class="cal-week__now" style="top: {pxFromMin(nowMin)}px;">
+						<span class="cal-week__now-dot"></span>
+						<span class="cal-week__now-bar"></span>
 					</div>
 				{/if}
 
-				<!-- Event blocks -->
-				{#each day.laidOut as ev (ev.item.id)}
+				<!-- Blocks: visits (colored, draggable) + Events (neutral grey, read-only) -->
+				{#each day.laidOut as ev (ev.block.kind === 'appt' ? ev.block.appt.id : ev.block.event.id)}
 					{@const top = pxFromMin(ev.startMin)}
 					{@const height = Math.max(20, pxFromMin(ev.endMin) - top)}
 					{@const widthPct = 100 / ev.cols}
 					{@const leftPct = ev.col * widthPct}
-					{@const dragging = drag?.mode === 'move' && drag.item?.id === ev.item.id}
-					<a
-						href={`/appointments/${ev.item.id}`}
-						use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.item.id)}
-						onpointerdown={(e) => onEventPointerDown(e, ev, i)}
-						onclick={(e) => {
-							e.stopPropagation();
-							if (justDragged) e.preventDefault();
-						}}
-						class={cn(
-							'group absolute z-10 select-none overflow-hidden rounded-md border px-1.5 py-1 text-[11px] leading-tight shadow-sm transition-shadow hover:z-30 hover:shadow-md',
-							canReschedule ? 'cursor-grab touch-none' : '',
-							dragging ? 'opacity-40' : '',
-							statusClasses(ev.item.status)
-						)}
-						style="top: {top}px; height: {height}px; left: calc({leftPct}% + 2px); width: calc({widthPct}% - 4px);"
-					>
-						<p class="truncate font-semibold">
-							{formatTimeInOrgTz(ev.item.scheduled_start, orgTz)}
-						</p>
-						<p class="truncate">{ev.item.title}</p>
-						{#if height >= 48}
-							<p class="truncate opacity-80">{ev.item.contact_name}</p>
-						{/if}
-						{#if canReschedule}
-							<!-- Resize handle (bottom edge) -->
-							<span
-								data-resize
-								role="slider"
-								tabindex="-1"
-								aria-label="Resize appointment end time"
-								aria-valuenow={ev.endMin}
-								onpointerdown={(e) => onResizePointerDown(e, ev, i)}
-								class="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
-							></span>
-						{/if}
-					</a>
+					{@const showPill = height >= 40}
+					{@const showMeta = height >= 84}
+					{@const blockStyle = `top: ${top}px; height: ${height}px; left: calc(${leftPct}% + 2px); width: calc(${widthPct}% - 4px);`}
+					{#if ev.block.kind === 'appt'}
+						{@const appt = ev.block.appt}
+						{@const dragging = drag?.mode === 'move' && drag.item?.id === appt.id}
+						{@const showAvatar = height >= 124}
+						{@const startTime = formatTimeInOrgTz(appt.scheduled_start, orgTz)}
+						{@const endTime = appt.scheduled_end
+							? formatTimeInOrgTz(appt.scheduled_end, orgTz)
+							: null}
+						<a
+							href={`/appointments/${appt.id}`}
+							draggable="false"
+							use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(appt.id)}
+							onpointerdown={(e) => onEventPointerDown(e, ev, appt, i)}
+							ondragstart={(e) => e.preventDefault()}
+							onclick={(e) => openDetail(e, appt)}
+							class={[
+								'cal-week__event',
+								statusClasses(appt.status),
+								`cal-week__event--type-${appt.type}`,
+								canReschedule && 'cal-week__event--reschedulable',
+								dragging && 'cal-week__event--dragging'
+							]}
+							style={blockStyle}
+						>
+							{#if showPill}
+								<span class="cal-week__event-pill">
+									{appt.contact_name} · {TYPE_LABELS[appt.type]}
+								</span>
+							{/if}
+							<p class="cal-week__event-title">{appt.title}</p>
+							{#if showMeta && appt.location}
+								<p class="cal-week__event-meta">
+									<i class="ri-map-pin-2-line" aria-hidden="true"></i>
+									<span>{appt.location}</span>
+								</p>
+							{/if}
+							{#if showMeta}
+								<p class="cal-week__event-meta">
+									<i class="ri-time-line" aria-hidden="true"></i>
+									<span
+										>{startTime}{#if endTime}&nbsp;– {endTime}{/if}</span
+									>
+								</p>
+							{:else if !showPill}
+								<p class="cal-week__event-meta cal-week__event-meta--inline">{startTime}</p>
+							{/if}
+							{#if showAvatar}
+								<span class="cal-week__event-avatar">{initials(appt.contact_name)}</span>
+							{/if}
+							{#if canReschedule}
+								<!-- Resize handle (bottom edge) -->
+								<span
+									data-resize
+									role="slider"
+									tabindex="-1"
+									aria-label="Resize appointment end time"
+									aria-valuenow={ev.endMin}
+									onpointerdown={(e) => onResizePointerDown(e, ev, appt, i)}
+									class="cal-week__resize"
+								></span>
+							{/if}
+						</a>
+					{:else}
+						{@const evt = ev.block.event}
+						{@const dragging = drag?.mode === 'move' && drag.eventItem?.id === evt.id}
+						{@const startTime = evt.start_at ? formatTimeInOrgTz(evt.start_at, orgTz) : ''}
+						{@const endTime = evt.end_at ? formatTimeInOrgTz(evt.end_at, orgTz) : null}
+						<div
+							class={[
+								'cal-week__timeblock',
+								canReschedule && 'cal-week__timeblock--draggable',
+								dragging && 'cal-week__timeblock--dragging'
+							]}
+							style={blockStyle}
+							title={evt.description ?? evt.title}
+							onpointerdown={(e) => onTimeblockPointerDown(e, ev, evt, i)}
+						>
+							{#if showPill}
+								<span class="cal-week__timeblock-tag">
+									<i class="ri-calendar-event-line" aria-hidden="true"></i> Event
+								</span>
+							{/if}
+							<p class="cal-week__timeblock-title">{evt.title}</p>
+							{#if showMeta}
+								<p class="cal-week__timeblock-meta">
+									<i class="ri-time-line" aria-hidden="true"></i>
+									<span
+										>{startTime}{#if endTime}&nbsp;– {endTime}{/if}</span
+									>
+								</p>
+							{:else if !showPill}
+								<p class="cal-week__timeblock-meta cal-week__timeblock-meta--inline">{startTime}</p>
+							{/if}
+							{#if canReschedule}
+								<!-- Resize handle (bottom edge) — drag to change the end time. -->
+								<span
+									data-resize
+									role="slider"
+									tabindex="-1"
+									aria-label="Resize event end time"
+									aria-valuenow={ev.endMin}
+									onpointerdown={(e) => onTimeblockResizePointerDown(e, ev, evt, i)}
+									class="cal-week__resize"
+								></span>
+							{/if}
+						</div>
+					{/if}
 				{/each}
 
 				<!-- Drag ghost -->
-				{#if drag && drag.colIndex === i && (drag.moved || drag.mode === 'resize')}
+				{#if drag && drag.colIndex === i && dropZone === 'grid' && (drag.moved || drag.mode === 'resize')}
 					{@const gTop = pxFromMin(drag.ghostStartMin)}
 					{@const gHeight = Math.max(20, pxFromMin(drag.ghostEndMin) - gTop)}
-					<div
-						class="pointer-events-none absolute inset-x-0.5 z-40 flex flex-col rounded-md border-2 border-dashed border-primary bg-primary/20 px-1.5 py-1"
-						style="top: {gTop}px; height: {gHeight}px;"
-					>
-						<span class="truncate text-[11px] font-semibold tabular-nums text-primary">
+					<div class="cal-week__ghost" style="top: {gTop}px; height: {gHeight}px;">
+						<span class="cal-week__ghost-label">
 							{labelForMin(drag.ghostStartMin)} – {labelForMin(drag.ghostEndMin)}
+						</span>
+					</div>
+				{/if}
+
+				<!-- Tentative create block — stays painted behind the quick-create bubble. -->
+				{#if pendingCreate && pendingCreate.colIndex === i}
+					{@const pTop = pxFromMin(pendingCreate.startMin)}
+					{@const pHeight = Math.max(20, pxFromMin(pendingCreate.endMin) - pTop)}
+					<div
+						class="cal-week__ghost cal-week__ghost--pending"
+						style="top: {pTop}px; height: {pHeight}px;"
+					>
+						<span class="cal-week__ghost-label">
+							{labelForMin(pendingCreate.startMin)} – {labelForMin(pendingCreate.endMin)}
 						</span>
 					</div>
 				{/if}
@@ -646,10 +1425,75 @@
 
 {#if popover}
 	<QuickCreatePopover
-		x={popover.x}
-		y={popover.y}
 		start={popover.start}
 		end={popover.end}
-		onClose={() => (popover = null)}
+		allDay={popover.allDay}
+		point={{ x: popover.x, y: popover.y }}
+		{assignees}
+		{canEditAssignee}
+		onCreated={() => onCreated?.()}
+		onClose={() => {
+			popover = null;
+			pendingCreate = null;
+		}}
 	/>
+{/if}
+
+<!-- Click-a-card detail preview (Jobber-style): a draggable, free-floating bubble
+     anchored beside the clicked card. `detailPopover` supplies the card + anchor. -->
+{#if detailPopover}
+	<CardDetailPopover
+		item={detailPopover.item}
+		anchorEl={detailPopover.anchorEl}
+		{orgTz}
+		canEdit={canReschedule}
+		onStatusChange={(id, status) => appointmentsStore.patchStatus(id, status)}
+		onClose={() => {
+			detailPopover = null;
+		}}
+	/>
+{/if}
+
+{#if pendingMove}
+	<!-- Step 1 — confirm the move (Cancel snaps back, Save persists with a spinner).
+	     Same popup for visits and Events; only the copy differs. -->
+	<ConfirmDialog
+		bind:open={confirmRescheduleOpen}
+		title={pendingMove.kind === 'event' ? 'Reschedule event?' : 'Reschedule appointment?'}
+		description={pendingMove.kind === 'event'
+			? `Move "${pendingMove.event.title}" to ${pendingMove.datetimeLabel}.`
+			: `Move ${pendingMove.item.contact_name}'s ${TYPE_LABELS[pendingMove.item.type]} to ${pendingMove.datetimeLabel}.`}
+		confirmLabel="Save"
+		cancelLabel="Cancel"
+		loading={rescheduleSaving}
+		onConfirm={onConfirmRescheduleSave}
+		onCancel={onConfirmRescheduleCancel}
+	/>
+
+	<!-- Step 2 (visits only) — after the save, ask whether/how to tell the client. -->
+	{#if pendingMove.kind === 'appt'}
+		<NotifyDialog
+			bind:open={notifyOpen}
+			title="Notify {firstName(pendingMove.item.contact_name)}?"
+			subtitle="Moved to {pendingMove.datetimeLabel} — let them know."
+			recipientName={pendingMove.item.contact_name}
+			recipientEmail={pendingMove.item.contact_email}
+			recipientPhone={pendingMove.item.contact_phone}
+			editable
+			mergeFields={RESCHEDULE_MERGE_FIELDS}
+			fill={fillReschedule}
+			defaultSms={RESCHEDULE_SMS_TEMPLATE}
+			defaultSubject={RESCHEDULE_EMAIL_SUBJECT}
+			defaultBody={RESCHEDULE_EMAIL_BODY}
+			linkDisplay="your appointment page"
+			linkForCount={RESCHEDULE_LINK_FOR_COUNT}
+			notice="Edit the message to override it for this reschedule only. Leave it as-is to use your saved appointment template. The link and time fill in automatically when it sends."
+			confirmLabel="Send update"
+			confirmLoadingLabel="Sending…"
+			confirmSuccessLabel="Sent"
+			secondaryLabel="Skip"
+			onSecondary={onNotifySkip}
+			onConfirm={onNotifyConfirm}
+		/>
+	{/if}
 {/if}

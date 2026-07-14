@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { CalendarOff, Plus, Trash2 } from '@lucide/svelte';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -166,32 +164,29 @@
 
 <svelte:head><title>Blocked Dates</title></svelte:head>
 
-<div class="space-y-4">
+<div class="book-form">
 	{#if !showForm}
-		<Button onclick={() => (showForm = true)}>
-			<Plus class="h-4 w-4" /> Block a date
-		</Button>
+		<div>
+			<Button onclick={() => (showForm = true)}>
+				<i class="ri-add-line" aria-hidden="true"></i> Block a date
+			</Button>
+		</div>
 	{:else}
-		<form class="space-y-4 rounded-xl border border-border bg-card p-4" onsubmit={submit}>
-			<div class="space-y-1.5">
-				<Label for="ov-date">Date <span class="text-destructive">*</span></Label>
+		<form class="book-ovform" onsubmit={submit}>
+			<div class="field">
+				<Label for="ov-date" class="field__label field__label--required">Date</Label>
 				{#if Calendar}
 					<Calendar bind:value={formDate} placeholder="Pick a date" min={today} />
 				{/if}
 				{#if fieldErrors.override_date}
-					<p class="text-xs text-destructive">{fieldErrors.override_date}</p>
+					<p class="field__error">{fieldErrors.override_date}</p>
 				{/if}
 			</div>
 
-			<div class="space-y-2">
-				<Label>Type <span class="text-destructive">*</span></Label>
-				<div class="grid grid-cols-2 gap-2">
-					<label
-						class={[
-							'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm',
-							formBlocked ? 'border-primary bg-primary/5' : 'border-border'
-						].join(' ')}
-					>
+			<div class="field">
+				<Label class="field__label field__label--required">Type</Label>
+				<div class="book-ovform__types">
+					<label class="book-radio" class:book-radio--active={formBlocked}>
 						<input
 							type="radio"
 							name="block-type"
@@ -200,12 +195,7 @@
 						/>
 						Block all day
 					</label>
-					<label
-						class={[
-							'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm',
-							!formBlocked ? 'border-primary bg-primary/5' : 'border-border'
-						].join(' ')}
-					>
+					<label class="book-radio" class:book-radio--active={!formBlocked}>
 						<input
 							type="radio"
 							name="block-type"
@@ -218,44 +208,29 @@
 			</div>
 
 			{#if !formBlocked}
-				<div class="grid grid-cols-2 gap-2">
-					<div class="space-y-1.5">
-						<Label for="ov-start">Start <span class="text-destructive">*</span></Label>
-						<input
-							id="ov-start"
-							type="time"
-							bind:value={formStart}
-							required
-							class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-						/>
+				<div class="field">
+					<div class="book-ovform__times">
+						<div class="field">
+							<Label for="ov-start" class="field__label field__label--required">Start</Label>
+							<input id="ov-start" type="time" bind:value={formStart} required class="book-time" />
+						</div>
+						<div class="field">
+							<Label for="ov-end" class="field__label field__label--required">End</Label>
+							<input id="ov-end" type="time" bind:value={formEnd} required class="book-time" />
+						</div>
 					</div>
-					<div class="space-y-1.5">
-						<Label for="ov-end">End <span class="text-destructive">*</span></Label>
-						<input
-							id="ov-end"
-							type="time"
-							bind:value={formEnd}
-							required
-							class="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-						/>
-					</div>
-					{#if fieldErrors.end_time}
-						<p class="col-span-2 text-xs text-destructive">{fieldErrors.end_time}</p>
-					{/if}
-					{#if fieldErrors.start_time}
-						<p class="col-span-2 text-xs text-destructive">{fieldErrors.start_time}</p>
-					{/if}
+					{#if fieldErrors.end_time}<p class="field__error">{fieldErrors.end_time}</p>{/if}
+					{#if fieldErrors.start_time}<p class="field__error">{fieldErrors.start_time}</p>{/if}
 				</div>
 			{/if}
 
-			<div class="space-y-1.5">
-				<Label for="ov-reason">Reason (internal)</Label>
+			<div class="field">
+				<Label for="ov-reason" class="field__label">Reason (internal)</Label>
 				<Input id="ov-reason" bind:value={formReason} maxlength={500} placeholder="Optional" />
 			</div>
 
-			<div class="flex justify-end gap-2">
+			<div class="book-ovform__actions">
 				<Button
-					type="button"
 					variant="outline"
 					onclick={() => {
 						resetForm();
@@ -265,13 +240,14 @@
 				>
 					Cancel
 				</Button>
-				<JetEngineButton
+				<Button
 					type="submit"
-					label="Add override"
 					loadingLabel="Saving…"
 					successLabel="Added"
-					state={creating ? 'loading' : 'idle'}
-				/>
+					loading={creating}
+				>
+					Add override
+				</Button>
 			</div>
 		</form>
 	{/if}
@@ -280,19 +256,17 @@
 		<SkeletonLoader lines={3} height="64px" label="Loading overrides" />
 	{:else if overrides.length === 0}
 		<EmptyState
-			icon={CalendarOff}
+			iconClass="ri-calendar-close-line"
 			title="No blocked dates"
 			description="Add overrides for holidays, vacations, or one-off custom hours."
 		/>
 	{:else}
-		<ul class="grid gap-2">
+		<ul class="book-overrides">
 			{#each overrides as o (o.id)}
-				<li
-					class="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3"
-				>
-					<div class="min-w-0 flex-1">
-						<p class="text-sm font-semibold text-foreground">{formatDate(o.override_date)}</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
+				<li class="book-override">
+					<div class="book-override__main">
+						<p class="book-override__date">{formatDate(o.override_date)}</p>
+						<p class="book-override__detail">
 							{#if o.is_blocked}
 								Blocked all day
 							{:else}
@@ -303,15 +277,14 @@
 							{/if}
 						</p>
 					</div>
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-9 w-9"
+					<button
+						type="button"
+						class="book-iconbtn book-iconbtn--sm"
 						onclick={() => askDelete(o.id)}
 						aria-label="Delete override"
 					>
-						<Trash2 class="h-4 w-4 text-destructive" />
-					</Button>
+						<i class="ri-delete-bin-line" aria-hidden="true"></i>
+					</button>
 				</li>
 			{/each}
 		</ul>

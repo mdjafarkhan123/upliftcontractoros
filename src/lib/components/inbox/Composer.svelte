@@ -1,23 +1,8 @@
 <script lang="ts">
-	import {
-		Send,
-		StickyNote,
-		Zap,
-		Paperclip,
-		X,
-		FileText,
-		Loader2,
-		ChevronDown,
-		Check,
-		Calendar
-	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { Input } from '$lib/components/ui/input';
 	import * as Popover from '$lib/components/ui/popover';
 	import ChannelSelector from './ChannelSelector.svelte';
 	import { bookingPublicUrl } from '$lib/components/booking/publicUrl';
-	import { cn } from '$lib/utils/cn';
 	import type { OutboundChannel, MessageMedia } from '$lib/stores/inbox.svelte';
 
 	export type QuickReplyItem = {
@@ -382,13 +367,6 @@
 	const showSubjectInput = $derived(!isInternalNote && channel === 'email');
 	// Only worth a picker when there is an actual choice (≥1 extra address).
 	const showFromPicker = $derived(showSubjectInput && fromExtras.length > 0);
-	const composerBorderClass = $derived(
-		isInternalNote
-			? 'border-amber-500/30 bg-amber-500/5'
-			: channel === 'email'
-				? 'border-blue-500/30'
-				: 'border-border'
-	);
 </script>
 
 <form
@@ -396,19 +374,17 @@
 		e.preventDefault();
 		void submit();
 	}}
-	class="space-y-2.5"
+	class="composer"
 >
-	<div class="flex flex-wrap items-center gap-2">
-		<label
-			class={cn(
-				'inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
-				isInternalNote
-					? 'border-amber-500/40 bg-amber-500/10 text-amber-700 shadow-sm dark:text-amber-400'
-					: 'border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-			)}
-		>
-			<input type="checkbox" class="sr-only" bind:checked={isInternalNote} disabled={sending} />
-			<StickyNote class="h-3.5 w-3.5" />
+	<div class="composer__toolbar">
+		<label class="composer__note-toggle" class:composer__note-toggle--active={isInternalNote}>
+			<input
+				type="checkbox"
+				class="composer__note-input"
+				bind:checked={isInternalNote}
+				disabled={sending}
+			/>
+			<i class="ri-sticky-note-line" aria-hidden="true"></i>
 			Internal note
 		</label>
 
@@ -422,9 +398,9 @@
 		{/if}
 
 		{#if channelBlocked && !isInternalNote}
-			<span class="truncate text-xs text-destructive">{channelBlocked}</span>
+			<span class="composer__hint composer__hint--blocked">{channelBlocked}</span>
 		{:else if reopenHint}
-			<span class="truncate text-xs text-muted-foreground">{reopenHint}</span>
+			<span class="composer__hint composer__hint--muted">{reopenHint}</span>
 		{/if}
 
 		{#if !isInternalNote}
@@ -434,58 +410,48 @@
 						<button
 							{...props}
 							type="button"
-							class="group ml-auto inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							class="composer__pill composer__pill--spark composer__pill--push"
 							aria-label="Insert quick reply"
 						>
-							<Zap class="h-3.5 w-3.5 animate-spark-flash group-hover:animate-none" />
+							<i class="ri-flashlight-line" aria-hidden="true"></i>
 							Quick reply
 						</button>
 					{/snippet}
 				</Popover.Trigger>
-				<Popover.Content align="end" class="w-72 p-2">
+				<Popover.Content align="end" class="composer-menu">
 					{#if quickReplies.length === 0}
-						<div class="px-2.5 py-3 text-center">
-							<Zap class="mx-auto h-5 w-5 text-muted-foreground/60" />
-							<p class="mt-2 text-sm font-medium text-foreground">No quick replies yet</p>
-							<p class="mt-1 text-xs text-muted-foreground">
+						<div class="composer-menu__empty">
+							<i class="ri-flashlight-line composer-menu__empty-icon" aria-hidden="true"></i>
+							<p class="composer-menu__empty-title">No quick replies yet</p>
+							<p class="composer-menu__empty-text">
 								Save common responses to send them in one tap.
 							</p>
-							<a
-								href="/settings/quick-replies"
-								class="mt-2.5 inline-flex h-8 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
-							>
-								Create your first one
-							</a>
+							<a href="/settings/quick-replies" class="composer-menu__cta">Create your first one</a>
 						</div>
 					{:else if visibleQuickReplies.length === 0}
-						<div class="px-2 py-2 text-xs text-muted-foreground">
+						<div class="composer-menu__note">
 							No quick replies for this channel.
-							<a href="/settings/quick-replies" class="text-primary hover:underline"> Add one → </a>
+							<a href="/settings/quick-replies" class="composer-menu__link">Add one →</a>
 						</div>
 					{:else}
-						<ul class="max-h-72 space-y-1 overflow-y-auto">
+						<ul class="composer-menu__list">
 							{#each visibleQuickReplies as q (q.id)}
 								<li>
 									<button
 										type="button"
-										class="w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+										class="composer-menu__item"
 										onclick={() => applyQuickReply(q)}
 									>
-										<div class="truncate text-sm font-medium text-foreground">{q.title}</div>
-										<div class="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-											{previewInterpolation(q.body)}
-										</div>
+										<span class="composer-menu__item-title">{q.title}</span>
+										<span class="composer-menu__item-preview">{previewInterpolation(q.body)}</span>
 									</button>
 								</li>
 							{/each}
 						</ul>
 					{/if}
 					{#if quickReplies.length > 0}
-						<div class="mt-1 border-t border-border/60 pt-1.5">
-							<a
-								href="/settings/quick-replies"
-								class="block rounded-lg px-2.5 py-1.5 text-xs text-primary hover:bg-muted"
-							>
+						<div class="composer-menu__foot">
+							<a href="/settings/quick-replies" class="composer-menu__foot-link">
 								Manage quick replies →
 							</a>
 						</div>
@@ -500,38 +466,32 @@
 							<button
 								{...props}
 								type="button"
-								class="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								class="composer__pill"
 								aria-label="Insert booking link"
 							>
-								<Calendar class="h-3.5 w-3.5" />
+								<i class="ri-calendar-line" aria-hidden="true"></i>
 								Booking link
 							</button>
 						{/snippet}
 					</Popover.Trigger>
-					<Popover.Content align="end" class="w-72 p-2">
-						<ul class="max-h-72 space-y-1 overflow-y-auto">
+					<Popover.Content align="end" class="composer-menu">
+						<ul class="composer-menu__list">
 							{#each bookingLinks as link (link.id)}
 								<li>
 									<button
 										type="button"
-										class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+										class="composer-menu__item composer-menu__item--row"
 										onclick={() => insertBookingLink(link)}
 									>
-										<Calendar class="h-4 w-4 shrink-0 text-muted-foreground" />
-										<span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-											{link.title}
-										</span>
+										<i class="ri-calendar-line composer-menu__item-icon" aria-hidden="true"></i>
+										<span class="composer-menu__item-label">{link.title}</span>
 									</button>
 								</li>
 							{/each}
 						</ul>
-						<div class="mt-1 border-t border-border/60 pt-1.5">
-							<a
-								href="/settings/booking"
-								class="block rounded-lg px-2.5 py-1.5 text-xs text-primary hover:bg-muted"
+						<div class="composer-menu__foot">
+							<a href="/settings/booking" class="composer-menu__foot-link">Manage booking links →</a
 							>
-								Manage booking links →
-							</a>
 						</div>
 					</Popover.Content>
 				</Popover.Root>
@@ -547,32 +507,32 @@
 						{...props}
 						type="button"
 						disabled={sending || !canSend || channelBlocked !== null}
-						class="inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+						class="composer__from"
 						aria-label="Choose sending address"
 					>
-						<span class="shrink-0 text-muted-foreground/70">From:</span>
-						<span class="truncate text-foreground">{selectedFromOption?.address ?? ''}</span>
-						<ChevronDown class="h-3.5 w-3.5 shrink-0" />
+						<span class="composer__from-label">From:</span>
+						<span class="composer__from-value">{selectedFromOption?.address ?? ''}</span>
+						<i class="ri-arrow-down-s-line" aria-hidden="true"></i>
 					</button>
 				{/snippet}
 			</Popover.Trigger>
-			<Popover.Content align="start" class="w-72 p-1.5">
-				<ul class="max-h-72 space-y-0.5 overflow-y-auto">
+			<Popover.Content align="start" class="composer-menu">
+				<ul class="composer-menu__list">
 					{#each fromAllOptions as opt (opt.local_part)}
 						<li>
 							<button
 								type="button"
-								class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted"
+								class="composer-menu__item composer-menu__item--row"
 								onclick={() => pickFrom(opt.local_part)}
 							>
-								<span class="min-w-0 flex-1">
-									<span class="block truncate text-sm font-medium text-foreground">{opt.address}</span>
+								<span class="composer-menu__item-main">
+									<span class="composer-menu__item-title">{opt.address}</span>
 									{#if opt.label}
-										<span class="block truncate text-xs text-muted-foreground">{opt.label}</span>
+										<span class="composer-menu__item-preview">{opt.label}</span>
 									{/if}
 								</span>
 								{#if selectedFromOption?.local_part === opt.local_part}
-									<Check class="h-4 w-4 shrink-0 text-primary" />
+									<i class="ri-check-line composer-menu__item-check" aria-hidden="true"></i>
 								{/if}
 							</button>
 						</li>
@@ -583,52 +543,47 @@
 	{/if}
 
 	{#if showSubjectInput}
-		<Input
+		<input
 			type="text"
 			value={emailSubject}
 			oninput={(e) => (emailSubjectInput = (e.currentTarget as HTMLInputElement).value)}
 			placeholder={subjectRequired ? 'Subject (required)' : 'Subject'}
 			disabled={sending || !canSend || channelBlocked !== null}
-			class="h-10 rounded-lg border-border/60 bg-background text-sm shadow-none focus-visible:border-primary/50 focus-visible:ring-primary/20"
+			class="composer__subject"
 		/>
 	{/if}
 
 	{#if attachments.length > 0}
-		<div class="flex flex-wrap gap-2">
+		<div class="composer__attachments">
 			{#each attachments as att (att.localId)}
 				<div
-					class={cn(
-						'group relative flex items-center gap-2 rounded-lg border border-border/60 bg-background p-1.5 pr-7',
-						att.status === 'error' && 'border-destructive/50'
-					)}
+					class="composer__attachment"
+					class:composer__attachment--error={att.status === 'error'}
 				>
 					{#if att.previewUrl}
 						<img
 							src={att.previewUrl}
 							alt={att.original_filename}
-							class="h-9 w-9 shrink-0 rounded object-cover"
+							class="composer__attachment-img"
 						/>
 					{:else}
-						<span
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
-						>
-							<FileText class="h-4 w-4" />
+						<span class="composer__attachment-icon">
+							<i class="ri-file-text-line" aria-hidden="true"></i>
 						</span>
 					{/if}
-					<span class="max-w-[120px] truncate text-xs text-foreground">{att.original_filename}</span
-					>
+					<span class="composer__attachment-name">{att.original_filename}</span>
 					{#if att.status === 'uploading'}
-						<Loader2 class="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+						<i class="ri-loader-4-line composer__attachment-spin" aria-hidden="true"></i>
 					{:else if att.status === 'error'}
-						<span class="shrink-0 text-[10px] font-medium text-destructive">Failed</span>
+						<span class="composer__attachment-failed">Failed</span>
 					{/if}
 					<button
 						type="button"
 						onclick={() => removeAttachment(att.localId)}
-						class="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+						class="composer__attachment-remove"
 						aria-label="Remove attachment"
 					>
-						<X class="h-3 w-3" />
+						<i class="ri-close-line" aria-hidden="true"></i>
 					</button>
 				</div>
 			{/each}
@@ -640,28 +595,27 @@
 		type="file"
 		accept="image/*,application/pdf"
 		multiple
-		class="hidden"
+		class="composer__file-input"
 		onchange={(e) => onFilesPicked((e.currentTarget as HTMLInputElement).files)}
 	/>
 
 	<div
-		class={cn(
-			'flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-card transition-all duration-150 focus-within:border-primary/50 focus-within:shadow-dropdown',
-			composerBorderClass
-		)}
+		class="composer__shell"
+		class:composer__shell--note={isInternalNote}
+		class:composer__shell--email={!isInternalNote && channel === 'email'}
 	>
 		{#if contactId && !isInternalNote}
 			<button
 				type="button"
 				onclick={() => fileInput?.click()}
 				disabled={sending || !canSend || attachments.length >= 10}
-				class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+				class="composer__attach"
 				aria-label="Attach a photo or file"
 			>
-				<Paperclip class="h-5 w-5" />
+				<i class="ri-attachment-2" aria-hidden="true"></i>
 			</button>
 		{/if}
-		<Textarea
+		<textarea
 			bind:value={body}
 			onkeydown={handleKey}
 			oninput={handleTyping}
@@ -674,20 +628,15 @@
 						: 'Type a message…'}
 			rows={1}
 			disabled={(channelBlocked !== null && !isInternalNote) || sending || !canSend}
-			class="min-h-[48px] resize-none border-0 bg-transparent p-2.5 text-sm shadow-none placeholder:text-muted-foreground/60 focus-visible:ring-0"
-		/>
+			class="composer__textarea"
+		></textarea>
 		<button
 			type="submit"
 			disabled={submitDisabled}
-			class={cn(
-				'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-foreground shadow-sm transition-all',
-				'bg-gradient-to-b from-primary to-[hsl(var(--primary-deep))] hover:shadow-[0_8px_22px_-10px_hsl(var(--primary)/0.9)] active:scale-95',
-				'disabled:cursor-not-allowed disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none disabled:active:scale-100',
-				'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-			)}
+			class="composer__send"
 			aria-label="Send message"
 		>
-			<Send class="h-4 w-4" />
+			<i class="ri-send-plane-fill" aria-hidden="true"></i>
 		</button>
 	</div>
 </form>

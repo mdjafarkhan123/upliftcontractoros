@@ -2,10 +2,8 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
 	import AddressForm from '$lib/components/contacts/AddressForm.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { AlertTriangle, MapPin, Plus } from '@lucide/svelte';
 
 	type AddressItem = {
 		id: string;
@@ -154,29 +152,29 @@
 	}
 </script>
 
-<div class="space-y-2">
-	<div class="flex items-stretch gap-2">
+<div class="service-address">
+	<div class="service-address__row">
 		<Select.Root value={selectValue} onValueChange={onSelect} {disabled}>
-			<Select.Trigger class="h-11 w-full">
+			<Select.Trigger class="service-address__select">
 				{#if loading}
-					<span class="text-muted-foreground">Loading addresses…</span>
+					<span class="service-address__placeholder">Loading addresses…</span>
 				{:else if selectedAddressId}
 					{@const a = addresses.find((x) => x.id === selectedAddressId)}
-					<span class="flex min-w-0 items-center gap-2">
-						<MapPin class="h-4 w-4 shrink-0 text-muted-foreground" />
-						<span class="truncate">{a ? fmt(a) : 'Selected address'}</span>
+					<span class="service-address__value">
+						<i class="ri-map-pin-line" aria-hidden="true"></i>
+						<span>{a ? fmt(a) : 'Selected address'}</span>
 					</span>
 				{:else}
-					<span class="text-muted-foreground">No service address</span>
+					<span class="service-address__placeholder">No service address</span>
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
 				<Select.Item value="">No service address</Select.Item>
 				{#each addresses as a (a.id)}
 					<Select.Item value={a.id}>
-						<span class="flex flex-col">
-							<span class="text-sm">{fmt(a)}</span>
-							<span class="text-xs text-muted-foreground">
+						<span class="service-address__opt">
+							<span class="service-address__opt-main">{fmt(a)}</span>
+							<span class="service-address__opt-sub">
 								{labelText(a.label)}{a.is_primary ? ' · Primary' : ''} · {a.zip}
 							</span>
 						</span>
@@ -185,27 +183,24 @@
 			</Select.Content>
 		</Select.Root>
 		<Button
-			type="button"
-			variant="outline"
-			class="h-11 shrink-0"
+			variant="secondary"
+			size="lg"
+			class="service-address__add"
 			disabled={disabled || !contactId}
 			onclick={() => {
 				resetDraft();
 				sheetOpen = true;
 			}}
 		>
-			<Plus class="h-4 w-4" />
-			<span class="ml-1 hidden sm:inline">Add</span>
+			<i class="ri-add-line" aria-hidden="true"></i>
+			<span>Add</span>
 		</Button>
 	</div>
 	{#if contactId && !loading && addresses.length === 0}
-		<p
-			class="inline-flex w-fit items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
-		>
-			<AlertTriangle class="h-3 w-3 shrink-0" />No address on file —
+		<p class="service-address__warn">
+			<i class="ri-alert-line" aria-hidden="true"></i>No address on file —
 			<button
 				type="button"
-				class="underline underline-offset-2 hover:no-underline disabled:no-underline disabled:opacity-60"
 				disabled={disabled || !contactId}
 				onclick={() => {
 					resetDraft();
@@ -221,22 +216,27 @@
 		<Sheet.Header>
 			<Sheet.Title>Add service address</Sheet.Title>
 		</Sheet.Header>
-		<div class="mt-4 space-y-4">
+		<div class="service-address__sheet-body">
 			<AddressForm value={draft} disabled={saving} />
 			{#if formError}
-				<p class="text-xs text-destructive">{formError}</p>
+				<p class="service-address__sheet-error">{formError}</p>
 			{/if}
-			<div class="grid grid-cols-2 gap-2">
-				<Button variant="outline" onclick={() => (sheetOpen = false)} disabled={saving}>
+			<div class="service-address__sheet-actions">
+				<Button
+					variant="secondary"
+					onclick={() => (sheetOpen = false)}
+					disabled={saving}
+				>
 					Cancel
 				</Button>
-				<JetEngineButton
-					label="Save address"
+				<Button
 					loadingLabel="Saving…"
 					successLabel="Saved"
-					state={saving ? 'loading' : 'idle'}
+					loading={saving}
 					onclick={saveNewAddress}
-				/>
+				>
+					Save address
+				</Button>
 			</div>
 		</div>
 	</Sheet.Content>

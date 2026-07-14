@@ -1,0 +1,109 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// BOTTOM NAV — mobile-only primary navigation bar pinned to the bottom.
+// Used once in src/routes/(app)/+layout.svelte.
+// =============================================================================
+
+.bottom-nav {
+	// Desktop / tablet: bottom nav is mobile-only — hide it entirely.
+	@media (min-width: #{$bp-mobile + 1px}) {
+		display: none;
+	}
+
+	// Mobile: pin to the bottom of the viewport.
+	@media (max-width: $bp-mobile) {
+		position: fixed;
+		inset-inline: 0;
+		bottom: 0;
+		z-index: $z-sticky;
+		display: flex;
+		align-items: stretch;
+		height: var(--bottom-nav-height);
+		padding-bottom: env(safe-area-inset-bottom);
+		background: var(--color-bg-surface);
+		border-top: 1px solid var(--color-border);
+		box-shadow: var(--shadow-lg);
+	}
+
+	// ── Shared link / button base ────────────────────────────────────────────
+	&__link,
+	&__more {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 3px;
+		padding: 0 $space-1;
+		color: var(--color-text-muted);
+		font-size: 11px;
+		font-weight: $weight-medium;
+		text-decoration: none;
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: color $duration-fast $ease-standard,
+		            background-color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	// ── Active tab ───────────────────────────────────────────────────────────
+	&__link--active {
+		color: var(--color-brand);
+		background: var(--state-active-tint);
+
+		.bottom-nav__icon { color: var(--color-brand); }
+	}
+
+	// ── Icon wrapper (holds the badge) ───────────────────────────────────────
+	&__icon-wrap {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	// ── Remix icon ───────────────────────────────────────────────────────────
+	&__icon {
+		font-size: 1.25rem;
+		line-height: 1;
+	}
+
+	// ── Unread badge ─────────────────────────────────────────────────────────
+	&__badge {
+		position: absolute;
+		top: -6px;
+		right: -10px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		border-radius: $radius-full;
+		background: #0ea5e9;
+		color: #fff;
+		font-size: 10px;
+		font-weight: $weight-semibold;
+		line-height: 1;
+		letter-spacing: 0;
+	}
+
+	// ── Label ────────────────────────────────────────────────────────────────
+	&__label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 100%;
+	}
+}

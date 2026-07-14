@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { X, MessageSquare, Clock, AlertTriangle } from '@lucide/svelte';
 	import { smsCountrySupport } from '$lib/utils/countries';
 
 	// SMS activation banners (Onboarding.md Parts 4, 6 & 7).
@@ -48,7 +47,7 @@
 	<div
 		class="flex items-start gap-3 border-b border-amber-200/60 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100"
 	>
-		<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
+		<i class="ri-alert-line mt-0.5 shrink-0" aria-hidden="true"></i>
 		<div class="flex-1 leading-snug">
 			<span class="font-medium">Finish carrier registration.</span>
 			<span class="ml-1">
@@ -66,7 +65,7 @@
 	<div
 		class="flex items-start gap-3 border-b border-red-200/60 bg-red-50 px-4 py-2.5 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-100"
 	>
-		<Clock class="mt-0.5 h-4 w-4 shrink-0" />
+		<i class="ri-time-line mt-0.5 shrink-0" aria-hidden="true"></i>
 		<div class="flex-1 leading-snug">
 			<span class="font-medium">SMS Messaging Pending Approval.</span>
 			<span class="ml-1"
@@ -80,14 +79,14 @@
 			class="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-red-700 transition-colors hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/40"
 			aria-label="Dismiss"
 		>
-			<X class="h-4 w-4" />
+			<i class="ri-close-line" aria-hidden="true"></i>
 		</button>
 	</div>
 {:else if showNoNumber}
 	<div
 		class="flex items-center gap-3 border-b border-sky-200/60 bg-sky-50 px-4 py-2.5 text-sm text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-100"
 	>
-		<MessageSquare class="h-4 w-4 shrink-0" />
+		<i class="ri-message-line shrink-0" aria-hidden="true"></i>
 		<div class="flex-1 leading-snug">
 			<span class="font-medium">SMS is now available.</span>
 			<a

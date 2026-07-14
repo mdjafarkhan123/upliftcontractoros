@@ -22,6 +22,9 @@ const jobLineItemBase = z.object({
 		.max(9999999.99)
 		.nullable()
 		.optional(),
+	// Per-line sales-tax flag (mirrors the quote line item). Omitted → true (taxable), matching
+	// the DB default and the pre-existing job-wide tax behavior.
+	taxable: z.boolean().optional(),
 	source_catalog_item_id: z.string().uuid().nullable().optional(),
 	position: z.coerce.number().int().min(0).optional()
 });
@@ -54,8 +57,220 @@ function validateJobDiscount(
 	}
 }
 
+// A single payment-schedule milestone (one-off billing). amount_value is a % of the job total
+// when amount_type='percent' (0–100) or a flat dollar amount when 'fixed'. `key` is the stable
+// identity that lets a PATCH preserve already-invoiced rows. Over-allocation across rows is
+// allowed (the UI shows the remaining balance) — matching Jobber/Housecall Pro.
+const paymentMilestoneBase = z
+	.object({
+		key: z.string().uuid().nullable().optional(),
+		description: z.string().trim().min(1, 'Description is required').max(120),
+		amount_type: z.enum(['percent', 'fixed']),
+		amount_value: z.coerce.number().positive('Amount must be greater than 0').max(9999999.99),
+		due_date: z
+			.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'), z.null()])
+			.optional()
+	})
+	.superRefine((m, ctx) => {
+		if (m.amount_type === 'percent' && m.amount_value > 100) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['amount_value'],
+				message: 'Percentage cannot exceed 100'
+			});
+		}
+	});
+
+const paymentMilestonesSchema = z.array(paymentMilestoneBase).max(50).optional();
+
+// Cross-field validation for recurring billing. A 'fixed' billing type needs a positive
+// fixed_invoice_amount. On create, billing config only makes sense on a recurring job, so we
+// also require recurrence to be present (skipped on PATCH, where recurrence isn't editable).
+function validateBilling(
+	val: {
+		billing_type?: 'visit_based' | 'fixed' | null;
+		fixed_invoice_amount?: number | null;
+		recurrence?: unknown;
+	},
+	ctx: z.RefinementCtx,
+	opts: { requireRecurrence: boolean }
+): void {
+	if (!val.billing_type) return;
+	if (opts.requireRecurrence && !val.recurrence) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['billing_type'],
+			message: 'Recurring billing applies to recurring jobs only'
+		});
+	}
+	if (val.billing_type === 'fixed' && !(val.fixed_invoice_amount && val.fixed_invoice_amount > 0)) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['fixed_invoice_amount'],
+			message: 'Enter the fixed invoice amount'
+		});
+	}
+}
+
+// Cross-field guard: a one-off job's payment schedule cannot bill MORE than the job total.
+// We rebuild the job total from the same inputs recalcJobTotals uses (line items → discount →
+// tax), then sum the requested allocation (percent rows = % of the total, fixed rows = a flat $)
+// with the same per-row math as milestoneAmount on the client. Only runs when BOTH line_items
+// and payment_milestones are in the payload — the job form always sends them together, so an
+// over-allocated schedule is rejected; a milestone-only PATCH (no lines, no total to check
+// against) is left to the client guard. A 1-cent tolerance absorbs rounding.
+function validatePaymentScheduleCap(
+	val: {
+		line_items?: Array<{ quantity: number; unit_price: number }>;
+		discount_type?: 'none' | 'fixed' | 'percent';
+		discount_value?: number | null;
+		tax_rate?: number;
+		payment_milestones?: Array<{ amount_type: 'percent' | 'fixed'; amount_value: number }>;
+	},
+	ctx: z.RefinementCtx
+): void {
+	const lines = val.line_items;
+	const milestones = val.payment_milestones;
+	if (!lines || !milestones || milestones.length === 0) return;
+
+	const subtotal = lines.reduce((sum, li) => {
+		const q = Number(li.quantity);
+		const p = Number(li.unit_price);
+		if (!Number.isFinite(q) || !Number.isFinite(p)) return sum;
+		return sum + Math.round(q * p * 100) / 100;
+	}, 0);
+
+	let discountAmount = 0;
+	if (val.discount_type === 'percent' && val.discount_value)
+		discountAmount = Math.round(((subtotal * Math.min(val.discount_value, 100)) / 100) * 100) / 100;
+	else if (val.discount_type === 'fixed' && val.discount_value)
+		discountAmount = Math.min(Math.max(val.discount_value, 0), subtotal);
+
+	const base = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+	const taxRate = val.tax_rate && val.tax_rate > 0 ? val.tax_rate : 0;
+	const taxAmount = Math.round(base * taxRate * 100) / 100;
+	const total = Math.round((base + taxAmount) * 100) / 100;
+
+	const allocated = milestones.reduce((sum, m) => {
+		if (!Number.isFinite(m.amount_value) || m.amount_value <= 0) return sum;
+		return (
+			sum +
+			(m.amount_type === 'percent'
+				? Math.round(total * m.amount_value) / 100
+				: Math.round(m.amount_value * 100) / 100)
+		);
+	}, 0);
+
+	if (Math.round((allocated - total) * 100) / 100 > 0.01) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['payment_milestones'],
+			message: 'Payment schedule exceeds the job total'
+		});
+	}
+}
+
 const jobTagsSchema = z.array(z.string().trim().min(1).max(50)).max(20).optional();
 const jobTypeSchema = z.string().trim().max(100).nullable().optional();
+
+// Recurring billing (manual, S4). billing_type 'visit_based' bills past visits grouped on one
+// invoice (priced at the job's line-item total); 'fixed' bills a flat fixed_invoice_amount each
+// time. invoice_frequency is an advisory cadence (no auto-fire in v1). All null = no recurring
+// billing. Cross-field rules (fixed needs an amount; billing implies a recurring job on create)
+// are enforced per-schema below.
+const billingTypeSchema = z.enum(['visit_based', 'fixed']).nullable().optional();
+const invoiceFrequencySchema = z
+	.enum(['per_visit', 'weekly', 'biweekly', 'monthly'])
+	.nullable()
+	.optional();
+const fixedInvoiceAmountSchema = z.coerce
+	.number()
+	.min(0, 'Amount cannot be negative')
+	.max(9999999.99)
+	.nullable()
+	.optional();
+
+// Recurring-job repeat rule. Mirrors $lib/server/jobs/recurrence JobRecurrence.
+// Cross-field shape (week needs weekdays; month needs a mode + its selections;
+// end needs its matching fields) is enforced in validateRecurrence below.
+export const recurrenceSchema = z.object({
+	freq: z.enum(['week', 'month']),
+	interval: z.coerce.number().int().min(1).max(52),
+	weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+	month_mode: z.enum(['day_of_month', 'day_of_week']).optional(),
+	month_days: z.array(z.number().int().min(1).max(31)).max(31).optional(),
+	month_last_day: z.boolean().optional(),
+	month_weeks: z.array(z.number().int().min(1).max(4)).max(4).optional(),
+	month_weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+	end_type: z.enum(['after', 'on']),
+	end_after_count: z.coerce.number().int().min(1).max(999).optional(),
+	end_after_unit: z.enum(['days', 'weeks', 'months', 'years']).optional(),
+	end_on: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid end date')
+		.optional(),
+	anytime: z.boolean().optional()
+});
+
+export function validateRecurrence(
+	rec: z.infer<typeof recurrenceSchema>,
+	ctx: z.RefinementCtx
+): void {
+	if (rec.freq === 'week') {
+		if (!rec.weekdays || rec.weekdays.length === 0) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['recurrence', 'weekdays'],
+				message: 'Pick at least one weekday'
+			});
+		}
+	} else {
+		const mode = rec.month_mode;
+		if (!mode) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['recurrence', 'month_mode'],
+				message: 'Choose day of month or day of week'
+			});
+		} else if (mode === 'day_of_month') {
+			if ((!rec.month_days || rec.month_days.length === 0) && !rec.month_last_day) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['recurrence', 'month_days'],
+					message: 'Pick at least one day of the month'
+				});
+			}
+		} else {
+			if (
+				!rec.month_weeks ||
+				rec.month_weeks.length === 0 ||
+				!rec.month_weekdays ||
+				rec.month_weekdays.length === 0
+			) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['recurrence', 'month_weekdays'],
+					message: 'Pick at least one week and weekday'
+				});
+			}
+		}
+	}
+	if (rec.end_type === 'after') {
+		if (rec.end_after_count == null || !rec.end_after_unit) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['recurrence', 'end_after_count'],
+				message: 'Set how long the schedule runs'
+			});
+		}
+	} else if (!rec.end_on) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['recurrence', 'end_on'],
+			message: 'Set an end date'
+		});
+	}
+}
 
 export const updateJobSchema = z
 	.object({
@@ -73,7 +288,9 @@ export const updateJobSchema = z
 	);
 
 export const transitionStatusSchema = z.object({
-	status: z.enum(['in_progress', 'completed', 'cancelled'])
+	// 'scheduled' is settable as the resume target from 'on_hold'. The ALLOWED source→target
+	// table in the status endpoint is the real guardrail; this just bounds the input.
+	status: z.enum(['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'])
 });
 
 const nullableTrimmed = (max: number) =>
@@ -83,17 +300,40 @@ const nullableTrimmed = (max: number) =>
 		.transform((v) => (v == null ? null : v.trim() || null))
 		.refine((v) => v === null || v.length <= max, `Too long (max ${max})`);
 
+// One custom-field value (S7) = one job's answer to one custom-field definition, addressed by
+// the field id. Only the column matching the field's type is honored server-side (routed by the
+// loaded field_type); the rest are ignored. Every value accepts null to clear it. Declared here
+// so createJobSchema (below) can embed it for the New Job form.
+export const jobCustomFieldValueSchema = z.object({
+	field_id: z.string().uuid(),
+	value_text: z.string().trim().max(2000).nullable().optional(),
+	value_number: z.coerce.number().min(-9999999999).max(9999999999).nullable().optional(),
+	value_bool: z.boolean().nullable().optional(),
+	value_date: z
+		.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'), z.null()])
+		.optional()
+});
+
 export const createJobSchema = z
 	.object({
 		contact_id: z.string().uuid('Contact is required'),
 		opportunity_id: z.string().uuid().nullable().optional(),
 		title: z.string().trim().min(1, 'Title is required').max(200, 'Title is too long'),
-		status: z.enum(['scheduled', 'in_progress', 'completed']).optional().default('scheduled'),
+		// Status is not client-settable on create — a new job is always 'scheduled' (shown as
+		// "Pending" until a date is added). It advances only via the /status transition endpoint.
 		assigned_to: z.string().uuid().nullable().optional(),
 		job_type: jobTypeSchema,
 		tags: jobTagsSchema,
 		scheduled_start: datetimeNullable.optional(),
 		scheduled_end: datetimeNullable.optional(),
+		// Jobber "Anytime" visit: a one-off job with a DATE but no clock time. When true the created
+		// visit is all-day (scheduled_end forced NULL) and lands in the calendar's Anytime lane; the
+		// job still carries the date so its status reads Scheduled. Ignored for recurring jobs.
+		all_day: z.boolean().optional(),
+		// Jobber "Schedule later": create the job with an UNSCHEDULED visit (a placeholder with
+		// no date) instead of a dated calendar visit. Only meaningful on a one-off job with no
+		// scheduled_start; ignored for recurring jobs (which always expand to dated visits).
+		schedule_later: z.boolean().optional(),
 		scope_of_work: nullableTrimmed(10000),
 		notes: nullableTrimmed(5000),
 		service_address_line_1: nullableTrimmed(200),
@@ -107,7 +347,32 @@ export const createJobSchema = z
 		discount_type: z.enum(['none', 'fixed', 'percent']).optional(),
 		discount_value: z.coerce.number().min(0).max(9999999.99).nullable().optional(),
 		discount_label: z.string().trim().max(60).nullable().optional(),
-		line_items: z.array(jobLineItemBase).max(200).optional()
+		// Which channel(s) to confirm the schedule to the client on. The client computes a
+		// smart default (both when reachable, else the one channel we have); 'none'/omitted
+		// stays silent. Only honored server-side when a scheduled_start actually exists.
+		notify_channel: z.enum(['sms', 'email', 'both', 'none']).optional(),
+		// Optional per-job overrides for the client confirmation copy. Edited on the form for
+		// THIS job only; null/omitted = use the org's job_scheduled template. Lengths mirror the
+		// settings limits (sms/subject/body). The worker interpolates merge tokens at send time.
+		notify_sms_message: z.string().trim().max(500).nullable().optional(),
+		notify_email_subject: z.string().trim().max(200).nullable().optional(),
+		notify_email_message: z.string().trim().max(2000).nullable().optional(),
+		// Recurring job: the repeat rule + the instruction text copied onto every
+		// generated visit. NULL/omitted recurrence = one-off (existing behavior).
+		recurrence: recurrenceSchema.nullable().optional(),
+		visit_instructions: nullableTrimmed(2000),
+		line_items: z.array(jobLineItemBase).max(200).optional(),
+		// One-off billing (S3): the close-reminder flag + an optional payment schedule.
+		invoice_on_close: z.boolean().optional(),
+		payment_milestones: paymentMilestonesSchema,
+		// Recurring billing (S4): how the recurring work is invoiced. Only meaningful on a
+		// recurring job (enforced below).
+		billing_type: billingTypeSchema,
+		invoice_frequency: invoiceFrequencySchema,
+		fixed_invoice_amount: fixedInvoiceAmountSchema,
+		// Custom field values (S7) entered on the New Job form. The required-field gate is
+		// enforced server-side against the org's live definitions (Zod can't know them here).
+		custom_field_values: z.array(jobCustomFieldValueSchema).max(100).optional()
 	})
 	.refine(
 		(d) =>
@@ -115,7 +380,16 @@ export const createJobSchema = z
 			d.scheduled_end.getTime() >= d.scheduled_start.getTime(),
 		{ message: 'Scheduled end must be after start', path: ['scheduled_end'] }
 	)
-	.superRefine(validateJobDiscount);
+	.refine((d) => !d.recurrence || !!d.scheduled_start, {
+		message: 'A recurring job needs a start date',
+		path: ['scheduled_start']
+	})
+	.superRefine(validateJobDiscount)
+	.superRefine((d, ctx) => {
+		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
+		validateBilling(d, ctx, { requireRecurrence: true });
+		validatePaymentScheduleCap(d, ctx);
+	});
 
 // Update a job's editable fields + (optionally) replace its line items. Lines are wipe-and-
 // reinsert keyed by line_key, then recalcJobTotals runs — same pattern as the quote PATCH.
@@ -132,7 +406,26 @@ export const updateJobLineItemsSchema = z
 		discount_type: z.enum(['none', 'fixed', 'percent']).optional(),
 		discount_value: z.coerce.number().min(0).max(9999999.99).nullable().optional(),
 		discount_label: z.string().trim().max(60).nullable().optional(),
-		line_items: z.array(jobLineItemBase).max(200).optional()
+		// Reschedule confirmation channel (see createJobSchema). Honored only when the
+		// updated job has a scheduled_start; 'none'/omitted = stay silent.
+		notify_channel: z.enum(['sms', 'email', 'both', 'none']).optional(),
+		line_items: z.array(jobLineItemBase).max(200).optional(),
+		// Recurring schedule edit. Sending `recurrence` (a rule or null) makes the PATCH
+		// recurrence-aware: the route freezes past/invoiced visits and rebuilds the upcoming
+		// ones from this rule. `null` turns a recurring job back into a one-off. `visit_instructions`
+		// is copied onto every newly generated visit (same as create). When a rule is sent,
+		// scheduled_start must accompany it (the anchor for expansion) — enforced below.
+		recurrence: recurrenceSchema.nullable().optional(),
+		visit_instructions: nullableTrimmed(2000),
+		// One-off billing (S3). On PATCH the schedule is wipe-and-reinserted by `key`,
+		// except rows already turned into invoices (those are locked server-side).
+		invoice_on_close: z.boolean().optional(),
+		payment_milestones: paymentMilestonesSchema,
+		// Recurring billing (S4). Editable on a job; the recurring-job requirement is not
+		// re-enforced here (a job can already be recurring before this PATCH).
+		billing_type: billingTypeSchema,
+		invoice_frequency: invoiceFrequencySchema,
+		fixed_invoice_amount: fixedInvoiceAmountSchema
 	})
 	.refine(
 		(d) =>
@@ -140,9 +433,270 @@ export const updateJobLineItemsSchema = z
 			d.scheduled_end.getTime() >= d.scheduled_start.getTime(),
 		{ message: 'Scheduled end must be after start', path: ['scheduled_end'] }
 	)
-	.superRefine(validateJobDiscount);
+	.refine((d) => !d.recurrence || !!d.scheduled_start, {
+		message: 'A recurring job needs a start date',
+		path: ['scheduled_start']
+	})
+	.superRefine(validateJobDiscount)
+	.superRefine((d, ctx) => {
+		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
+		validateBilling(d, ctx, { requireRecurrence: false });
+		validatePaymentScheduleCap(d, ctx);
+	});
+
+// ── Job costing expenses (Session 1) ────────────────────────────────────────
+// An out-of-pocket cost logged against a job (materials receipt, subcontractor, equipment, or
+// hand-entered labor until timesheets land). amount is always > 0 (a cost, never a credit);
+// expense_date is the calendar day the cost was incurred. Cost data is private — the routes gate
+// on can_view_revenue on top of this input validation.
+export const jobExpenseCategoryValues = [
+	'materials',
+	'labor',
+	'subcontractor',
+	'equipment',
+	'other'
+] as const;
+
+export const createJobExpenseSchema = z.object({
+	category: z.enum(jobExpenseCategoryValues),
+	description: z
+		.string()
+		.trim()
+		.min(1, 'Description is required')
+		.max(200, 'Description is too long'),
+	amount: z.coerce.number().positive('Amount must be greater than 0').max(9999999.99),
+	expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'),
+	notes: z.string().trim().max(2000).nullable().optional()
+});
+
+export const updateJobExpenseSchema = z
+	.object({
+		category: z.enum(jobExpenseCategoryValues).optional(),
+		description: z.string().trim().min(1, 'Description is required').max(200).optional(),
+		amount: z.coerce.number().positive('Amount must be greater than 0').max(9999999.99).optional(),
+		expense_date: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date')
+			.optional(),
+		notes: z.string().trim().max(2000).nullable().optional()
+	})
+	.refine((d) => Object.values(d).some((v) => v !== undefined), 'No changes to save');
+
+export type CreateJobExpenseInput = z.infer<typeof createJobExpenseSchema>;
+export type UpdateJobExpenseInput = z.infer<typeof updateJobExpenseSchema>;
+
+// ── Time tracking (Session 2) ───────────────────────────────────────────────
+// Two shapes through one endpoint: start a live timer (clock_out omitted, clock_in defaults to
+// now server-side) or log a manual completed entry (clock_in + clock_out both given). Route
+// enforces clock_out > clock_in and, for non-managers, org_member_id === self.
+export const createJobTimeEntrySchema = z
+	.object({
+		org_member_id: z.string().uuid().optional(),
+		clock_in: z.string().datetime().optional(),
+		clock_out: z.string().datetime().optional(),
+		notes: z.string().trim().max(2000).nullable().optional()
+	})
+	.refine((d) => !d.clock_out || d.clock_in, {
+		message: 'A manual entry needs a start time',
+		path: ['clock_in']
+	})
+	.refine((d) => !d.clock_in || !d.clock_out || new Date(d.clock_out) > new Date(d.clock_in), {
+		message: 'End time must be after start time',
+		path: ['clock_out']
+	});
+
+export const updateJobTimeEntrySchema = z
+	.object({
+		clock_in: z.string().datetime().optional(),
+		// Explicit null is not accepted — a completed entry can't be reopened into a running
+		// timer through this route; delete and re-log instead.
+		clock_out: z.string().datetime().optional(),
+		notes: z.string().trim().max(2000).nullable().optional()
+	})
+	.refine((d) => Object.values(d).some((v) => v !== undefined), 'No changes to save');
+
+export type CreateJobTimeEntryInput = z.infer<typeof createJobTimeEntrySchema>;
+export type UpdateJobTimeEntryInput = z.infer<typeof updateJobTimeEntrySchema>;
+
+// ── Tasks / checklist (Session 3) ───────────────────────────────────────────
+// A checklist task on a job (Jobber "Tasks"). Only the title is required; assignee/due date are
+// optional. `position` orders the list (the client sends the desired slot). A new task is never
+// created already-completed — it's ticked afterward via PATCH.
+export const createJobTaskSchema = z.object({
+	title: z.string().trim().min(1, 'Task is required').max(300, 'Task is too long'),
+	assigned_to: z.string().uuid().nullable().optional(),
+	due_date: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'), z.null()]).optional(),
+	position: z.coerce.number().min(0).max(1000000).optional()
+});
+
+export const updateJobTaskSchema = z
+	.object({
+		title: z.string().trim().min(1, 'Task is required').max(300).optional(),
+		completed: z.boolean().optional(),
+		assigned_to: z.string().uuid().nullable().optional(),
+		due_date: z
+			.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'), z.null()])
+			.optional(),
+		position: z.coerce.number().min(0).max(1000000).optional()
+	})
+	.refine((d) => Object.values(d).some((v) => v !== undefined), 'No changes to save');
+
+export type CreateJobTaskInput = z.infer<typeof createJobTaskSchema>;
+export type UpdateJobTaskInput = z.infer<typeof updateJobTaskSchema>;
 
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;
 export type UpdateJobLineItemsInput = z.infer<typeof updateJobLineItemsSchema>;
 export type TransitionStatusInput = z.infer<typeof transitionStatusSchema>;
 export type CreateJobInput = z.infer<typeof createJobSchema>;
+
+// ── Job form templates (Session 4.1) ────────────────────────────────────────
+// A reusable inspection/checklist form: a name + description and an ordered set of
+// fields. `id` on a field is present when editing an existing field (PATCH upserts by
+// id); omitted for a brand-new field. A dropdown field must carry at least one non-empty
+// option. The template must have at least one field.
+export const JOB_FORM_FIELD_TYPES = [
+	'section',
+	'short_text',
+	'long_text',
+	'number',
+	'checkbox',
+	'dropdown',
+	'date',
+	'photo',
+	'signature'
+] as const;
+
+const jobFormFieldSchema = z
+	.object({
+		id: z.string().uuid().optional(),
+		field_type: z.enum(JOB_FORM_FIELD_TYPES),
+		label: z.string().trim().min(1, 'Label is required').max(200, 'Label is too long'),
+		help_text: z.string().trim().max(500, 'Help text is too long').nullable().optional(),
+		required: z.boolean().optional(),
+		// Only meaningful for dropdown fields; trimmed, empties dropped downstream.
+		options: z.array(z.string().trim().max(120)).max(50).nullable().optional(),
+		position: z.coerce.number().min(0).max(1000000).optional()
+	})
+	.superRefine((f, ctx) => {
+		if (f.field_type === 'dropdown') {
+			const opts = (f.options ?? []).filter((o) => o.trim().length > 0);
+			if (opts.length < 1) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['options'],
+					message: 'Add at least one dropdown option'
+				});
+			}
+		}
+	});
+
+export const createJobFormTemplateSchema = z.object({
+	name: z.string().trim().min(1, 'Name is required').max(120, 'Name is too long'),
+	description: z.string().trim().max(500, 'Description is too long').nullable().optional(),
+	fields: z.array(jobFormFieldSchema).min(1, 'Add at least one field').max(100)
+});
+
+// Editing replaces the whole template in one call (name/description + full field set).
+export const updateJobFormTemplateSchema = createJobFormTemplateSchema;
+
+export type JobFormFieldInput = z.infer<typeof jobFormFieldSchema>;
+export type CreateJobFormTemplateInput = z.infer<typeof createJobFormTemplateSchema>;
+
+// ── Job form submissions (Session 4.2) ──────────────────────────────────────
+// Attaching a form to a job: only the source template id. The route snapshot-copies the
+// template's current fields into the submission, so nothing else is client-settable.
+export const attachJobFormSchema = z.object({
+	template_id: z.string().uuid('Pick a form to add')
+});
+
+// One answer for one snapshotted field, addressed by its submission-field id. Only the column
+// matching the field's type is honored server-side; the others are ignored. Every value accepts
+// null to clear an answer. value_number is coerced from the input; value_date is a calendar day.
+const jobFormAnswerSchema = z.object({
+	field_id: z.string().uuid(),
+	value_text: z.string().trim().max(5000).nullable().optional(),
+	value_number: z.coerce.number().min(-9999999999).max(9999999999).nullable().optional(),
+	value_bool: z.boolean().nullable().optional(),
+	value_date: z
+		.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'), z.null()])
+		.optional()
+});
+
+// Save answers and/or move the form's status. Both parts optional so the UI can autosave answers
+// without touching status, or flip status without resending every answer. When status flips to
+// 'completed' the PATCH route enforces the required-field gate (photo/signature checked via media).
+export const saveJobFormSubmissionSchema = z
+	.object({
+		answers: z.array(jobFormAnswerSchema).max(200).optional(),
+		status: z.enum(['in_progress', 'completed']).optional()
+	})
+	.refine((d) => d.answers !== undefined || d.status !== undefined, 'No changes to save');
+
+export type AttachJobFormInput = z.infer<typeof attachJobFormSchema>;
+export type SaveJobFormSubmissionInput = z.infer<typeof saveJobFormSubmissionSchema>;
+
+// ── Client sign-off (Session 6) ─────────────────────────────────────────────
+// The signer's typed name, saved alongside the drawn signature image (uploaded
+// separately via /api/media/upload). Saving stamps signed_at server-side.
+export const saveJobSignoffSchema = z.object({
+	signer_name: z.string().trim().min(1, 'A name is required').max(120, 'Name is too long')
+});
+
+export type SaveJobSignoffInput = z.infer<typeof saveJobSignoffSchema>;
+
+// ── Custom fields (Session 7) ────────────────────────────────────────────────
+// Org-defined extra fields on a job (Jobber "Custom Fields"). Definitions are managed
+// one-at-a-time in Settings (unlike job form templates, which replace the whole set),
+// so there's a create + partial-update shape. `field_type` is immutable after creation
+// (changing it would strand already-entered values of the old type) — the update schema
+// omits it. A dropdown definition must carry at least one non-empty option.
+export const JOB_CUSTOM_FIELD_TYPES = [
+	'short_text',
+	'number',
+	'date',
+	'dropdown',
+	'checkbox',
+	'link'
+] as const;
+
+export const createJobCustomFieldSchema = z
+	.object({
+		field_type: z.enum(JOB_CUSTOM_FIELD_TYPES),
+		label: z.string().trim().min(1, 'Label is required').max(120, 'Label is too long'),
+		help_text: z.string().trim().max(500, 'Help text is too long').nullable().optional(),
+		required: z.boolean().optional(),
+		// Only meaningful for dropdown; trimmed + empties dropped downstream.
+		options: z.array(z.string().trim().max(120)).max(50).nullable().optional(),
+		position: z.coerce.number().min(0).max(1000000).optional()
+	})
+	.superRefine((f, ctx) => {
+		if (f.field_type === 'dropdown') {
+			const opts = (f.options ?? []).filter((o) => o.trim().length > 0);
+			if (opts.length < 1) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['options'],
+					message: 'Add at least one dropdown option'
+				});
+			}
+		}
+	});
+
+export const updateJobCustomFieldSchema = z
+	.object({
+		label: z.string().trim().min(1, 'Label is required').max(120).optional(),
+		help_text: z.string().trim().max(500).nullable().optional(),
+		required: z.boolean().optional(),
+		options: z.array(z.string().trim().max(120)).max(50).nullable().optional(),
+		position: z.coerce.number().min(0).max(1000000).optional()
+	})
+	.refine((d) => Object.values(d).some((v) => v !== undefined), 'No changes to save');
+
+export const saveJobCustomFieldValuesSchema = z.object({
+	values: z.array(jobCustomFieldValueSchema).max(100)
+});
+
+export type CreateJobCustomFieldInput = z.infer<typeof createJobCustomFieldSchema>;
+export type UpdateJobCustomFieldInput = z.infer<typeof updateJobCustomFieldSchema>;
+export type JobCustomFieldValueInput = z.infer<typeof jobCustomFieldValueSchema>;
+export type SaveJobCustomFieldValuesInput = z.infer<typeof saveJobCustomFieldValuesSchema>;

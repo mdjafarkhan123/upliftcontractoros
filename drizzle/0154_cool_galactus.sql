@@ -1,0 +1,1 @@
+ALTER TABLE "job_line_items" ADD COLUMN "taxable" boolean DEFAULT true NOT NULL;

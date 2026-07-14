@@ -1,7 +1,6 @@
 <script lang="ts">
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
-	import { MoreVertical, Send, Bell, Ban } from '@lucide/svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { reviewRequestsStore, reputationSummaryStore } from '$lib/stores/reputation.svelte';
 	import type { ReviewRequestListItem } from '$lib/types/reputation';
@@ -89,22 +88,22 @@
 {#if hasAnyAction}
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger
-			class="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+			class="request-actions__trigger"
 			aria-label="Review request actions"
 			disabled={actionLoading}
 		>
-			<MoreVertical class="h-4 w-4" />
+			<i class="ri-more-2-fill" aria-hidden="true"></i>
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="end" class="w-52">
 			{#if canResend}
 				<DropdownMenu.Item onSelect={resend}>
-					<Send class="mr-2 h-4 w-4" />
+					<i class="ri-send-plane-line" aria-hidden="true"></i>
 					Resend SMS now
 				</DropdownMenu.Item>
 			{/if}
 			{#if canNudge}
 				<DropdownMenu.Item onSelect={sendNudge}>
-					<Bell class="mr-2 h-4 w-4" />
+					<i class="ri-notification-3-line" aria-hidden="true"></i>
 					Send nudge #{request.nudge_count + 1} now
 				</DropdownMenu.Item>
 			{/if}
@@ -113,7 +112,7 @@
 					<DropdownMenu.Separator />
 				{/if}
 				<DropdownMenu.Item variant="destructive" onSelect={() => (confirmCancelOpen = true)}>
-					<Ban class="mr-2 h-4 w-4" />
+					<i class="ri-forbid-line" aria-hidden="true"></i>
 					Cancel automation
 				</DropdownMenu.Item>
 			{/if}

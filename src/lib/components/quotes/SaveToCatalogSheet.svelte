@@ -1,13 +1,9 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import UnitCombobox from './UnitCombobox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { catalogStore } from '$lib/stores/catalog.svelte';
-	import { BookmarkPlus, AlertTriangle } from '@lucide/svelte';
 
 	let {
 		open = $bindable(false),
@@ -166,63 +162,65 @@
 </script>
 
 <Sheet.Root bind:open>
-	<Sheet.Content side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-		<Sheet.Header class="border-b border-border/60 px-4 py-3 text-left">
-			<Sheet.Title class="flex items-center gap-2 text-base">
-				<BookmarkPlus class="h-4 w-4 text-primary" />
+	<Sheet.Content side="right" class="sheet-form">
+		<div class="sheet-form__header">
+			<Sheet.Title class="sheet-form__title">
+				<i class="ri-bookmark-line" aria-hidden="true"></i>
 				Save to price book
 			</Sheet.Title>
-		</Sheet.Header>
+		</div>
 
-		<div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+		<div class="sheet-form__body">
 			{#if duplicateId}
-				<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-					<div class="flex items-start gap-3">
-						<div
-							class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300"
-						>
-							<AlertTriangle class="h-4 w-4" />
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-								An item named “{name.trim()}” already exists
-							</p>
-							<p class="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
-								Update the existing item with these values, or save this as a separate new item?
-							</p>
-						</div>
+				<div class="save-catalog__dup">
+					<span class="save-catalog__dup-icon">
+						<i class="ri-error-warning-line" aria-hidden="true"></i>
+					</span>
+					<div class="save-catalog__dup-body">
+						<p class="save-catalog__dup-title">An item named “{name.trim()}” already exists</p>
+						<p class="save-catalog__dup-text">
+							Update the existing item with these values, or save this as a separate new item?
+						</p>
 					</div>
 				</div>
 			{:else}
-				<p class="text-sm text-muted-foreground">
+				<p class="sheet-form__intro">
 					Save this line so you can reuse it on future quotes. Editing it later won't change quotes
 					you've already sent.
 				</p>
 			{/if}
 
-			<div class="grid gap-2">
-				<Label for="save-name">Name <span class="text-destructive">*</span></Label>
-				<Input id="save-name" bind:value={name} maxlength={200} disabled={!!duplicateId} />
-				{#if fieldErrors.name}<p class="text-xs text-destructive">{fieldErrors.name}</p>{/if}
+			<div class="field">
+				<label for="save-name" class="field__label field__label--required">Name</label>
+				<input
+					id="save-name"
+					class="field__input"
+					bind:value={name}
+					maxlength={200}
+					disabled={!!duplicateId}
+				/>
+				{#if fieldErrors.name}<p class="field__error">{fieldErrors.name}</p>{/if}
 			</div>
 
-			<div class="grid gap-2">
-				<Label for="save-description">Description</Label>
-				<Textarea
+			<div class="field">
+				<label for="save-description" class="field__label">Description</label>
+				<textarea
 					id="save-description"
+					class="field__textarea"
 					bind:value={description}
 					rows={2}
 					maxlength={1000}
 					placeholder="Optional details shown under the item"
 					disabled={!!duplicateId}
-				/>
+				></textarea>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-2">
-					<Label for="save-price">Price <span class="text-destructive">*</span></Label>
-					<Input
+			<div class="sheet-form__grid">
+				<div class="field">
+					<label for="save-price" class="field__label field__label--required">Price</label>
+					<input
 						id="save-price"
+						class="field__input"
 						type="number"
 						inputmode="decimal"
 						min="0"
@@ -231,30 +229,34 @@
 						disabled={!!duplicateId}
 					/>
 					{#if fieldErrors.unit_price}
-						<p class="text-xs text-destructive">{fieldErrors.unit_price}</p>
+						<p class="field__error">{fieldErrors.unit_price}</p>
 					{/if}
 				</div>
-				<div class="grid gap-2">
-					<Label>Unit</Label>
+				<div class="field">
+					<span class="field__label">Unit</span>
 					<UnitCombobox bind:value={unit} disabled={!!duplicateId} />
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-2">
-					<Label for="save-category">Category</Label>
-					<Input
+			<div class="sheet-form__grid">
+				<div class="field">
+					<label for="save-category" class="field__label">Category</label>
+					<input
 						id="save-category"
+						class="field__input"
 						bind:value={category}
 						placeholder="e.g. Roofing"
 						maxlength={100}
 						disabled={!!duplicateId}
 					/>
 				</div>
-				<div class="grid gap-2">
-					<Label for="save-cost">Cost <span class="text-muted-foreground">(opt)</span></Label>
-					<Input
+				<div class="field">
+					<label for="save-cost" class="field__label"
+						>Cost <span class="field__hint">(opt)</span></label
+					>
+					<input
 						id="save-cost"
+						class="field__input"
 						type="number"
 						inputmode="decimal"
 						min="0"
@@ -266,18 +268,23 @@
 			</div>
 		</div>
 
-		<div class="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
+		<div class="sheet-form__footer">
 			{#if duplicateId}
 				<Button variant="outline" disabled={saving} onclick={() => void saveAsNew()}>
 					Save as new
 				</Button>
-				<Button disabled={saving} onclick={() => void updateExisting()}>
-					{saving ? 'Saving…' : 'Update existing'}
+				<Button loading={saving} loadingLabel="Saving…" onclick={() => void updateExisting()}>
+					Update existing
 				</Button>
 			{:else}
 				<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
-				<Button disabled={saving || !name.trim()} onclick={() => void save()}>
-					{saving ? 'Saving…' : 'Save item'}
+				<Button
+					loading={saving}
+					loadingLabel="Saving…"
+					disabled={!name.trim()}
+					onclick={() => void save()}
+				>
+					Save item
 				</Button>
 			{/if}
 		</div>

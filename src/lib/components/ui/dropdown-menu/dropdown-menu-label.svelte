@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils/cn';
 
 	let {
-		class: className,
+		class: className = '',
 		ref = $bindable(null),
 		children,
 		...rest
@@ -12,7 +11,7 @@
 
 <DropdownMenuPrimitive.GroupHeading
 	bind:ref
-	class={cn('px-3 py-2 text-xs font-medium text-muted-foreground', className)}
+	class={['dropdown__label', className].filter(Boolean).join(' ')}
 	{...rest}
 >
 	{@render children?.()}

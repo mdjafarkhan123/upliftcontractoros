@@ -1,11 +1,7 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import LineItemEditor from './LineItemEditor.svelte';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quoteTemplatesStore } from '$lib/stores/quoteTemplates.svelte';
 	import { formatCurrency } from '$lib/utils/format';
@@ -78,6 +74,7 @@
 				unit: li.unit ?? '',
 				section_label: li.section_label ?? null,
 				is_optional: li.is_optional ?? false,
+				taxable: li.taxable ?? true,
 				unit_price: li.unit_price
 			}));
 		} catch {
@@ -123,6 +120,7 @@
 					unit: li.unit?.trim() || null,
 					section_label: li.section_label?.trim() || null,
 					is_optional: li.is_optional ?? false,
+					taxable: li.taxable ?? true,
 					unit_price: Number(li.unit_price),
 					position: idx
 				}))
@@ -153,63 +151,69 @@
 </script>
 
 <Sheet.Root bind:open>
-	<Sheet.Content side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-xl md:w-[640px]">
-		<Sheet.Header class="border-b border-border px-5 py-4">
-			<Sheet.Title>{mode === 'edit' ? 'Edit template' : 'New template'}</Sheet.Title>
-		</Sheet.Header>
+	<Sheet.Content side="right" class="sheet-form tpl-editor">
+		<div class="sheet-form__header">
+			<Sheet.Title class="sheet-form__title">
+				<i class="ri-file-list-3-line" aria-hidden="true"></i>
+				{mode === 'edit' ? 'Edit template' : 'New template'}
+			</Sheet.Title>
+		</div>
 
-		<div class="flex-1 overflow-y-auto px-5 py-5">
+		<div class="sheet-form__body">
 			{#if loadingDetail}
-				<p class="text-sm text-muted-foreground">Loading template…</p>
+				<p class="sheet-form__intro">Loading template…</p>
 			{:else}
-				<div class="grid gap-5">
-					<div class="grid gap-2">
-						<Label for="tpl-name">Name <span class="text-destructive">*</span></Label>
-						<Input id="tpl-name" bind:value={name} placeholder="e.g. Standard roof replacement" />
-						{#if fieldErrors.name}
-							<p class="text-xs text-destructive">{fieldErrors.name}</p>
-						{/if}
-					</div>
+				<div class="field">
+					<label for="tpl-name" class="field__label field__label--required">Name</label>
+					<input
+						id="tpl-name"
+						class="field__input"
+						bind:value={name}
+						placeholder="e.g. Standard roof replacement"
+					/>
+					{#if fieldErrors.name}<p class="field__error">{fieldErrors.name}</p>{/if}
+				</div>
 
-					<div class="grid gap-2">
-						<Label for="tpl-desc">Description</Label>
-						<Textarea
-							id="tpl-desc"
-							bind:value={description}
-							rows={3}
-							placeholder="Optional internal description"
-						/>
-					</div>
+				<div class="field">
+					<label for="tpl-desc" class="field__label">Description</label>
+					<textarea
+						id="tpl-desc"
+						class="field__textarea"
+						bind:value={description}
+						rows={3}
+						placeholder="Optional internal description"
+					></textarea>
+				</div>
 
-					<div class="space-y-3">
-						<div class="flex items-center justify-between">
-							<h2 class="text-sm font-semibold">Line items</h2>
-							<span class="text-xs text-muted-foreground">
-								{lineItems.length} item{lineItems.length === 1 ? '' : 's'}
-							</span>
-						</div>
-						<LineItemEditor bind:lineItems enableOptional />
+				<div class="tpl-editor__lines">
+					<div class="tpl-editor__lines-head">
+						<h2 class="tpl-editor__lines-title">Line items</h2>
+						<span class="tpl-editor__lines-count">
+							{lineItems.length} item{lineItems.length === 1 ? '' : 's'}
+						</span>
 					</div>
+					<LineItemEditor bind:lineItems enableOptional enableTax />
 				</div>
 			{/if}
 		</div>
 
-		<div
-			class="sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t border-border bg-background px-5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
-		>
-			<div class="text-sm">
-				<span class="text-muted-foreground">Subtotal</span>
-				<span class="ml-2 font-semibold tabular-nums">{formatCurrency(subtotal)}</span>
+		<div class="sheet-form__footer tpl-editor__footer">
+			<div class="tpl-editor__subtotal">
+				<span class="tpl-editor__subtotal-label">Subtotal</span>
+				<span class="tpl-editor__subtotal-value">{formatCurrency(subtotal)}</span>
 			</div>
-			<div class="flex items-center gap-2">
-				<Button variant="outline" disabled={saving} onclick={() => (open = false)}>Cancel</Button>
-				<JetEngineButton
-					label={mode === 'edit' ? 'Save changes' : 'Create template'}
+			<div class="tpl-editor__actions">
+				<Button variant="outline" disabled={saving} onclick={() => (open = false)}>
+					Cancel
+				</Button>
+				<Button
 					loadingLabel="Saving…"
 					successLabel="Saved"
-					state={saving ? 'loading' : 'idle'}
+					loading={saving}
 					onclick={save}
-				/>
+				>
+					{mode === 'edit' ? 'Save changes' : 'Create template'}
+				</Button>
 			</div>
 		</div>
 	</Sheet.Content>

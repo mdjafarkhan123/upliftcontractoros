@@ -1,0 +1,1 @@
+ALTER TABLE "invoices" ADD COLUMN "accept_tips" boolean DEFAULT true NOT NULL;

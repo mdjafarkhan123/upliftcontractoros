@@ -2,48 +2,28 @@
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import EditActionBar from '$lib/components/shared/EditActionBar.svelte';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import QuoteStatusBadge from '$lib/components/quotes/QuoteStatusBadge.svelte';
 	import QuoteHistoryTimeline from '$lib/components/quotes/QuoteHistoryTimeline.svelte';
-	import QuoteTotalsCard from '$lib/components/quotes/QuoteTotalsCard.svelte';
 	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
+	import QuotePackageBuilder from '$lib/components/quotes/QuotePackageBuilder.svelte';
 	import QuoteProgressStrip from '$lib/components/quotes/QuoteProgressStrip.svelte';
 	import ServiceAddressPicker from '$lib/components/quotes/ServiceAddressPicker.svelte';
-	import { Switch } from '$lib/components/ui/switch';
+	import DocumentDetailShell from '$lib/components/documents/DocumentDetailShell.svelte';
+	import DocumentHeaderCard from '$lib/components/documents/DocumentHeaderCard.svelte';
+	import DocumentSectionCard from '$lib/components/documents/DocumentSectionCard.svelte';
+	import DocumentTotalsCard from '$lib/components/documents/DocumentTotalsCard.svelte';
+	import DocumentDiscountEditor from '$lib/components/documents/DocumentDiscountEditor.svelte';
+	import DocumentDepositEditor from '$lib/components/documents/DocumentDepositEditor.svelte';
 	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { quotesStore } from '$lib/stores/quotes.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import {
-		AlertTriangle,
-		BookOpen,
-		Briefcase,
-		Check,
-		CircleCheckBig,
-		CircleX,
-		Clock,
-		Copy,
-		CreditCard,
-		Download,
-		Eye,
-		FileText,
-		Lock,
-		MapPin,
-		MessageSquare,
-		MoreHorizontal,
-		PenLine,
-		Phone,
-		Receipt,
-		Save,
-		Send,
-		Trash2,
-		Loader2
-	} from '@lucide/svelte';
-	import { Calendar } from '$lib/components/ui/calendar';
+	import { getOrgContext } from '$lib/context/org';
 	import { formatCurrency } from '$lib/utils/format';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -51,16 +31,42 @@
 		QuoteDetail,
 		QuoteLineDraft,
 		QuoteLineItemRow,
-		QuoteLinePhoto
+		QuoteLinePhoto,
+		QuotePackageDraft
 	} from '$lib/types/quotes';
+	import type { DocumentHeaderDate } from '$lib/types/documents';
 
 	let { data }: { data: PageData } = $props();
 
 	const member = getMemberContext();
+	const org = getOrgContext();
 	const quote = $derived(quotesStore.getDetail(data.id));
 	const detailStatus = $derived(quotesStore.getDetailStatus(data.id));
 	const detailError = $derived(quotesStore.getDetailError(data.id));
 	const showSkeleton = $derived(!quote && detailStatus !== 'error');
+
+	// In-person drawn signature: resolve a short-lived signed URL when the accepted quote carries
+	// one (null on online / offline-marked acceptances).
+	let signatureUrl = $state<string | null>(null);
+	$effect(() => {
+		const id = quote?.acceptance_signature_media_id;
+		if (!id) {
+			signatureUrl = null;
+			return;
+		}
+		let cancelled = false;
+		void fetch(`/api/media/${id}/url?variant=web`)
+			.then((r) => (r.ok ? r.json() : null))
+			.then((b) => {
+				if (!cancelled) signatureUrl = b?.data?.url ?? null;
+			})
+			.catch(() => {
+				if (!cancelled) signatureUrl = null;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	function toDrafts(rows: QuoteLineItemRow[]): QuoteLineDraft[] {
 		return rows.map((li) => ({
@@ -72,13 +78,30 @@
 			unit: li.unit ?? '',
 			section_label: li.section_label ?? null,
 			is_optional: li.is_optional ?? false,
+			taxable: li.taxable ?? true,
 			unit_price: li.unit_price,
 			unit_cost: li.unit_cost ?? null,
 			source_catalog_item_id: li.source_catalog_item_id ?? null
 		}));
 	}
 
+	// Simple-quote line list (the flat, single-option path — today's behavior). Ignored when
+	// the quote is tiered (Good-Better-Best): then `packages` holds each tier's own lines.
 	let lineItems = $state<QuoteLineDraft[]>([]);
+	// Good-Better-Best tiers. Empty = simple quote. Each package owns its own `lines`.
+	let packages = $state<QuotePackageDraft[]>([]);
+	const isTiered = $derived(packages.length > 0);
+	// The recommended tier drives the quote's headline totals (matches recalcQuoteTotals).
+	const recommendedPkg = $derived(
+		isTiered ? (packages.find((p) => p.is_recommended) ?? packages[0] ?? null) : null
+	);
+	// Flattened lines across all tiers, each stamped with its package_key — the authoritative
+	// list sent on save and used for line-level validation. Equals `lineItems` when simple.
+	const allLines = $derived<QuoteLineDraft[]>(
+		isTiered
+			? packages.flatMap((p) => p.lines.map((li) => ({ ...li, package_key: p.package_key })))
+			: lineItems
+	);
 	// Per-line photos for this quote, grouped by line_key, loaded independently of the detail.
 	let linePhotos = $state<Record<string, QuoteLinePhoto[]>>({});
 	let titleDraft = $state('');
@@ -86,6 +109,7 @@
 	let taxRateDraft = $state('0');
 	let notesDraft = $state('');
 	let internalNotesDraft = $state('');
+	let termsDraft = $state('');
 	let expiresAtDraft = $state('');
 	let depositRequiredDraft = $state(false);
 	let depositTypeDraft = $state<'fixed' | 'percent'>('fixed');
@@ -97,12 +121,26 @@
 	let initializedForId = $state<string | null>(null);
 
 	function initDrafts(q: QuoteDetail) {
-		lineItems = toDrafts(q.line_items);
+		if (q.packages.length > 0) {
+			// Tiered quote — group the flat lines under their package by package_id.
+			packages = q.packages.map((p) => ({
+				client_id: p.package_key,
+				package_key: p.package_key,
+				name: p.name,
+				is_recommended: p.is_recommended,
+				lines: toDrafts(q.line_items.filter((li) => li.package_id === p.id))
+			}));
+			lineItems = [];
+		} else {
+			packages = [];
+			lineItems = toDrafts(q.line_items);
+		}
 		titleDraft = q.title;
 		serviceAddressIdDraft = q.service_address_id ?? null;
 		taxRateDraft = String(Number(q.tax_rate) * 100);
 		notesDraft = q.notes ?? '';
 		internalNotesDraft = q.internal_notes ?? '';
+		termsDraft = q.terms ?? '';
 		expiresAtDraft = q.expires_at ? q.expires_at.slice(0, 10) : '';
 		depositRequiredDraft = q.deposit_required;
 		depositTypeDraft = (q.deposit_type as 'fixed' | 'percent') ?? 'fixed';
@@ -151,17 +189,48 @@
 	});
 
 	let sendOpen = $state(false);
+	let shareLinkOpen = $state(false);
 	let templateOpen = $state(false);
 	let catalogOpen = $state(false);
 	let saving = $state(false);
 	let deleting = $state(false);
 	let converting = $state(false);
+	// Edit-after-send: the contractor has re-opened an already-sent (sent/viewed) quote to edit
+	// it. Draft/changes-requested quotes are edited without this toggle (they're always editable).
+	let editMode = $state(false);
+	// Set once any section save lands while in edit-after-send mode, so the follow-up
+	// re-send is treated as a revision (freezes a new version snapshot). Reset on send/exit.
+	let editedAfterSend = $state(false);
+	// Section-block editing (Jobber pattern, same as our Jobs detail page): each card carries
+	// ONE pencil that opens the WHOLE block for editing with a Save/Cancel scoped to that card.
+	// Only one section is open at a time. `pricing` covers line items + tiers; `discount` and
+	// `deposit` are each their OWN always-visible inline control (Jobber/HCP adjust the discount
+	// and the required-deposit toggle without opening line-item editing); the other sections group
+	// their own fields.
+	let editingSection = $state<
+		'details' | 'notes' | 'terms' | 'pricing' | 'discount' | 'deposit' | null
+	>(null);
+	// Save state for the text sections (Details / Notes / Terms). Pricing uses `saving` via save().
+	let sectionSaving = $state(false);
+	let sectionError = $state<string | null>(null);
+	// Kept as a derived so all the totals-preview / line-item template refs below still read a
+	// single `pricingEditing` flag.
+	const pricingEditing = $derived(editingSection === 'pricing');
+	const discountEditing = $derived(editingSection === 'discount');
+	const depositEditing = $derived(editingSection === 'deposit');
+	// Totals card previews the live draft while either the line-items OR the discount block is being
+	// edited (both change the total); the deposit block does not affect the total.
+	const moneyPreview = $derived(pricingEditing || discountEditing);
 
 	const isAccepted = $derived(quote?.status === 'accepted');
 	const isDraft = $derived(quote?.status === 'draft');
 	const isExpired = $derived(quote?.status === 'expired');
 	const isChangesRequested = $derived(quote?.status === 'changes_requested');
-	const isEditable = $derived(isDraft || isChangesRequested);
+	// Intrinsically-editable states — a draft or change-requested quote is in edit mode by default.
+	const alwaysEditable = $derived(isDraft || isChangesRequested);
+	// Editing is unlocked when the quote is intrinsically editable (draft / changes-requested) OR
+	// the contractor has re-opened a sent/viewed quote via "Edit". Gates whether pencils appear.
+	const isEditable = $derived(alwaysEditable || editMode);
 	const canResend = $derived(
 		quote?.status === 'sent' || quote?.status === 'viewed' || quote?.status === 'changes_requested'
 	);
@@ -181,10 +250,182 @@
 	const canConvertPerm = $derived(member().can_create_invoices);
 	const canCreatePerm = $derived(member().can_create_quotes);
 	const canConvertToJobPerm = $derived(member().can_view_full_pipeline);
+	// Edit-after-send is offered only while the quote is still out with the customer (sent/viewed)
+	// and the member can edit. Accepted (signed/paid) / declined / expired quotes stay locked.
+	const canEnterEditMode = $derived(
+		(quote?.status === 'sent' || quote?.status === 'viewed') && canEditPerm
+	);
+
+	// A section can be edited when editing is unlocked (draft/changes-requested, or edit-after-send)
+	// and the member can edit quotes. A NEW section can only be opened when none is already open.
+	const canEditSection = $derived(isEditable && canEditPerm);
+	const canStartSection = $derived(canEditSection && editingSection === null);
+
+	// Open a section for block editing — re-seed every draft from the saved quote first so the
+	// inputs reflect current values, then flip the section on.
+	function startSection(name: 'details' | 'notes' | 'terms' | 'pricing' | 'discount' | 'deposit') {
+		if (!canStartSection || !quote) return;
+		initDrafts(quote);
+		sectionError = null;
+		editingSection = name;
+	}
+	// Cancel the open section — discard drafts by re-seeding from the saved quote.
+	function cancelSection() {
+		if (quote) initDrafts(quote);
+		editingSection = null;
+		sectionError = null;
+	}
+
+	// Generic PATCH + close for the text sections (Details / Notes / Terms). On success re-seeds
+	// all drafts, closes the section, and (in edit-after-send) flags the follow-up re-send as a
+	// revision. Inline `sectionError` keeps the card open on failure.
+	async function commitSection(payload: Record<string, unknown>) {
+		if (!quote) return;
+		sectionSaving = true;
+		sectionError = null;
+		try {
+			const res = await fetch(`/api/quotes/${quote.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				sectionError = body.error ?? 'Could not save.';
+				return;
+			}
+			await refresh();
+			if (editMode) editedAfterSend = true;
+			editingSection = null;
+			toast.success('Saved');
+		} catch {
+			sectionError = 'Network error. Try again.';
+		} finally {
+			sectionSaving = false;
+		}
+	}
+
+	// Details block: title (required) + service address + valid-until + tax rate, saved together.
+	function saveDetails() {
+		if (!titleDraft.trim()) {
+			sectionError = 'Title is required.';
+			return;
+		}
+		const n = Number(taxRateDraft);
+		if (!Number.isFinite(n) || n < 0 || n > 100) {
+			sectionError = 'Enter a tax rate between 0 and 100.';
+			return;
+		}
+		void commitSection({
+			title: titleDraft.trim(),
+			service_address_id: serviceAddressIdDraft,
+			expires_at: expiresAtDraft ? `${expiresAtDraft}T23:59:59.000Z` : null,
+			tax_rate: n / 100
+		});
+	}
+	// Notes block: client-facing + internal notes together.
+	function saveNotes() {
+		void commitSection({
+			notes: notesDraft.trim() || null,
+			internal_notes: internalNotesDraft.trim() || null
+		});
+	}
+	// Terms block.
+	function saveTerms() {
+		void commitSection({ terms: termsDraft.trim() || null });
+	}
+	// Discount block: its own always-visible inline control (decoupled from the line-items block —
+	// Jobber/HCP adjust a quote-level discount without editing line items). Editable only when the
+	// quote has at least one line item to discount. Validates locally, then PATCHes only the
+	// discount fields via the shared section commit.
+	function saveDiscount() {
+		if (depositLocked) return;
+		if (discountTypeDraft !== 'none') {
+			if (!Number.isFinite(discountValueNum) || discountValueNum <= 0) {
+				sectionError =
+					discountTypeDraft === 'percent'
+						? 'Enter a discount percentage greater than 0.'
+						: 'Enter a discount amount greater than 0.';
+				return;
+			}
+			if (discountTypeDraft === 'percent' && discountValueNum > 100) {
+				sectionError = 'Discount percentage cannot exceed 100.';
+				return;
+			}
+		}
+		const payload: Record<string, unknown> = { discount_type: discountTypeDraft };
+		if (discountTypeDraft === 'none') {
+			payload.discount_value = null;
+			payload.discount_label = null;
+		} else {
+			payload.discount_value = discountValueNum;
+			payload.discount_label = discountLabelDraft.trim() || null;
+		}
+		void commitSection(payload);
+	}
+	// Deposit block: its own independent inline control (decoupled from the pricing/line-items
+	// block — Jobber/HCP let you flip the required-deposit toggle without editing line items).
+	// Validates the deposit locally (mirrors the server superRefine + the deposit-<-total rule),
+	// then PATCHes ONLY the deposit fields via the shared section commit.
+	function saveDeposit() {
+		if (depositLocked) return;
+		if (depositRequiredDraft) {
+			if (depositTypeDraft === 'percent') {
+				if (!Number.isFinite(depositPercentNum) || depositPercentNum <= 0 || depositPercentNum >= 100) {
+					sectionError = 'Enter a percentage between 0.01 and 99.99.';
+					return;
+				}
+			} else {
+				if (!Number.isFinite(depositAmountNum) || depositAmountNum <= 0) {
+					sectionError = 'Enter a deposit amount.';
+					return;
+				}
+				if (total > 0 && depositAmountNum >= total) {
+					sectionError = 'Deposit must be less than the quote total.';
+					return;
+				}
+			}
+		}
+		const payload: Record<string, unknown> = {
+			deposit_required: depositRequiredDraft,
+			deposit_type: depositTypeDraft
+		};
+		if (depositTypeDraft === 'percent') {
+			payload.deposit_percent = depositRequiredDraft ? depositPercentNum : null;
+			payload.deposit_amount = null;
+		} else {
+			payload.deposit_amount = depositRequiredDraft ? depositAmountNum : null;
+			payload.deposit_percent = null;
+		}
+		void commitSection(payload);
+	}
+
+	// ── Pricing section (line items + discount + deposit) ────────────────────────
+	// Reuses the existing full-document save() (validates + PATCHes line items, packages,
+	// discount, deposit, tax). save() re-seeds drafts on success → `dirty` clears; we detect
+	// that to close the section (and flag a post-send edit for the re-send revision).
+	async function savePricing() {
+		await save();
+		if (!dirty) {
+			editingSection = null;
+			if (editMode) editedAfterSend = true;
+		}
+	}
+
+	// Exit edit-after-send. Re-send (revision) is a separate explicit action, matching
+	// Jobber/HCP ("amend the quote, then re-send").
+	function exitEditMode() {
+		cancelSection();
+		editMode = false;
+		editedAfterSend = false;
+	}
 
 	// Base subtotal excludes optional add-ons (they only count if the customer selects them).
+	// On a tiered quote the headline base is the RECOMMENDED tier's required lines (mirrors
+	// recalcQuoteTotals); on a simple quote it's the full flat list.
+	const subtotalSource = $derived(isTiered ? (recommendedPkg?.lines ?? []) : lineItems);
 	const subtotal = $derived(
-		lineItems.reduce((s, li) => {
+		subtotalSource.reduce((s, li) => {
 			if (li.is_optional) return s;
 			const q = Number(li.quantity);
 			const p = Number(li.unit_price);
@@ -192,9 +433,10 @@
 			return s + Math.round(q * p * 100) / 100;
 		}, 0)
 	);
-	// Optional add-ons (draft preview) for the totals card while editing.
+	// Optional add-ons (draft preview) for the totals card while editing — from the recommended
+	// tier when tiered, else the flat list.
 	const draftOptionalItems = $derived(
-		lineItems
+		subtotalSource
 			.filter((li) => li.is_optional)
 			.map((li) => {
 				const q = Number(li.quantity);
@@ -220,7 +462,7 @@
 	// What the totals card lists as "optional add-ons (not included)". Hidden once accepted
 	// (selections are shown in their own breakdown below).
 	const cardOptionalItems = $derived(
-		isEditable
+		pricingEditing
 			? draftOptionalItems
 			: isAcceptedWithTotals
 				? []
@@ -244,9 +486,25 @@
 		return Math.min(discountValueNum, subtotal);
 	});
 	const discountedSubtotal = $derived(Math.round((subtotal - discountAmount) * 100) / 100);
-	const taxAmount = $derived(Math.round(discountedSubtotal * taxRateNum * 100) / 100);
+	// Per-line tax: only required TAXABLE lines feed the tax base. The quote-level discount is
+	// allocated proportionally across the whole subtotal, so tax hits the taxable share of the
+	// discounted amount (mirrors recalcQuoteTotals). Collapses to discounted × rate when every
+	// line is taxable.
+	const taxableSubtotal = $derived(
+		subtotalSource.reduce((s, li) => {
+			if (li.is_optional || li.taxable === false) return s;
+			const q = Number(li.quantity);
+			const p = Number(li.unit_price);
+			if (!Number.isFinite(q) || !Number.isFinite(p)) return s;
+			return s + Math.round(q * p * 100) / 100;
+		}, 0)
+	);
+	const taxableAfterDiscount = $derived(
+		subtotal > 0 ? (taxableSubtotal * discountedSubtotal) / subtotal : 0
+	);
+	const taxAmount = $derived(Math.round(taxableAfterDiscount * taxRateNum * 100) / 100);
 	const total = $derived(
-		Math.round((discountedSubtotal + discountedSubtotal * taxRateNum) * 100) / 100
+		Math.round((discountedSubtotal + taxableAfterDiscount * taxRateNum) * 100) / 100
 	);
 	// Discount actually applied on an accepted quote (base + chosen add-ons), derived from the
 	// frozen accepted figures so it always reconciles with the accepted total shown.
@@ -265,11 +523,6 @@
 		const n = Number(depositPercentDraft);
 		return Number.isFinite(n) && n > 0 ? n : NaN;
 	});
-	const depositPreviewAmount = $derived.by(() => {
-		if (!depositRequiredDraft || depositTypeDraft !== 'percent') return null;
-		if (!Number.isFinite(depositPercentNum) || total <= 0) return null;
-		return Math.round(((total * depositPercentNum) / 100) * 100) / 100;
-	});
 
 	const dirty = $derived.by(() => {
 		if (!quote) return false;
@@ -277,44 +530,79 @@
 		if ((serviceAddressIdDraft ?? null) !== (quote.service_address_id ?? null)) return true;
 		if (notesDraft.trim() !== (quote.notes ?? '')) return true;
 		if (internalNotesDraft.trim() !== (quote.internal_notes ?? '')) return true;
+		if (termsDraft.trim() !== (quote.terms ?? '')) return true;
 		const currentExpiry = quote.expires_at ? quote.expires_at.slice(0, 10) : '';
 		if (expiresAtDraft !== currentExpiry) return true;
 		const currentTaxPct = String(Number(quote.tax_rate) * 100);
 		if (Number(taxRateDraft) !== Number(currentTaxPct)) return true;
-		if (depositRequiredDraft !== quote.deposit_required) return true;
-		const origType = (quote.deposit_type as 'fixed' | 'percent') ?? 'fixed';
-		if (depositTypeDraft !== origType) return true;
-		if (depositTypeDraft === 'percent') {
-			const origPct = quote.deposit_percent ? Number(quote.deposit_percent) : NaN;
-			const draftPct = depositRequiredDraft ? depositPercentNum : NaN;
-			if (Number.isFinite(origPct) !== Number.isFinite(draftPct)) return true;
-			if (Number.isFinite(origPct) && Number.isFinite(draftPct) && origPct !== draftPct)
-				return true;
-		} else {
-			const origDeposit = quote.deposit_amount ? Number(quote.deposit_amount) : NaN;
-			const draftDeposit = depositRequiredDraft ? depositAmountNum : NaN;
-			if (Number.isFinite(origDeposit) !== Number.isFinite(draftDeposit)) return true;
-			if (
-				Number.isFinite(origDeposit) &&
-				Number.isFinite(draftDeposit) &&
-				origDeposit !== draftDeposit
-			)
-				return true;
+		// Tiered-ness changed (simple ⇄ Good-Better-Best) is always a dirty edit.
+		const wasTiered = quote.packages.length > 0;
+		if (wasTiered !== isTiered) return true;
+
+		if (isTiered) {
+			if (packages.length !== quote.packages.length) return true;
+			// Compare each tier in order: name, recommended flag, and its lines. Original lines
+			// for a tier are the flat lines whose package_id matches that tier's db id.
+			for (let i = 0; i < packages.length; i++) {
+				const dp = packages[i];
+				const op = quote.packages[i];
+				if (dp.package_key !== op.package_key) return true;
+				if (dp.name.trim() !== op.name) return true;
+				if (dp.is_recommended !== op.is_recommended) return true;
+				const origLines = quote.line_items.filter((li) => li.package_id === op.id);
+				if (linesDiffer(dp.lines, origLines)) return true;
+			}
+			return false;
 		}
-		const origDiscType = (quote.discount_type as 'none' | 'fixed' | 'percent') ?? 'none';
-		if (discountTypeDraft !== origDiscType) return true;
-		if (discountTypeDraft !== 'none') {
-			const origVal = quote.discount_value ? Number(quote.discount_value) : NaN;
-			const draftVal = discountValueNum;
-			if (Number.isFinite(origVal) !== Number.isFinite(draftVal)) return true;
-			if (Number.isFinite(origVal) && Number.isFinite(draftVal) && origVal !== draftVal)
-				return true;
-			if (discountLabelDraft.trim() !== (quote.discount_label ?? '')) return true;
+
+		if (linesDiffer(lineItems, quote.line_items)) return true;
+		return false;
+	});
+
+	// ── Header edit bar wiring ───────────────────────────────────────────────────
+	// Friendly block name for the header bar, plus the shared save flag / dirty-guard both the
+	// header bar and the in-card footer read, so they can never diverge. Pricing tracks `dirty`
+	// (its in-card Save is dirty-gated); text sections always allow Save, like their footers.
+	const SECTION_LABELS = {
+		details: 'Details',
+		notes: 'Notes',
+		terms: 'Terms',
+		pricing: 'Pricing',
+		discount: 'Discount',
+		deposit: 'Deposit'
+	};
+	const sectionBusy = $derived(pricingEditing ? saving : sectionSaving);
+	const sectionCanSave = $derived(pricingEditing ? dirty : true);
+	// Header Save dispatches to whichever block is open (only one is ever open at a time), running
+	// the same validation as the in-card Save.
+	function saveCurrentSection() {
+		switch (editingSection) {
+			case 'details':
+				saveDetails();
+				break;
+			case 'notes':
+				saveNotes();
+				break;
+			case 'terms':
+				saveTerms();
+				break;
+			case 'pricing':
+				void savePricing();
+				break;
+			case 'discount':
+				saveDiscount();
+				break;
+			case 'deposit':
+				saveDeposit();
+				break;
 		}
-		const orig = quote.line_items;
-		if (lineItems.length !== orig.length) return true;
-		for (let i = 0; i < lineItems.length; i++) {
-			const a = lineItems[i];
+	}
+
+	// Field-by-field comparison of a draft line list against the saved rows (order-sensitive).
+	function linesDiffer(draft: QuoteLineDraft[], orig: QuoteLineItemRow[]): boolean {
+		if (draft.length !== orig.length) return true;
+		for (let i = 0; i < draft.length; i++) {
+			const a = draft[i];
 			const b = orig[i];
 			if (a.description !== b.description) return true;
 			if ((a.details?.trim() || '') !== (b.details ?? '')) return true;
@@ -322,10 +610,11 @@
 			if ((a.unit?.trim() || '') !== (b.unit ?? '')) return true;
 			if ((a.section_label?.trim() || '') !== (b.section_label ?? '')) return true;
 			if ((a.is_optional ?? false) !== (b.is_optional ?? false)) return true;
+			if ((a.taxable ?? true) !== (b.taxable ?? true)) return true;
 			if (Number(a.unit_price) !== Number(b.unit_price)) return true;
 		}
 		return false;
-	});
+	}
 
 	async function refresh() {
 		await quotesStore.loadDetail(data.id, true);
@@ -349,13 +638,62 @@
 		lineItems = [...lineItems, ...items];
 	}
 
+	// Convert a simple quote into Good-Better-Best tiers. Seeds the canonical three tiers and
+	// moves the current lines into the recommended middle tier ("Better") — the contractor
+	// then builds out the cheaper/premium tiers. Reversible before saving via toSingleOption().
+	function toTiered() {
+		if (isTiered || !pricingEditing) return;
+		const existing = lineItems;
+		packages = [
+			{
+				client_id: crypto.randomUUID(),
+				package_key: crypto.randomUUID(),
+				name: 'Good',
+				is_recommended: false,
+				lines: []
+			},
+			{
+				client_id: crypto.randomUUID(),
+				package_key: crypto.randomUUID(),
+				name: 'Better',
+				is_recommended: true,
+				lines: existing
+			},
+			{
+				client_id: crypto.randomUUID(),
+				package_key: crypto.randomUUID(),
+				name: 'Best',
+				is_recommended: false,
+				lines: []
+			}
+		];
+		lineItems = [];
+	}
+
+	// Collapse tiers back into a single option — merges every tier's lines into one flat list.
+	function toSingleOption() {
+		if (!isTiered || !pricingEditing) return;
+		lineItems = packages.flatMap((p) => p.lines);
+		packages = [];
+	}
+
 	let SendQuoteDialog = $state<
-		typeof import('$lib/components/quotes/SendQuoteDialog.svelte').default | null
+		typeof import('$lib/components/documents/SendDocumentDialog.svelte').default | null
 	>(null);
 	$effect(() => {
 		if (!sendOpen || SendQuoteDialog) return;
-		void import('$lib/components/quotes/SendQuoteDialog.svelte').then((m) => {
+		void import('$lib/components/documents/SendDocumentDialog.svelte').then((m) => {
 			SendQuoteDialog = m.default;
+		});
+	});
+
+	let ShareQuoteLinkDialog = $state<
+		typeof import('$lib/components/quotes/ShareQuoteLinkDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (!shareLinkOpen || ShareQuoteLinkDialog) return;
+		void import('$lib/components/quotes/ShareQuoteLinkDialog.svelte').then((m) => {
+			ShareQuoteLinkDialog = m.default;
 		});
 	});
 
@@ -370,12 +708,8 @@
 	});
 
 	async function save() {
-		if (!quote || !isEditable) return;
-		if (!titleDraft.trim()) {
-			toast.error('Title is required');
-			return;
-		}
-		for (const li of lineItems) {
+		if (!quote || !pricingEditing) return;
+		for (const li of allLines) {
 			const q = Number(li.quantity);
 			const p = Number(li.unit_price);
 			if (!li.description.trim()) {
@@ -391,85 +725,58 @@
 				return;
 			}
 		}
-		if (discountTypeDraft !== 'none' && !depositLocked) {
-			if (!Number.isFinite(discountValueNum) || discountValueNum <= 0) {
-				toast.error(
-					discountTypeDraft === 'percent'
-						? 'Enter a discount percentage greater than 0'
-						: 'Enter a discount amount greater than 0'
-				);
+		// Tiered (Good-Better-Best) guardrails — mirror the server's validatePackages so the
+		// contractor gets an inline toast instead of a 422.
+		if (isTiered) {
+			if (packages.length < 2 || packages.length > 3) {
+				toast.error('A tiered quote needs 2 or 3 packages');
 				return;
 			}
-			if (discountTypeDraft === 'percent' && discountValueNum > 100) {
-				toast.error('Discount percentage cannot exceed 100');
+			if (packages.some((p) => !p.name.trim())) {
+				toast.error('Every package needs a name');
+				return;
+			}
+			if (packages.filter((p) => p.is_recommended).length !== 1) {
+				toast.error('Mark exactly one package as recommended');
+				return;
+			}
+			if (packages.some((p) => p.lines.length === 0)) {
+				toast.error('Every package needs at least one line item');
 				return;
 			}
 		}
-		if (depositRequiredDraft && !depositLocked) {
-			if (depositTypeDraft === 'percent') {
-				if (
-					!Number.isFinite(depositPercentNum) ||
-					depositPercentNum <= 0 ||
-					depositPercentNum >= 100
-				) {
-					toast.error('Enter a percentage between 0.01 and 99.99');
-					return;
-				}
-			} else {
-				if (!Number.isFinite(depositAmountNum) || depositAmountNum <= 0) {
-					toast.error('Enter a deposit amount');
-					return;
-				}
-				if (total > 0 && depositAmountNum >= total) {
-					toast.error('Deposit must be less than the quote total');
-					return;
-				}
-			}
-		}
-
 		saving = true;
 		try {
+			// Pricing-section save: only the line items + tiers. Discount and deposit each save
+			// independently via their own inline cards; the atomic fields (title, notes, terms,
+			// dates, address, tax) save via their own inline rows — none are resent here, which also
+			// stops a cancelled/abandoned draft from another section leaking into a pricing save.
 			const patchBody: Record<string, unknown> = {
-				title: titleDraft.trim(),
-				service_address_id: serviceAddressIdDraft,
-				tax_rate: Number.isFinite(taxRateNum) ? taxRateNum : 0,
-				notes: notesDraft.trim() || null,
-				internal_notes: internalNotesDraft.trim() || null,
-				expires_at: expiresAtDraft ? `${expiresAtDraft}T23:59:59.000Z` : null,
-				line_items: lineItems.map((li, idx) => ({
+				line_items: allLines.map((li, idx) => ({
 					line_key: li.line_key,
+					package_key: li.package_key ?? null,
 					description: li.description.trim(),
 					details: li.details?.trim() || null,
 					quantity: Number(li.quantity),
 					unit: li.unit?.trim() || null,
 					section_label: li.section_label?.trim() || null,
 					is_optional: li.is_optional ?? false,
+					taxable: li.taxable ?? true,
 					unit_price: Number(li.unit_price),
 					unit_cost:
 						li.unit_cost !== undefined && li.unit_cost !== null ? Number(li.unit_cost) : null,
 					source_catalog_item_id: li.source_catalog_item_id ?? null,
 					position: idx
+				})),
+				// Good-Better-Best: send the tiers (2–3) when tiered, or [] to (re)assert a simple
+				// quote. Sent on every save so the server keeps packages in sync with the lines.
+				packages: packages.map((p, idx) => ({
+					package_key: p.package_key,
+					name: p.name.trim(),
+					is_recommended: p.is_recommended,
+					position: idx
 				}))
 			};
-			if (!depositLocked) {
-				patchBody.discount_type = discountTypeDraft;
-				if (discountTypeDraft === 'none') {
-					patchBody.discount_value = null;
-					patchBody.discount_label = null;
-				} else {
-					patchBody.discount_value = discountValueNum;
-					patchBody.discount_label = discountLabelDraft.trim() || null;
-				}
-				patchBody.deposit_required = depositRequiredDraft;
-				patchBody.deposit_type = depositTypeDraft;
-				if (depositTypeDraft === 'percent') {
-					patchBody.deposit_percent = depositRequiredDraft ? depositPercentNum : null;
-					patchBody.deposit_amount = null;
-				} else {
-					patchBody.deposit_amount = depositRequiredDraft ? depositAmountNum : null;
-					patchBody.deposit_percent = null;
-				}
-			}
 			const res = await fetch(`/api/quotes/${quote.id}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
@@ -580,6 +887,19 @@
 		offlineOpen = true;
 	}
 
+	// In-person "sign on this device" — hand the device to the customer to approve + draw their
+	// signature on the spot. Lazy-loaded like the other dialogs.
+	let signInPersonOpen = $state(false);
+	let SignInPersonDialog = $state<
+		typeof import('$lib/components/quotes/QuoteInPersonSignDialog.svelte').default | null
+	>(null);
+	$effect(() => {
+		if (!signInPersonOpen || SignInPersonDialog) return;
+		void import('$lib/components/quotes/QuoteInPersonSignDialog.svelte').then((m) => {
+			SignInPersonDialog = m.default;
+		});
+	});
+
 	// Delete confirmation (destructive + irreversible) gets an explicit dialog, not a native prompt.
 	let confirmDeleteOpen = $state(false);
 	let ConfirmDialog = $state<
@@ -670,480 +990,634 @@
 			year: 'numeric'
 		});
 	}
+
+	// One-line formatted address for the Details inline row's read-only display.
+	function quoteAddressLine(a: NonNullable<QuoteDetail['service_address']>): string {
+		return [a.address_line_1, a.address_line_2, [a.city, a.state, a.zip].filter(Boolean).join(' ')]
+			.filter(Boolean)
+			.join(', ');
+	}
+
+	// Key-dates row for the shared document header.
+	const headerDates = $derived.by<DocumentHeaderDate[]>(() => {
+		const q = quote;
+		if (!q) return [];
+		const out: DocumentHeaderDate[] = [{ label: 'Issued', value: fmtDate(q.created_at) }];
+		if (q.expires_at) {
+			out.push({
+				label: 'Expires',
+				value: fmtDate(q.expires_at),
+				tone: isExpired ? 'danger' : 'default'
+			});
+		}
+		if (q.sent_at) out.push({ label: 'Sent', value: fmtDate(q.sent_at) });
+		if (q.accepted_at)
+			out.push({ label: 'Accepted', value: fmtDate(q.accepted_at), tone: 'success' });
+		if (q.acceptance_signature_name) {
+			out.push({
+				label: q.acceptance_signature_media_id ? 'Signed in person' : 'Signed by',
+				value: q.acceptance_signature_name,
+				tone: 'signed',
+				icon: 'ri-quill-pen-line'
+			});
+		}
+		if (q.declined_at)
+			out.push({ label: 'Declined', value: fmtDate(q.declined_at), tone: 'danger' });
+		return out;
+	});
 </script>
 
 <svelte:head><title>{quote ? quote.quote_number_display : 'Quote'}</title></svelte:head>
 
+<!-- Shared Cancel + Save row for the text sections (Details / Notes / Terms). -->
+{#snippet sectionFooter(onSave: () => void)}
+	<EditActionBar {onSave} onCancel={cancelSection} saving={sectionSaving} error={sectionError} size="sm" />
+{/snippet}
+
 {#if showSkeleton}
 	<PageWrapper title="Quote" back="/quotes">
-		<div class="grid gap-6 lg:grid-cols-[1fr_360px]">
-			<div class="space-y-4">
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<SkeletonLoader lines={3} />
-				</div>
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<SkeletonLoader lines={4} />
-				</div>
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<SkeletonLoader lines={5} />
-				</div>
-			</div>
-			<div class="space-y-4">
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<SkeletonLoader lines={4} />
-				</div>
-			</div>
-		</div>
+		<DocumentDetailShell>
+			{#snippet main()}
+				<div class="card" style="padding: 16px;"><SkeletonLoader lines={3} /></div>
+				<div class="card" style="padding: 16px;"><SkeletonLoader lines={4} /></div>
+				<div class="card" style="padding: 16px;"><SkeletonLoader lines={5} /></div>
+			{/snippet}
+			{#snippet sidebar()}
+				<div class="card" style="padding: 16px;"><SkeletonLoader lines={4} /></div>
+			{/snippet}
+		</DocumentDetailShell>
 	</PageWrapper>
 {:else if !quote}
 	<PageWrapper title="Quote" back="/quotes">
-		<p class="text-sm text-destructive">{detailError ?? 'Not found'}</p>
+		<p class="quote-detail__error">{detailError ?? 'Not found'}</p>
 	</PageWrapper>
 {:else}
 	{@const q = quote}
 	<PageWrapper title={q.quote_number_display} back="/quotes">
 		{#snippet actions()}
-			{#if isEditable}
-				<JetEngineButton
-					label="Save"
-					loadingLabel="Saving…"
-					successLabel="Saved"
-					state={saving ? 'loading' : 'idle'}
-					disabled={!dirty}
-					onclick={save}
-				>
-					{#snippet icon()}<Save class="h-4 w-4" />{/snippet}
-				</JetEngineButton>
+			{#if editingSection !== null}
+				<!-- A block is being edited — mirror its Save/Cancel up here so it's reachable
+				     no matter how far the card is scrolled. Same handlers as the in-card footer. -->
+				<EditActionBar
+					onSave={saveCurrentSection}
+					onCancel={cancelSection}
+					saving={sectionBusy}
+					canSave={sectionCanSave}
+					error={sectionError}
+					label={`Editing ${SECTION_LABELS[editingSection]}`}
+				/>
+			{:else if alwaysEditable}
+				<!-- Draft / changes-requested: fields edit inline; the header only sends. -->
 				{#if canSendPerm}
-					<Button
-						variant="outline"
+					<button
+						type="button"
+						class="btn btn--outline"
 						onclick={() => (sendOpen = true)}
-						disabled={lineItems.length === 0 || dirty}
+						disabled={allLines.length === 0}
 					>
-						<Send class="mr-1 h-4 w-4" />{isDraft ? 'Send' : 'Resend'}
+						<i class="ri-send-plane-line" aria-hidden="true"></i>
+						{isDraft ? 'Send' : 'Resend'}
+					</button>
+				{/if}
+			{:else if editMode}
+				<!-- Edit-after-send unlocked: edits auto-save inline; re-send when done. -->
+				{#if canResend && canSendPerm}
+					<Button type="button" onclick={() => (sendOpen = true)}>
+						<i class="ri-send-plane-line" aria-hidden="true"></i>Re-send
 					</Button>
 				{/if}
-			{:else if canResend && canSendPerm}
-				<Button variant="outline" onclick={() => (sendOpen = true)}>
-					<Send class="mr-1 h-4 w-4" />Resend
+				<Button type="button" variant="outline" onclick={exitEditMode}>Done</Button>
+			{:else}
+				<!-- Sent/viewed and locked: re-open for edits, or re-deliver as-is. -->
+				{#if canEnterEditMode}
+					<Button type="button" variant="outline" onclick={() => (editMode = true)}>
+						<i class="ri-pencil-line" aria-hidden="true"></i>Edit
+					</Button>
+				{/if}
+				{#if canResend && canSendPerm}
+					<Button type="button" variant="outline" onclick={() => (sendOpen = true)}>
+						<i class="ri-send-plane-line" aria-hidden="true"></i>Resend
+					</Button>
+				{/if}
+			{/if}
+			{#if editingSection === null && isMarkable && canEditPerm}
+				<Button type="button" onclick={() => (signInPersonOpen = true)}>
+					<i class="ri-quill-pen-line" aria-hidden="true"></i>Sign in person
 				</Button>
 			{/if}
-			{#if isAccepted && canConvertPerm}
-				<JetEngineButton
-					label="Create invoice"
+			{#if editingSection === null && isAccepted && canConvertPerm}
+				<Button
 					loadingLabel="Creating…"
 					successLabel="Created"
-					state={converting ? 'loading' : 'idle'}
+					loading={converting}
 					onclick={convertToInvoice}
 				>
-					{#snippet icon()}<Receipt class="h-4 w-4" />{/snippet}
-				</JetEngineButton>
+					Create invoice
+					{#snippet icon()}<i class="ri-receipt-line" aria-hidden="true"></i>{/snippet}
+				</Button>
 			{/if}
-			{@const showMark = isMarkable && canEditPerm}
-			{@const showDelete = isDeletable && canDeletePerm}
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger
-					class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/40 bg-transparent text-foreground shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/70 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-[hsl(var(--brand-light)/0.4)] dark:hover:border-[hsl(var(--brand-light)/0.7)]"
-					aria-label="More actions"
-				>
-					<MoreHorizontal class="h-4 w-4" />
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="end">
-					<DropdownMenu.Item onclick={previewAsClient}>
-						<Eye class="h-4 w-4" /> Preview as client
-					</DropdownMenu.Item>
-					<DropdownMenu.Item closeOnSelect={false} onclick={downloadPdf} disabled={downloadingPdf}>
-						{#if downloadingPdf}
-							<Loader2 class="h-4 w-4 animate-spin" /> Preparing PDF…
-						{:else}
-							<Download class="h-4 w-4" /> Download PDF
+			{#if editingSection === null}
+				{@const showMark = isMarkable && canEditPerm}
+				{@const showDelete = isDeletable && canDeletePerm}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger class="btn btn--icon btn--outline" aria-label="More actions">
+						<i class="ri-more-2-fill" aria-hidden="true"></i>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Item onclick={previewAsClient}>
+							<i class="ri-eye-line" aria-hidden="true"></i> Preview as client
+						</DropdownMenu.Item>
+						{#if canSendPerm && q.status !== 'declined' && q.status !== 'expired'}
+							<DropdownMenu.Item onclick={() => (shareLinkOpen = true)}>
+								<i class="ri-links-line" aria-hidden="true"></i> Copy client link
+							</DropdownMenu.Item>
 						{/if}
-					</DropdownMenu.Item>
-					{#if showMark}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => openOffline('accepted')}>
-							<CircleCheckBig class="h-4 w-4" /> Mark as approved
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => openOffline('declined')}>
-							<CircleX class="h-4 w-4" /> Mark as declined
-						</DropdownMenu.Item>
-					{/if}
-					{#if canConvertToJobPerm && q.status !== 'declined' && q.status !== 'expired'}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => goto(`/jobs/new?from_quote=${q.id}`)}>
-							<Briefcase class="h-4 w-4" /> Convert to job
-						</DropdownMenu.Item>
-					{/if}
-					{#if canCreatePerm}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={duplicate} disabled={duplicating}>
-							<Copy class="h-4 w-4" /> Duplicate
-						</DropdownMenu.Item>
-					{/if}
-					{#if showDelete}
-						<DropdownMenu.Separator />
 						<DropdownMenu.Item
-							class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-							onclick={() => (confirmDeleteOpen = true)}
+							closeOnSelect={false}
+							onclick={downloadPdf}
+							disabled={downloadingPdf}
 						>
-							<Trash2 class="h-4 w-4" /> Delete quote
+							{#if downloadingPdf}
+								<i
+									class="ri-loader-4-line"
+									aria-hidden="true"
+									style="animation: spin 1s linear infinite;"
+								></i> Preparing PDF…
+							{:else}
+								<i class="ri-download-line" aria-hidden="true"></i> Download PDF
+							{/if}
 						</DropdownMenu.Item>
-					{/if}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
+						{#if showMark}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Item onclick={() => openOffline('accepted')}>
+								<i class="ri-checkbox-circle-line" aria-hidden="true"></i> Mark as approved
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => openOffline('declined')}>
+								<i class="ri-close-circle-line" aria-hidden="true"></i> Mark as declined
+							</DropdownMenu.Item>
+						{/if}
+						{#if canConvertToJobPerm && q.status !== 'declined' && q.status !== 'expired'}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Item onclick={() => goto(`/jobs/new?from_quote=${q.id}`)}>
+								<i class="ri-briefcase-line" aria-hidden="true"></i> Convert to job
+							</DropdownMenu.Item>
+						{/if}
+						{#if canCreatePerm}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Item onclick={duplicate} disabled={duplicating}>
+								<i class="ri-file-copy-line" aria-hidden="true"></i> Duplicate
+							</DropdownMenu.Item>
+						{/if}
+						{#if showDelete}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Item
+								class="dropdown__item--danger"
+								onclick={() => (confirmDeleteOpen = true)}
+							>
+								<i class="ri-delete-bin-line" aria-hidden="true"></i> Delete quote
+							</DropdownMenu.Item>
+						{/if}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/if}
 		{/snippet}
 
-		<div class="grid gap-6 lg:grid-cols-[1fr_360px]">
-			<!-- ── LEFT COLUMN ─────────────────────────────────── -->
-			<div class="space-y-4">
-				<!-- Progress strip (build stage) -->
+		<DocumentDetailShell>
+			{#snippet main()}
+				<!-- Progress strip -->
 				{#if isEditable}
-					<div class="rounded-xl border border-border/60 bg-card px-4 py-3 shadow-card">
+					<div class="card quote-detail__progress-wrap">
 						<QuoteProgressStrip current="build" />
 					</div>
 				{/if}
 
 				<!-- Alert: changes requested -->
 				{#if q.active_change_request}
-					<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-sm">
-						<div class="flex items-start gap-3">
-							<div
-								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300"
-							>
-								<MessageSquare class="h-4 w-4" />
+					<div class="quote-alert quote-alert--warning">
+						<div class="quote-alert__icon-wrap">
+							<i class="ri-message-2-line" aria-hidden="true"></i>
+						</div>
+						<div class="quote-alert__body">
+							<div class="quote-alert__head">
+								<p class="quote-alert__title">Client requested changes</p>
+								<span class="quote-alert__time">
+									{formatRequestedAt(q.active_change_request.requested_at)}
+								</span>
 							</div>
-							<div class="min-w-0 flex-1">
-								<div class="flex items-center justify-between gap-2">
-									<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-										Client requested changes
-									</p>
-									<span class="shrink-0 text-xs text-amber-700/80 dark:text-amber-300/80">
-										{formatRequestedAt(q.active_change_request.requested_at)}
-									</span>
-								</div>
-								<p
-									class="mt-1 whitespace-pre-wrap text-sm text-amber-900/90 dark:text-amber-100/90"
-								>
-									{q.active_change_request.message}
-								</p>
-								<p class="mt-2 text-xs text-amber-700/80 dark:text-amber-300/80">
-									Update the quote below and re-send. The request will be marked resolved
-									automatically.
-								</p>
-							</div>
+							<p class="quote-alert__message">{q.active_change_request.message}</p>
+							<p class="quote-alert__hint">
+								Update the quote below and re-send. The request will be marked resolved
+								automatically.
+							</p>
 						</div>
 					</div>
 				{/if}
 
 				<!-- Alert: expired -->
 				{#if isExpired}
-					<div class="rounded-xl border border-zinc-500/30 bg-zinc-500/10 p-4 shadow-sm">
-						<div class="flex items-start gap-3">
-							<div
-								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-500/20 text-zinc-700 dark:text-zinc-300"
-							>
-								<Clock class="h-4 w-4" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-									This quote has expired
-								</p>
-								<p class="mt-1 text-sm text-zinc-700/90 dark:text-zinc-300/90">
-									{#if q.expires_at}
-										Validity passed {fmtDate(q.expires_at)}.
-									{/if}
-									The deal stays in your pipeline — revive it below.
-								</p>
-								<div class="mt-3 flex flex-wrap items-center gap-2">
-									<span class="text-xs font-medium text-muted-foreground">Extend</span>
-									<Button
-										size="sm"
-										variant="outline"
-										disabled={extending}
-										onclick={() => extendQuote(7)}>+7 days</Button
-									>
-									<Button size="sm" disabled={extending} onclick={() => extendQuote(14)}>
-										{#if extending}<Loader2 class="mr-1 h-4 w-4 animate-spin" />{/if}+14 days
-									</Button>
-									<Button
-										size="sm"
-										variant="outline"
-										disabled={extending}
-										onclick={() => extendQuote(30)}>+30 days</Button
-									>
-									<a
-										href="tel:{q.contact_phone}"
-										class="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
-									>
-										<Phone class="h-4 w-4" />Call
-									</a>
-								</div>
+					<div class="quote-alert quote-alert--muted">
+						<div class="quote-alert__icon-wrap">
+							<i class="ri-time-line" aria-hidden="true"></i>
+						</div>
+						<div class="quote-alert__body">
+							<p class="quote-alert__title">This quote has expired</p>
+							<p class="quote-alert__message">
+								{#if q.expires_at}Validity passed {fmtDate(q.expires_at)}.{/if}
+								The deal stays in your pipeline — revive it below.
+							</p>
+							<div class="quote-alert__actions">
+								<span class="quote-alert__hint" style="margin:0;">Extend</span>
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
+									disabled={extending}
+									onclick={() => extendQuote(7)}>+7 days</button
+								>
+								<button
+									type="button"
+									class="btn btn--sm btn--primary"
+									disabled={extending}
+									onclick={() => extendQuote(14)}
+								>
+									{#if extending}<i
+											class="ri-loader-4-line"
+											style="animation:spin 1s linear infinite;"
+											aria-hidden="true"
+										></i>{/if}
+									+14 days
+								</button>
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
+									disabled={extending}
+									onclick={() => extendQuote(30)}>+30 days</button
+								>
+								<a href="tel:{q.contact_phone}" class="btn btn--sm btn--outline">
+									<i class="ri-phone-line" aria-hidden="true"></i>Call
+								</a>
 							</div>
 						</div>
 					</div>
 				{/if}
 
 				<!-- Document header card -->
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0 flex-1">
-							<!-- Status + view count -->
-							<div class="flex flex-wrap items-center gap-2">
-								<QuoteStatusBadge status={q.status} version={q.current_version} />
-								{#if q.viewed_at}
-									<span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-										<Eye class="h-3 w-3" />{q.view_count} view{q.view_count === 1 ? '' : 's'}
-									</span>
-								{/if}
-							</div>
-
-							<!-- Contact -->
-							<p class="mt-2 text-base font-semibold text-foreground">{q.contact_name}</p>
-							<p class="text-sm text-muted-foreground">
-								{q.contact_phone}{q.contact_email ? ` · ${q.contact_email}` : ''}
-							</p>
-							{#if !q.contact_email}
-								<p
-									class="mt-1.5 inline-flex w-fit items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
-								>
-									<AlertTriangle class="h-3 w-3 shrink-0" />No email on file — SMS only
-								</p>
-							{/if}
-							{#if q.service_address && !isEditable}
-								<p class="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
-									<MapPin class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-									<span>
-										{[
-											q.service_address.address_line_1,
-											q.service_address.address_line_2,
-											[q.service_address.city, q.service_address.state, q.service_address.zip]
-												.filter(Boolean)
-												.join(' ')
-										]
+				<DocumentHeaderCard
+					name={q.contact_name}
+					meta={`${q.contact_phone}${q.contact_email ? ` · ${q.contact_email}` : ''}`}
+					noEmail={!q.contact_email}
+					dates={headerDates}
+				>
+					{#snippet badge()}
+						<QuoteStatusBadge status={q.status} version={q.current_version} />
+					{/snippet}
+					{#snippet chips()}
+						{#if q.viewed_at}
+							<span class="quote-doc-views">
+								<i class="ri-eye-line" aria-hidden="true"></i>
+								{q.view_count} view{q.view_count === 1 ? '' : 's'}
+							</span>
+						{/if}
+					{/snippet}
+					{#snippet subline()}
+						{#if q.service_address}
+							<p class="quote-doc-address">
+								<i class="ri-map-pin-line" aria-hidden="true"></i>
+								<span>
+									{[
+										q.service_address.address_line_1,
+										q.service_address.address_line_2,
+										[q.service_address.city, q.service_address.state, q.service_address.zip]
 											.filter(Boolean)
-											.join(', ')}
-									</span>
-								</p>
-							{/if}
-
-							<!-- Date row -->
-							<div class="mt-3 flex flex-wrap gap-4">
-								<div>
-									<p class="text-xs text-muted-foreground">Issued</p>
-									<p class="text-sm font-medium text-foreground">{fmtDate(q.created_at)}</p>
-								</div>
-								{#if q.expires_at && !isEditable}
-									<div>
-										<p class="text-xs text-muted-foreground">Expires</p>
-										<p
-											class="text-sm font-medium {isExpired
-												? 'text-destructive'
-												: 'text-foreground'}"
-										>
-											{fmtDate(q.expires_at)}
-										</p>
-									</div>
-								{/if}
-								{#if q.sent_at}
-									<div>
-										<p class="text-xs text-muted-foreground">Sent</p>
-										<p class="text-sm font-medium text-foreground">{fmtDate(q.sent_at)}</p>
-									</div>
-								{/if}
-								{#if q.accepted_at}
-									<div>
-										<p class="text-xs text-muted-foreground">Accepted</p>
-										<p class="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-											{fmtDate(q.accepted_at)}
-										</p>
-									</div>
-								{/if}
-								{#if q.acceptance_signature_name}
-									<div>
-										<p class="text-xs text-muted-foreground">Signed by</p>
-										<p
-											class="flex items-center gap-1 text-sm font-medium text-emerald-600 dark:text-emerald-400"
-										>
-											<PenLine class="h-3.5 w-3.5 shrink-0" />{q.acceptance_signature_name}
-										</p>
-									</div>
-								{/if}
-								{#if q.declined_at}
-									<div>
-										<p class="text-xs text-muted-foreground">Declined</p>
-										<p class="text-sm font-medium text-destructive">{fmtDate(q.declined_at)}</p>
-									</div>
-								{/if}
+											.join(' ')
+									]
+										.filter(Boolean)
+										.join(', ')}
+								</span>
+							</p>
+						{/if}
+					{/snippet}
+					{#snippet footer()}
+						{#if q.acceptance_signature_media_id && signatureUrl}
+							<div class="quote-doc-signature">
+								<img class="quote-doc-signature-img" src={signatureUrl} alt="Customer signature" />
 							</div>
-						</div>
-					</div>
-				</div>
+						{/if}
+					{/snippet}
+				</DocumentHeaderCard>
 
-				<!-- Details form card -->
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<h2 class="mb-4 text-sm font-semibold text-foreground">Details</h2>
-					<div class="grid gap-4">
-						<div class="grid gap-2">
-							<Label for="quote-title">Title <span class="text-destructive">*</span></Label>
-							<Input id="quote-title" bind:value={titleDraft} disabled={!isEditable} />
-						</div>
-
-						{#if isEditable}
-							<div class="grid gap-2">
-								<Label class="flex items-center gap-1.5">
-									<MapPin class="h-3.5 w-3.5 text-muted-foreground" />
-									Service address
-									<span class="text-xs font-normal text-muted-foreground">(optional)</span>
-								</Label>
+				<!-- Details card (section-block edit) -->
+				<DocumentSectionCard title="Details">
+					{#snippet actions()}
+						{#if canStartSection}
+							<button
+								type="button"
+								class="btn btn--sm btn--outline"
+								onclick={() => startSection('details')}
+							>
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span class="quote-detail__btn-label">Edit</span>
+							</button>
+						{/if}
+					{/snippet}
+					{#if editingSection === 'details'}
+						<div class="doc-form">
+							<div class="field">
+								<label class="field__label" for="q-title">Title</label>
+								<!-- svelte-ignore a11y_autofocus -->
+								<Input id="q-title" class="field__input" bind:value={titleDraft} autofocus />
+							</div>
+							<div class="field">
+								<span class="field__label">Service address</span>
 								<ServiceAddressPicker
 									contactId={q.contact_id}
 									bind:selectedAddressId={serviceAddressIdDraft}
 								/>
 							</div>
-						{/if}
-
-						<div class="grid grid-cols-2 gap-4">
-							<div class="grid gap-2">
-								<Label>Valid until</Label>
+							<div class="field">
+								<span class="field__label">Valid until</span>
 								<Calendar
 									bind:value={expiresAtDraft}
 									placeholder="Pick expiry date"
-									disabled={!isEditable}
 									min={new Date().toISOString().slice(0, 10)}
 								/>
 							</div>
-							<div class="grid gap-2">
-								<Label for="quote-tax">Tax rate (%)</Label>
+							<div class="field">
+								<label class="field__label" for="q-tax">Tax rate (%)</label>
 								<Input
-									id="quote-tax"
+									id="q-tax"
 									type="number"
 									inputmode="decimal"
 									min="0"
 									max="100"
 									step="0.01"
+									class="field__input"
 									bind:value={taxRateDraft}
-									disabled={!isEditable}
 								/>
 							</div>
+							{@render sectionFooter(saveDetails)}
 						</div>
-					</div>
-				</div>
+					{:else}
+						<dl class="doc-facts">
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Title</dt>
+								<dd class="doc-facts__value">{q.title}</dd>
+							</div>
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Service address</dt>
+								<dd class="doc-facts__value">
+									{#if q.service_address}
+										{quoteAddressLine(q.service_address)}
+									{:else}
+										<span class="doc-inline-muted">No service address</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Valid until</dt>
+								<dd class="doc-facts__value">
+									{#if q.expires_at}
+										{fmtDate(q.expires_at)}
+									{:else}
+										<span class="doc-inline-muted">No expiry set</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Tax rate</dt>
+								<dd class="doc-facts__value">{+(Number(q.tax_rate) * 100).toFixed(4)}%</dd>
+							</div>
+						</dl>
+					{/if}
+				</DocumentSectionCard>
 
-				<!-- Notes card -->
-				<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-					<h2 class="mb-4 text-sm font-semibold text-foreground">Notes</h2>
-					<div class="grid gap-4">
-						<div class="grid gap-2">
-							<Label for="quote-notes">Client notes</Label>
-							<p class="text-xs text-muted-foreground -mt-1">
-								Visible to the customer on their quote.
-							</p>
-							<Textarea
-								id="quote-notes"
-								bind:value={notesDraft}
-								rows={3}
-								disabled={!isEditable}
-								placeholder="e.g. All work includes a 1-year warranty."
-							/>
+				<!-- Notes card (section-block edit) -->
+				<DocumentSectionCard title="Notes">
+					{#snippet actions()}
+						{#if canStartSection}
+							<button
+								type="button"
+								class="btn btn--sm btn--outline"
+								onclick={() => startSection('notes')}
+							>
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span class="quote-detail__btn-label">Edit</span>
+							</button>
+						{/if}
+					{/snippet}
+					{#if editingSection === 'notes'}
+						<div class="doc-form">
+							<div class="field">
+								<label class="field__label" for="q-notes">Client notes</label>
+								<Textarea
+									id="q-notes"
+									class="field__input"
+									bind:value={notesDraft}
+									rows={3}
+									placeholder="e.g. All work includes a 1-year warranty."
+								/>
+							</div>
+							<div class="field">
+								<label class="field__label" for="q-internal-notes">Internal notes</label>
+								<Textarea
+									id="q-internal-notes"
+									class="field__input"
+									bind:value={internalNotesDraft}
+									rows={3}
+									placeholder="e.g. Client mentioned tight budget."
+								/>
+							</div>
+							{@render sectionFooter(saveNotes)}
 						</div>
-						<div class="grid gap-2">
-							<Label for="quote-internal-notes" class="flex items-center gap-1.5">
-								Internal notes
-								<span
-									class="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-								>
-									<Lock class="h-2.5 w-2.5" />Staff only
-								</span>
-							</Label>
-							<p class="text-xs text-muted-foreground -mt-1">Never shown to the client.</p>
-							<Textarea
-								id="quote-internal-notes"
-								bind:value={internalNotesDraft}
-								rows={3}
-								disabled={!isEditable}
-								placeholder="e.g. Client mentioned tight budget — consider offering phased approach."
-							/>
-						</div>
-					</div>
-				</div>
+					{:else}
+						<dl class="doc-facts">
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Client notes</dt>
+								<dd class="doc-facts__value">
+									{#if q.notes}
+										<span class="doc-inline-pre">{q.notes}</span>
+									{:else}
+										<span class="doc-inline-muted">Visible to the customer - none yet</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="doc-facts__row">
+								<dt class="doc-facts__label">Internal notes</dt>
+								<dd class="doc-facts__value">
+									{#if q.internal_notes}
+										<span class="doc-inline-pre">{q.internal_notes}</span>
+									{:else}
+										<span class="doc-inline-muted">Staff only - none yet</span>
+									{/if}
+								</dd>
+							</div>
+						</dl>
+					{/if}
+				</DocumentSectionCard>
 
-				<!-- Line items -->
-				<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-card">
-					<!-- Header strip — title + item count + all item actions in one row -->
-					<div class="flex items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
-						<div class="flex items-center gap-2">
-							<h2 class="text-sm font-semibold text-foreground">Line items</h2>
-							{#if lineItems.length > 0}
-								<span
-									class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
-								>
-									{lineItems.length}
-								</span>
-							{/if}
+				<!-- Terms & Conditions card (section-block edit) -->
+				<DocumentSectionCard title="Terms & Conditions">
+					{#snippet actions()}
+						{#if canStartSection}
+							<button
+								type="button"
+								class="btn btn--sm btn--outline"
+								onclick={() => startSection('terms')}
+							>
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span class="quote-detail__btn-label">Edit</span>
+							</button>
+						{/if}
+					{/snippet}
+					{#if editingSection === 'terms'}
+						<div class="doc-form">
+							<div class="field">
+								<Textarea
+									class="field__input"
+									bind:value={termsDraft}
+									rows={6}
+									placeholder="e.g. A 50% deposit is required to schedule. Balance due on completion."
+								/>
+							</div>
+							{@render sectionFooter(saveTerms)}
 						</div>
-						{#if isEditable}
-							<div class="flex items-center gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									class="gap-1.5"
+					{:else if q.terms}
+						<span class="doc-inline-pre">{q.terms}</span>
+					{:else}
+						<span class="doc-inline-muted">
+							Shown above the signature and on the PDF - none yet
+						</span>
+					{/if}
+				</DocumentSectionCard>
+
+				<!-- Line items card -->
+				<DocumentSectionCard
+					flush
+					title={isTiered ? 'Packages' : 'Line items'}
+					count={allLines.length}
+				>
+					{#snippet actions()}
+						{#if pricingEditing}
+							{#if isTiered}
+								<button
+									type="button"
+									class="btn btn--sm btn--ghost"
+									onclick={toSingleOption}
+									title="Merge all packages back into a single option"
+								>
+									<i class="ri-list-unordered" aria-hidden="true"></i>
+									<span class="quote-detail__btn-label">Single option</span>
+								</button>
+							{:else}
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
 									onclick={() => (catalogOpen = true)}
 								>
-									<BookOpen class="h-4 w-4" /><span class="hidden sm:inline">Price book</span>
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									class="gap-1.5"
+									<i class="ri-book-open-line" aria-hidden="true"></i>
+									<span class="quote-detail__btn-label">Price book</span>
+								</button>
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
 									onclick={() => (templateOpen = true)}
 								>
-									<FileText class="h-4 w-4" /><span class="hidden sm:inline">Apply template</span>
-								</Button>
-							</div>
+									<i class="ri-file-text-line" aria-hidden="true"></i>
+									<span class="quote-detail__btn-label">Apply template</span>
+								</button>
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
+									onclick={toTiered}
+									title="Offer the customer 2–3 packages to choose from (Good-Better-Best)"
+								>
+									<i class="ri-stack-line" aria-hidden="true"></i>
+									<span class="quote-detail__btn-label">Add packages</span>
+								</button>
+							{/if}
+						{:else if canStartSection}
+							<button
+								type="button"
+								class="btn btn--sm btn--outline"
+								onclick={() => startSection('pricing')}
+							>
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span class="quote-detail__btn-label">Edit</span>
+							</button>
 						{/if}
-					</div>
-					<!-- Body -->
-					<div class="p-4">
+					{/snippet}
+					{#snippet subhead()}
+						{#if isTiered}
+							<p class="quote-detail__packages-hint">
+								The customer picks <strong>one</strong> package. The
+								<i class="ri-star-fill" aria-hidden="true"></i> recommended tier is highlighted and drives
+								the quote's headline total.
+							</p>
+						{/if}
+					{/snippet}
+					{#if isTiered}
+						<QuotePackageBuilder
+							bind:packages
+							readonly={!pricingEditing}
+							quoteId={q.id}
+							photosByLineKey={linePhotos}
+							canEditPhotos={member().can_upload_files}
+							showCost={member().can_view_revenue}
+							targetMarginPct={org().target_margin_pct}
+							enableTax
+						/>
+					{:else}
 						<LineItemEditor
 							bind:lineItems
-							readonly={!isEditable}
+							readonly={!pricingEditing}
 							enableCatalog
 							enableOptional
+							enableTax
 							externalCatalogTrigger
 							bind:catalogOpen
 							enablePhotos
 							quoteId={q.id}
 							photosByLineKey={linePhotos}
 							canEditPhotos={member().can_upload_files}
+							showCost={member().can_view_revenue}
+							targetMarginPct={org().target_margin_pct}
 						/>
-					</div>
-				</div>
-			</div>
+					{/if}
+					{#if pricingEditing}
+						<EditActionBar
+							onSave={() => void savePricing()}
+							onCancel={cancelSection}
+							{saving}
+							canSave={dirty}
+							size="sm"
+							variant="card"
+						/>
+					{/if}
+				</DocumentSectionCard>
+			{/snippet}
 
-			<!-- ── RIGHT SIDEBAR ───────────────────────────────── -->
-			<div class="space-y-4 lg:sticky lg:top-24 lg:self-start">
+			{#snippet sidebar()}
 				<!-- Totals -->
-				<QuoteTotalsCard
-					subtotal={isEditable
+				<DocumentTotalsCard
+					subtotal={moneyPreview
 						? subtotal.toFixed(2)
 						: isAcceptedWithTotals
 							? (q.accepted_subtotal ?? q.subtotal)
 							: q.subtotal}
-					discount_type={q.discount_type}
-					discount_value={q.discount_value}
-					discount_amount={isEditable
+					discount_type={discountEditing ? discountTypeDraft : q.discount_type}
+					discount_value={discountEditing ? discountValueDraft : q.discount_value}
+					discount_amount={moneyPreview
 						? discountAmount.toFixed(2)
 						: isAcceptedWithTotals
 							? acceptedDiscount.toFixed(2)
 							: q.discount_amount}
-					discount_label={q.discount_label}
-					tax_rate={isEditable ? taxRateNum.toFixed(4) : q.tax_rate}
-					tax_amount={isEditable
+					discount_label={discountEditing ? discountLabelDraft : q.discount_label}
+					tax_rate={moneyPreview ? taxRateNum.toFixed(4) : q.tax_rate}
+					tax_amount={moneyPreview
 						? taxAmount.toFixed(2)
 						: isAcceptedWithTotals
 							? (q.accepted_tax_amount ?? q.tax_amount)
 							: q.tax_amount}
-					total={isEditable
+					total={moneyPreview
 						? total.toFixed(2)
 						: isAcceptedWithTotals
 							? (q.accepted_total ?? q.total)
@@ -1155,311 +1629,142 @@
 					optionalItems={cardOptionalItems}
 				/>
 
-				<!-- Discount (editable, before deposit collection) -->
-				{#if isEditable && !depositLocked}
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<div class="flex items-center justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-foreground">Discount</p>
-								<p class="mt-0.5 text-xs text-muted-foreground">
-									Applied to the subtotal before tax.
-								</p>
-							</div>
-						</div>
-						<!-- Type toggle -->
-						<div class="mt-3 flex overflow-hidden rounded-lg border border-border">
+				<!-- Discount section — its OWN always-visible inline control, independent of the
+				     line-items block. Editable only when the quote has at least one line item. -->
+				<DocumentSectionCard title="Discount">
+					{#snippet actions()}
+						{#if !discountEditing && canStartSection && allLines.length > 0 && !depositLocked}
 							<button
 								type="button"
-								class="flex-1 py-1.5 text-sm font-medium transition-colors {discountTypeDraft ===
-								'none'
-									? 'bg-primary text-primary-foreground'
-									: 'bg-card text-muted-foreground hover:bg-muted'}"
-								onclick={() => (discountTypeDraft = 'none')}
+								class="btn btn--sm btn--outline"
+								onclick={() => startSection('discount')}
 							>
-								None
+								<i class="ri-pencil-line" aria-hidden="true"></i>
+								<span class="quote-detail__btn-label">Edit</span>
 							</button>
-							<button
-								type="button"
-								class="flex-1 border-l border-border py-1.5 text-sm font-medium transition-colors {discountTypeDraft ===
-								'fixed'
-									? 'bg-primary text-primary-foreground'
-									: 'bg-card text-muted-foreground hover:bg-muted'}"
-								onclick={() => {
-									if (discountTypeDraft === 'percent' && discountAmount > 0) {
-										discountValueDraft = discountAmount.toFixed(2);
-									}
-									discountTypeDraft = 'fixed';
-								}}
-							>
-								$ Off
-							</button>
-							<button
-								type="button"
-								class="flex-1 border-l border-border py-1.5 text-sm font-medium transition-colors {discountTypeDraft ===
-								'percent'
-									? 'bg-primary text-primary-foreground'
-									: 'bg-card text-muted-foreground hover:bg-muted'}"
-								onclick={() => {
-									if (
-										discountTypeDraft === 'fixed' &&
-										subtotal > 0 &&
-										Number.isFinite(discountValueNum) &&
-										discountValueNum > 0
-									) {
-										discountValueDraft = ((discountValueNum / subtotal) * 100).toFixed(1);
-									}
-									discountTypeDraft = 'percent';
-								}}
-							>
-								% Off
-							</button>
-						</div>
-
-						{#if discountTypeDraft !== 'none'}
-							<div class="mt-3 space-y-3">
-								<div class="grid gap-1.5">
-									<Label for="discount-value">
-										{discountTypeDraft === 'percent' ? 'Percentage' : 'Amount (USD)'}
-										<span class="text-destructive">*</span>
-									</Label>
-									<div class="relative">
-										<Input
-											id="discount-value"
-											type="number"
-											inputmode="decimal"
-											min="0.01"
-											max={discountTypeDraft === 'percent' ? '100' : undefined}
-											step="0.01"
-											placeholder={discountTypeDraft === 'percent' ? '10' : '0.00'}
-											bind:value={discountValueDraft}
-											class={discountTypeDraft === 'percent' ? 'pr-8' : ''}
-										/>
-										{#if discountTypeDraft === 'percent'}
-											<span
-												class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-												>%</span
-											>
-										{/if}
-									</div>
-									{#if discountAmount > 0}
-										<p class="text-xs text-muted-foreground">
-											−<span class="font-medium text-foreground">${discountAmount.toFixed(2)}</span>
-											off ${subtotal.toFixed(2)} subtotal
-										</p>
-									{:else if subtotal === 0}
-										<p class="text-xs text-muted-foreground">
-											Add line items to preview the discount.
-										</p>
-									{/if}
-								</div>
-								<div class="grid gap-1.5">
-									<Label for="discount-label">Label (optional)</Label>
-									<Input
-										id="discount-label"
-										type="text"
-										maxlength={60}
-										placeholder="e.g. Spring promo"
-										bind:value={discountLabelDraft}
-									/>
-								</div>
-							</div>
 						{/if}
-					</div>
-				{/if}
+					{/snippet}
+					{#if discountEditing}
+						<DocumentDiscountEditor
+							bare
+							bind:type={discountTypeDraft}
+							bind:value={discountValueDraft}
+							bind:label={discountLabelDraft}
+							{subtotal}
+						/>
+						{@render sectionFooter(saveDiscount)}
+					{:else if q.discount_type !== 'none' && Number(q.discount_amount) > 0}
+						<span class="doc-inline-pre">
+							{#if q.discount_type === 'percent' && q.discount_value}
+								{Number(q.discount_value).toFixed(0)}% off — −{formatCurrency(
+									Number(q.discount_amount)
+								)}
+							{:else}
+								{formatCurrency(Number(q.discount_amount))} off
+							{/if}
+							{#if q.discount_label}
+								· {q.discount_label}
+							{/if}
+						</span>
+					{:else if allLines.length === 0}
+						<span class="doc-inline-muted">Add a line item first to apply a discount.</span>
+					{:else}
+						<span class="doc-inline-muted">No discount applied.</span>
+					{/if}
+				</DocumentSectionCard>
 
 				<!-- Accepted add-on selections -->
 				{#if isAcceptedWithTotals && quoteOptionalItems.length > 0}
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-							Optional add-ons
-						</p>
-						<ul class="space-y-1.5 text-sm">
+					<div class="quote-optional-addons">
+						<p class="quote-optional-addons__heading">Optional add-ons</p>
+						<ul class="quote-optional-addons__list">
 							{#each quoteOptionalItems as item, i (i)}
-								<li class="flex items-center justify-between gap-3">
+								<li class="quote-optional-addons__item">
 									<span
-										class="flex min-w-0 items-center gap-1.5 {item.selected
-											? 'text-foreground'
-											: 'text-muted-foreground line-through'}"
+										class="quote-optional-addons__desc{item.selected
+											? ''
+											: ' quote-optional-addons__desc--deselected'}"
 									>
 										{#if item.selected}
-											<Check class="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+											<i class="ri-check-line" aria-hidden="true"></i>
 										{:else}
-											<span class="h-3.5 w-3.5 shrink-0"></span>
+											<span style="width:14px;display:inline-block;"></span>
 										{/if}
-										<span class="truncate">{item.description || 'Untitled'}</span>
+										<span>{item.description || 'Untitled'}</span>
 									</span>
 									<span
-										class="shrink-0 tabular-nums {item.selected ? '' : 'text-muted-foreground'}"
+										class="quote-optional-addons__amount{item.selected
+											? ''
+											: ' quote-optional-addons__amount--deselected'}"
 									>
 										{formatCurrency(item.total)}
 									</span>
 								</li>
 							{/each}
 						</ul>
-						<p class="mt-2 text-xs text-muted-foreground">
+						<p class="quote-optional-addons__hint">
 							The customer's selections are included in the accepted total above.
 						</p>
 					</div>
 				{/if}
 
-				<!-- Deposit section -->
+				<!-- Deposit section — its OWN inline control, independent of the line-items block
+				     (Jobber/HCP let you flip the required-deposit toggle without editing line items). -->
 				{#if q.deposit_paid_amount > 0 && q.deposit_amount}
-					<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-						<div class="flex items-start gap-3">
-							<div
-								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-							>
-								<Check class="h-4 w-4" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
-									Deposit received
-								</p>
-								<p class="mt-1 text-sm text-emerald-900/90 dark:text-emerald-100/90">
-									{formatCurrency(q.deposit_amount)}
-									{#if q.deposit_paid_at}
-										· paid {new Date(q.deposit_paid_at).toLocaleDateString('en-US')}
-									{/if}
-								</p>
-							</div>
+					<div class="quote-deposit-card quote-deposit-card--received">
+						<div class="quote-deposit-card__icon-wrap">
+							<i class="ri-check-line" aria-hidden="true"></i>
 						</div>
-					</div>
-				{:else if q.deposit_required && q.deposit_amount && !depositLocked}
-					<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-						<div class="flex items-start gap-3">
-							<div
-								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300"
-							>
-								<CreditCard class="h-4 w-4" />
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-									Deposit pending
-								</p>
-								<p class="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
-									{formatCurrency(q.deposit_amount)} requested — awaiting client payment.
-								</p>
-							</div>
+						<div class="quote-deposit-card__body">
+							<p class="quote-deposit-card__title">Deposit received</p>
+							<p class="quote-deposit-card__desc">
+								{formatCurrency(q.deposit_amount)}
+								{#if q.deposit_paid_at}
+									· paid {new Date(q.deposit_paid_at).toLocaleDateString('en-US')}
+								{/if}
+							</p>
 						</div>
 					</div>
 				{:else if !depositLocked}
-					<!-- Deposit toggle (only when editable or no deposit collected) -->
-					<div class="rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<div class="flex items-center justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-foreground">Request a deposit</p>
-								<p class="mt-0.5 text-xs text-muted-foreground">
-									Client pays online after accepting.
-								</p>
-							</div>
-							<Switch
-								id="deposit-toggle"
-								bind:checked={depositRequiredDraft}
-								disabled={!isEditable}
+					<DocumentSectionCard title="Deposit">
+						{#snippet actions()}
+							{#if !depositEditing && canStartSection}
+								<button
+									type="button"
+									class="btn btn--sm btn--outline"
+									onclick={() => startSection('deposit')}
+								>
+									<i class="ri-pencil-line" aria-hidden="true"></i>
+									<span class="quote-detail__btn-label">Edit</span>
+								</button>
+							{/if}
+						{/snippet}
+						{#if depositEditing}
+							<DocumentDepositEditor
+								bare
+								bind:required={depositRequiredDraft}
+								bind:type={depositTypeDraft}
+								bind:amount={depositAmountDraft}
+								bind:percent={depositPercentDraft}
+								{total}
 							/>
-						</div>
-						{#if depositRequiredDraft}
-							<div class="mt-3 space-y-3">
-								<!-- Type toggle -->
-								<div class="flex overflow-hidden rounded-lg border border-border">
-									<button
-										type="button"
-										disabled={!isEditable}
-										class="flex-1 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 {depositTypeDraft ===
-										'fixed'
-											? 'bg-primary text-primary-foreground'
-											: 'bg-card text-muted-foreground hover:bg-muted'}"
-										onclick={() => {
-											if (depositTypeDraft === 'percent' && depositPreviewAmount) {
-												depositAmountDraft = depositPreviewAmount.toFixed(2);
-											}
-											depositTypeDraft = 'fixed';
-										}}
-									>
-										Fixed ($)
-									</button>
-									<button
-										type="button"
-										disabled={!isEditable}
-										class="flex-1 border-l border-border py-1.5 text-sm font-medium transition-colors disabled:opacity-50 {depositTypeDraft ===
-										'percent'
-											? 'bg-primary text-primary-foreground'
-											: 'bg-card text-muted-foreground hover:bg-muted'}"
-										onclick={() => {
-											if (
-												depositTypeDraft === 'fixed' &&
-												total > 0 &&
-												Number.isFinite(depositAmountNum) &&
-												depositAmountNum > 0
-											) {
-												depositPercentDraft = ((depositAmountNum / total) * 100).toFixed(1);
-											}
-											depositTypeDraft = 'percent';
-										}}
-									>
-										Percent (%)
-									</button>
-								</div>
-
-								{#if depositTypeDraft === 'fixed'}
-									<div class="grid gap-1.5">
-										<Label for="deposit-amount">
-											Amount (USD) <span class="text-destructive">*</span>
-										</Label>
-										<Input
-											id="deposit-amount"
-											type="number"
-											inputmode="decimal"
-											min="0.01"
-											step="0.01"
-											placeholder="0.00"
-											bind:value={depositAmountDraft}
-											disabled={!isEditable}
-										/>
-										{#if isEditable && total > 0 && Number.isFinite(depositAmountNum) && depositAmountNum >= total}
-											<p class="text-xs text-destructive">Must be less than the quote total.</p>
-										{/if}
-									</div>
+							{@render sectionFooter(saveDeposit)}
+						{:else if q.deposit_required && q.deposit_amount}
+							<span class="doc-inline-pre">
+								{#if q.deposit_type === 'percent' && q.deposit_percent}
+									{Number(q.deposit_percent).toFixed(0)}% deposit — {formatCurrency(
+										q.deposit_amount
+									)} due before work starts.
 								{:else}
-									<div class="grid gap-1.5">
-										<Label for="deposit-percent">
-											Percentage <span class="text-destructive">*</span>
-										</Label>
-										<div class="relative">
-											<Input
-												id="deposit-percent"
-												type="number"
-												inputmode="decimal"
-												min="0.01"
-												max="99.99"
-												step="0.01"
-												placeholder="25"
-												bind:value={depositPercentDraft}
-												disabled={!isEditable}
-												class="pr-8"
-											/>
-											<span
-												class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-												>%</span
-											>
-										</div>
-										{#if depositPreviewAmount !== null}
-											<p class="text-xs text-muted-foreground">
-												≈ <span class="font-medium text-foreground"
-													>${depositPreviewAmount.toFixed(2)}</span
-												>
-												of ${total.toFixed(2)} total
-											</p>
-										{:else if total === 0}
-											<p class="text-xs text-muted-foreground">
-												Add line items to see the deposit amount.
-											</p>
-										{/if}
-									</div>
+									{formatCurrency(q.deposit_amount)} deposit due before work starts.
 								{/if}
-							</div>
+							</span>
+						{:else}
+							<span class="doc-inline-muted">
+								No deposit requested — client pays the full total after accepting.
+							</span>
 						{/if}
-					</div>
+					</DocumentSectionCard>
 				{/if}
 
 				<!-- Attachments -->
@@ -1472,22 +1777,37 @@
 
 				<!-- History timeline -->
 				<QuoteHistoryTimeline quoteId={q.id} />
-			</div>
-		</div>
+			{/snippet}
+		</DocumentDetailShell>
 
 		{#if SendQuoteDialog}
 			<SendQuoteDialog
 				bind:open={sendOpen}
-				quoteId={q.id}
-				quoteNumberDisplay={q.quote_number_display}
-				title={q.title}
-				total={q.total}
+				kind="quote"
+				documentId={q.id}
+				numberDisplay={q.quote_number_display}
+				subtitle={`${q.title} · ${formatCurrency(q.total)}`}
+				amountForTokens={formatCurrency(q.total)}
 				contactName={q.contact_name}
 				contactEmail={q.contact_email}
 				contactPhone={q.contact_phone}
 				contactSmsOptOut={q.contact_sms_opt_out}
 				mode={isDraft ? 'send' : 'resend'}
+				revision={editedAfterSend}
 				onSent={() => {
+					editMode = false;
+					editedAfterSend = false;
+					void refresh();
+				}}
+			/>
+		{/if}
+
+		{#if ShareQuoteLinkDialog}
+			<ShareQuoteLinkDialog
+				bind:open={shareLinkOpen}
+				quoteId={q.id}
+				status={q.status}
+				onActivated={() => {
 					void refresh();
 				}}
 			/>
@@ -1512,6 +1832,20 @@
 			/>
 		{/if}
 
+		{#if SignInPersonDialog}
+			<SignInPersonDialog
+				bind:open={signInPersonOpen}
+				quote={{
+					id: q.id,
+					quote_number_display: q.quote_number_display,
+					contact_name: q.contact_name
+				}}
+				onDone={() => {
+					void refresh();
+				}}
+			/>
+		{/if}
+
 		{#if ConfirmDialog}
 			<ConfirmDialog
 				bind:open={confirmDeleteOpen}
@@ -1525,3 +1859,105 @@
 		{/if}
 	</PageWrapper>
 {/if}
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.quote-detail {
+		&__progress-wrap {
+			padding: $space-3 $space-4;
+		}
+
+		// Tiered (Good-Better-Best) hint rendered in the line-items card subhead snippet.
+		&__packages-hint {
+			margin: 0;
+			padding: 0 $space-4 $space-3;
+			font-size: $fs-body;
+			line-height: $lh-body;
+			color: var(--color-text-secondary);
+
+			i {
+				color: var(--color-brand);
+			}
+		}
+
+		&__btn-label {
+			@media (max-width: #{$bp-tablet - 1px}) {
+				display: none;
+			}
+		}
+
+		&__error {
+			font-size: $fs-body;
+			color: var(--danger-solid);
+		}
+	}
+
+	// Quote-only chips/blocks injected into the shared DocumentHeaderCard via snippets.
+	.quote-doc-views {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	.quote-doc-address {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-1;
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.4rem;
+			flex-shrink: 0;
+			margin-top: 2px;
+		}
+	}
+
+	.quote-doc-signature {
+		margin-top: $space-1;
+	}
+
+	.quote-doc-signature-img {
+		max-width: 260px;
+		max-height: 90px;
+		padding: $space-2;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: #fff;
+		object-fit: contain;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+
+		&__label {
+			font-size: $fs-body;
+			font-weight: $weight-medium;
+			color: var(--color-text-secondary);
+		}
+
+		&__error {
+			font-size: $fs-caption;
+			color: var(--danger-solid);
+		}
+	}
+</style>

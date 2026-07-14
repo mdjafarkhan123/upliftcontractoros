@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Plus, X } from '@lucide/svelte';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -142,17 +140,15 @@
 {#if loading}
 	<SkeletonLoader lines={7} height="80px" label="Loading availability" />
 {:else if errorMsg}
-	<p class="text-sm text-destructive">{errorMsg}</p>
+	<p class="book-error">{errorMsg}</p>
 {:else}
-	<div class="space-y-3">
+	<div class="book-list">
 		{#each days as d (d.day_of_week)}
-			<div class="rounded-xl border border-border bg-card p-4">
-				<div class="flex items-center justify-between gap-3">
+			<div class="book-day">
+				<div class="book-day__head">
 					<div>
-						<p class="text-sm font-semibold text-foreground">{DAY_NAMES[d.day_of_week]}</p>
-						<p class="text-xs text-muted-foreground">
-							{d.enabled ? 'Available' : 'Unavailable'}
-						</p>
+						<p class="book-day__name">{DAY_NAMES[d.day_of_week]}</p>
+						<p class="book-day__status">{d.enabled ? 'Available' : 'Unavailable'}</p>
 					</div>
 					<Switch
 						checked={d.enabled}
@@ -164,48 +160,39 @@
 				</div>
 
 				{#if d.enabled}
-					<div class="mt-4 space-y-2">
+					<div class="book-day__windows">
 						{#each d.windows as w, i (i)}
-							<div class="flex items-center gap-2">
-								<input
-									type="time"
-									bind:value={w.start}
-									class="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
-								/>
-								<span class="text-sm text-muted-foreground">–</span>
-								<input
-									type="time"
-									bind:value={w.end}
-									class="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
-								/>
-								<Button
+							<div class="book-day__window">
+								<input type="time" bind:value={w.start} class="book-time" />
+								<span class="book-day__sep">–</span>
+								<input type="time" bind:value={w.end} class="book-time" />
+								<button
 									type="button"
-									variant="ghost"
-									size="icon"
-									class="h-11 w-11"
+									class="book-iconbtn"
 									onclick={() => removeWindow(d, i)}
 									aria-label="Remove window"
 								>
-									<X class="h-4 w-4" />
-								</Button>
+									<i class="ri-close-line" aria-hidden="true"></i>
+								</button>
 							</div>
 						{/each}
-						<Button type="button" variant="outline" size="sm" onclick={() => addWindow(d)}>
-							<Plus class="h-3.5 w-3.5" /> Add window
+						<Button variant="outline" size="sm" onclick={() => addWindow(d)}>
+							<i class="ri-add-line" aria-hidden="true"></i> Add window
 						</Button>
 					</div>
 				{/if}
 			</div>
 		{/each}
+	</div>
 
-		<div class="flex justify-end gap-2 pt-2">
-			<JetEngineButton
-				label="Save availability"
-				loadingLabel="Saving…"
-				successLabel="Saved"
-				state={saving ? 'loading' : 'idle'}
-				onclick={save}
-			/>
-		</div>
+	<div class="book-actions book-actions--end">
+		<Button
+			loadingLabel="Saving…"
+			successLabel="Saved"
+			loading={saving}
+			onclick={save}
+		>
+			Save availability
+		</Button>
 	</div>
 {/if}

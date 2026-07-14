@@ -1,0 +1,55 @@
+@use '../tokens' as *;
+
+// Shared Save/Cancel bar for block editing — rendered by
+// $lib/components/shared/EditActionBar.svelte in the page header and in-card footers
+// across Quote / Invoice / Jobs detail pages. Replaces the old per-page copies
+// (.doc-section-actions button rows, .job-section-edit__actions, .job-inline-savebar).
+.edit-action-bar {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: $space-2;
+
+	// In-card footer: divider + spacing off the editor above it.
+	&--card {
+		margin-top: $space-4;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	// Context chip ("Editing Details") — sits left of the buttons, hidden on small screens.
+	&__label {
+		margin-right: auto;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+
+		@media (max-width: #{$bp-tablet - 1px}) {
+			display: none;
+		}
+	}
+
+	&__error {
+		margin: 0 auto 0 0;
+		max-width: 22rem;
+	}
+
+	&__btns {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__spin {
+		font-size: 1.6rem;
+		animation: edit-action-bar-spin 0.7s linear infinite;
+	}
+}
+
+@keyframes edit-action-bar-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

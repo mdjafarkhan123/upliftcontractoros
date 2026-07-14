@@ -1,0 +1,3031 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// APPOINTMENTS — S8.0  LIST + SHELL + SHARED  (grows each S8.x session)
+// Global BEM blocks for the appointments / calendar feature.
+// Page-specific layout (page height offset, body scroll) stays scoped.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// CAL HEADER — slim calendar toolbar (date nav + view toggles + New).
+// The global app topbar (.topbar) now renders search/theme/notifications/user
+// on every page, so this toolbar no longer duplicates them.
+// -----------------------------------------------------------------------------
+.cal-header {
+	position: sticky;
+	top: 0;
+	z-index: $z-sticky;
+	display: flex;
+	min-height: 56px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-2;
+	padding: 0 $space-4;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+
+	@media (min-width: $bp-tablet) {
+		min-height: 64px;
+		padding: 0 $space-6;
+	}
+
+	&__left {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		display: none;
+		margin-right: $space-2;
+		font-size: $fs-h2;
+		font-weight: $weight-semibold;
+		line-height: 1.1;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+
+		@media (min-width: $bp-tablet) {
+			display: block;
+		}
+	}
+
+	&__nav-btn {
+		display: inline-flex;
+		height: 32px;
+		width: 32px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: 1.8rem;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__today {
+		flex-shrink: 0;
+	}
+
+	&__month-label {
+		display: none;
+		margin-left: $space-1;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+
+		@media (min-width: $bp-mobile) {
+			display: block;
+		}
+	}
+
+	// Inline search (replaces date nav while search mode is on)
+	&__search-inline {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-text-muted);
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.6rem;
+		}
+	}
+
+	&__search-input {
+		width: 192px;
+		border: none;
+		background: transparent;
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		outline: none;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+
+		@media (min-width: $bp-mobile) {
+			width: 256px;
+		}
+	}
+
+	&__right {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		height: 32px;
+		width: 32px;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: 1.8rem;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		// Mobile-only filter toggle — hidden once the sidebar appears.
+		&--filter {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+	}
+
+	// Segmented control (List/Calendar + Day/Week/Month)
+	&__seg {
+		display: none;
+		align-items: center;
+		gap: $space-1;
+		padding: 3px;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		box-shadow: var(--shadow-xs);
+
+		@media (min-width: $bp-mobile) {
+			display: inline-flex;
+		}
+	}
+
+	&__seg-btn {
+		display: inline-flex;
+		height: 28px;
+		align-items: center;
+		gap: $space-1;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.5rem;
+		}
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-brand);
+			box-shadow: var(--shadow-xs);
+
+			&:hover {
+				color: var(--color-brand);
+			}
+		}
+	}
+
+	// Label inside a seg button that only shows on wider screens.
+	&__seg-label {
+		display: none;
+
+		@media (min-width: $bp-tablet) {
+			display: inline;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// APPT SHELL — the body row below the toolbar: desktop sidebar + main pane.
+// -----------------------------------------------------------------------------
+.appt-shell {
+	display: flex;
+	flex: 1;
+	overflow: hidden;
+
+	&__sidebar {
+		display: none;
+		width: 240px;
+		flex-shrink: 0;
+		flex-direction: column;
+		overflow-y: auto;
+		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+
+		@media (min-width: $bp-tablet) {
+			display: flex;
+		}
+	}
+
+	&__main {
+		display: flex;
+		min-width: 0;
+		flex: 1;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	// Wrapper around the filter content inside the mobile BottomSheet.
+	&__sheet {
+		padding: $space-2 $space-1 $space-4;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// APPT FILTERS — status / assignee filter groups (sidebar + mobile sheet).
+// -----------------------------------------------------------------------------
+.appt-filters {
+	&__divider {
+		height: 1px;
+		margin: 0 $space-3;
+		background: var(--color-border);
+	}
+
+	&__group {
+		padding: $space-3;
+
+		& + & {
+			padding-top: $space-3;
+		}
+	}
+
+	&__label {
+		margin-bottom: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__item {
+		display: flex;
+		height: 32px;
+		align-items: center;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--active {
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+			font-weight: $weight-medium;
+
+			&:hover {
+				background: var(--state-active-tint);
+			}
+		}
+
+		// Taller hit target inside the mobile sheet.
+		&--lg {
+			height: 40px;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// MINI CAL — compact month picker in the sidebar.
+// -----------------------------------------------------------------------------
+.mini-cal {
+	user-select: none;
+	padding: $space-3;
+
+	&__nav {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: $space-2;
+	}
+
+	&__nav-btn {
+		display: inline-flex;
+		height: 24px;
+		width: 24px;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: 1.4rem;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__dow {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		margin-bottom: 2px;
+	}
+
+	&__dow-cell {
+		display: flex;
+		height: 24px;
+		align-items: center;
+		justify-content: center;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+	}
+
+	&__day {
+		position: relative;
+		display: flex;
+		height: 28px;
+		width: 100%;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		// Days outside the visible month.
+		&--muted {
+			color: var(--color-text-muted);
+			opacity: 0.6;
+		}
+
+		// Anchor-week band — square in the middle, rounded only at the ends.
+		&--in-week {
+			border-radius: 0;
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+
+			&:hover {
+				background: var(--state-active-tint);
+			}
+		}
+		&--week-start {
+			border-top-left-radius: $radius-full;
+			border-bottom-left-radius: $radius-full;
+		}
+		&--week-end {
+			border-top-right-radius: $radius-full;
+			border-bottom-right-radius: $radius-full;
+		}
+
+		// Today — solid brand pill above the band.
+		&--today {
+			z-index: 1;
+			border-radius: $radius-full;
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+			font-weight: $weight-semibold;
+
+			&:hover {
+				background: var(--color-brand-strong);
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// APPT CARD — premium card layout (reference: schedule-card.jpg).
+// Global: rendered across the appointment list/calendar pages — must not be page-scoped.
+// Layout: pill badge + status → bold title → location/time rows → assignee footer.
+// -----------------------------------------------------------------------------
+.appt-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-4 $space-4 $space-4 calc(#{$space-4} + 4px);
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-xs);
+	transition:
+		background-color $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard,
+		box-shadow $duration-fast $ease-standard;
+
+	// Type-colored accent bar — lets a contractor scan the board at a glance.
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 4px;
+		background: var(--appt-accent, var(--color-brand));
+	}
+
+	&:hover {
+		box-shadow: var(--shadow-sm);
+		border-color: var(--color-border-strong);
+	}
+
+	// Accent color per appointment type.
+	&--type-estimate {
+		--appt-accent: var(--info-solid);
+	}
+	&--type-job_start {
+		--appt-accent: var(--color-brand);
+	}
+	&--type-follow_up {
+		--appt-accent: var(--warning-solid);
+	}
+	&--type-inspection {
+		--appt-accent: #7c3aed;
+	}
+	&--type-other {
+		--appt-accent: var(--color-text-muted);
+	}
+
+	&--highlight {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+	}
+
+	// Stretched link — covers the whole card for navigation/prefetch so the
+	// quick-action buttons can sit on top as real, separately-clickable links.
+	&__link {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		border-radius: inherit;
+	}
+	&__link:focus-visible {
+		outline: 2px solid var(--color-brand);
+		outline-offset: -2px;
+	}
+
+	// Header row: client·type pill (left) + status badge (right)
+	&__header {
+		position: relative;
+		z-index: 1;
+		pointer-events: none;
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	// Pill badge — "Robin · Estimate" in brand tint
+	&__badge {
+		display: inline-flex;
+		align-items: center;
+		max-width: calc(100% - 80px);
+		padding: 3px $space-3;
+		overflow: hidden;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		line-height: 1.4;
+	}
+
+	// Appointment title
+	&__title {
+		position: relative;
+		z-index: 1;
+		pointer-events: none;
+		margin: 0;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		line-height: 1.35;
+		color: var(--color-text-primary);
+	}
+
+	// Location + time rows
+	&__details {
+		position: relative;
+		z-index: 1;
+		pointer-events: none;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__detail {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.4rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__detail-text {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	// Time — the hero of a schedule card: bold and slightly larger.
+	&__time {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-text-primary);
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.4rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__time-start,
+	&__time-end {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+	}
+
+	&__time-end {
+		color: var(--color-text-secondary);
+		font-weight: $weight-medium;
+	}
+
+	&__time-arrow {
+		font-size: 1.2rem !important;
+	}
+
+	// Footer: crew stack + name (left) · quick actions (right)
+	&__footer {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__assignee {
+		pointer-events: none;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-width: 0;
+	}
+
+	// Overlapping avatar circles = crew stack.
+	&__crew {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+	}
+
+	// Initials circle (no photo URL in list item — initials are the standard)
+	&__avatar {
+		display: inline-flex;
+		height: 28px;
+		width: 28px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: $radius-full;
+		background: var(--color-brand);
+		color: var(--color-text-on-brand);
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		line-height: 1;
+		text-transform: uppercase;
+		user-select: none;
+		box-shadow: 0 0 0 2px var(--color-bg-surface);
+
+		&--more {
+			margin-left: -10px;
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+			font-size: $fs-caption;
+		}
+	}
+
+	&__assignee-name {
+		overflow: hidden;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+
+		&--unassigned {
+			font-style: italic;
+			font-weight: $weight-regular;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__self-booked {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+
+	// Quick actions — call / text / directions, on top of the stretched link.
+	&__actions {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+	}
+
+	&__action {
+		display: inline-flex;
+		height: 32px;
+		width: 32px;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: 1.5rem;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--color-brand);
+			outline-offset: 2px;
+		}
+	}
+}
+
+// =============================================================================
+// APPOINTMENTS — S8.1  CALENDAR VIEWS
+// Week grid (.cal-week), month view (.cal-month), day list (.cal-daylist),
+// quick-create popover (.quick-create).
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// CAL WEEK — time-grid week/day view with drag-to-create / reschedule.
+// Absolute event/line positions are set via inline `top/height/left` (dynamic
+// px) — only the look lives here.
+// -----------------------------------------------------------------------------
+.cal-week {
+	position: relative;
+	display: flex;
+	height: 100%;
+	flex-direction: column;
+	overflow-y: auto;
+	background: var(--color-bg-surface);
+
+	// Sticky day-of-week header row.
+	&__head {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		display: grid;
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+	}
+
+	&__head-gutter {
+		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__head-day {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		padding: $space-2 0;
+		border-right: 1px solid var(--color-border);
+		text-align: center;
+
+		&:last-child {
+			border-right: none;
+		}
+
+		&--today {
+			background: var(--state-active-tint);
+		}
+	}
+
+	&__head-dow {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+
+		&--today {
+			color: var(--color-brand);
+		}
+	}
+
+	&__head-date {
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-primary);
+
+		&--today {
+			color: var(--color-brand);
+		}
+	}
+
+	// "Anytime" lane — date-only visits pinned above the time grid (Jobber/Housecall Pro).
+	&__anytime {
+		display: grid;
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+	}
+
+	&__anytime-gutter {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		padding: $space-2 $space-1;
+		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	// Clickable cell (button): click empty space to create an Anytime visit, and
+	// it doubles as a drop target when dragging a visit up from the time grid.
+	&__anytime-col {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		min-height: 38px;
+		padding: $space-1;
+		border: none;
+		border-right: 1px solid var(--color-border);
+		background: transparent;
+		text-align: left;
+		cursor: default;
+
+		&:last-child {
+			border-right: none;
+		}
+		&:focus {
+			outline: none;
+		}
+
+		&--today {
+			background: var(--state-active-tint);
+		}
+		&--copy {
+			cursor: copy;
+		}
+		&--grabbing {
+			cursor: grabbing;
+		}
+		// Highlighted while a dragged visit hovers this day's lane.
+		&--drop {
+			background: var(--state-active-tint);
+			box-shadow: inset 0 0 0 2px var(--color-brand);
+		}
+	}
+
+	&__anytime-chip {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		overflow: hidden;
+		padding: $space-1 $space-2;
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--appt-accent, var(--color-brand));
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		text-decoration: none;
+
+		&:hover {
+			box-shadow: var(--shadow-sm);
+		}
+
+		&--draggable {
+			cursor: grab;
+			touch-action: none;
+		}
+
+		&--type-estimate {
+			--appt-accent: var(--info-solid);
+		}
+		&--type-job_start {
+			--appt-accent: var(--color-brand);
+		}
+		&--type-follow_up {
+			--appt-accent: var(--warning-solid);
+		}
+		&--type-inspection {
+			--appt-accent: #7c3aed;
+		}
+		&--type-other {
+			--appt-accent: var(--color-text-muted);
+		}
+
+		&--completed {
+			border-color: var(--success-solid);
+			background: var(--success-bg);
+		}
+		&--cancelled {
+			border-color: var(--danger-solid);
+			background: var(--danger-bg);
+
+			.cal-week__anytime-chip-title {
+				text-decoration: line-through;
+			}
+		}
+
+		// Non-billable Event chip — neutral grey, read-only (no grab cursor / hover lift).
+		&--event {
+			border-color: var(--color-border);
+			border-left-color: var(--color-text-muted);
+			background: var(--color-bg-surface-sunk);
+			cursor: default;
+		}
+	}
+
+	&__anytime-chip-title {
+		overflow: hidden;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	&__anytime-chip-sub {
+		overflow: hidden;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	// Scrollable grid body: time rail + 7 day columns.
+	&__body {
+		position: relative;
+		display: grid;
+		flex: 1;
+	}
+
+	&__rail {
+		position: relative;
+		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__rail-label {
+		position: absolute;
+		right: $space-1;
+		transform: translateY(-50%);
+		font-size: 1rem;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+
+		&--off {
+			color: var(--color-text-muted);
+			opacity: 0.6;
+		}
+	}
+
+	&__col {
+		position: relative;
+		touch-action: none;
+		border: none;
+		border-right: 1px solid var(--color-border);
+		background: transparent;
+		text-align: left;
+		cursor: default;
+
+		&:last-child {
+			border-right: none;
+		}
+		&:focus {
+			outline: none;
+		}
+
+		&--today {
+			background: rgba(34, 125, 83, 0.03);
+		}
+		&--copy {
+			cursor: copy;
+		}
+		&--grabbing {
+			cursor: grabbing;
+		}
+	}
+
+	// Hour gridline (+ optional off-hours shading) and half-hour subline.
+	&__line {
+		position: absolute;
+		left: 0;
+		right: 0;
+		border-top: 1px solid var(--color-border);
+
+		&--off {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__subline {
+		position: absolute;
+		left: 0;
+		right: 0;
+		border-top: 1px dashed var(--color-border);
+		opacity: 0.5;
+	}
+
+	// "Now" indicator on today's column.
+	&__now {
+		pointer-events: none;
+		position: absolute;
+		left: 0;
+		right: 0;
+		z-index: 20;
+		display: flex;
+		align-items: center;
+	}
+
+	&__now-dot {
+		margin-left: -4px;
+		height: 8px;
+		width: 8px;
+		flex-shrink: 0;
+		border-radius: $radius-full;
+		background: var(--danger-solid);
+		box-shadow: var(--shadow-xs);
+	}
+
+	&__now-bar {
+		height: 1px;
+		flex: 1;
+		background: var(--danger-solid);
+	}
+
+	// Event block.
+	&__event {
+		position: absolute;
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		overflow: hidden;
+		padding: 5px $space-2 5px 9px;
+		border: 1px solid transparent;
+		border-radius: $radius-md;
+		font-size: 1.1rem;
+		line-height: 1.25;
+		box-shadow: var(--shadow-xs);
+		user-select: none;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		&:hover {
+			z-index: 30;
+			box-shadow: var(--shadow-sm);
+		}
+
+		// Type accent — only the active ("default") state reads these vars, so
+		// completed/cancelled keep their status colors regardless of type.
+		&--type-estimate {
+			--appt-accent: var(--info-solid);
+			--appt-tint: var(--info-bg);
+		}
+		&--type-job_start {
+			--appt-accent: var(--color-brand);
+			--appt-tint: var(--state-active-tint);
+		}
+		&--type-follow_up {
+			--appt-accent: var(--warning-solid);
+			--appt-tint: var(--warning-bg);
+		}
+		&--type-inspection {
+			--appt-accent: #7c3aed;
+			--appt-tint: rgba(124, 58, 237, 0.1);
+		}
+		&--type-other {
+			--appt-accent: var(--color-text-muted);
+			--appt-tint: var(--color-bg-surface-sunk);
+		}
+
+		&--default {
+			border-color: var(--color-border);
+			border-left: 3px solid var(--appt-accent, var(--color-brand));
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+		}
+		&--completed {
+			border-color: var(--success-solid);
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		&--cancelled {
+			border-color: var(--danger-solid);
+			background: var(--danger-bg);
+			color: var(--danger-text);
+			text-decoration: line-through;
+		}
+		&--reschedulable {
+			touch-action: none;
+			cursor: grab;
+		}
+		&--dragging {
+			opacity: 0.4;
+		}
+	}
+	&__event {
+		background-color: $green-100;
+	}
+
+	// Non-billable calendar Event block (Jobber `Event`) — neutral grey, read-only.
+	// A distinct class from `&__event` so it never inherits the visit type/status colors.
+	&__timeblock {
+		position: absolute;
+		z-index: 9; // just under visits so an overlapping visit stays clickable on top
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		overflow: hidden;
+		padding: 5px $space-2 5px 9px;
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-text-muted);
+		border-radius: $radius-md;
+		background: repeating-linear-gradient(
+			-45deg,
+			var(--color-bg-surface-sunk),
+			var(--color-bg-surface-sunk) 6px,
+			var(--color-bg-surface) 6px,
+			var(--color-bg-surface) 12px
+		);
+		color: var(--color-text-secondary);
+		font-size: 1.1rem;
+		line-height: 1.25;
+		box-shadow: var(--shadow-xs);
+		user-select: none;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		&:hover {
+			z-index: 30;
+			box-shadow: var(--shadow-sm);
+		}
+
+		// Draggable when the user can reschedule — grab cursor + swallow touch-scroll
+		// so a drag on touch devices moves the block instead of scrolling the grid.
+		&--draggable {
+			cursor: grab;
+			touch-action: none;
+		}
+		&--dragging {
+			opacity: 0.4;
+		}
+	}
+
+	&__timeblock-tag {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		line-height: 1.5;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.1rem;
+		}
+	}
+
+	&__timeblock-title {
+		overflow: hidden;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: var(--color-text-primary);
+	}
+
+	&__timeblock-meta {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		overflow: hidden;
+		font-size: 1.05rem;
+		color: var(--color-text-muted);
+
+		i {
+			flex: none;
+			font-size: 1.2rem;
+		}
+
+		span {
+			overflow: hidden;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		&--inline {
+			font-weight: $weight-semibold;
+			font-variant-numeric: tabular-nums;
+		}
+	}
+
+	// Accent pill: contact name + appointment type — the card's headline chip.
+	&__event-pill {
+		align-self: flex-start;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		line-height: 1.5;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		background: var(--appt-tint, var(--state-active-tint));
+		color: var(--appt-accent, var(--color-brand));
+
+		// Status states keep their own color so the pill reads as the status.
+		.cal-week__event--completed & {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		.cal-week__event--cancelled & {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__event-title {
+		overflow: hidden;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	// Icon + text meta rows (location, time) — muted, matching the reference card.
+	&__event-meta {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		overflow: hidden;
+		font-size: 1.05rem;
+		color: var(--color-text-muted);
+
+		i {
+			flex: none;
+			font-size: 1.2rem;
+		}
+
+		span {
+			overflow: hidden;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		&--inline {
+			font-weight: $weight-semibold;
+			font-variant-numeric: tabular-nums;
+			color: inherit;
+			opacity: 0.75;
+		}
+	}
+
+	// Initials avatar (no contact photo is stored) — anchored bottom-left.
+	&__event-avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		margin-top: auto;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		background: var(--appt-tint, var(--state-active-tint));
+		color: var(--appt-accent, var(--color-brand));
+	}
+
+	// Resize handle at an event's bottom edge.
+	&__resize {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 8px;
+		cursor: ns-resize;
+		opacity: 0;
+		transition: opacity $duration-fast $ease-standard;
+
+		.cal-week__event:hover &,
+		.cal-week__timeblock:hover & {
+			opacity: 1;
+		}
+	}
+
+	// Drag ghost (create / move / resize preview).
+	&__ghost {
+		pointer-events: none;
+		position: absolute;
+		left: 2px;
+		right: 2px;
+		z-index: 40;
+		display: flex;
+		flex-direction: column;
+		padding: $space-1 6px;
+		border: 2px dashed var(--color-brand);
+		border-radius: $radius-sm;
+		background: rgba(34, 125, 83, 0.2);
+	}
+
+	// Tentative "being created" block — stays painted behind the quick-create
+	// bubble (Google Calendar style) so the drawn slot never appears to vanish.
+	&__ghost--pending {
+		border-style: solid;
+		background: rgba(34, 125, 83, 0.28);
+		box-shadow: 0 0 0 2px rgba(34, 125, 83, 0.15);
+	}
+
+	&__ghost-label {
+		overflow: hidden;
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		color: var(--color-brand);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CAL MONTH — 6-week month grid with event pills per day cell.
+// -----------------------------------------------------------------------------
+.cal-month {
+	display: flex;
+	height: 100%;
+	flex-direction: column;
+	background: var(--color-bg-surface);
+
+	&__dow {
+		display: grid;
+		flex-shrink: 0;
+		grid-template-columns: repeat(7, 1fr);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+	}
+
+	&__dow-cell {
+		padding: 6px 0;
+		border-right: 1px solid var(--color-border);
+		text-align: center;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+
+		&:last-child {
+			border-right: none;
+		}
+	}
+
+	&__grid {
+		display: grid;
+		flex: 1;
+		grid-template-columns: repeat(7, 1fr);
+		grid-template-rows: repeat(6, 1fr);
+	}
+
+	&__cell {
+		display: flex;
+		min-height: 0;
+		flex-direction: column;
+		gap: 2px;
+		padding: $space-1;
+		border-right: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+
+		&:nth-child(7n) {
+			border-right: none;
+		}
+
+		&--out {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__date {
+		display: flex;
+		height: 20px;
+		width: 20px;
+		flex-shrink: 0;
+		align-self: flex-end;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 2px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		&--out {
+			color: var(--color-text-muted);
+		}
+		&--today {
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+			font-weight: $weight-semibold;
+
+			&:hover {
+				background: var(--color-brand-strong);
+			}
+		}
+	}
+
+	&__pills {
+		display: flex;
+		min-height: 0;
+		flex-direction: column;
+		gap: 2px;
+		overflow: hidden;
+	}
+
+	&__pill {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		overflow: hidden;
+		padding: 1px $space-1;
+		border-radius: $radius-sm;
+		font-size: 1.1rem;
+		line-height: 1.25;
+		transition: opacity $duration-fast $ease-standard;
+
+		&:hover {
+			opacity: 0.8;
+		}
+
+		// Type accent — only the active ("default") pill reads these vars.
+		&--type-estimate {
+			--appt-accent: var(--info-solid);
+			--appt-tint: var(--info-bg);
+		}
+		&--type-job_start {
+			--appt-accent: var(--color-brand);
+			--appt-tint: var(--state-active-tint);
+		}
+		&--type-follow_up {
+			--appt-accent: var(--warning-solid);
+			--appt-tint: var(--warning-bg);
+		}
+		&--type-inspection {
+			--appt-accent: #7c3aed;
+			--appt-tint: rgba(124, 58, 237, 0.1);
+		}
+		&--type-other {
+			--appt-accent: var(--color-text-muted);
+			--appt-tint: var(--color-bg-surface-sunk);
+		}
+
+		&--default {
+			border-left: 3px solid var(--appt-accent, var(--color-brand));
+			background: var(--appt-tint, var(--state-active-tint));
+			color: var(--color-text-primary);
+		}
+		&--completed {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+		&--cancelled {
+			background: var(--danger-bg);
+			color: var(--danger-text);
+			text-decoration: line-through;
+		}
+
+		// Non-billable Event pill — neutral grey, read-only (renders as a div, no link).
+		&--event {
+			border-left: 3px solid var(--color-text-muted);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+			cursor: default;
+
+			&:hover {
+				opacity: 1;
+			}
+		}
+	}
+
+	&__pill-time {
+		flex-shrink: 0;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		opacity: 0.8;
+	}
+
+	&__pill-title {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	&__more {
+		padding: 0 $space-1;
+		border: none;
+		background: transparent;
+		text-align: left;
+		font: inherit;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CAL DAYLIST — agenda list grouped by day (mobile / list-of-days view).
+// -----------------------------------------------------------------------------
+.cal-daylist {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__heading {
+		display: flex;
+		align-items: baseline;
+		gap: $space-1;
+		margin-bottom: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+
+		&--today {
+			color: var(--color-brand);
+		}
+	}
+
+	&__today-tag {
+		font-size: $fs-body;
+		font-weight: $weight-regular;
+		color: var(--color-text-muted);
+	}
+
+	&__empty {
+		padding: $space-4 $space-3;
+		border: 1px dashed var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__items {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	// Non-billable Event row — neutral grey, read-only (no navigation).
+	&__event {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-text-muted);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__event-time {
+		flex-shrink: 0;
+		min-width: 64px;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+	}
+
+	&__event-body {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__event-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__event-sub {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__link {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+		transition:
+			background-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			box-shadow: var(--shadow-sm);
+		}
+		&:active {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__time {
+		width: 64px;
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title {
+		overflow: hidden;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	&__contact {
+		overflow: hidden;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+}
+
+// =============================================================================
+// APPOINTMENTS — S8.2  DETAIL PAGE
+// Desktop-first 2-col detail: header + section cards (left) + status/actions
+// sidebar (right). The grid itself is page-scoped; these blocks are the
+// reusable chrome (section card, meta rows, crew chips, sidebar card).
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// DETAIL HEADER — contact eyebrow + title (+ self-booked tag) + status badge.
+// -----------------------------------------------------------------------------
+.appt-detail-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: $space-3;
+	margin-bottom: $space-5;
+
+	&__main {
+		min-width: 0;
+	}
+
+	&__eyebrow {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	&__title-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: 2px;
+	}
+
+	&__title {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		line-height: 1.25;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+
+	&__tag {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SECTION CARD — left-column content card with an icon heading.
+// -----------------------------------------------------------------------------
+.appt-section {
+	padding: $space-5;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-bottom: $space-4;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		font-size: 1.8rem;
+		color: var(--color-text-muted);
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__subtitle {
+		margin: -#{$space-2} 0 $space-4;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__notes {
+		margin-top: $space-4;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__notes-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	&__notes-body {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		line-height: 1.55;
+		color: var(--color-text-primary);
+		white-space: pre-wrap;
+	}
+
+	// Self-booked submissions — dashed, sunk surface to read as "incoming".
+	&--booking {
+		border-style: dashed;
+		background: var(--color-bg-surface-sunk);
+		box-shadow: none;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// META — icon + term/desc rows inside the Details card.
+// -----------------------------------------------------------------------------
+.appt-meta {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	margin: 0;
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.7rem;
+		color: var(--color-text-muted);
+	}
+
+	&__content {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__term {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__muted {
+		font-style: italic;
+		color: var(--color-text-muted);
+	}
+
+	&__link {
+		color: var(--color-brand);
+		font-weight: $weight-medium;
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CREW — assignee chips, lead highlighted in brand.
+// -----------------------------------------------------------------------------
+.appt-crew {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $space-2;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: 4px $space-3;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--lead {
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+	}
+
+	&__role {
+		font-size: $fs-caption;
+		opacity: 0.75;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SUBMITTED — stacked term/desc rows for booking-link customer input.
+// -----------------------------------------------------------------------------
+.appt-submitted {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin: 0;
+
+	&__row {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__term {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	&__desc {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+
+		&--wrap {
+			white-space: pre-wrap;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// SIDE CARD — sticky status + actions card in the right sidebar.
+// -----------------------------------------------------------------------------
+.appt-side-card {
+	padding: $space-5;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__label {
+		margin-bottom: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+
+	&__status {
+		display: flex;
+	}
+
+	&__actions {
+		display: grid;
+		gap: $space-2;
+		margin-top: $space-4;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__terminal {
+		margin-top: $space-3;
+		font-size: $fs-body;
+		line-height: 1.5;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// QUICK CREATE — pointer-anchored "Create job/event" popover from the week grid.
+// -----------------------------------------------------------------------------
+.quick-create {
+	position: fixed;
+	z-index: $z-modal;
+	width: fit-content;
+	max-width: 480px;
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-xl);
+
+	// Full-screen dismiss layer behind the panel.
+	&__scrim {
+		position: fixed;
+		inset: 0;
+		z-index: $z-modal;
+		border: none;
+		background: var(--color-overlay);
+		cursor: default;
+	}
+
+	&__head {
+		padding: $space-2 14px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__time {
+		margin-top: 2px;
+		font-size: $fs-body;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		padding: 6px;
+	}
+
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: $space-2 10px;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		text-align: left;
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--disabled {
+			color: var(--color-text-muted);
+			cursor: not-allowed;
+
+			&:hover {
+				background: transparent;
+			}
+		}
+	}
+
+	&__icon {
+		display: inline-flex;
+		height: 28px;
+		width: 28px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: $radius-md;
+		background: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: 1.7rem;
+
+		&--muted {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__item-text {
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__soon {
+		font-size: 1rem;
+		font-weight: $weight-regular;
+		color: var(--color-text-muted);
+	}
+
+	// --- Inline mini-create form (title + customer, no page navigation) -------
+	&__form {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding: 10px 14px 14px;
+	}
+
+	// Customer search/select is the shared ContactPicker (.contact-picker*), so the
+	// quick-create popup owns no contact-chip / results styling of its own.
+
+	&__error {
+		font-size: $fs-caption;
+		color: var(--color-danger);
+	}
+
+	&__footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+		padding-top: $space-1;
+	}
+
+	&__more {
+		border: none;
+		background: transparent;
+		padding: 0;
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		cursor: pointer;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	// --- Rich variant: centered dialog, Job/Visit/Event entity switcher + schedule/assign -
+	&--rich {
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: 320px;
+		max-height: min(560px, calc(100vh - 24px));
+		display: flex;
+		flex-direction: column;
+	}
+
+	&__tabs {
+		display: flex;
+		flex-shrink: 0;
+		gap: 2px;
+		padding: 6px 6px 0;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: $space-2 12px;
+		border: none;
+		border-bottom: 2px solid transparent;
+		background: transparent;
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&--active {
+			color: var(--color-brand);
+			border-bottom-color: var(--color-brand);
+		}
+
+		&--disabled {
+			cursor: not-allowed;
+			color: var(--color-text-disabled);
+		}
+	}
+
+	&__soon-pill {
+		padding: 1px 6px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: 1rem;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+	}
+
+	// The rich form scrolls if it outgrows the viewport.
+	&--rich &__form {
+		overflow-y: auto;
+	}
+
+	&__anytime {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__anytime-label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__times {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	// "+ Assign" reveal button (Jobber pattern — crew hidden until needed).
+	&__add {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		align-self: flex-start;
+		padding: $space-2 10px;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: transparent;
+		font: inherit;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+}
+
+// =============================================================================
+// APPOINTMENTS — S8.3  NEW PAGE + FORM
+// Shared AppointmentForm (rendered standalone on /appointments/new AND inside
+// the edit sheet on the detail page) + its crew picker and contact search.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// APPT FORM — vertical form built from .field blocks. Used in two contexts, so
+// it owns no outer width; the host (page or sheet) sizes it.
+// -----------------------------------------------------------------------------
+.appt-form {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	// Two-up Start/End time row, stacks on narrow hosts.
+	&__times {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: $space-4;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	// "Anytime" toggle row (label + hint on the left, switch on the right).
+	&__anytime {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-4;
+		padding: $space-3 $space-4;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__anytime-text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	&__anytime-label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__anytime-hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__error {
+		font-size: $fs-body;
+		color: var(--danger-text);
+	}
+
+	// Selected-contact chip row (name + Change).
+	&__contact-selected {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-2 $space-2 $space-4;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__contact-name {
+		flex: 1;
+		min-width: 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	// Contact search field + floating results.
+	&__contact-search {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__results {
+		margin: 0;
+		padding: $space-1;
+		list-style: none;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-md);
+	}
+
+	&__result {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		text-align: left;
+		font: inherit;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	// Cancel + submit footer. Equal-width on all sizes.
+	&__actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+		padding-top: $space-2;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CREW PICKER — toggleable member list with a lead (crown) selector.
+// -----------------------------------------------------------------------------
+.appt-crew-picker {
+	margin: 0;
+	padding: $space-1;
+	list-style: none;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+
+	&__empty {
+		padding: $space-3;
+		border: 1px dashed var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+
+		& + & {
+			margin-top: 2px;
+		}
+	}
+
+	// Main toggle: checkbox + name (+ lead pill).
+	&__toggle {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		gap: $space-3;
+		min-height: 44px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		text-align: left;
+		font: inherit;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--selected {
+			background: var(--state-active-tint);
+
+			&:hover {
+				background: var(--state-active-tint);
+			}
+		}
+	}
+
+	&__check {
+		display: inline-flex;
+		height: 22px;
+		width: 22px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		color: var(--color-text-on-brand);
+		font-size: 1.4rem;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		&--on {
+			border-color: var(--color-brand);
+			background: var(--color-brand);
+		}
+	}
+
+	&__name {
+		flex: 1;
+		min-width: 0;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__lead-pill {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--state-active-tint);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	// Crown button — set this member as the lead.
+	&__crown {
+		display: inline-flex;
+		height: 40px;
+		width: 40px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border-strong);
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		font-size: 1.7rem;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+			cursor: default;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// APPT NEW — /appointments/new page shell (centered single-column form).
+// -----------------------------------------------------------------------------
+.appt-new {
+	max-width: 720px;
+	margin: 0 auto;
+
+	&__intro {
+		margin: 0 0 $space-5;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CARD DETAIL POPOVER — click a calendar card → Jobber-style visit preview.
+// Rendered via bits-ui Popover.Content (customAnchor = the clicked card), so it
+// carries no `.popover__content` base — the surface is styled fully here.
+// -----------------------------------------------------------------------------
+.card-detail-pop {
+	z-index: $z-dropdown;
+	// Hug the content; no fixed/min width, capped at 480px so it never overflows.
+	width: fit-content;
+	max-width: 480px;
+	box-sizing: border-box;
+	border-radius: $radius-lg;
+	border: 1px solid var(--color-border);
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-xl);
+	padding: $space-4;
+	outline: none;
+
+	&[data-state='open'] {
+		animation: popover-in $duration-base $ease-standard;
+	}
+	&[data-state='closed'] {
+		animation: popover-out $duration-fast $ease-standard;
+	}
+
+	// Rendered inside the shared DraggablePanel — the shell owns the chrome
+	// (border, shadow, background, sizing); keep only the inner padding from base.
+	&--panel {
+		width: auto;
+		max-width: none;
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		z-index: auto;
+	}
+
+	// --- Header: type accent pill + close -------------------------------------
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__type {
+		--pill-accent: var(--color-text-muted);
+		display: inline-flex;
+		align-items: center;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: 0.02em;
+		color: #fff;
+		background: var(--pill-accent);
+
+		&--estimate {
+			--pill-accent: var(--info-solid);
+		}
+		&--job_start {
+			--pill-accent: var(--color-brand);
+		}
+		&--follow_up {
+			--pill-accent: var(--warning-solid);
+		}
+		&--inspection {
+			--pill-accent: #7c3aed;
+		}
+		&--other {
+			--pill-accent: var(--color-text-muted);
+		}
+		// Terminal states desaturate the pill regardless of type.
+		&--completed {
+			--pill-accent: var(--success-solid);
+		}
+		&--cancelled,
+		&--no_show {
+			--pill-accent: var(--color-text-muted);
+		}
+	}
+
+	&__close {
+		display: inline-grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: $fs-lg;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__title {
+		margin: $space-2 0 0;
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		line-height: 1.25;
+		color: var(--color-text-primary);
+	}
+
+	// --- Quick complete / terminal status badge -------------------------------
+	&__done {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		width: 100%;
+		margin-top: $space-3;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+
+		i {
+			font-size: $fs-lg;
+		}
+
+		&--action {
+			border: 1px solid var(--color-border);
+			background: var(--color-bg-surface);
+			color: var(--color-text-secondary);
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				border-color: var(--success-solid);
+				color: var(--success-text);
+			}
+			&:disabled {
+				cursor: default;
+				opacity: 0.7;
+			}
+		}
+
+		&--on {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+
+		&--muted {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+	}
+
+	// --- Customer / job facts --------------------------------------------------
+	&__facts {
+		margin: $space-4 0 0;
+		display: grid;
+		gap: $space-3;
+	}
+
+	&__fact {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: $space-3;
+
+		dt {
+			font-size: $fs-caption;
+			font-weight: $weight-semibold;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+			color: var(--color-text-muted);
+		}
+		dd {
+			margin: 0;
+			font-size: $fs-body;
+			text-align: right;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__link {
+		color: var(--color-brand);
+		font-weight: $weight-medium;
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	// --- Team ------------------------------------------------------------------
+	&__team {
+		margin-top: $space-4;
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__team-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--color-text-muted);
+	}
+
+	&__crew {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__avatar {
+		display: inline-grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+		background: var(--avatar-fallback-bg);
+		color: var(--avatar-fallback-text);
+		font-size: 1rem;
+		font-weight: $weight-bold;
+	}
+
+	&__more {
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-secondary);
+	}
+
+	&__unassigned {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	// --- Location --------------------------------------------------------------
+	&__loc {
+		margin: $space-3 0 0;
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			margin-top: 2px;
+			color: var(--color-text-muted);
+		}
+	}
+
+	// --- When (start / end) ----------------------------------------------------
+	&__when {
+		margin-top: $space-4;
+		padding-top: $space-4;
+		border-top: 1px solid var(--color-border);
+
+		&--range {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: $space-3;
+		}
+	}
+
+	&__when-col {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	&__when-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--color-text-muted);
+	}
+
+	&__when-date {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&__when-time {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// --- Line items ------------------------------------------------------------
+	&__lines {
+		margin-top: $space-4;
+		padding: $space-3;
+		border-radius: $radius-md;
+		background: var(--color-bg-surface-sunk);
+		display: grid;
+		gap: $space-2;
+
+		&--loading {
+			display: flex;
+			align-items: center;
+			gap: $space-2;
+			font-size: $fs-body;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__lines-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--color-text-muted);
+	}
+
+	&__line {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-2;
+		font-size: $fs-body;
+		line-height: 1.35;
+		color: var(--color-text-primary);
+
+		&--total {
+			margin-top: $space-1;
+			padding-top: $space-2;
+			border-top: 1px solid var(--color-border);
+			font-weight: $weight-bold;
+
+			.card-detail-pop__line-desc {
+				text-align: right;
+			}
+		}
+	}
+
+	&__line-qty {
+		flex: 0 0 auto;
+		min-width: 28px;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	// Clamp to 2 lines with an ellipsis; min-width:0 lets it shrink inside the
+	// flex row so it never pushes the amount off the card.
+	&__line-desc {
+		flex: 1 1 auto;
+		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+
+	&__line-amt {
+		flex: 0 0 auto;
+		text-align: right;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+
+	// --- Inline "more" row (cancel / no-show) ----------------------------------
+	&__more-row {
+		margin-top: $space-3;
+		display: flex;
+		gap: $space-2;
+	}
+
+	&__more-btn {
+		flex: 1 1 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		padding: $space-2;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+
+		&:hover:not(:disabled) {
+			background: var(--color-bg-surface-sunk);
+		}
+		&:disabled {
+			cursor: default;
+			opacity: 0.7;
+		}
+
+		&--danger {
+			color: var(--danger-text);
+			&:hover:not(:disabled) {
+				border-color: var(--danger-solid);
+			}
+		}
+	}
+
+	// --- Footer ----------------------------------------------------------------
+	&__foot {
+		margin-top: $space-4;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__foot-spacer {
+		flex: 1 1 auto;
+	}
+
+	&__icon-btn {
+		display: inline-grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-lg;
+		cursor: pointer;
+
+		&:hover,
+		&[aria-pressed='true'] {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 36px;
+		padding: 0 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--primary {
+			border-color: var(--color-brand);
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+
+			&:hover {
+				background: var(--color-brand-strong);
+			}
+		}
+	}
+
+	&__spin {
+		animation: spin 0.7s linear infinite;
+	}
+}

@@ -1,12 +1,7 @@
 <script lang="ts">
-	import { Label } from '$lib/components/ui/label';
-	import {
-		SelectRoot,
-		SelectTrigger,
-		SelectContent,
-		SelectItem
-	} from '$lib/components/ui/select';
 	import { Button } from '$lib/components/ui/button';
+	import { Label } from '$lib/components/ui/label';
+	import { SelectRoot, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select';
 	import AutomationCardShell from './AutomationCardShell.svelte';
 	import SequenceStepEditor from './SequenceStepEditor.svelte';
 	import { CARD_VISUALS, CHANNEL_VISUALS } from './cardVisuals';
@@ -17,7 +12,6 @@
 		type EditableStep,
 		type StepChannel
 	} from '$lib/automation/cardDefinitions';
-	import { Plus } from '@lucide/svelte';
 
 	type ApiStep = {
 		position: number;
@@ -96,7 +90,14 @@
 		return {
 			position: form.steps.length,
 			delay_minutes: card.timingMode === 'delay' ? 1440 : 0,
-			offset_minutes: card.timingMode === 'offset' ? (isStaff ? 120 : -60) : null,
+			offset_minutes:
+				card.timingMode === 'offset'
+					? isStaff
+						? 120
+						: card.offsetAnchor === 'due'
+							? 4320
+							: -60
+					: null,
 			channel: null,
 			audience: card.audience,
 			condition: isStaff ? 'no_quote_since_anchor' : null,
@@ -111,7 +112,9 @@
 	}
 	function removeStep(i: number) {
 		if (form.steps.length <= card.minSteps) return;
-		form.steps = form.steps.filter((_, idx) => idx !== i).map((s, idx) => ({ ...s, position: idx }));
+		form.steps = form.steps
+			.filter((_, idx) => idx !== i)
+			.map((s, idx) => ({ ...s, position: idx }));
 	}
 
 	function errorsForStep(i: number): Record<string, string> {
@@ -201,33 +204,32 @@
 	{onToggle}
 	{dirty}
 >
-	<div class="flex flex-col gap-4">
+	<div class="seq-edit">
 		{#if card.channelEditable}
 			{@const selected = channelOptions.find((c) => c.value === form.channel)}
-			<div class="flex flex-col gap-1.5">
-				<Label class="text-xs font-medium">Default channel</Label>
-				<div class="sm:max-w-[300px]">
+			<div class="field">
+				<Label class="field__label">Default channel</Label>
+				<div class="seq-edit__channel">
 					<SelectRoot value={form.channel} onValueChange={(v) => (form.channel = v as StepChannel)}>
 						<SelectTrigger>
-							<span class="flex items-center gap-2">
+							<span class="auto-chan">
 								{#if selected}
-									{@const Icon = CHANNEL_VISUALS[selected.value]}
-									<Icon class="size-4 shrink-0 text-muted-foreground" />
+									<i class="{CHANNEL_VISUALS[selected.value]} auto-chan__icon" aria-hidden="true"
+									></i>
 									<span>{selected.label}</span>
 								{:else}
-									<span class="text-muted-foreground">Choose a channel</span>
+									<span class="auto-chan__placeholder">Choose a channel</span>
 								{/if}
 							</span>
 						</SelectTrigger>
 						<SelectContent>
 							{#each channelOptions as c (c.value)}
-								{@const Icon = CHANNEL_VISUALS[c.value]}
 								<SelectItem value={c.value} label={c.label}>
-									<span class="flex items-start gap-2.5 py-0.5">
-										<Icon class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-										<span class="flex flex-col gap-0.5">
-											<span class="font-medium leading-none">{c.label}</span>
-											<span class="text-[11px] leading-snug text-muted-foreground">{c.description}</span>
+									<span class="auto-chan auto-chan--option">
+										<i class="{CHANNEL_VISUALS[c.value]} auto-chan__icon" aria-hidden="true"></i>
+										<span class="auto-chan__text">
+											<span class="auto-chan__label">{c.label}</span>
+											<span class="auto-chan__desc">{c.description}</span>
 										</span>
 									</span>
 								</SelectItem>
@@ -235,15 +237,15 @@
 						</SelectContent>
 					</SelectRoot>
 				</div>
-				<p class="text-[11px] text-muted-foreground/70">{selected?.description ?? ''}</p>
+				<p class="field__hint">{selected?.description ?? ''}</p>
 			</div>
 		{/if}
 
 		{#if fieldErrors.steps}
-			<p class="text-xs text-destructive">{fieldErrors.steps}</p>
+			<p class="field__error">{fieldErrors.steps}</p>
 		{/if}
 
-		<div class="flex flex-col gap-2.5">
+		<div class="seq-edit__steps">
 			{#each form.steps as _step, i (i)}
 				<SequenceStepEditor
 					bind:step={form.steps[i]}
@@ -258,24 +260,16 @@
 		</div>
 
 		{#if card.stepsEditable && form.steps.length < card.maxSteps}
-			<button
-				type="button"
-				onclick={addStep}
-				class="group flex items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				<span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-					<Plus class="h-3.5 w-3.5" />
-				</span>
+			<button type="button" onclick={addStep} class="seq-add">
+				<span class="seq-add__plus"><i class="ri-add-line" aria-hidden="true"></i></span>
 				Add a follow-up step
 			</button>
 		{/if}
 
 		{#if dirty}
-			<footer class="flex items-center justify-end gap-2 border-t border-border/60 pt-3">
-				<Button variant="outline" size="sm" type="button" disabled={saving} onclick={reset}>Reset</Button>
-				<Button size="sm" type="button" disabled={saving} onclick={save}>
-					{saving ? 'Saving…' : 'Save changes'}
-				</Button>
+			<footer class="seq-edit__footer">
+				<Button variant="outline" size="sm" disabled={saving} onclick={reset}>Reset</Button>
+				<Button size="sm" loading={saving} loadingLabel="Saving…" onclick={save}>Save changes</Button>
 			</footer>
 		{/if}
 	</div>

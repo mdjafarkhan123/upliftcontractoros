@@ -15,23 +15,21 @@
 	} = $props();
 </script>
 
-<div class="flex flex-1 overflow-hidden">
+<div class="appt-shell">
 	<!-- Desktop sidebar -->
-	<aside
-		class="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background lg:flex"
-	>
+	<aside class="appt-shell__sidebar">
 		{@render sidebar()}
 	</aside>
 
 	<!-- Main calendar/list area -->
-	<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+	<div class="appt-shell__main">
 		{@render children()}
 	</div>
 </div>
 
 <!-- Mobile filter sheet -->
 <BottomSheet bind:open={filterSheetOpen} title="Filters">
-	<div class="px-1 pb-4 pt-2">
+	<div class="appt-shell__sheet">
 		{@render filterSheet()}
 	</div>
 </BottomSheet>

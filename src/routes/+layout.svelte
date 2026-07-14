@@ -1,5 +1,6 @@
 <script lang="ts">
-	import '$lib/styles/app.css';
+	import '$lib/styles/app.scss';
+	import 'remixicon/fonts/remixicon.css';
 	import '$lib/stores/theme.svelte';
 	import { onMount, tick } from 'svelte';
 	import { beforeNavigate, afterNavigate } from '$app/navigation';
@@ -61,7 +62,7 @@
 						: window.matchMedia('(prefers-color-scheme: light)').matches
 							? 'light'
 							: 'dark';
-				if (theme === 'dark') document.documentElement.classList.add('dark');
+				document.documentElement.setAttribute('data-theme', theme);
 				document.documentElement.style.colorScheme = theme;
 			} catch (e) {}
 		})();

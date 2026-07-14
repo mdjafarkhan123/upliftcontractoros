@@ -1,64 +1,76 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import type { Org, OrgMember } from '$lib/types';
 	import UserMenu from './UserMenu.svelte';
+	import AddNewMenu from './AddNewMenu.svelte';
 	import OrgAvatar from './OrgAvatar.svelte';
 	import ThemeToggle from '$lib/components/shared/ThemeToggle.svelte';
 	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
-	import { Search } from '@lucide/svelte';
 	import { commandPalette } from '$lib/stores/commandPalette.svelte';
 
 	let { org, member }: { org: Org; member: OrgMember } = $props();
+
+	const PAGE_TITLES: Record<string, string> = {
+		'/dashboard': 'Dashboard',
+		'/pipeline': 'Pipeline',
+		'/contacts': 'Contacts',
+		'/jobs': 'Jobs',
+		'/quotes': 'Quotes',
+		'/invoices': 'Invoices',
+		'/inbox': 'Inbox',
+		'/appointments': 'Appointments',
+		'/reputation': 'Reputation',
+		'/settings': 'Settings',
+		'/growth': 'Growth'
+	};
+
+	function getPageTitle(pathname: string): string {
+		if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+		for (const [path, title] of Object.entries(PAGE_TITLES)) {
+			if (pathname.startsWith(path + '/')) return title;
+		}
+		return '';
+	}
+
+	const pageTitle = $derived(getPageTitle($page.url.pathname));
 </script>
 
-<header
-	class="sticky top-0 z-40 border-b border-border/50 bg-background px-3 py-2 md:border-b-0 md:px-5 md:py-4"
->
-	<div
-		class="flex min-h-[56px] items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 shadow-dropdown md:min-h-[72px] md:rounded-2xl md:px-5"
-	>
-		<a
-			href="/dashboard"
-			class="flex min-w-0 items-center gap-3 rounded-xl pr-2 transition-colors duration-150 ease-out hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			aria-label={org.name}
-		>
-			<OrgAvatar name={org.name} logoUrl={org.logo_url ?? null} size="md" class="shadow-card" />
-			<span class="min-w-0">
-				<span
-					class="block truncate text-sm font-semibold tracking-tight text-foreground md:text-base"
-				>
-					{org.name}
-				</span>
-				<span class="hidden truncate text-xs font-medium text-muted-foreground md:block">
-					Contractor OS
-				</span>
-			</span>
-		</a>
+<header class="topbar">
+	<!-- Desktop: current page name -->
+	<div class="topbar__left">
+		{#if pageTitle}
+			<h1 class="topbar__page-title">{pageTitle}</h1>
+		{/if}
+	</div>
 
-		<div class="flex min-w-0 items-center gap-1.5 md:gap-2.5">
-			<div
-				class="hidden items-center gap-1.5 rounded-full border border-border/70 bg-muted/70 p-1 shadow-card md:flex"
-			>
-				<ThemeToggle />
-				<NotificationBell />
-			</div>
-			<div class="flex items-center gap-1.5 md:hidden">
-				<button
-					type="button"
-					onclick={() => (commandPalette.open = true)}
-					class="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					aria-label="Search"
-				>
-					<Search class="h-5 w-5" />
-				</button>
-				<ThemeToggle />
-				<NotificationBell />
-			</div>
-			<div class="hidden h-8 w-px bg-border/60 md:block" aria-hidden="true"></div>
-			<div
-				class="flex min-w-0 items-center rounded-full border border-border/60 bg-card-raised/90 p-[3px] shadow-card transition-shadow duration-200 hover:shadow-dropdown"
-			>
-				<UserMenu {member} {org} />
-			</div>
+	<!-- Mobile only: org brand -->
+	<a href="/dashboard" class="topbar__brand" aria-label={org.name}>
+		<OrgAvatar name={org.name} logoUrl={org.logo_url ?? null} size="md" />
+		<span class="topbar__brand-name">{org.name}</span>
+	</a>
+
+	<!-- Center: search bar + Add new button -->
+	<div class="topbar__center">
+		<button
+			type="button"
+			class="topbar__search"
+			onclick={() => (commandPalette.open = true)}
+			aria-label="Search (⌘K)"
+		>
+			<i class="ri-search-line" aria-hidden="true"></i>
+			<span class="topbar__search-placeholder">Search...</span>
+			<kbd class="topbar__search-kbd">⌘K</kbd>
+		</button>
+		<AddNewMenu {member} />
+	</div>
+
+	<!-- Right: theme toggle, notifications, user menu -->
+	<div class="topbar__right">
+		<ThemeToggle />
+		<NotificationBell />
+		<div class="topbar__divider" aria-hidden="true"></div>
+		<div class="topbar__user-pill">
+			<UserMenu {member} {org} />
 		</div>
 	</div>
 </header>

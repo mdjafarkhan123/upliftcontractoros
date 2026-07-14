@@ -11,7 +11,7 @@
 <svelte:head><title>Notifications</title></svelte:head>
 
 <PageWrapper title="Notifications">
-	<div class="overflow-hidden rounded-xl border border-border bg-card">
+	<div class="noti-page-card">
 		<NotificationPanel variant="page" />
 	</div>
 </PageWrapper>

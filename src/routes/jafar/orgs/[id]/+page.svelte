@@ -218,11 +218,11 @@
 	});
 
 	const statusStyles: Record<Org['status'], string> = {
-		active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-		suspended: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-		pending_setup: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
-		pending_deletion: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
-		deleted: 'border-red-500/30 bg-red-500/10 text-red-300'
+		active: 'jafar-badge jafar-badge--active',
+		suspended: 'jafar-badge jafar-badge--suspended',
+		pending_setup: 'jafar-badge jafar-badge--pending_setup',
+		pending_deletion: 'jafar-badge jafar-badge--pending_deletion',
+		deleted: 'jafar-badge jafar-badge--deleted'
 	};
 
 	const statusLabels: Record<Org['status'], string> = {
@@ -402,27 +402,25 @@
 			id: 'general' as Category,
 			label: 'General',
 			desc: 'Identity, status & actions',
-			svgPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4'
+			icon: 'ri-building-line'
 		},
 		{
 			id: 'details' as Category,
 			label: 'Details',
 			desc: 'Onboarding & carrier data',
-			svgPath:
-				'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8'
+			icon: 'ri-file-list-3-line'
 		},
 		{
 			id: 'entitlements' as Category,
 			label: 'Entitlements',
 			desc: 'Plan, flags & limits',
-			svgPath: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22V15'
+			icon: 'ri-flag-line'
 		},
 		{
 			id: 'integrations' as Category,
 			label: 'Integrations',
 			desc: 'Chat, email & connections',
-			svgPath:
-				'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'
+			icon: 'ri-links-line'
 		}
 	] as const;
 
@@ -525,10 +523,10 @@
 	}
 
 	const approvalBadge: Record<Org['sms_approval_status'], string> = {
-		not_required: 'border-slate-700 bg-slate-800/60 text-slate-400',
-		pending: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-		approved: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-		rejected: 'border-red-500/30 bg-red-500/10 text-red-300'
+		not_required: 'jafar-badge jafar-badge--muted',
+		pending: 'jafar-badge jafar-badge--pending',
+		approved: 'jafar-badge jafar-badge--active',
+		rejected: 'jafar-badge jafar-badge--red'
 	};
 	const approvalLabel: Record<Org['sms_approval_status'], string> = {
 		not_required: 'Not required',
@@ -542,30 +540,12 @@
 	<title>{org ? `${org.name} · Jafar` : 'Organization · Jafar'}</title>
 </svelte:head>
 
-<div class="space-y-6 pb-32">
+<div class="jafar-orgdetail">
 	<!-- Back (always instant) -->
-	<div>
-		<a
-			href="/jafar/dashboard"
-			class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<polyline points="15 18 9 12 15 6" />
-			</svg>
-			Back to dashboard
-		</a>
-	</div>
+	<a href="/jafar/dashboard" class="jafar-back">
+		<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
+		Back to dashboard
+	</a>
 
 	{#if showSkeleton}
 		<AdminHeaderSkeleton />
@@ -574,80 +554,44 @@
 		<AdminSectionSkeleton titleWidth="w-32" bodyRows={6} grid />
 		<AdminSectionSkeleton titleWidth="w-28" bodyRows={3} grid />
 	{:else if showError}
-		<div
-			role="alert"
-			class="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-6 text-center"
-		>
-			<p class="text-sm font-semibold text-red-200">Failed to load organization</p>
-			<p class="mt-1 text-xs text-red-300/80">{fetchError ?? 'Unknown error.'}</p>
+		<div role="alert" class="jafar-alert jafar-alert--error jafar-alert--center">
+			<p class="jafar-alert__title">Failed to load organization</p>
+			<p class="jafar-alert__text">{fetchError ?? 'Unknown error.'}</p>
 			<button
 				type="button"
+				class="jafar-btn jafar-btn--danger"
 				onclick={() => jafarOrgStore.refresh(orgId)}
-				class="mt-4 inline-flex h-9 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 text-xs font-semibold text-red-100 hover:border-red-400/60 hover:bg-red-500/20 transition-colors cursor-pointer"
 			>
 				Retry
 			</button>
 		</div>
 	{:else if org}
 		<!-- Header -->
-		<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-			<div class="flex min-w-0 items-start gap-4">
-				<span
-					class="hidden size-12 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 text-base font-bold tracking-tight text-slate-200 shadow-inner shadow-black/40 sm:inline-flex"
-					aria-hidden="true"
-				>
-					{orgInitials}
-				</span>
-				<div class="min-w-0">
-					<div class="flex flex-wrap items-center gap-2.5">
-						<h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-							{org.name}
-						</h1>
-						<span
-							class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide {statusStyles[
-								org.status
-							]}"
-						>
-							<span class="size-1.5 rounded-full bg-current"></span>
+		<div class="jafar-org-hd">
+			<div class="jafar-org-hd__inner">
+				<span class="jafar-org-hd__initials" aria-hidden="true">{orgInitials}</span>
+				<div class="jafar-org-hd__meta">
+					<div class="jafar-org-hd__pills">
+						<h1>{org.name}</h1>
+						<span class={statusStyles[org.status]}>
+							<span class="jafar-badge__dot"></span>
 							{statusLabels[org.status]}
 						</span>
 						{#if org.is_setup_complete}
-							<span
-								class="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-300"
-							>
-								Setup complete
-							</span>
+							<span class="jafar-badge jafar-badge--sky">Setup complete</span>
 						{:else}
-							<span
-								class="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
-							>
-								Setup pending
-							</span>
+							<span class="jafar-badge jafar-badge--muted">Setup pending</span>
 						{/if}
 						{#if status === 'revalidating'}
-							<span class="inline-flex items-center gap-1 text-[11px] text-slate-500">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="10"
-									height="10"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.4"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="animate-spin"
-									aria-hidden="true"
-								>
-									<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-								</svg>
+							<span class="jafar-org-hd__revalidating">
+								<i class="ri-loader-4-line" aria-hidden="true"></i>
 								Refreshing
 							</span>
 						{/if}
 					</div>
-					<p class="mt-1.5 text-sm text-slate-400">
-						<span class="font-mono text-slate-500">/{org.slug}</span>
-						<span class="mx-1.5 text-slate-700">·</span>
+					<p class="jafar-org-hd__sub">
+						<span class="jafar-org-hd__slug">/{org.slug}</span>
+						<span class="jafar-org-hd__dot">·</span>
 						{org.trade_type}
 					</p>
 				</div>
@@ -655,105 +599,46 @@
 		</div>
 
 		{#if actionError}
-			<div
-				role="alert"
-				class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="18"
-					height="18"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="mt-0.5 shrink-0 text-red-300"
-					aria-hidden="true"
-				>
-					<circle cx="12" cy="12" r="10" />
-					<line x1="12" y1="8" x2="12" y2="12" />
-					<line x1="12" y1="16" x2="12.01" y2="16" />
-				</svg>
+			<div role="alert" class="jafar-alert jafar-alert--error">
+				<span class="jafar-alert__icon">
+					<i class="ri-error-warning-line" aria-hidden="true"></i>
+				</span>
 				<div>
-					<p class="font-semibold text-red-100">Action failed</p>
-					<p class="mt-0.5 text-red-200/90">{actionError}</p>
+					<p class="jafar-alert__title">Action failed</p>
+					<p class="jafar-alert__text">{actionError}</p>
 				</div>
 			</div>
 		{/if}
 
 		{#if saved && !dirty}
-			<div
-				role="status"
-				class="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="16"
-					height="16"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2.4"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<polyline points="20 6 9 17 4 12" />
-				</svg>
+			<div role="status" class="jafar-alert jafar-alert--emerald">
+				<span class="jafar-alert__icon">
+					<i class="ri-check-line" aria-hidden="true"></i>
+				</span>
 				Entitlements saved.
 			</div>
 		{/if}
 
 		<!-- Settings: sidebar + content panel -->
-		<div class="flex gap-6 items-start">
+		<div class="jafar-orgdetail__body">
 			<!-- Sidebar nav -->
-			<aside class="w-56 shrink-0 sticky top-4 self-start">
-				<nav
-					class="rounded-xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-				>
-					<div class="px-3 pt-3 pb-1">
-						<p class="px-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-							Settings
-						</p>
-					</div>
-					<div class="px-1.5 pb-1.5 space-y-0.5">
+			<aside class="jafar-cat">
+				<nav class="jafar-cat__nav">
+					<p class="jafar-cat__label">Settings</p>
+					<div class="jafar-cat__list">
 						{#each categoryItems as cat (cat.id)}
 							<button
 								type="button"
 								onclick={() => (activeCategory = cat.id)}
-								class="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-all duration-150 ease-out cursor-pointer min-h-[44px]
-									{activeCategory === cat.id
-									? 'bg-emerald-500/20 text-emerald-100 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.15)]'
-									: 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}"
+								class="jafar-cat__item"
+								class:jafar-cat__item--active={activeCategory === cat.id}
 							>
-								<span
-									class="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150
-										{activeCategory === cat.id
-										? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-										: 'border-slate-700 bg-slate-800/40 text-slate-500 group-hover:border-slate-600 group-hover:text-slate-300'}"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="15"
-										height="15"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										{#each cat.svgPath.split(/(?=M)/) as part}
-											<path d={part} />
-										{/each}
-									</svg>
+								<span class="jafar-cat__icon" aria-hidden="true">
+									<i class={cat.icon}></i>
 								</span>
-								<div class="min-w-0">
-									<p class="text-sm font-semibold leading-tight">{cat.label}</p>
-									<p class="text-[10px] leading-tight text-slate-500">{cat.desc}</p>
+								<div>
+									<p class="jafar-cat__item-label">{cat.label}</p>
+									<p class="jafar-cat__item-desc">{cat.desc}</p>
 								</div>
 							</button>
 						{/each}
@@ -762,128 +647,97 @@
 			</aside>
 
 			<!-- Content panel -->
-			<div class="flex-1 min-w-0 space-y-4">
+			<div class="jafar-orgdetail__content">
 				{#if activeCategory === 'general'}
 					<!-- Overview -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M3 21h18" />
-									<path d="M5 21V7l8-4v18" />
-									<path d="M19 21V11l-6-4" />
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--sky" aria-hidden="true">
+								<i class="ri-building-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Overview</h2>
-								<p class="mt-0.5 text-xs text-slate-500">Tenant identity and operating region.</p>
+								<h2 class="jafar-panel__title">Overview</h2>
+								<p class="jafar-panel__sub">Tenant identity and operating region.</p>
 							</div>
 						</header>
 
-						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Organization ID
-								</dt>
-								<dd class="mt-1 flex items-center gap-2">
-									<code class="truncate font-mono text-xs text-slate-200">{org.id}</code>
+						<dl class="jafar-dl">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Organization ID</dt>
+								<dd class="jafar-dl__val">
+									<code class="jafar-dl__code">{org.id}</code>
 									<button
 										type="button"
+										class="jafar-dl__copy"
 										onclick={() => copyValue(org!.id, 'id')}
-										class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 									>
 										{copied === 'id' ? 'Copied' : 'Copy'}
 									</button>
 								</dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Slug
-								</dt>
-								<dd class="mt-1 font-mono text-sm text-white">{org.slug}</dd>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Slug</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__code">{org.slug}</span></dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Trade type
-								</dt>
-								<dd class="mt-1 text-sm text-white">{org.trade_type}</dd>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Trade type</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__text">{org.trade_type}</span></dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Location
-								</dt>
-								<dd class="mt-1 text-sm text-white">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Location</dt>
+								<dd class="jafar-dl__val">
 									{#if org.city || org.state}
-										{[org.city, org.state].filter(Boolean).join(', ')}
+										<span class="jafar-dl__text">
+											{[org.city, org.state].filter(Boolean).join(', ')}
+										</span>
 									{:else}
-										<span class="text-slate-500">—</span>
+										<span class="jafar-dl__muted">—</span>
 									{/if}
 								</dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Timezone
-								</dt>
-								<dd class="mt-1 font-mono text-sm text-white">{org.timezone}</dd>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Timezone</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__code">{org.timezone}</span></dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Twilio phone
-								</dt>
-								<dd class="mt-1 flex items-center gap-2">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Twilio phone</dt>
+								<dd class="jafar-dl__val">
 									{#if org.twilio_phone_number}
-										<span class="font-mono text-sm text-white">{org.twilio_phone_number}</span>
+										<span class="jafar-dl__code">{org.twilio_phone_number}</span>
 										<button
 											type="button"
+											class="jafar-dl__copy"
 											onclick={() => copyValue(org!.twilio_phone_number!, 'phone')}
-											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 										>
 											{copied === 'phone' ? 'Copied' : 'Copy'}
 										</button>
 									{:else}
-										<span class="text-sm italic text-slate-500">Not set</span>
+										<span class="jafar-dl__na">Not set</span>
 									{/if}
 								</dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Created
-								</dt>
-								<dd class="mt-1 text-sm text-white">
-									{new Date(org.created_at).toLocaleString()}
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Created</dt>
+								<dd class="jafar-dl__val">
+									<span class="jafar-dl__text">{new Date(org.created_at).toLocaleString()}</span>
 								</dd>
 							</div>
 
-							<div class="bg-slate-900/50 px-5 py-4 transition-colors hover:bg-slate-900/80">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Entitlements updated
-								</dt>
-								<dd class="mt-1 text-sm text-white">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Entitlements updated</dt>
+								<dd class="jafar-dl__val">
 									{#if org.feature_overrides_updated_at}
-										{new Date(org.feature_overrides_updated_at).toLocaleString()}
+										<span class="jafar-dl__text">
+											{new Date(org.feature_overrides_updated_at).toLocaleString()}
+										</span>
 									{:else}
-										<span class="text-slate-500">Never</span>
+										<span class="jafar-dl__muted">Never</span>
 									{/if}
 								</dd>
 							</div>
@@ -891,217 +745,107 @@
 					</section>
 
 					<!-- Lifecycle actions -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M12 2v10" />
-									<path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--rose" aria-hidden="true">
+								<i class="ri-shut-down-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Lifecycle actions</h2>
-								<p class="mt-0.5 text-xs text-slate-500">
+								<h2 class="jafar-panel__title">Lifecycle actions</h2>
+								<p class="jafar-panel__sub">
 									Change tenant status or finalize provisioning. Actions take effect immediately.
 								</p>
 							</div>
 						</header>
 
-						<div class="grid gap-3 px-5 py-5 sm:grid-cols-3">
+						<div class="jafar-life__grid">
 							<button
 								type="button"
 								disabled={updating || org.status === 'active'}
 								onclick={() => updateStatus('active')}
-								class="group flex flex-col items-start gap-1.5 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-800 disabled:hover:bg-slate-950/40 transition-colors cursor-pointer"
+								class="jafar-life__card jafar-life__card--emerald"
 							>
-								<span
-									class="inline-flex size-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-									>
-										<polyline points="20 6 9 17 4 12" />
-									</svg>
+								<span class="jafar-life__icon jafar-life__icon--emerald" aria-hidden="true">
+									<i class="ri-check-line"></i>
 								</span>
-								<span class="text-sm font-semibold text-white">Set active</span>
-								<span class="text-[11px] text-slate-500">Tenant can log in and operate.</span>
+								<span class="jafar-life__title">Set active</span>
+								<span class="jafar-life__hint">Tenant can log in and operate.</span>
 							</button>
 
 							<button
 								type="button"
 								disabled={updating || org.status === 'suspended'}
 								onclick={() => updateStatus('suspended')}
-								class="group flex flex-col items-start gap-1.5 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left hover:border-amber-500/40 hover:bg-amber-500/5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-800 disabled:hover:bg-slate-950/40 transition-colors cursor-pointer"
+								class="jafar-life__card jafar-life__card--amber"
 							>
-								<span
-									class="inline-flex size-8 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-									>
-										<rect x="6" y="5" width="4" height="14" />
-										<rect x="14" y="5" width="4" height="14" />
-									</svg>
+								<span class="jafar-life__icon jafar-life__icon--amber" aria-hidden="true">
+									<i class="ri-pause-line"></i>
 								</span>
-								<span class="text-sm font-semibold text-white">Suspend</span>
-								<span class="text-[11px] text-slate-500">Block access without deleting data.</span>
+								<span class="jafar-life__title">Suspend</span>
+								<span class="jafar-life__hint">Block access without deleting data.</span>
 							</button>
 
 							<button
 								type="button"
 								disabled={updating || org.is_setup_complete}
 								onclick={completeSetup}
-								class="group flex flex-col items-start gap-1.5 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left hover:border-sky-500/40 hover:bg-sky-500/5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-800 disabled:hover:bg-slate-950/40 transition-colors cursor-pointer"
+								class="jafar-life__card jafar-life__card--sky"
 							>
-								<span
-									class="inline-flex size-8 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-									>
-										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-										<polyline points="22 4 12 14.01 9 11.01" />
-									</svg>
+								<span class="jafar-life__icon jafar-life__icon--sky" aria-hidden="true">
+									<i class="ri-checkbox-circle-line"></i>
 								</span>
-								<span class="text-sm font-semibold text-white">Complete setup</span>
-								<span class="text-[11px] text-slate-500">Mark provisioning as finalized.</span>
+								<span class="jafar-life__title">Complete setup</span>
+								<span class="jafar-life__hint">Mark provisioning as finalized.</span>
 							</button>
 						</div>
 
 						{#if updating}
-							<div
-								class="flex items-center gap-2 border-t border-slate-800/80 bg-slate-950/40 px-5 py-3 text-xs text-slate-400"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.4"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="animate-spin"
-									aria-hidden="true"
-								>
-									<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-								</svg>
+							<div class="jafar-life__applying">
+								<i class="ri-loader-4-line" aria-hidden="true"></i>
 								Applying change…
 							</div>
 						{/if}
 					</section>
 				{:else if activeCategory === 'details'}
 					<!-- Business Profile -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M3 21h18" />
-									<path d="M5 21V7l8-4v18" />
-									<path d="M19 21V11l-6-4" />
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--sky" aria-hidden="true">
+								<i class="ri-building-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Business profile</h2>
-								<p class="mt-0.5 text-xs text-slate-500">
-									Onboarding Step 2 — collected from the contractor.
-								</p>
+								<h2 class="jafar-panel__title">Business profile</h2>
+								<p class="jafar-panel__sub">Onboarding Step 2 — collected from the contractor.</p>
 							</div>
 						</header>
-						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Company name
-								</dt>
-								<dd class="mt-1 text-sm text-white">{org.name}</dd>
+						<dl class="jafar-dl">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Company name</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__text">{org.name}</span></dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Trade type
-								</dt>
-								<dd class="mt-1 text-sm text-white">{org.trade_type}</dd>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Trade type</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__text">{org.trade_type}</span></dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Country
-								</dt>
-								<dd class="mt-1 text-sm text-white">
-									{org.country ?? '—'}
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Country</dt>
+								<dd class="jafar-dl__val">
+									<span class="jafar-dl__text">{org.country ?? '—'}</span>
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Timezone
-								</dt>
-								<dd class="mt-1 font-mono text-sm text-white">{org.timezone}</dd>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Timezone</dt>
+								<dd class="jafar-dl__val"><span class="jafar-dl__code">{org.timezone}</span></dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Address
-								</dt>
-								<dd class="mt-1 text-sm text-white">
+							<div class="jafar-dl__cell jafar-dl__cell--full">
+								<dt class="jafar-dl__term">Address</dt>
+								<dd class="jafar-dl__val">
 									{#if org.address || org.city || org.state || org.zip}
-										{[org.address, org.city, org.state, org.zip].filter(Boolean).join(', ')}
+										<span class="jafar-dl__text">
+											{[org.address, org.city, org.state, org.zip].filter(Boolean).join(', ')}
+										</span>
 									{:else}
-										<span class="text-slate-500">—</span>
+										<span class="jafar-dl__muted">—</span>
 									{/if}
 								</dd>
 							</div>
@@ -1109,104 +853,65 @@
 					</section>
 
 					<!-- Phone & SMS -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path
-										d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"
-									/>
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--emerald" aria-hidden="true">
+								<i class="ri-phone-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Phone &amp; SMS</h2>
-								<p class="mt-0.5 text-xs text-slate-500">Number, subaccount, and sending state.</p>
+								<h2 class="jafar-panel__title">Phone &amp; SMS</h2>
+								<p class="jafar-panel__sub">Number, subaccount, and sending state.</p>
 							</div>
 						</header>
-						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Twilio phone
-								</dt>
-								<dd class="mt-1 flex items-center gap-2">
+						<dl class="jafar-dl">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Twilio phone</dt>
+								<dd class="jafar-dl__val">
 									{#if org.twilio_phone_number}
-										<span class="font-mono text-sm text-white">{org.twilio_phone_number}</span>
+										<span class="jafar-dl__code">{org.twilio_phone_number}</span>
 										<button
 											type="button"
+											class="jafar-dl__copy"
 											onclick={() => copyValue(org!.twilio_phone_number!, 'd-phone')}
-											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 										>
 											{copied === 'd-phone' ? 'Copied' : 'Copy'}
 										</button>
 									{:else}
-										<span class="text-sm italic text-slate-500">Not set</span>
+										<span class="jafar-dl__na">Not set</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Subaccount SID
-								</dt>
-								<dd class="mt-1 flex items-center gap-2">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Subaccount SID</dt>
+								<dd class="jafar-dl__val">
 									{#if org.twilio_subaccount_sid}
-										<code class="truncate font-mono text-xs text-slate-200"
-											>{org.twilio_subaccount_sid}</code
-										>
+										<code class="jafar-dl__code">{org.twilio_subaccount_sid}</code>
 										<button
 											type="button"
+											class="jafar-dl__copy"
 											onclick={() => copyValue(org!.twilio_subaccount_sid!, 'd-sid')}
-											class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 										>
 											{copied === 'd-sid' ? 'Copied' : 'Copy'}
 										</button>
 									{:else}
-										<span class="text-sm italic text-slate-500">None</span>
+										<span class="jafar-dl__na">None</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									SMS enabled
-								</dt>
-								<dd class="mt-1">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">SMS enabled</dt>
+								<dd class="jafar-dl__val">
 									{#if org.sms_enabled}
-										<span
-											class="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
-											>On</span
-										>
+										<span class="jafar-badge jafar-badge--active">On</span>
 									{:else}
-										<span
-											class="inline-flex items-center rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-semibold text-slate-400"
-											>Off</span
-										>
+										<span class="jafar-badge jafar-badge--muted">Off</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Approval status
-								</dt>
-								<dd class="mt-1">
-									<span
-										class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold {approvalBadge[
-											org.sms_approval_status
-										]}"
-									>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Approval status</dt>
+								<dd class="jafar-dl__val">
+									<span class={approvalBadge[org.sms_approval_status]}>
 										{approvalLabel[org.sms_approval_status]}
 									</span>
 								</dd>
@@ -1215,35 +920,15 @@
 					</section>
 
 					<!-- Carrier Registration -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header
-							class="flex items-center justify-between gap-3 border-b border-slate-800/80 px-5 py-4"
-						>
-							<div class="flex items-center gap-3 min-w-0">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-										<path d="M14 2v6h6" />
-									</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head jafar-panel__head--between">
+							<div class="jafar-org-hd__inner">
+								<span class="jafar-panel__icon jafar-panel__icon--violet" aria-hidden="true">
+									<i class="ri-file-list-3-line"></i>
 								</span>
-								<div class="min-w-0">
-									<h2 class="text-base font-semibold text-white">Carrier registration</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+								<div>
+									<h2 class="jafar-panel__title">Carrier registration</h2>
+									<p class="jafar-panel__sub">
 										Onboarding Step 4 — for manual Twilio {org.country === 'CA' ? 'CWTA' : '10DLC'} submission.
 									</p>
 								</div>
@@ -1251,8 +936,8 @@
 							{#if carrierRequired}
 								<button
 									type="button"
+									class="jafar-btn jafar-btn--sm"
 									onclick={() => copyValue(carrierCopyAll, 'd-carrier-all')}
-									class="shrink-0 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/20 transition-colors cursor-pointer"
 								>
 									{copied === 'd-carrier-all' ? 'Copied all' : 'Copy all'}
 								</button>
@@ -1260,110 +945,102 @@
 						</header>
 
 						{#if !carrierRequired}
-							<div class="px-5 py-6">
-								<p class="text-sm text-slate-400">
+							<div class="jafar-panel__body">
+								<p class="jafar-fmsg jafar-fmsg--muted">
 									Not required — carrier registration applies to US (10DLC) and Canada (CWTA) only.
 								</p>
 							</div>
 						{:else}
-							<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-								<div class="bg-slate-900/50 px-5 py-4">
-									<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+							<dl class="jafar-dl">
+								<div class="jafar-dl__cell">
+									<dt class="jafar-dl__term">
 										{org.country === 'CA' ? 'Business name' : 'Legal business name'}
 									</dt>
-									<dd class="mt-1 flex items-center gap-2">
+									<dd class="jafar-dl__val">
 										{#if org.legal_business_name}
-											<span class="text-sm text-white">{org.legal_business_name}</span>
+											<span class="jafar-dl__text">{org.legal_business_name}</span>
 											<button
 												type="button"
+												class="jafar-dl__copy"
 												onclick={() => copyValue(org!.legal_business_name!, 'd-legal')}
-												class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 											>
 												{copied === 'd-legal' ? 'Copied' : 'Copy'}
 											</button>
 										{:else}
-											<span class="text-sm italic text-slate-500">Not provided</span>
+											<span class="jafar-dl__na">Not provided</span>
 										{/if}
 									</dd>
 								</div>
 
 								{#if org.country === 'CA'}
-									<div class="bg-slate-900/50 px-5 py-4">
-										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-											Business Number
-										</dt>
-										<dd class="mt-1 flex items-center gap-2">
+									<div class="jafar-dl__cell">
+										<dt class="jafar-dl__term">Business Number</dt>
+										<dd class="jafar-dl__val">
 											{#if org.business_number}
-												<span class="font-mono text-sm text-white">{org.business_number}</span>
+												<span class="jafar-dl__code">{org.business_number}</span>
 												<button
 													type="button"
+													class="jafar-dl__copy"
 													onclick={() => copyValue(org!.business_number!, 'd-bn')}
-													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 												>
 													{copied === 'd-bn' ? 'Copied' : 'Copy'}
 												</button>
 											{:else}
-												<span class="text-sm italic text-slate-500">Not provided</span>
+												<span class="jafar-dl__na">Not provided</span>
 											{/if}
 										</dd>
 									</div>
 								{:else}
-									<div class="bg-slate-900/50 px-5 py-4">
-										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-											EIN
-										</dt>
-										<dd class="mt-1 flex items-center gap-2">
+									<div class="jafar-dl__cell">
+										<dt class="jafar-dl__term">EIN</dt>
+										<dd class="jafar-dl__val">
 											{#if org.ein}
-												<span class="font-mono text-sm text-white">{org.ein}</span>
+												<span class="jafar-dl__code">{org.ein}</span>
 												<button
 													type="button"
+													class="jafar-dl__copy"
 													onclick={() => copyValue(org!.ein!, 'd-ein')}
-													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 												>
 													{copied === 'd-ein' ? 'Copied' : 'Copy'}
 												</button>
 											{:else}
-												<span class="text-sm italic text-slate-500">Not provided</span>
+												<span class="jafar-dl__na">Not provided</span>
 											{/if}
 										</dd>
 									</div>
-									<div class="bg-slate-900/50 px-5 py-4">
-										<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-											Website
-										</dt>
-										<dd class="mt-1 flex items-center gap-2">
+									<div class="jafar-dl__cell">
+										<dt class="jafar-dl__term">Website</dt>
+										<dd class="jafar-dl__val">
 											{#if org.website}
-												<span class="truncate text-sm text-white">{org.website}</span>
+												<span class="jafar-dl__text">{org.website}</span>
 												<button
 													type="button"
+													class="jafar-dl__copy"
 													onclick={() => copyValue(org!.website!, 'd-web')}
-													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 												>
 													{copied === 'd-web' ? 'Copied' : 'Copy'}
 												</button>
 											{:else}
-												<span class="text-sm italic text-slate-500">Not provided</span>
+												<span class="jafar-dl__na">Not provided</span>
 											{/if}
 										</dd>
 									</div>
 								{/if}
 
-								<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
-									<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-										Messaging use case
-									</dt>
-									<dd class="mt-1 flex items-start gap-2">
+								<div class="jafar-dl__cell jafar-dl__cell--full">
+									<dt class="jafar-dl__term">Messaging use case</dt>
+									<dd class="jafar-dl__val jafar-dl__val--start">
 										{#if org.messaging_use_case}
-											<p class="whitespace-pre-wrap text-sm text-white">{org.messaging_use_case}</p>
+											<p class="jafar-dl__pre">{org.messaging_use_case}</p>
 											<button
 												type="button"
+												class="jafar-dl__copy"
 												onclick={() => copyValue(org!.messaging_use_case!, 'd-usecase')}
-												class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
 											>
 												{copied === 'd-usecase' ? 'Copied' : 'Copy'}
 											</button>
 										{:else}
-											<span class="text-sm italic text-slate-500">Not provided</span>
+											<span class="jafar-dl__na">Not provided</span>
 										{/if}
 									</dd>
 								</div>
@@ -1372,247 +1049,158 @@
 					</section>
 
 					<!-- Branding -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-pink-500/30 bg-pink-500/10 text-pink-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<circle cx="13.5" cy="6.5" r=".5" />
-									<circle cx="17.5" cy="10.5" r=".5" />
-									<circle cx="8.5" cy="7.5" r=".5" />
-									<circle cx="6.5" cy="12.5" r=".5" />
-									<path
-										d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
-									/>
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--rose" aria-hidden="true">
+								<i class="ri-palette-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Branding</h2>
-								<p class="mt-0.5 text-xs text-slate-500">
-									Onboarding Step 5 — logo, colors, hours.
-								</p>
+								<h2 class="jafar-panel__title">Branding</h2>
+								<p class="jafar-panel__sub">Onboarding Step 5 — logo, colors, hours.</p>
 							</div>
 						</header>
-						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Logo
-								</dt>
-								<dd class="mt-1">
+						<dl class="jafar-dl">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Logo</dt>
+								<dd class="jafar-dl__val">
 									{#if org.logo_url}
-										<img
-											src={org.logo_url}
-											alt="{org.name} logo"
-											class="h-12 w-auto max-w-[160px] rounded-md border border-slate-800 bg-white/5 object-contain p-1"
-										/>
+										<img src={org.logo_url} alt="{org.name} logo" class="jafar-dl__logo" />
 									{:else}
-										<span class="text-sm italic text-slate-500">No logo</span>
+										<span class="jafar-dl__na">No logo</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Primary color
-								</dt>
-								<dd class="mt-1 flex items-center gap-2">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Primary color</dt>
+								<dd class="jafar-dl__val">
 									{#if org.primary_color}
-										<span
-											class="inline-block size-5 shrink-0 rounded border border-slate-700"
-											style="background-color: {org.primary_color}"
+										<span class="jafar-dl__swatch" style="background-color: {org.primary_color}"
 										></span>
-										<span class="font-mono text-sm text-white">{org.primary_color}</span>
+										<span class="jafar-dl__code">{org.primary_color}</span>
 									{:else}
-										<span class="text-sm italic text-slate-500">Default</span>
+										<span class="jafar-dl__na">Default</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4 sm:col-span-2">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Business hours
-								</dt>
-								<dd class="mt-1 font-mono text-sm text-white">
-									{org.calendar_day_start_hour}:00 – {org.calendar_day_end_hour}:00
+							<div class="jafar-dl__cell jafar-dl__cell--full">
+								<dt class="jafar-dl__term">Business hours</dt>
+								<dd class="jafar-dl__val">
+									<span class="jafar-dl__code">
+										{org.calendar_day_start_hour}:00 – {org.calendar_day_end_hour}:00
+									</span>
 								</dd>
 							</div>
 						</dl>
 					</section>
 
 					<!-- Account status & approval lifecycle -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-									<polyline points="22 4 12 14.01 9 11.01" />
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--amber" aria-hidden="true">
+								<i class="ri-shield-check-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Account status</h2>
-								<p class="mt-0.5 text-xs text-slate-500">
-									Carrier approval lifecycle and SMS credit balance.
-								</p>
+								<h2 class="jafar-panel__title">Account status</h2>
+								<p class="jafar-panel__sub">Carrier approval lifecycle and SMS credit balance.</p>
 							</div>
 						</header>
 
-						<dl class="grid gap-px bg-slate-800/60 sm:grid-cols-2">
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Tenant status
-								</dt>
-								<dd class="mt-1">
-									<span
-										class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold {statusStyles[
-											org.status
-										]}"
+						<dl class="jafar-dl">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Tenant status</dt>
+								<dd class="jafar-dl__val">
+									<span class={statusStyles[org.status]}>{statusLabels[org.status]}</span>
+								</dd>
+							</div>
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Setup</dt>
+								<dd class="jafar-dl__val">
+									<span class="jafar-dl__text"
+										>{org.is_setup_complete ? 'Complete' : 'Pending'}</span
 									>
-										{statusLabels[org.status]}
-									</span>
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Setup
-								</dt>
-								<dd class="mt-1 text-sm text-white">
-									{org.is_setup_complete ? 'Complete' : 'Pending'}
-								</dd>
-							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									Approval submitted
-								</dt>
-								<dd class="mt-1 text-sm text-white">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">Approval submitted</dt>
+								<dd class="jafar-dl__val">
 									{#if org.sms_approval_submitted_at}
-										{new Date(org.sms_approval_submitted_at).toLocaleString()}
+										<span class="jafar-dl__text">
+											{new Date(org.sms_approval_submitted_at).toLocaleString()}
+										</span>
 									{:else}
-										<span class="text-slate-500">Never</span>
+										<span class="jafar-dl__muted">Never</span>
 									{/if}
 								</dd>
 							</div>
-							<div class="bg-slate-900/50 px-5 py-4">
-								<dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-									SMS credit balance
-								</dt>
-								<dd class="mt-1 text-sm text-white">
+							<div class="jafar-dl__cell">
+								<dt class="jafar-dl__term">SMS credit balance</dt>
+								<dd class="jafar-dl__val">
 									{#if creditLoading && creditBalance === null}
-										<span class="text-slate-500">Loading…</span>
+										<span class="jafar-dl__muted">Loading…</span>
 									{:else if creditBalance !== null}
-										${creditBalance.toFixed(2)}
+										<span class="jafar-dl__text">${creditBalance.toFixed(2)}</span>
 									{:else}
-										<span class="text-slate-500">No credit account</span>
+										<span class="jafar-dl__muted">No credit account</span>
 									{/if}
 								</dd>
 							</div>
 						</dl>
 
 						<!-- Approval actions -->
-						<div class="border-t border-slate-800/80 px-5 py-5 space-y-4">
-							<div class="flex flex-wrap items-center gap-3">
-								<span class="text-sm font-semibold text-white">Carrier approval:</span>
-								<span
-									class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold {approvalBadge[
-										org.sms_approval_status
-									]}"
-								>
+						<div class="jafar-approval">
+							<div class="jafar-approval__status">
+								<span class="jafar-approval__status-label">Carrier approval:</span>
+								<span class={approvalBadge[org.sms_approval_status]}>
 									{approvalLabel[org.sms_approval_status]}
 								</span>
 							</div>
 
 							{#if carrierRequired}
 								{#if org.sms_approval_status === 'rejected' && org.sms_approval_reason}
-									<div
-										class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-									>
-										<p class="text-[11px] font-semibold uppercase tracking-wide text-red-300/80">
-											Resubmission reason
-										</p>
-										<p class="mt-1 whitespace-pre-wrap">{org.sms_approval_reason}</p>
+									<div class="jafar-approval__reason">
+										<p class="jafar-approval__reason-term">Resubmission reason</p>
+										<p class="jafar-approval__reason-text">{org.sms_approval_reason}</p>
 									</div>
 								{/if}
 
-								<div class="flex flex-wrap items-center gap-2">
+								<div class="jafar-approval__actions">
 									<button
 										type="button"
 										disabled={approving || org.sms_approval_status === 'approved'}
 										onclick={markApproved}
-										class="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+										class="jafar-btn jafar-btn--emerald"
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="15"
-											height="15"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.4"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											aria-hidden="true"
-										>
-											<polyline points="20 6 9 17 4 12" />
-										</svg>
+										<i class="ri-check-line" aria-hidden="true"></i>
 										Mark approved
 									</button>
 									<button
 										type="button"
 										disabled={approving}
 										onclick={() => (showRejectForm = !showRejectForm)}
-										class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 text-sm font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+										class="jafar-btn"
 									>
 										Request resubmission
 									</button>
 								</div>
 
 								{#if showRejectForm}
-									<div class="space-y-2">
-										<label
-											for="reject-reason"
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Resubmission reason <span class="text-red-400">*</span>
+									<div class="jafar-approval__form">
+										<label for="reject-reason" class="jafar-flabel">
+											Resubmission reason <span class="jafar-flabel__req">*</span>
 										</label>
 										<textarea
 											id="reject-reason"
 											rows={3}
 											bind:value={rejectReason}
 											placeholder="What needs to be corrected before resubmitting to the carrier?"
-											class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-red-500/60"
+											class="jafar-textarea"
 										></textarea>
-										<div class="flex justify-end">
+										<div class="jafar-approval__form-actions">
 											<button
 												type="button"
 												disabled={approving || !rejectReason.trim()}
 												onclick={requestResubmission}
-												class="inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-4 text-sm font-semibold text-white shadow-md shadow-red-900/40 hover:from-red-500 hover:to-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
+												class="jafar-btn jafar-btn--red"
 											>
 												{approving ? 'Saving…' : 'Mark rejected'}
 											</button>
@@ -1620,7 +1208,7 @@
 									</div>
 								{/if}
 							{:else}
-								<p class="text-xs text-slate-500">
+								<p class="jafar-approval__note">
 									Approval isn't required for this org — carrier registration (US 10DLC / Canada
 									CWTA) applies to US and Canada only, so outbound SMS is permitted without it.
 								</p>
@@ -1630,40 +1218,23 @@
 				{:else if activeCategory === 'entitlements'}
 					{#if seeded}
 						<!-- SMS activation (master switch) -->
-						<section
-							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-						>
-							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-									</svg>
+						<section class="jafar-panel">
+							<header class="jafar-panel__head">
+								<span class="jafar-panel__icon jafar-panel__icon--emerald" aria-hidden="true">
+									<i class="ri-chat-3-line"></i>
 								</span>
 								<div>
-									<h2 class="text-base font-semibold text-white">SMS activation</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<h2 class="jafar-panel__title">SMS activation</h2>
+									<p class="jafar-panel__sub">
 										Master switch for this tenant's SMS. When off, all outbound SMS is blocked and
 										the SMS feature flags below are locked — their stored values are preserved.
 									</p>
 								</div>
 							</header>
-							<div class="flex items-center justify-between gap-4 px-5 py-5">
-								<div class="min-w-0">
-									<p class="text-sm font-semibold text-white">SMS enabled</p>
-									<p class="mt-0.5 text-[11px] text-slate-500">
+							<div class="jafar-switchrow">
+								<div class="jafar-switchrow__info">
+									<p class="jafar-switchrow__title">SMS enabled</p>
+									<p class="jafar-switchrow__desc">
 										{smsEnabled
 											? 'Outbound SMS is permitted (subject to number, approval, and credit).'
 											: 'Outbound SMS is blocked org-wide. Inbound is still received and stored.'}
@@ -1671,91 +1242,46 @@
 								</div>
 								<Toggle bind:checked={smsEnabled} ariaLabel="Toggle SMS enabled" />
 							</div>
-							<div class="border-t border-slate-800/80 px-5 py-4">
-								<p class="text-[11px] text-slate-500">
-									Carrier approval (US 10DLC / Canada CWTA) is managed in the
-									<button
-										type="button"
-										onclick={() => (activeCategory = 'details')}
-										class="font-semibold text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline cursor-pointer"
-									>
-										Details
-									</button> tab.
-								</p>
+							<div class="jafar-panel__note">
+								Carrier approval (US 10DLC / Canada CWTA) is managed in the
+								<button type="button" onclick={() => (activeCategory = 'details')}>Details</button>
+								tab.
 							</div>
 						</section>
 
 						<!-- Plan template -->
-						<section
-							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-						>
-							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path
-											d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
-										/>
-										<path d="m9 12 2 2 4-4" />
-									</svg>
+						<section class="jafar-panel">
+							<header class="jafar-panel__head">
+								<span class="jafar-panel__icon jafar-panel__icon--violet" aria-hidden="true">
+									<i class="ri-medal-line"></i>
 								</span>
 								<div>
-									<h2 class="text-base font-semibold text-white">Plan template</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<h2 class="jafar-panel__title">Plan template</h2>
+									<p class="jafar-panel__sub">
 										Plan is display metadata. Feature flags below are the real entitlement system.
 									</p>
 								</div>
 							</header>
-							<div class="px-5 py-5">
+							<div class="jafar-panel__body">
 								<PlanTemplateSelector bind:value={plan} onApply={applyTemplate} />
 							</div>
 						</section>
 
 						<!-- Feature flags -->
-						<section
-							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-						>
-							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-										<line x1="4" y1="22" x2="4" y2="15" />
-									</svg>
+						<section class="jafar-panel">
+							<header class="jafar-panel__head">
+								<span class="jafar-panel__icon jafar-panel__icon--indigo" aria-hidden="true">
+									<i class="ri-flag-line"></i>
 								</span>
 								<div>
-									<h2 class="text-base font-semibold text-white">Feature flags</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<h2 class="jafar-panel__title">Feature flags</h2>
+									<p class="jafar-panel__sub">
 										The authoritative entitlement layer. Disable a flag and the tenant loses the
 										feature — no role bypass.
 									</p>
 								</div>
 							</header>
-							<div class="px-5 py-5">
+							<div class="jafar-panel__body">
 								<FeatureFlagsEditor
 									bind:flags
 									integrationStatus={org.integration_status ?? {}}
@@ -1765,39 +1291,20 @@
 						</section>
 
 						<!-- Limits -->
-						<section
-							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-						>
-							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M12 20v-6" />
-										<path d="M6 20V10" />
-										<path d="M18 20V4" />
-									</svg>
+						<section class="jafar-panel">
+							<header class="jafar-panel__head">
+								<span class="jafar-panel__icon jafar-panel__icon--amber" aria-hidden="true">
+									<i class="ri-bar-chart-2-line"></i>
 								</span>
 								<div>
-									<h2 class="text-base font-semibold text-white">Usage limits</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<h2 class="jafar-panel__title">Usage limits</h2>
+									<p class="jafar-panel__sub">
 										Hard caps enforced by usage counters. Use 0 for disabled or unlimited where
 										noted.
 									</p>
 								</div>
 							</header>
-							<div class="px-5 py-5">
+							<div class="jafar-panel__body">
 								<LimitsEditor bind:limits />
 							</div>
 						</section>
@@ -1805,258 +1312,190 @@
 				{:else if activeCategory === 'integrations'}
 					<!-- Webchat widget config (shown only when feature_webchat is enabled) -->
 					{#if org.feature_webchat}
-						<section
-							class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-						>
-							<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-								<span
-									class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-teal-500/30 bg-teal-500/10 text-teal-300"
-									aria-hidden="true"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="17"
-										height="17"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-									</svg>
+						<section class="jafar-panel">
+							<header class="jafar-panel__head">
+								<span class="jafar-panel__icon jafar-panel__icon--teal" aria-hidden="true">
+									<i class="ri-chat-3-line"></i>
 								</span>
 								<div>
-									<h2 class="text-base font-semibold text-white">Web Chat Widget</h2>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<h2 class="jafar-panel__title">Web Chat Widget</h2>
+									<p class="jafar-panel__sub">
 										Configure the embeddable chat widget for this org's website.
 									</p>
 								</div>
 							</header>
 
-							<div class="px-5 py-5 space-y-5">
+							<div class="jafar-panel__body">
 								{#if webchatLoading}
-									<p class="text-sm text-slate-400">Loading widget configuration…</p>
+									<p class="jafar-fmsg jafar-fmsg--muted">Loading widget configuration…</p>
 								{:else if webchatWidget}
-									<!-- Mode selector -->
-									<div class="space-y-2">
-										<span
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Chat mode
-										</span>
-										<div class="flex gap-3">
-											{#each [{ value: 'asynchronous', label: 'Asynchronous', hint: 'Visitors leave details, team replies later' }, { value: 'instant', label: 'Instant', hint: 'Implies team is ready to respond quickly' }] as mode (mode.value)}
-												<button
-													type="button"
-													onclick={() => {
-														if (webchatWidget)
-															webchatWidget.webchat_mode = mode.value as 'instant' | 'asynchronous';
-													}}
-													class="flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer flex-1
-														{webchatWidget.webchat_mode === mode.value
-														? 'border-indigo-500/50 bg-indigo-500/10 text-white'
-														: 'border-slate-700 bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'}"
-												>
-													<span class="text-sm font-semibold">{mode.label}</span>
-													<span class="text-[11px] opacity-70">{mode.hint}</span>
-												</button>
-											{/each}
+									<div class="jafar-wc">
+										<!-- Mode selector -->
+										<div class="jafar-wc__field">
+											<span class="jafar-flabel">Chat mode</span>
+											<div class="jafar-wc__modes">
+												{#each [{ value: 'asynchronous', label: 'Asynchronous', hint: 'Visitors leave details, team replies later' }, { value: 'instant', label: 'Instant', hint: 'Implies team is ready to respond quickly' }] as mode (mode.value)}
+													<button
+														type="button"
+														onclick={() => {
+															if (webchatWidget)
+																webchatWidget.webchat_mode = mode.value as
+																	| 'instant'
+																	| 'asynchronous';
+														}}
+														class="jafar-wc__mode"
+														class:jafar-wc__mode--active={webchatWidget.webchat_mode === mode.value}
+													>
+														<span class="jafar-wc__mode-name">{mode.label}</span>
+														<span class="jafar-wc__mode-hint">{mode.hint}</span>
+													</button>
+												{/each}
+											</div>
 										</div>
-									</div>
 
-									<!-- Active toggle -->
-									<div
-										class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3"
-									>
-										<div>
-											<p class="text-sm font-semibold text-white">Widget active</p>
-											<p class="text-[11px] text-slate-500">
-												When disabled, the widget will not appear on any website.
-											</p>
-										</div>
-										<button
-											type="button"
-											role="switch"
-											aria-label="Toggle widget active"
-											aria-checked={webchatWidget.is_active}
-											onclick={() => {
-												if (webchatWidget) webchatWidget.is_active = !webchatWidget.is_active;
-											}}
-											class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
-												{webchatWidget.is_active ? 'bg-indigo-600' : 'bg-slate-700'}"
-										>
-											<span
-												class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-													{webchatWidget.is_active ? 'translate-x-5' : 'translate-x-0'}"
-											></span>
-										</button>
-									</div>
-
-									<!-- Intro message -->
-									<div class="space-y-1.5">
-										<label
-											for="wc-intro"
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Intro message
-										</label>
-										<textarea
-											id="wc-intro"
-											rows={3}
-											bind:value={webchatWidget.intro_message}
-											class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
-										></textarea>
-										<p class="text-[11px] text-slate-500 italic">
-											Preview: "{webchatWidget.intro_message}"
-										</p>
-									</div>
-
-									<!-- Offline message -->
-									<div class="space-y-1.5">
-										<label
-											for="wc-offline"
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Offline message
-										</label>
-										<textarea
-											id="wc-offline"
-											rows={3}
-											bind:value={webchatWidget.offline_message}
-											class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
-										></textarea>
-										<p class="text-[11px] text-slate-500 italic">
-											Preview: "{webchatWidget.offline_message}"
-										</p>
-									</div>
-
-									<!-- Domain allowlist -->
-									<div class="space-y-2">
-										<span
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Domain allowlist
-										</span>
-										<p class="text-[11px] text-slate-500">
-											Leave empty to allow all origins. Add full origins like <code
-												class="font-mono text-slate-400">https://example.com</code
-											>.
-										</p>
-										<div class="flex gap-2">
-											<input
-												type="url"
-												bind:value={newDomain}
-												placeholder="https://example.com"
-												onkeydown={(e) => {
-													if (e.key === 'Enter') {
-														e.preventDefault();
-														addDomain();
-													}
-												}}
-												class="flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-indigo-500/60"
-											/>
+										<!-- Active toggle -->
+										<div class="jafar-wc__toggle-row jafar-subcard">
+											<div>
+												<p class="jafar-wc__toggle-title">Widget active</p>
+												<p class="jafar-wc__toggle-desc">
+													When disabled, the widget will not appear on any website.
+												</p>
+											</div>
 											<button
 												type="button"
-												onclick={addDomain}
-												class="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-colors cursor-pointer"
+												role="switch"
+												aria-label="Toggle widget active"
+												aria-checked={webchatWidget.is_active}
+												onclick={() => {
+													if (webchatWidget) webchatWidget.is_active = !webchatWidget.is_active;
+												}}
+												class="jafar-toggle"
 											>
-												Add
+												<span class="jafar-toggle__knob"></span>
 											</button>
 										</div>
-										{#if webchatWidget.domain_allowlist.length > 0}
-											<ul class="space-y-1.5">
-												{#each webchatWidget.domain_allowlist as domain (domain)}
-													<li
-														class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2"
-													>
-														<code class="font-mono text-xs text-slate-300">{domain}</code>
-														<button
-															type="button"
-															onclick={() => removeDomain(domain)}
-															class="text-[11px] font-semibold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-														>
-															Remove
-														</button>
-													</li>
-												{/each}
-											</ul>
-										{:else}
-											<p class="text-[11px] text-slate-500">
-												No domains added — all origins permitted.
-											</p>
-										{/if}
-									</div>
 
-									<!-- Widget token (immutable) -->
-									<div class="space-y-1.5">
-										<span
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Widget token
-										</span>
-										<p class="text-[11px] text-slate-500">
-											Generated once. Immutable. Never editable.
-										</p>
-										<div class="flex items-center gap-2">
-											<code
-												class="flex-1 truncate font-mono text-xs text-slate-300 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
-											>
-												{webchatToken ?? '—'}
-											</code>
-											{#if webchatToken}
-												<button
-													type="button"
-													onclick={() => copyValue(webchatToken!, 'wc-token')}
-													class="shrink-0 rounded-md border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
-												>
-													{copied === 'wc-token' ? 'Copied' : 'Copy'}
-												</button>
+										<!-- Intro message -->
+										<div class="jafar-wc__field">
+											<label for="wc-intro" class="jafar-flabel">Intro message</label>
+											<textarea
+												id="wc-intro"
+												rows={3}
+												bind:value={webchatWidget.intro_message}
+												class="jafar-textarea"
+											></textarea>
+											<p class="jafar-wc__preview">Preview: "{webchatWidget.intro_message}"</p>
+										</div>
+
+										<!-- Offline message -->
+										<div class="jafar-wc__field">
+											<label for="wc-offline" class="jafar-flabel">Offline message</label>
+											<textarea
+												id="wc-offline"
+												rows={3}
+												bind:value={webchatWidget.offline_message}
+												class="jafar-textarea"
+											></textarea>
+											<p class="jafar-wc__preview">Preview: "{webchatWidget.offline_message}"</p>
+										</div>
+
+										<!-- Domain allowlist -->
+										<div class="jafar-wc__field">
+											<span class="jafar-flabel">Domain allowlist</span>
+											<p class="jafar-fhint">
+												Leave empty to allow all origins. Add full origins like <code
+													class="jafar-wc__code">https://example.com</code
+												>.
+											</p>
+											<div class="jafar-wc__domain-add">
+												<input
+													type="url"
+													bind:value={newDomain}
+													placeholder="https://example.com"
+													onkeydown={(e) => {
+														if (e.key === 'Enter') {
+															e.preventDefault();
+															addDomain();
+														}
+													}}
+													class="jafar-input"
+												/>
+												<button type="button" onclick={addDomain} class="jafar-btn">Add</button>
+											</div>
+											{#if webchatWidget.domain_allowlist.length > 0}
+												<div class="jafar-wc__domain-list">
+													{#each webchatWidget.domain_allowlist as domain (domain)}
+														<div class="jafar-wc__domain-item">
+															<code class="jafar-wc__domain-code">{domain}</code>
+															<button
+																type="button"
+																onclick={() => removeDomain(domain)}
+																class="jafar-wc__domain-remove"
+															>
+																Remove
+															</button>
+														</div>
+													{/each}
+												</div>
+											{:else}
+												<p class="jafar-fhint">No domains added — all origins permitted.</p>
 											{/if}
 										</div>
-									</div>
 
-									<!-- Embed snippet -->
-									<div class="space-y-1.5">
-										<span
-											class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-										>
-											Embed snippet
-										</span>
-										<p class="text-[11px] text-slate-500">
-											Paste this into the <code class="font-mono text-slate-400">&lt;head&gt;</code> of
-											the contractor's website.
-										</p>
-										<div class="relative">
-											<pre
-												class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-xs text-emerald-300 leading-relaxed">{embedSnippet}</pre>
+										<!-- Widget token (immutable) -->
+										<div class="jafar-wc__field">
+											<span class="jafar-flabel">Widget token</span>
+											<p class="jafar-fhint">Generated once. Immutable. Never editable.</p>
+											<div class="jafar-wc__token-row">
+												<code class="jafar-wc__token-code">{webchatToken ?? '—'}</code>
+												{#if webchatToken}
+													<button
+														type="button"
+														class="jafar-copy-chip"
+														onclick={() => copyValue(webchatToken!, 'wc-token')}
+													>
+														{copied === 'wc-token' ? 'Copied' : 'Copy'}
+													</button>
+												{/if}
+											</div>
+										</div>
+
+										<!-- Embed snippet -->
+										<div class="jafar-wc__field">
+											<span class="jafar-flabel">Embed snippet</span>
+											<p class="jafar-fhint">
+												Paste this into the <code class="jafar-wc__code">&lt;head&gt;</code> of the contractor's
+												website.
+											</p>
+											<div class="jafar-wc__snippet">
+												<pre class="jafar-wc__snippet-pre">{embedSnippet}</pre>
+												<button
+													type="button"
+													class="jafar-copy-chip jafar-wc__snippet-copy"
+													onclick={() => copyValue(embedSnippet, 'snippet')}
+												>
+													{copied === 'snippet' ? 'Copied' : 'Copy'}
+												</button>
+											</div>
+										</div>
+
+										{#if webchatError}
+											<p class="jafar-fmsg jafar-fmsg--err">{webchatError}</p>
+										{/if}
+										{#if webchatSaved}
+											<p class="jafar-fmsg jafar-fmsg--ok">Widget configuration saved.</p>
+										{/if}
+
+										<div class="jafar-wc__actions">
 											<button
 												type="button"
-												onclick={() => copyValue(embedSnippet, 'snippet')}
-												class="absolute right-2 top-2 rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
+												onclick={saveWebchatWidget}
+												disabled={webchatSaving}
+												class="jafar-btn jafar-btn--red"
 											>
-												{copied === 'snippet' ? 'Copied' : 'Copy'}
+												{webchatSaving ? 'Saving…' : 'Save widget config'}
 											</button>
 										</div>
-									</div>
-
-									{#if webchatError}
-										<p class="text-sm text-red-400">{webchatError}</p>
-									{/if}
-									{#if webchatSaved}
-										<p class="text-sm text-emerald-400">Widget configuration saved.</p>
-									{/if}
-
-									<div class="flex justify-end">
-										<button
-											type="button"
-											onclick={saveWebchatWidget}
-											disabled={webchatSaving}
-											class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
-										>
-											{webchatSaving ? 'Saving…' : 'Save widget config'}
-										</button>
 									</div>
 								{/if}
 							</div>
@@ -2067,81 +1506,54 @@
 					<EmailDomainPanel {orgId} />
 
 					<!-- Integration status (read-only) -->
-					<section
-						class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl shadow-black/30 overflow-hidden"
-					>
-						<header class="flex items-center gap-3 border-b border-slate-800/80 px-5 py-4">
-							<span
-								class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
-								aria-hidden="true"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="17"
-									height="17"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-									<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-								</svg>
+					<section class="jafar-panel">
+						<header class="jafar-panel__head">
+							<span class="jafar-panel__icon jafar-panel__icon--cyan" aria-hidden="true">
+								<i class="ri-links-line"></i>
 							</span>
 							<div>
-								<h2 class="text-base font-semibold text-white">Integration status</h2>
-								<p class="mt-0.5 text-xs text-slate-500">
+								<h2 class="jafar-panel__title">Integration status</h2>
+								<p class="jafar-panel__sub">
 									Read-only. Some features require both the flag above AND an active integration
 									here (e.g. Stripe payments, Twilio SMS).
 								</p>
 							</div>
 						</header>
-						<div class="px-5 py-5">
-							<dl class="grid gap-px overflow-hidden rounded-xl bg-slate-800/60 sm:grid-cols-2">
+						<div class="jafar-panel__body">
+							<div class="jafar-connections">
 								{#each connections as conn (conn.key)}
-									<div class="flex items-center justify-between gap-3 bg-slate-950/40 px-4 py-3">
-										<dt class="min-w-0">
-											<span class="block text-sm font-semibold text-slate-200">{conn.label}</span>
-											<span class="block truncate text-[11px] text-slate-500">
+									<div class="jafar-connection">
+										<div class="jafar-connection__left">
+											<span class="jafar-connection__label">{conn.label}</span>
+											<span class="jafar-connection__sub">
 												{conn.connected && conn.detail ? conn.detail : conn.sublabel}
 											</span>
-										</dt>
-										<dd class="flex shrink-0 items-center gap-2">
+										</div>
+										<div class="jafar-connection__right">
 											{#if conn.connected && conn.mode}
 												<span
-													class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide
-														{conn.mode === 'live'
-														? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-														: 'border-slate-700 bg-slate-800/60 text-slate-400'}"
+													class="jafar-badge"
+													class:jafar-badge--mode-live={conn.mode === 'live'}
+													class:jafar-badge--muted={conn.mode !== 'live'}
 												>
 													{conn.mode}
 												</span>
 											{/if}
 											{#if conn.connected}
-												<span
-													class="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300"
-												>
-													Connected
-												</span>
+												<span class="jafar-badge jafar-badge--active">Connected</span>
 											{:else}
-												<span
-													class="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
-												>
-													Not connected
-												</span>
+												<span class="jafar-badge jafar-badge--muted">Not connected</span>
 											{/if}
-										</dd>
+										</div>
 									</div>
 								{/each}
-							</dl>
+							</div>
 						</div>
 					</section>
 				{/if}
 
 				{#if fetchError && org}
-					<p class="text-xs text-amber-400/80" role="status">
+					<p class="jafar-orgdetail__cached" role="status">
 						{fetchError} Showing cached data.
 					</p>
 				{/if}
@@ -2152,51 +1564,26 @@
 
 <!-- Sticky save bar -->
 {#if dirty}
-	<div
-		class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md"
-	>
-		<div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-5 py-3 sm:px-8">
-			<div class="min-w-0">
-				<p class="text-sm font-semibold text-white">Unsaved changes</p>
-				<p class="text-[11px] text-slate-400">Plan, feature flags, or limits have been modified.</p>
-			</div>
-			<div class="flex shrink-0 items-center gap-2">
-				<button
-					type="button"
-					onclick={discardChanges}
-					disabled={savingEntitlements}
-					class="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
-				>
-					Discard
-				</button>
-				<button
-					type="button"
-					onclick={saveEntitlements}
-					disabled={savingEntitlements}
-					class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-900/40 hover:from-red-500 hover:to-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
-				>
-					{#if savingEntitlements}
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class="animate-spin"
-							aria-hidden="true"
-						>
-							<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-						</svg>
-						Saving…
-					{:else}
-						Save changes
-					{/if}
-				</button>
-			</div>
+	<div class="jafar-save-bar">
+		<div class="jafar-save-bar__note">
+			<span class="jafar-save-bar__title">Unsaved changes</span>
+			Plan, feature flags, or limits have been modified.
 		</div>
+		<button type="button" onclick={discardChanges} disabled={savingEntitlements} class="jafar-btn">
+			Discard
+		</button>
+		<button
+			type="button"
+			onclick={saveEntitlements}
+			disabled={savingEntitlements}
+			class="jafar-btn jafar-btn--red"
+		>
+			{#if savingEntitlements}
+				<i class="ri-loader-4-line j-spin" aria-hidden="true"></i>
+				Saving…
+			{:else}
+				Save changes
+			{/if}
+		</button>
 	</div>
 {/if}

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { outboxEvents, quoteLineItems, quotes } from '$lib/server/db/schema';
+import { outboxEvents, quoteLineItems, quotePackages, quotes } from '$lib/server/db/schema';
 import { clientIpFrom, lookupQuoteForAction, sha256Hex } from '$lib/server/quotes/publicAccess';
 import { rateLimit } from '$lib/server/quotes/rateLimit';
 import { quoteAcceptedEvent } from '$lib/server/quotes/events';
@@ -27,6 +27,9 @@ export const POST: RequestHandler = async (event) => {
 
 	let signerName: string;
 	let requestedOptionalIds: string[];
+	// Good-Better-Best: the tier the customer selected. Required on a tiered quote, ignored on
+	// a simple one. Validated against the quote's real packages inside the tx below.
+	let requestedPackageId: string | null;
 	try {
 		const body = await event.request.json();
 		const name = String(body?.signer_name ?? '').trim();
@@ -44,6 +47,8 @@ export const POST: RequestHandler = async (event) => {
 		requestedOptionalIds = ids
 			.filter((v: unknown): v is string => typeof v === 'string')
 			.slice(0, 200);
+		requestedPackageId =
+			typeof body?.selected_package_id === 'string' ? body.selected_package_id : null;
 	} catch {
 		return json({ error: 'Please enter your full name to sign.' }, { status: 400 });
 	}
@@ -59,7 +64,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const quote = result.quote;
-	await db.transaction(async (tx) => {
+	const txResult = await db.transaction(async (tx) => {
 		const [locked] = await tx.execute<{
 			status: string;
 			subtotal: string;
@@ -74,19 +79,57 @@ export const POST: RequestHandler = async (event) => {
 			       deposit_required, deposit_type, deposit_percent
 			FROM quotes WHERE id = ${quote.id} FOR UPDATE
 		`);
-		if (!locked) return;
-		if (locked.status === 'accepted') return;
-		if (locked.status !== 'sent' && locked.status !== 'viewed') return;
+		if (!locked) return { kind: 'noop' as const };
+		if (locked.status === 'accepted') return { kind: 'noop' as const };
+		if (locked.status !== 'sent' && locked.status !== 'viewed') return { kind: 'noop' as const };
 
-		// All optional add-on lines on this quote (the source of truth for what's selectable).
-		const optionalLines = await tx
-			.select({ id: quoteLineItems.id, total: quoteLineItems.total })
+		// Good-Better-Best: load this quote's tiers. Empty = simple quote (today's behavior).
+		const pkgs = await tx
+			.select({ id: quotePackages.id })
+			.from(quotePackages)
+			.where(and(eq(quotePackages.quote_id, quote.id), isNull(quotePackages.deleted_at)));
+
+		let selectedPackageId: string | null = null;
+		if (pkgs.length > 0) {
+			// Tiered: the customer MUST pick exactly one of this quote's real packages. Anything
+			// missing or foreign is rejected — the browser can never smuggle another tier's price.
+			if (!requestedPackageId || !pkgs.some((p) => p.id === requestedPackageId)) {
+				return { kind: 'error' as const, status: 400, message: 'Please choose a package to continue.' };
+			}
+			selectedPackageId = requestedPackageId;
+		}
+
+		// Base (required) lines. Scoped to the SELECTED tier when tiered — the base subtotal is
+		// recomputed from stored prices here, NOT read from quotes.subtotal (which mirrors the
+		// recommended tier and would over/under-charge when the customer picks a different one).
+		const requiredLines = await tx
+			.select({ total: quoteLineItems.total, taxable: quoteLineItems.taxable })
 			.from(quoteLineItems)
 			.where(
 				and(
 					eq(quoteLineItems.quote_id, quote.id),
 					isNull(quoteLineItems.deleted_at),
-					eq(quoteLineItems.is_optional, true)
+					eq(quoteLineItems.is_optional, false),
+					selectedPackageId ? eq(quoteLineItems.package_id, selectedPackageId) : undefined
+				)
+			);
+		const baseSubtotalCents = requiredLines.reduce((sum, l) => sum + toCents(l.total), 0);
+		// Per-line tax: only the taxable required lines feed the tax base.
+		const taxableBaseCents = requiredLines.reduce(
+			(sum, l) => sum + (l.taxable ? toCents(l.total) : 0),
+			0
+		);
+
+		// Optional add-ons the customer could tick — scoped to the selected tier when tiered.
+		const optionalLines = await tx
+			.select({ id: quoteLineItems.id, total: quoteLineItems.total, taxable: quoteLineItems.taxable })
+			.from(quoteLineItems)
+			.where(
+				and(
+					eq(quoteLineItems.quote_id, quote.id),
+					isNull(quoteLineItems.deleted_at),
+					eq(quoteLineItems.is_optional, true),
+					selectedPackageId ? eq(quoteLineItems.package_id, selectedPackageId) : undefined
 				)
 			);
 
@@ -94,12 +137,18 @@ export const POST: RequestHandler = async (event) => {
 		const selected = optionalLines.filter((l) => requested.has(l.id));
 		const selectedIds = selected.map((l) => l.id);
 
-		// Accepted figures = base (required items, already excluded from quote.subtotal's
-		// computation) + the selected optional add-ons. Recomputed here from stored prices.
-		const baseSubtotalCents = toCents(locked.subtotal);
+		// Accepted figures = the selected tier's base (required items) + the chosen optional
+		// add-ons. Recomputed here from stored prices.
 		const optionalCents = selected.reduce((sum, l) => sum + toCents(l.total), 0);
+		// Taxable portion of the chosen add-ons.
+		const taxableOptionalCents = selected.reduce(
+			(sum, l) => sum + (l.taxable ? toCents(l.total) : 0),
+			0
+		);
 		// Pre-discount subtotal = base required items + the optional add-ons chosen.
 		const acceptedSubtotalCents = baseSubtotalCents + optionalCents;
+		// Pre-discount TAXABLE subtotal = taxable required + taxable chosen add-ons.
+		const taxableSubtotalCents = taxableBaseCents + taxableOptionalCents;
 		// Quote-level discount applies to the WHOLE accepted subtotal (base + chosen
 		// add-ons) before tax — industry standard. Percent scales with the selection; a
 		// fixed amount is clamped so the total can never go negative. accepted_subtotal
@@ -118,8 +167,15 @@ export const POST: RequestHandler = async (event) => {
 		}
 		const discountedSubtotalCents = acceptedSubtotalCents - discountCents;
 		const taxRate = Number(locked.tax_rate);
+		// Allocate the discount proportionally to the taxable base, then tax only that share.
+		// When every line is taxable, taxableSubtotalCents === acceptedSubtotalCents and this
+		// collapses to discountedSubtotalCents * taxRate exactly.
+		const taxableAfterDiscountCents =
+			acceptedSubtotalCents > 0
+				? (taxableSubtotalCents * discountedSubtotalCents) / acceptedSubtotalCents
+				: 0;
 		const acceptedTaxCents = Math.round(
-			discountedSubtotalCents * (Number.isFinite(taxRate) ? taxRate : 0)
+			taxableAfterDiscountCents * (Number.isFinite(taxRate) ? taxRate : 0)
 		);
 		const acceptedTotalCents = discountedSubtotalCents + acceptedTaxCents;
 
@@ -151,6 +207,8 @@ export const POST: RequestHandler = async (event) => {
 			acceptance_signature_name: signerName,
 			acceptance_signature_ip: rawIp,
 			acceptance_signed_at: now,
+			// Null on a simple quote (no tiers); the chosen tier on a Good-Better-Best quote.
+			accepted_package_id: selectedPackageId,
 			accepted_subtotal: centsToString(acceptedSubtotalCents),
 			accepted_tax_amount: centsToString(acceptedTaxCents),
 			accepted_total: centsToString(acceptedTotalCents)
@@ -173,7 +231,12 @@ export const POST: RequestHandler = async (event) => {
 			.insert(outboxEvents)
 			.values(quoteAcceptedEvent({ orgId: quote.org_id, quoteId: quote.id }))
 			.onConflictDoNothing({ target: outboxEvents.idempotency_key });
+
+		return { kind: 'accepted' as const };
 	});
 
+	if (txResult.kind === 'error') {
+		return json({ error: txResult.message }, { status: txResult.status });
+	}
 	return json({ data: { status: 'accepted' } });
 };

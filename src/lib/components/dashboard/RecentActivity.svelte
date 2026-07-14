@@ -5,49 +5,31 @@
 		DashboardActivityIcon,
 		DashboardActivityTone
 	} from '$lib/types/dashboard';
-	import {
-		Receipt,
-		CheckCircle2,
-		Eye,
-		XCircle,
-		Trophy,
-		TrendingDown,
-		Sparkles,
-		ArrowRightLeft,
-		Briefcase,
-		UserPlus,
-		UserCheck,
-		Star,
-		Activity,
-		Send,
-		UserCog
-	} from '@lucide/svelte';
-	import type { Component } from 'svelte';
 
 	let { rows }: { rows: DashboardActivityRow[] } = $props();
 
-	const ICONS: Record<DashboardActivityIcon, Component> = {
-		payment: Receipt,
-		quote_accepted: CheckCircle2,
-		quote_viewed: Eye,
-		quote_declined: XCircle,
-		quote_sent: Send,
-		opportunity_created: Sparkles,
-		opportunity_stage_changed: ArrowRightLeft,
-		opportunity_assignee_changed: UserCog,
-		opportunity_won: Trophy,
-		opportunity_lost: TrendingDown,
-		job_completed: Briefcase,
-		lead: UserPlus,
-		contact_became_customer: UserCheck,
-		review_received: Star
+	const ICONS: Record<DashboardActivityIcon, string> = {
+		payment: 'ri-receipt-line',
+		quote_accepted: 'ri-checkbox-circle-line',
+		quote_viewed: 'ri-eye-line',
+		quote_declined: 'ri-close-circle-line',
+		quote_sent: 'ri-send-plane-line',
+		opportunity_created: 'ri-sparkling-line',
+		opportunity_stage_changed: 'ri-arrow-left-right-line',
+		opportunity_assignee_changed: 'ri-user-settings-line',
+		opportunity_won: 'ri-trophy-line',
+		opportunity_lost: 'ri-arrow-down-line',
+		job_completed: 'ri-briefcase-line',
+		lead: 'ri-user-add-line',
+		contact_became_customer: 'ri-user-follow-line',
+		review_received: 'ri-star-line'
 	};
 
 	const TONE: Record<DashboardActivityTone, string> = {
-		neutral: 'text-sky-500',
-		positive: 'text-emerald-500',
-		attention: 'text-amber-500',
-		negative: 'text-rose-500'
+		neutral: 'widget-card__list-icon--info',
+		positive: 'widget-card__list-icon--success',
+		attention: 'widget-card__list-icon--warning',
+		negative: 'widget-card__list-icon--danger'
 	};
 
 	const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -62,50 +44,40 @@
 		if (abs < day * 30) return rtf.format(Math.round(ms / day), 'day');
 		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 	}
-
-	function go(route: string) {
-		goto(route);
-	}
 </script>
 
-<section
-	class="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card dark:border-white/10"
->
-	<header
-		class="flex items-center justify-between border-b border-border/70 bg-card-raised/35 px-5 py-4"
-	>
-		<h2 class="text-base font-semibold tracking-tight text-foreground">Recent activity</h2>
+<section class="widget-card">
+	<header class="widget-card__header">
+		<h2 class="widget-card__title">Recent activity</h2>
 	</header>
 
 	{#if rows.length === 0}
-		<div class="flex flex-col items-center gap-2 bg-muted/20 px-6 py-10 text-center">
-			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-				<Activity class="h-5 w-5 text-muted-foreground" />
-			</div>
-			<p class="text-sm font-medium text-foreground">No activity yet</p>
-			<p class="text-xs text-muted-foreground">
+		<div class="widget-card__empty">
+			<span class="widget-card__empty-icon">
+				<i class="ri-pulse-line"></i>
+			</span>
+			<p class="widget-card__empty-title">No activity yet</p>
+			<p class="widget-card__empty-sub">
 				As leads, quotes, jobs, and payments come in, they'll show up here.
 			</p>
 		</div>
 	{:else}
-		<ul class="divide-y divide-border/60">
+		<ul class="widget-card__list">
 			{#each rows as row (row.id)}
-				{@const Icon = ICONS[row.icon_key]}
-				{#if Icon}
-					<li>
+				{@const iconClass = ICONS[row.icon_key]}
+				{#if iconClass}
+					<li class="widget-card__list-item">
 						<button
 							type="button"
-							onclick={() => go(row.target_route)}
-							class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 ease-out hover:bg-card-raised focus-visible:bg-card-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							onclick={() => goto(row.target_route)}
+							class="widget-card__list-row"
 						>
-							<span
-								class={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-border/60 ${TONE[row.tone]}`}
-							>
-								<Icon class="h-4 w-4" />
+							<span class={['widget-card__list-icon', TONE[row.tone]].join(' ')}>
+								<i class={iconClass}></i>
 							</span>
-							<span class="flex min-w-0 flex-1 flex-col">
-								<span class="truncate text-sm font-medium text-foreground">{row.label}</span>
-								<span class="text-xs text-muted-foreground">{relative(row.occurred_at)}</span>
+							<span class="widget-card__list-content">
+								<span class="widget-card__list-label">{row.label}</span>
+								<span class="widget-card__list-sub">{relative(row.occurred_at)}</span>
 							</span>
 						</button>
 					</li>

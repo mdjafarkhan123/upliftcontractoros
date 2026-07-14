@@ -1,15 +1,14 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
 	import TeamMemberCard from '$lib/components/team/TeamMemberCard.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { teamStore } from '$lib/stores/team.svelte';
-	import { Users, Plus, UserCheck, UsersRound } from '@lucide/svelte';
 
 	const member = getMemberContext();
 
@@ -40,19 +39,16 @@
 
 <PageWrapper title="Team" subtitle="Manage team members, roles, and permissions." back="/settings">
 	{#snippet actions()}
-		<div class="flex items-center gap-3">
-			<label
-				class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none"
-				for="show-inactive"
-			>
+		<div class="team-toolbar">
+			<label class="settings-switch-inline" for="show-inactive">
 				<Switch id="show-inactive" bind:checked={showInactive} />
 				Show inactive
 			</label>
 			{#if canCreate}
-				<Button onclick={() => goto('/settings/team/new')}>
-					<Plus class="h-4 w-4" />
-					Add member
-				</Button>
+			<Button onclick={() => goto('/settings/team/new')}>
+				<i class="ri-add-line" aria-hidden="true"></i>
+				Add member
+			</Button>
 			{/if}
 		</div>
 	{/snippet}
@@ -60,10 +56,12 @@
 	{#if showSkeleton}
 		<SkeletonLoader lines={5} label="Loading team" />
 	{:else if showError}
-		<p class="text-sm text-destructive">{errorMsg}</p>
+		<p class="settings-note settings-note--error">
+			<span class="settings-note__text">{errorMsg}</span>
+		</p>
 	{:else if items.length === 0}
 		<EmptyState
-			icon={Users}
+			iconClass="ri-group-line"
 			title="No team members yet"
 			description={canCreate
 				? 'Add your first team member to share access with your crew.'
@@ -72,41 +70,28 @@
 			onAction={canCreate ? () => goto('/settings/team/new') : undefined}
 		/>
 	{:else}
-		<!-- Stat cards -->
-		<div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-			<div class="rounded-xl border border-border/60 bg-card px-4 py-4 shadow-sm">
-				<div class="flex items-start justify-between gap-2">
-					<div>
-						<p class="text-2xl font-bold tabular-nums text-foreground">{activeCount}</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							Active {activeCount === 1 ? 'member' : 'members'}
-						</p>
-					</div>
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--status-active))]/10 text-[hsl(var(--status-active))]"
-					>
-						<UserCheck class="h-4 w-4" />
-					</div>
+		<div class="team-stats">
+			<div class="team-stats__card">
+				<div>
+					<p class="team-stats__value">{activeCount}</p>
+					<p class="team-stats__label">Active {activeCount === 1 ? 'member' : 'members'}</p>
 				</div>
+				<span class="team-stats__icon team-stats__icon--active">
+					<i class="ri-user-follow-line" aria-hidden="true"></i>
+				</span>
 			</div>
-			<div class="rounded-xl border border-border/60 bg-card px-4 py-4 shadow-sm">
-				<div class="flex items-start justify-between gap-2">
-					<div>
-						<p class="text-2xl font-bold tabular-nums text-foreground">{totalCount}</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							Total {totalCount === 1 ? 'member' : 'members'}
-						</p>
-					</div>
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"
-					>
-						<UsersRound class="h-4 w-4" />
-					</div>
+			<div class="team-stats__card">
+				<div>
+					<p class="team-stats__value">{totalCount}</p>
+					<p class="team-stats__label">Total {totalCount === 1 ? 'member' : 'members'}</p>
 				</div>
+				<span class="team-stats__icon team-stats__icon--total">
+					<i class="ri-group-line" aria-hidden="true"></i>
+				</span>
 			</div>
 		</div>
 
-		<ul class="flex flex-col gap-2">
+		<ul class="team-list">
 			{#each items as m (m.id)}
 				<li>
 					<TeamMemberCard member={m} onclick={() => goto(`/settings/team/${m.id}`)} />
@@ -115,16 +100,22 @@
 		</ul>
 
 		{#if inactiveCount > 0 && !showInactive}
-			<p class="mt-3 text-center text-xs text-muted-foreground">
+			<p class="team-inactive-note">
 				{inactiveCount} inactive {inactiveCount === 1 ? 'member' : 'members'} hidden —
-				<button
-					type="button"
-					onclick={() => (showInactive = true)}
-					class="underline underline-offset-2 hover:text-foreground transition-colors duration-150"
-				>
-					show all
-				</button>
+				<button type="button" onclick={() => (showInactive = true)}>show all</button>
 			</p>
 		{/if}
 	{/if}
 </PageWrapper>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.team-list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		list-style: none;
+		padding: 0;
+	}
+</style>

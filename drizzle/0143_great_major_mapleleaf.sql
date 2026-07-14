@@ -1,0 +1,1 @@
+ALTER TABLE "organizations" ADD COLUMN "target_margin_pct" numeric(5, 2) DEFAULT '40.00';

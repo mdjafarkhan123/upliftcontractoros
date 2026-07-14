@@ -12,38 +12,19 @@
 	} = $props();
 </script>
 
-<main
-	class="relative min-h-screen flex items-center justify-center overflow-hidden bg-background px-4 py-10"
->
-	<!-- Brand gradient mesh -->
-	<div class="pointer-events-none absolute inset-0 -z-10">
-		<div
-			class="absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full opacity-50 blur-3xl"
-			style="background: radial-gradient(closest-side, hsl(var(--brand-primary) / 0.55), transparent 70%);"
-		></div>
-		<div
-			class="absolute -bottom-40 -right-24 h-[480px] w-[480px] rounded-full opacity-40 blur-3xl"
-			style="background: radial-gradient(closest-side, hsl(var(--brand-light) / 0.35), transparent 70%);"
-		></div>
-		<div
-			class="absolute top-1/2 left-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-40 blur-3xl"
-			style="background: radial-gradient(closest-side, hsl(var(--brand-deep) / 0.7), transparent 70%);"
-		></div>
-		<!-- subtle grid overlay -->
-		<div
-			class="absolute inset-0 opacity-[0.04]"
-			style="background-image: linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px); background-size: 44px 44px;"
-		></div>
+<main class="auth-layout">
+	<!-- Decorative background blobs -->
+	<div class="auth-layout__bg" aria-hidden="true">
+		<div class="auth-layout__blob auth-layout__blob--top-left"></div>
+		<div class="auth-layout__blob auth-layout__blob--bottom-right"></div>
+		<div class="auth-layout__blob auth-layout__blob--center"></div>
+		<div class="auth-layout__grid"></div>
 	</div>
 
-	<div class="w-full max-w-[420px]">
+	<div class="auth-layout__container">
 		<!-- Brand header -->
-		<div class="text-center mb-8">
-			<div
-				class="relative mx-auto mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl shadow-xl"
-				style="background: linear-gradient(135deg, hsl(var(--brand-light)) 0%, hsl(var(--brand-primary)) 55%, hsl(var(--brand-deep)) 100%); box-shadow: 0 10px 30px -8px hsl(var(--brand-primary) / 0.55), inset 0 1px 0 hsl(var(--brand-light) / 0.6);"
-			>
-				<!-- 3-tone brand mark: layered chevrons in deep / primary / light -->
+		<div class="auth-brand">
+			<div class="auth-brand__logo">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="30"
@@ -56,50 +37,210 @@
 				>
 					<path
 						d="M3 17 L12 8 L21 17"
-						stroke="hsl(var(--brand-deep))"
+						stroke="#13452D"
 						stroke-width="2.6"
 						opacity="0.55"
 						transform="translate(0,3)"
 					/>
 					<path d="M3 17 L12 8 L21 17" stroke="white" stroke-width="2.6" opacity="0.95" />
-					<circle cx="12" cy="8" r="1.6" fill="hsl(var(--brand-light))" />
+					<circle cx="12" cy="8" r="1.6" fill="#17F700" />
 				</svg>
 			</div>
-			<p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-				Contractor OS
-			</p>
+			<p class="auth-brand__name">Contractor OS</p>
 		</div>
 
-		<!-- Glass card -->
-		<div
-			class="relative rounded-2xl border border-white/5 bg-card shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] overflow-hidden"
-		>
-			<!-- top hairline glow -->
-			<div
-				class="pointer-events-none absolute inset-x-0 top-0 h-px"
-				style="background: linear-gradient(90deg, transparent, hsl(var(--brand-light) / 0.6), transparent);"
-			></div>
-
-			<div class="px-8 pt-8 pb-2">
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+		<!-- Card -->
+		<div class="auth-card">
+			<div class="auth-card__header">
+				<h1 class="auth-card__title">{title}</h1>
 				{#if description}
-					<p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">{description}</p>
+					<p class="auth-card__description">{description}</p>
 				{/if}
 			</div>
 
-			<div class="px-8 py-7">
+			<div class="auth-card__body">
 				{@render children()}
 			</div>
 
 			{#if footer}
-				<div class="flex justify-center border-t border-border/60 bg-muted/30 px-8 py-4">
+				<div class="auth-card__footer">
 					{@render footer()}
 				</div>
 			{/if}
 		</div>
 
-		<p class="mt-6 text-center text-xs text-muted-foreground/60">
+		<p class="auth-layout__copyright">
 			© {new Date().getFullYear()} Contractor OS. All rights reserved.
 		</p>
 	</div>
 </main>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.auth-layout {
+		position: relative;
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		background: var(--color-bg-app);
+		padding: $space-10 $space-4;
+	}
+
+	// ── Background decorative layer ──────────────────────────────────────────
+
+	.auth-layout__bg {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 0;
+	}
+
+	.auth-layout__blob {
+		position: absolute;
+		border-radius: $radius-full;
+
+		&--top-left {
+			top: -80px;
+			left: -80px;
+			width: 420px;
+			height: 420px;
+			background: radial-gradient(closest-side, rgba(34, 125, 83, 0.55), transparent 70%);
+			filter: blur(72px);
+			opacity: 0.5;
+		}
+
+		&--bottom-right {
+			bottom: -100px;
+			right: -60px;
+			width: 480px;
+			height: 480px;
+			background: radial-gradient(closest-side, rgba(23, 247, 0, 0.15), transparent 70%);
+			filter: blur(80px);
+			opacity: 0.4;
+		}
+
+		&--center {
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			width: 520px;
+			height: 520px;
+			background: radial-gradient(closest-side, rgba(19, 69, 45, 0.7), transparent 70%);
+			filter: blur(80px);
+			opacity: 0.4;
+		}
+	}
+
+	.auth-layout__grid {
+		position: absolute;
+		inset: 0;
+		opacity: 0.04;
+		background-image:
+			linear-gradient(var(--color-text-primary) 1px, transparent 1px),
+			linear-gradient(90deg, var(--color-text-primary) 1px, transparent 1px);
+		background-size: 44px 44px;
+	}
+
+	// ── Centered content column ──────────────────────────────────────────────
+
+	.auth-layout__container {
+		position: relative;
+		z-index: 1;
+		width: 100%;
+		max-width: 420px;
+	}
+
+	.auth-layout__copyright {
+		margin-top: $space-6;
+		text-align: center;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		opacity: 0.7;
+	}
+
+	// ── Brand mark ──────────────────────────────────────────────────────────
+
+	.auth-brand {
+		text-align: center;
+		margin-bottom: $space-8;
+	}
+
+	.auth-brand__logo {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 64px;
+		height: 64px;
+		border-radius: $radius-xl;
+		background: linear-gradient(135deg, #{$brand-light} 0%, #{$brand-primary} 55%, #{$brand-deep} 100%);
+		box-shadow:
+			0 10px 30px -8px rgba(34, 125, 83, 0.55),
+			inset 0 1px 0 rgba(23, 247, 0, 0.6);
+		margin: 0 auto $space-5;
+	}
+
+	.auth-brand__name {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: 0.28em;
+		color: var(--color-text-secondary);
+	}
+
+	// ── Auth card ────────────────────────────────────────────────────────────
+
+	.auth-card {
+		position: relative;
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xl);
+		overflow: hidden;
+
+		// Top hairline brand glow
+		&::before {
+			content: '';
+			position: absolute;
+			inset-inline: 0;
+			top: 0;
+			height: 1px;
+			background: linear-gradient(90deg, transparent, rgba(23, 247, 0, 0.45), transparent);
+			pointer-events: none;
+		}
+	}
+
+	.auth-card__header {
+		padding: $space-8 $space-8 $space-3;
+	}
+
+	.auth-card__title {
+		font-family: $font-display;
+		font-size: $fs-h2;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.02em;
+		color: var(--color-text-primary);
+		line-height: $lh-h2;
+	}
+
+	.auth-card__description {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-secondary);
+	}
+
+	.auth-card__body {
+		padding: $space-7 $space-8;
+	}
+
+	.auth-card__footer {
+		display: flex;
+		justify-content: center;
+		border-top: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+		padding: $space-4 $space-8;
+	}
+</style>

@@ -55,6 +55,7 @@ export type QuotePdfData = {
 		tax_amount: string;
 		total: string;
 		notes: string | null;
+		terms: string | null;
 		deposit_required: boolean;
 		deposit_amount: string | null;
 		created_at: Date;
@@ -74,12 +75,36 @@ export type QuotePdfData = {
 		unit: string | null;
 		section_label: string | null;
 		is_optional: boolean;
+		// Per-line tax flag. Only taxable lines feed the quote's tax base; false shows a
+		// "Tax exempt" hint on the PDF. Absent = taxable (the default).
+		taxable?: boolean;
+		// Good-Better-Best: the tier this line belongs to (null on a simple quote).
+		package_id?: string | null;
 		unit_price: string;
 		total: string;
 		// Per-line photos (resolved/signed URLs) rendered as small thumbnails under the
 		// description. Empty/absent for lines without photos.
 		photos?: { url: string }[];
 	}[];
+	// Good-Better-Best tiers. Empty on a simple quote; 2–3 entries on a tiered quote. When
+	// present the PDF renders one block per tier instead of a single totals table.
+	packages?: {
+		id: string;
+		name: string;
+		is_recommended: boolean;
+		subtotal: string;
+		total: string;
+	}[];
+	// The customer's acceptance, rendered as a signed "Accepted by" block only when the quote is
+	// accepted with a signature on file. imageUrl is the resolved (signed) URL of the drawn
+	// signature (in-person "sign on this device"); null on a typed online acceptance. Null on
+	// offline "mark approved" (no signature was captured).
+	acceptance?: {
+		signerName: string;
+		signedAt: Date;
+		imageUrl: string | null;
+		inPerson: boolean;
+	} | null;
 };
 
 function fmtMoney(n: string): string {
@@ -95,17 +120,6 @@ function renderHtml(d: QuotePdfData): string {
 	// so a section's items are contiguous; we still group by label defensively. A null
 	// label = ungrouped (no heading, no subtotal).
 	type PdfLine = QuotePdfData['lineItems'][number];
-	// Required lines drive the main table + totals. Optional add-ons render in a separate
-	// block below the totals (they are not part of the quoted total).
-	const requiredLines = d.lineItems.filter((li) => !li.is_optional);
-	const optionalLines = d.lineItems.filter((li) => li.is_optional);
-	const sections: { label: string | null; items: PdfLine[] }[] = [];
-	for (const li of requiredLines) {
-		const label = li.section_label?.trim() || null;
-		const last = sections[sections.length - 1];
-		if (last && last.label === label) last.items.push(li);
-		else sections.push({ label, items: [li] });
-	}
 	const photoStrip = (li: PdfLine): string =>
 		li.photos && li.photos.length > 0
 			? `<div class="linephotos">${li.photos
@@ -116,31 +130,46 @@ function renderHtml(d: QuotePdfData): string {
 		li.details && li.details.trim()
 			? `<div class="linedetails">${escapeHtml(li.details)}</div>`
 			: '';
+	// Only surface "Tax exempt" when the quote actually charges tax — otherwise it's noise.
+	const quoteHasTax = Number(d.quote.tax_rate) > 0;
+	const taxExemptHint = (li: PdfLine): string =>
+		quoteHasTax && li.taxable === false ? `<div class="linetaxexempt">Tax exempt</div>` : '';
 	const lineRow = (li: PdfLine): string => `<tr>
-				<td><div class="linetitle">${escapeHtml(li.description)}</div>${lineDetails(li)}${photoStrip(li)}</td>
+				<td><div class="linetitle">${escapeHtml(li.description)}</div>${lineDetails(li)}${taxExemptHint(li)}${photoStrip(li)}</td>
 				<td class="num">${escapeHtml(li.quantity)}${li.unit ? ' ' + escapeHtml(li.unit) : ''}</td>
 				<td class="num">${fmtMoney(li.unit_price)}</td>
 				<td class="num">${fmtMoney(li.total)}</td>
 			</tr>`;
-	const optionalBlock =
-		optionalLines.length > 0
+	// Render a set of required lines grouped into their sections (contiguous by position),
+	// with a per-section subtotal row for labelled sections.
+	const renderSectionRows = (lines: PdfLine[]): string => {
+		const sections: { label: string | null; items: PdfLine[] }[] = [];
+		for (const li of lines) {
+			const label = li.section_label?.trim() || null;
+			const last = sections[sections.length - 1];
+			if (last && last.label === label) last.items.push(li);
+			else sections.push({ label, items: [li] });
+		}
+		return sections
+			.map((sec) => {
+				const body = sec.items.map(lineRow).join('');
+				if (sec.label === null) return body;
+				const secTotal = sec.items.reduce((sum, li) => sum + Number(li.total), 0);
+				return `<tr class="section"><td colspan="4">${escapeHtml(sec.label)}</td></tr>
+				${body}
+				<tr class="section-subtotal"><td colspan="3">${escapeHtml(sec.label)} subtotal</td><td class="num">${fmtMoney(String(secTotal))}</td></tr>`;
+			})
+			.join('');
+	};
+	const optionalBlockFor = (lines: PdfLine[]): string =>
+		lines.length > 0
 			? `<table style="margin-top:24px;">
 			<thead><tr>
 				<th colspan="4" style="background:#fffbeb;color:#92400e;">Optional add-ons — not included in total</th>
 			</tr></thead>
-			<tbody>${optionalLines.map(lineRow).join('')}</tbody>
+			<tbody>${lines.map(lineRow).join('')}</tbody>
 		</table>`
 			: '';
-	const rows = sections
-		.map((sec) => {
-			const body = sec.items.map(lineRow).join('');
-			if (sec.label === null) return body;
-			const secTotal = sec.items.reduce((sum, li) => sum + Number(li.total), 0);
-			return `<tr class="section"><td colspan="4">${escapeHtml(sec.label)}</td></tr>
-				${body}
-				<tr class="section-subtotal"><td colspan="3">${escapeHtml(sec.label)} subtotal</td><td class="num">${fmtMoney(String(secTotal))}</td></tr>`;
-		})
-		.join('');
 	const taxPct = (Number(d.quote.tax_rate) * 100).toFixed(2) + '%';
 	const discountAmt = Number(d.quote.discount_amount ?? 0);
 	const discountLabel =
@@ -148,6 +177,54 @@ function renderHtml(d: QuotePdfData): string {
 		(d.quote.discount_type === 'percent' && d.quote.discount_value
 			? ` (${Number(d.quote.discount_value).toFixed(Number(d.quote.discount_value) % 1 === 0 ? 0 : 2)}%)`
 			: '');
+
+	const isTiered = (d.packages?.length ?? 0) > 0;
+
+	// Simple quote → single table + totals (today's layout). Tiered quote → one block per
+	// package (the customer picks one), each with its own lines + price; no single grand total
+	// since nothing is chosen yet. Applicable discount/deposit are settled at acceptance.
+	let bodyContent: string;
+	if (!isTiered) {
+		const requiredLines = d.lineItems.filter((li) => !li.is_optional);
+		const optionalLines = d.lineItems.filter((li) => li.is_optional);
+		bodyContent = `<table>
+			<thead><tr>
+				<th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>
+			</tr></thead>
+			<tbody>${renderSectionRows(requiredLines)}</tbody>
+		</table>
+		<div class="totals">
+			<div class="row"><span>Subtotal</span><span>${fmtMoney(d.quote.subtotal)}</span></div>
+			${discountAmt > 0 ? `<div class="row"><span>${escapeHtml(discountLabel)}</span><span>−${fmtMoney(String(discountAmt))}</span></div>` : ''}
+			<div class="row"><span>Tax (${taxPct})</span><span>${fmtMoney(d.quote.tax_amount)}</span></div>
+			<div class="row grand"><span>Total</span><span class="amt">${fmtMoney(d.quote.total)}</span></div>
+			${d.quote.deposit_required && d.quote.deposit_amount ? `<div class="row"><span>Deposit due</span><span>${fmtMoney(d.quote.deposit_amount)}</span></div>` : ''}
+		</div>
+		${optionalBlockFor(optionalLines)}`;
+	} else {
+		const blocks = (d.packages ?? [])
+			.map((pkg) => {
+				const pkgLines = d.lineItems.filter((li) => li.package_id === pkg.id);
+				const required = pkgLines.filter((li) => !li.is_optional);
+				const optional = pkgLines.filter((li) => li.is_optional);
+				return `<div class="pkg">
+				<div class="pkghead">
+					<span class="pkgname">${escapeHtml(pkg.name)}</span>
+					${pkg.is_recommended ? `<span class="pkgbadge">★ Recommended</span>` : ''}
+				</div>
+				<table>
+					<thead><tr>
+						<th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>
+					</tr></thead>
+					<tbody>${renderSectionRows(required)}</tbody>
+				</table>
+				<div class="pkgtotal"><span>${escapeHtml(pkg.name)} total (before tax)</span><span class="amt">${fmtMoney(pkg.subtotal)}</span></div>
+				${optionalBlockFor(optional)}
+			</div>`;
+			})
+			.join('');
+		bodyContent = `<div class="pkgcaption">Choose one package below. ${escapeHtml(`Tax (${taxPct})`)} and any deposit are applied to the option you select when you accept.</div>${blocks}`;
+	}
 	const sa = d.serviceAddress;
 	const serviceAddressText = sa
 		? [sa.address_line_1, sa.address_line_2, [sa.city, sa.state, sa.zip].filter(Boolean).join(' ')]
@@ -164,6 +241,20 @@ function renderHtml(d: QuotePdfData): string {
 				${sig.signatureStatement ? `<div class="sigstatement">${escapeHtml(sig.signatureStatement)}</div>` : ''}
 			</div>`
 			: '';
+	// Customer "Accepted by" block — the signed proof. Drawn signature image when signed in
+	// person; otherwise the typed name. The caption states how + when for dispute protection.
+	const acc = d.acceptance;
+	const acceptanceBlock = acc
+		? `<div class="signature">
+					<div class="siglabel">Accepted by</div>
+					${acc.imageUrl ? `<img class="sigimg" src="${escapeHtml(acc.imageUrl)}" alt="Customer signature" />` : ''}
+					<div class="signame">${escapeHtml(acc.signerName)}</div>
+					<div class="sigstatement">${acc.inPerson ? 'Signed in person' : 'Signed electronically'} on ${escapeHtml(acc.signedAt.toLocaleDateString('en-US'))}</div>
+				</div>`
+		: '';
+	// Both signatures sit side by side (two-party agreement). Renders whichever exist.
+	const signatureColumns = [signatureBlock, acceptanceBlock].filter(Boolean).join('');
+	const signaturesArea = signatureColumns ? `<div class="sigrow">${signatureColumns}</div>` : '';
 	const brand = resolveBrandTheme(d.org.primary_color);
 	const logoBlock = d.org.logo_url
 		? `<img src="${escapeHtml(d.org.logo_url)}" alt="${escapeHtml(d.org.name)}" style="max-height:56px;max-width:200px;object-fit:contain;display:block;margin-bottom:8px;" />`
@@ -186,6 +277,7 @@ function renderHtml(d: QuotePdfData): string {
 	td.num, th.num { text-align:right; }
 	.linetitle { font-weight:600; color:#0f172a; }
 	.linedetails { margin-top:3px; font-size:12px; color:#64748b; white-space:pre-wrap; }
+	.linetaxexempt { margin-top:3px; font-size:11px; font-weight:600; color:#94a3b8; }
 	.linephotos { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
 	.linephotos img { width:46px; height:46px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; }
 	tr.section td { padding-top:16px; font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:#475569; border-bottom:1px solid #e2e8f0; }
@@ -195,12 +287,24 @@ function renderHtml(d: QuotePdfData): string {
 	.totals .row.grand { margin-top:8px; padding:10px 12px; font-weight:700; font-size:15px; border-radius:8px; background:color-mix(in srgb, ${brand.accent} 12%, transparent); }
 	.totals .row.grand .amt { color:${brand.accent}; }
 	.notes { margin-top:32px; padding:16px; background:#f8fafc; border-radius:8px; font-size:13px; color:#334155; white-space:pre-wrap; }
+	.terms { margin-top:20px; padding:16px; border:1px solid #e2e8f0; border-radius:8px; page-break-inside:avoid; }
+	.terms h4 { margin:0 0 8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; }
+	.terms .body { font-size:12px; line-height:1.6; color:#334155; white-space:pre-wrap; }
+	.sigrow { display:flex; gap:40px; flex-wrap:wrap; page-break-inside:avoid; }
+	.sigrow .signature { flex:1 1 220px; }
 	.signature { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0; }
 	.signature .siglabel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#94a3b8; margin-bottom:6px; }
 	.signature .sigimg { max-height:56px; max-width:240px; object-fit:contain; display:block; margin-bottom:6px; }
 	.signature .signame { font-size:13px; font-weight:600; color:#0f172a; }
 	.signature .sigtitle { font-weight:400; color:#64748b; }
 	.signature .sigstatement { font-size:12px; color:#64748b; margin-top:4px; }
+	.pkgcaption { margin-top:8px; font-size:12px; color:#64748b; }
+	.pkg { margin-top:20px; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; page-break-inside:avoid; }
+	.pkghead { display:flex; align-items:center; gap:8px; }
+	.pkghead .pkgname { font-size:15px; font-weight:700; color:#0f172a; }
+	.pkghead .pkgbadge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:${brand.accent}; background:color-mix(in srgb, ${brand.accent} 12%, transparent); padding:2px 8px; border-radius:999px; }
+	.pkgtotal { display:flex; justify-content:space-between; margin-top:10px; padding:8px 12px; font-weight:700; font-size:14px; border-radius:8px; background:color-mix(in srgb, ${brand.accent} 10%, transparent); }
+	.pkgtotal .amt { color:${brand.accent}; }
 </style></head><body>
 	<div class="brandbar"></div>
 	<div class="page">
@@ -224,22 +328,10 @@ function renderHtml(d: QuotePdfData): string {
 		${serviceAddressText ? `<br><span class="muted">Service address:</span> ${escapeHtml(serviceAddressText)}` : ''}
 	</div>
 	<div style="font-weight:600;font-size:16px;margin-bottom:8px;">${escapeHtml(d.quote.title)}</div>
-	<table>
-		<thead><tr>
-			<th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>
-		</tr></thead>
-		<tbody>${rows}</tbody>
-	</table>
-	<div class="totals">
-		<div class="row"><span>Subtotal</span><span>${fmtMoney(d.quote.subtotal)}</span></div>
-		${discountAmt > 0 ? `<div class="row"><span>${escapeHtml(discountLabel)}</span><span>−${fmtMoney(String(discountAmt))}</span></div>` : ''}
-		<div class="row"><span>Tax (${taxPct})</span><span>${fmtMoney(d.quote.tax_amount)}</span></div>
-		<div class="row grand"><span>Total</span><span class="amt">${fmtMoney(d.quote.total)}</span></div>
-		${d.quote.deposit_required && d.quote.deposit_amount ? `<div class="row"><span>Deposit due</span><span>${fmtMoney(d.quote.deposit_amount)}</span></div>` : ''}
-	</div>
-	${optionalBlock}
+	${bodyContent}
 	${d.quote.notes ? `<div class="notes">${escapeHtml(d.quote.notes)}</div>` : ''}
-	${signatureBlock}
+	${d.quote.terms ? `<div class="terms"><h4>Terms &amp; Conditions</h4><div class="body">${escapeHtml(d.quote.terms)}</div></div>` : ''}
+	${signaturesArea}
 	</div>
 </body></html>`;
 }

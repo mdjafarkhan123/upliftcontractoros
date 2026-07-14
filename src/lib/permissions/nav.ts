@@ -1,18 +1,3 @@
-import type { Component } from 'svelte';
-import {
-	LayoutDashboard,
-	Inbox,
-	Users,
-	GitBranch,
-	Briefcase,
-	FileText,
-	Receipt,
-	Calendar,
-	Star,
-	TrendingUp,
-	Settings,
-	MoreHorizontal
-} from '@lucide/svelte';
 import type { OrgMember, FeatureFlags, PermissionKey } from '$lib/types';
 import { can, canAny } from './can';
 import { featureForNavKey } from './featureMap';
@@ -21,14 +6,14 @@ export type NavItem = {
 	key: string;
 	label: string;
 	href: string;
-	icon: Component;
+	icon: string;
 };
 
 type NavDef = {
 	key: string;
 	label: string;
 	href: string;
-	icon: Component;
+	icon: string;
 	permissions: PermissionKey[];
 };
 
@@ -37,70 +22,70 @@ const NAV_DEFS: NavDef[] = [
 		key: 'dashboard',
 		label: 'Dashboard',
 		href: '/dashboard',
-		icon: LayoutDashboard,
+		icon: 'ri-layout-grid-line',
 		permissions: ['can_view_dashboard']
 	},
 	{
 		key: 'inbox',
 		label: 'Inbox',
 		href: '/inbox',
-		icon: Inbox,
+		icon: 'ri-inbox-2-line',
 		permissions: ['can_view_all_conversations', 'can_view_assigned_conversations']
 	},
 	{
 		key: 'contacts',
 		label: 'Contacts',
 		href: '/contacts',
-		icon: Users,
+		icon: 'ri-group-line',
 		permissions: ['can_view_all_contacts']
 	},
 	{
 		key: 'pipeline',
 		label: 'Pipeline',
 		href: '/pipeline',
-		icon: GitBranch,
+		icon: 'ri-git-branch-line',
 		permissions: ['can_view_full_pipeline', 'can_view_assigned_opportunities']
 	},
 	{
 		key: 'jobs',
 		label: 'Jobs',
 		href: '/jobs',
-		icon: Briefcase,
+		icon: 'ri-briefcase-line',
 		permissions: ['can_view_full_pipeline', 'can_view_assigned_jobs']
 	},
 	{
 		key: 'quotes',
 		label: 'Quotes',
 		href: '/quotes',
-		icon: FileText,
+		icon: 'ri-file-text-line',
 		permissions: ['can_view_all_quotes']
 	},
 	{
 		key: 'invoices',
 		label: 'Invoices',
 		href: '/invoices',
-		icon: Receipt,
+		icon: 'ri-receipt-line',
 		permissions: ['can_view_all_invoices']
 	},
 	{
 		key: 'appointments',
-		label: 'Appointments',
+		label: 'Schedule',
 		href: '/appointments',
-		icon: Calendar,
+		icon: 'ri-calendar-line',
 		permissions: ['can_view_all_appointments', 'can_view_assigned_appointments']
 	},
 	{
 		key: 'reputation',
 		label: 'Reputation',
 		href: '/reputation',
-		icon: Star,
+		icon: 'ri-star-line',
 		permissions: ['can_view_reviews']
 	},
 	{
 		key: 'growth',
 		label: 'Growth Feed',
 		href: '/growth',
-		icon: TrendingUp,
+		icon: 'ri-trending-up-line',
 		permissions: ['can_view_growth_feed']
 	}
 ];
@@ -143,12 +128,12 @@ export const SETTINGS_NAV: NavItem = {
 	key: 'settings',
 	label: 'Settings',
 	href: '/settings',
-	icon: Settings
+	icon: 'ri-settings-3-line'
 };
 
 export const MORE_ITEM: NavItem = {
 	key: 'more',
 	label: 'More',
 	href: '#more',
-	icon: MoreHorizontal
+	icon: 'ri-more-2-fill'
 };

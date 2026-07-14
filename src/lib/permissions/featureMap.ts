@@ -44,6 +44,7 @@ export const FEATURE_MODULE_MAP: Record<FeatureFlagKey, FeatureModuleBinding> = 
 			'appointment.created',
 			'appointment.booked',
 			'appointment.rescheduled',
+			'appointment.reschedule_confirmation',
 			'appointment.completed',
 			'appointment.cancelled',
 			'appointment.no_show'

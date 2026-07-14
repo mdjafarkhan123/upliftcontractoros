@@ -1,17 +1,4 @@
 <script lang="ts">
-	import {
-		Activity,
-		ArrowRightLeft,
-		UserCog,
-		Send,
-		Eye,
-		CheckCircle2,
-		XCircle,
-		Sparkles,
-		Trophy,
-		Frown
-	} from '@lucide/svelte';
-	import type { Component } from 'svelte';
 	import type { OpportunityActivity, OpportunityActivityKind } from '$lib/types/pipeline';
 
 	type Props = {
@@ -23,28 +10,28 @@
 
 	let { activity, hasQuotes, canCreate, newQuoteHref }: Props = $props();
 
-	const ICONS: Record<OpportunityActivityKind, Component> = {
-		stage: ArrowRightLeft,
-		assignee: UserCog,
-		quote_sent: Send,
-		quote_viewed: Eye,
-		quote_accepted: CheckCircle2,
-		quote_declined: XCircle,
-		created: Sparkles,
-		won: Trophy,
-		lost: Frown
+	const ICONS: Record<OpportunityActivityKind, string> = {
+		stage: 'ri-arrow-left-right-line',
+		assignee: 'ri-user-settings-line',
+		quote_sent: 'ri-send-plane-line',
+		quote_viewed: 'ri-eye-line',
+		quote_accepted: 'ri-checkbox-circle-line',
+		quote_declined: 'ri-close-circle-line',
+		created: 'ri-sparkling-line',
+		won: 'ri-trophy-line',
+		lost: 'ri-emotion-unhappy-line'
 	};
 
 	const TONES: Record<OpportunityActivityKind, string> = {
-		stage: 'text-muted-foreground',
-		assignee: 'text-muted-foreground',
-		quote_sent: 'text-blue-600 dark:text-blue-400',
-		quote_viewed: 'text-amber-600 dark:text-amber-400',
-		quote_accepted: 'text-emerald-600 dark:text-emerald-400',
-		quote_declined: 'text-rose-600 dark:text-rose-400',
-		created: 'text-emerald-600 dark:text-emerald-400',
-		won: 'text-emerald-600 dark:text-emerald-400',
-		lost: 'text-rose-600 dark:text-rose-400'
+		stage: 'muted',
+		assignee: 'muted',
+		quote_sent: 'info',
+		quote_viewed: 'warning',
+		quote_accepted: 'success',
+		quote_declined: 'danger',
+		created: 'success',
+		won: 'success',
+		lost: 'danger'
 	};
 
 	function relative(iso: string): string {
@@ -62,39 +49,36 @@
 	}
 </script>
 
-<section class="rounded-xl border border-border bg-card">
-	<header class="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-		<Activity class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-		<h3 class="text-sm font-semibold">Activity</h3>
+<section class="opp-section">
+	<header class="opp-section__header">
+		<div class="opp-section__header-left">
+			<i class="ri-pulse-line opp-section__title-icon" aria-hidden="true"></i>
+			<h3 class="opp-section__title">Activity</h3>
+		</div>
 	</header>
 
 	{#if activity.length === 0}
-		<div class="px-3 py-4 text-center">
+		<div class="opp-section__empty">
 			{#if !hasQuotes && canCreate}
-				<p class="text-xs text-muted-foreground">
-					No quotes yet — create one to move this opportunity forward.
-				</p>
-				<a
-					href={newQuoteHref}
-					class="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
-				>
-					Create a quote →
-				</a>
+				<p>No quotes yet — create one to move this opportunity forward.</p>
+				<a href={newQuoteHref} class="opp-section__empty-link">Create a quote →</a>
 			{:else}
-				<p class="text-xs text-muted-foreground">No activity yet.</p>
+				<p>No activity yet.</p>
 			{/if}
 		</div>
 	{:else}
-		<ul class="divide-y divide-border/40">
+		<ul class="opp-section__list">
 			{#each activity as a (a.id)}
-				{@const Icon = ICONS[a.kind]}
-				<li class="flex items-start gap-2.5 px-3 py-2">
-					<Icon class={`mt-0.5 h-3.5 w-3.5 shrink-0 ${TONES[a.kind]}`} aria-hidden="true" />
-					<div class="min-w-0 flex-1">
-						<p class="text-xs leading-snug text-foreground">{a.summary}</p>
+				<li class="opp-section__item">
+					<i
+						class="{ICONS[a.kind]} opp-section__item-icon opp-section__item-icon--{TONES[a.kind]}"
+						aria-hidden="true"
+					></i>
+					<div class="opp-section__item-body">
+						<p class="opp-section__item-text">{a.summary}</p>
 					</div>
 					<span
-						class="shrink-0 text-[10px] tabular-nums text-muted-foreground"
+						class="opp-section__item-time"
 						title={new Date(a.occurred_at).toLocaleString()}
 					>
 						{relative(a.occurred_at)}

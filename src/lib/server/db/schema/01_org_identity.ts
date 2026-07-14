@@ -115,6 +115,46 @@ export const organizations = pgTable('organizations', {
 	signature_statement: varchar('signature_statement', { length: 300 }),
 	signature_image_url: text('signature_image_url'),
 
+	// --- Default quote Terms & Conditions (Quotes Phase 2 #7) ---
+	// Reusable org-default fine print (payment terms, warranty, scope in/out) written ONCE
+	// here and SNAPSHOT-copied into quotes.terms at create time (Jobber/Housecall pattern).
+	// Separate from a quote's freeform `notes`. Nullable/empty = no T&C block renders. Editing
+	// this only affects FUTURE quotes -- existing quotes keep their frozen copy for disputes.
+	default_quote_terms: text('default_quote_terms'),
+
+	// --- Invoice tips (M7) ---
+	// Master on/off for collecting tips/gratuity on invoices (Housecall Pro pattern). When
+	// false, no tip UI shows on the public pay page OR the manual record-payment dialog, and
+	// the online-pay endpoint rejects any tip. Default false = opt-in per org (settings).
+	tips_enabled: boolean('tips_enabled').notNull().default(false),
+	// Percentage presets offered on the public pay page ("15% / 20% / 25%"). Integer percents
+	// applied to the amount being charged; the homeowner can also pick "Custom" or "No tip".
+	// Contractor-editable in Settings → Payments. Default [10,15,20].
+	tip_preset_percents: jsonb('tip_preset_percents')
+		.$type<number[]>()
+		.notNull()
+		.default([10, 15, 20]),
+
+	// --- Invoice late fees (M8) ---
+	// Master on/off for charging a late fee on overdue invoices (QuickBooks / Housecall Pro /
+	// Jobber pattern). When false, the "Add late fee" action is hidden and the endpoint rejects.
+	// v1 is a MANUAL button the contractor clicks on an overdue invoice; an auto-after-grace pass
+	// is deferred. Default false = opt-in per org (Settings → Payments).
+	late_fee_enabled: boolean('late_fee_enabled').notNull().default(false),
+	// How the fee is computed: 'flat' = fixed dollars (late_fee_flat_amount); 'percent' = a
+	// percentage of the invoice's unpaid balance (late_fee_percent). Default 'percent'.
+	late_fee_type: text('late_fee_type').notNull().default('percent'),
+	// Flat-dollar fee used when late_fee_type = 'flat'. Null when the org bills a percentage.
+	late_fee_flat_amount: numeric('late_fee_flat_amount', { precision: 12, scale: 2 }),
+	// Percent-of-balance fee used when late_fee_type = 'percent' (e.g. 5.00 = 5% of amount_due).
+	// Null when the org bills a flat amount.
+	late_fee_percent: numeric('late_fee_percent', { precision: 5, scale: 2 }),
+	// Grace period (M8 Phase 2): how many days past the due date before a late fee auto-applies.
+	// The nightly sweep charges the fee ONCE, only after the invoice is overdue past
+	// due_date + this many days (QuickBooks-style buffer so a payment in transit isn't penalized).
+	// Only relevant when late_fee_enabled. Default 3 days.
+	late_fee_grace_days: integer('late_fee_grace_days').notNull().default(3),
+
 	timezone: text('timezone').notNull().default('America/Chicago'),
 	address: text('address'),
 	city: text('city'),
@@ -259,7 +299,14 @@ export const organizations = pgTable('organizations', {
 	won_trigger: wonTriggerEnum('won_trigger').notNull().default('quote_acceptance'),
 	// After this many days of an open deal going quiet, the UI *suggests* marking it Lost
 	// (a nudge, never an auto-action). PLAN §8 Auto-Ghost rule: 7/14/21/30, default 14.
-	ghost_lead_days: integer('ghost_lead_days').notNull().default(14)
+	ghost_lead_days: integer('ghost_lead_days').notNull().default(14),
+
+	// --- Quote profitability (ServiceTitan-style margin floor) ---
+	// The contractor's target profit margin %, used purely as the green/yellow/red
+	// threshold on the internal margin readout while quoting (never customer-facing).
+	// Green ≥ target, yellow within 10 points below, red more than 10 below. Nullable:
+	// cleared = coloring disabled (plain numbers). Default 40 = industry-typical floor.
+	target_margin_pct: numeric('target_margin_pct', { precision: 5, scale: 2 }).default('40.00')
 });
 
 export type Organization = InferSelectModel<typeof organizations>;
@@ -387,7 +434,14 @@ export const orgMembers = pgTable('org_members', {
 	can_view_team_members: boolean('can_view_team_members').notNull().default(false),
 	can_create_team_members: boolean('can_create_team_members').notNull().default(false),
 	can_edit_team_members: boolean('can_edit_team_members').notNull().default(false),
-	can_delete_team_members: boolean('can_delete_team_members').notNull().default(false)
+	can_delete_team_members: boolean('can_delete_team_members').notNull().default(false),
+
+	// What this member COSTS the business per hour worked (job costing labor input — Session 2
+	// time tracking), NOT what they're paid on a paycheck necessarily and NEVER shown to the
+	// member as a wage promise. Nullable: unset members contribute $0 labor cost until an admin
+	// sets a rate. Private financial data — same gate as job/quote cost (can_view_revenue) plus
+	// can_edit_team_members to change it.
+	hourly_cost_rate: numeric('hourly_cost_rate', { precision: 12, scale: 2 })
 });
 
 export type OrgMember = InferSelectModel<typeof orgMembers>;
@@ -430,6 +484,24 @@ export const automationSettings = pgTable('automation_settings', {
 	appointment_confirmation_sms_message: text('appointment_confirmation_sms_message').notNull(),
 	appointment_confirmation_email_subject: text('appointment_confirmation_email_subject').notNull(),
 	appointment_confirmation_email_message: text('appointment_confirmation_email_message').notNull(),
+	// Customer-facing "your job is scheduled" confirmation. Sent when the contractor
+	// picks a notify channel on the job form (job.scheduled event). The enable flag is a
+	// master gate ON TOP of that per-job channel pick — default-on so existing behavior
+	// is unchanged. Copy was previously hardcoded in the worker; now org-editable.
+	job_scheduled_confirmation_enabled: boolean('job_scheduled_confirmation_enabled')
+		.notNull()
+		.default(true),
+	job_scheduled_sms_message: text('job_scheduled_sms_message').notNull(),
+	job_scheduled_email_subject: text('job_scheduled_email_subject').notNull(),
+	job_scheduled_email_message: text('job_scheduled_email_message').notNull(),
+	// Customer-facing "your pro is on the way" alert. Manual, one-tap field action
+	// (POST /api/jobs/[id]/on-my-way) — the contractor picks the channel(s) at send
+	// time. This master gate lets an org switch the feature off entirely; default-on
+	// so the button works out of the box. Copy is org-editable here.
+	job_on_my_way_enabled: boolean('job_on_my_way_enabled').notNull().default(true),
+	job_on_my_way_sms_message: text('job_on_my_way_sms_message').notNull(),
+	job_on_my_way_email_subject: text('job_on_my_way_email_subject').notNull(),
+	job_on_my_way_email_message: text('job_on_my_way_email_message').notNull(),
 	payment_receipt_enabled: boolean('payment_receipt_enabled').notNull().default(true),
 	payment_receipt_message: text('payment_receipt_message').notNull(),
 	payment_receipt_sms_enabled: boolean('payment_receipt_sms_enabled').notNull().default(false),

@@ -1,20 +1,8 @@
 <script lang="ts">
-	import {
-		Mail,
-		AlertCircle,
-		Loader2,
-		Check,
-		CheckCheck,
-		Eye,
-		Ban,
-		RotateCcw,
-		Sparkles
-	} from '@lucide/svelte';
 	import type { ThreadMessage } from '$lib/stores/inbox.svelte';
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import MessageMedia from './MessageMedia.svelte';
-	import { cn } from '$lib/utils/cn';
 
 	let {
 		message: m,
@@ -88,129 +76,89 @@
 	const hasBody = $derived(displayBody.length > 0);
 </script>
 
-<div
-	class={cn(
-		'flex items-end gap-2',
-		isInbound ? 'justify-start' : 'justify-end',
-		grouped ? 'mt-0.5' : 'mt-4'
-	)}
->
+<div class="msg msg--{isInbound ? 'in' : 'out'}" class:msg--grouped={grouped}>
 	{#if isInbound}
 		{#if !grouped}
-			<div
-				class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-foreground ring-1 ring-border/60"
-				aria-hidden="true"
-			>
+			<div class="msg__avatar msg__avatar--in" aria-hidden="true">
 				{#if inboundInitials}
 					{inboundInitials}
 				{:else}
-					<Mail class="h-3.5 w-3.5" />
+					<i class="ri-mail-line" aria-hidden="true"></i>
 				{/if}
 			</div>
 		{:else}
-			<div class="w-8 shrink-0"></div>
+			<div class="msg__spacer"></div>
 		{/if}
 	{/if}
 
-	<div
-		class={cn(
-			'flex max-w-[82%] flex-col md:max-w-[74%]',
-			isInbound ? 'items-start' : 'items-end'
-		)}
-	>
+	<div class="msg__col msg__col--{isInbound ? 'in' : 'out'}">
 		<div
-			class={cn(
-				'rounded-2xl px-4 py-3.5 text-sm shadow-sm transition-colors',
-				isInbound
-					? 'bg-secondary text-foreground'
-					: cn(
-							'bg-primary/90 text-primary-foreground',
-							isDestructive && 'ring-1 ring-inset ring-destructive/40',
-							isTerminalFailure && 'bg-destructive/10 text-foreground ring-2 ring-inset ring-destructive/50'
-						),
-				isPending && !isTerminalFailure && 'opacity-75'
-			)}
+			class="msg__bubble msg__bubble--{isInbound ? 'in' : 'out'} msg__bubble--email"
+			class:msg__bubble--pending={isPending && !isTerminalFailure}
+			class:msg__bubble--failed={!isInbound && isDestructive && !isTerminalFailure}
+			class:msg__bubble--terminal={!isInbound && isTerminalFailure}
 		>
 			{#if m.email_subject}
-				<p
-					class={cn(
-						'mb-1.5 truncate text-[13px] font-semibold leading-snug',
-						isInbound ? 'text-foreground' : 'text-primary-foreground/90'
-					)}
-				>
-					{m.email_subject}
-				</p>
+				<p class="msg__subject">{m.email_subject}</p>
 			{/if}
 
 			{#if hasBody}
-				<p class="whitespace-pre-wrap break-words leading-relaxed">{displayBody}</p>
+				<p class="msg__text">{displayBody}</p>
 			{/if}
 
 			{#if m.media && m.media.length > 0}
-				<div class="mt-3">
+				<div class="msg__media msg__media--email">
 					<MessageMedia media={m.media} align="start" />
 				</div>
 			{/if}
 
-			<div
-				class={cn(
-					'mt-2 flex items-center justify-end gap-1.5',
-					hasBody === false && m.media && m.media.length > 0 && '-mt-1'
-				)}
-			>
-				<span class="inline-flex items-center gap-1 text-[10px]">
-					<Mail class="h-3.5 w-3.5 text-amber-500" />
-					<span class={isInbound ? 'text-muted-foreground/70' : 'text-primary-foreground/50'}>Email</span>
+			<div class="msg__foot" class:msg__foot--tight={!hasBody && m.media && m.media.length > 0}>
+				<span class="msg__chan">
+					<i class="ri-mail-line" aria-hidden="true"></i>
+					<span class="msg__chan-label">Email</span>
 				</span>
 				{#if isAutomated}
-					<Sparkles class="h-3 w-3 shrink-0 opacity-60" aria-label="Automated" />
+					<i class="ri-sparkling-line msg__auto" aria-label="Automated"></i>
 				{/if}
-				<span
-					class={cn(
-						'text-[11px]',
-						isInbound ? 'text-muted-foreground' : 'text-primary-foreground/60'
-					)}
-				>
-					{timestamp}
-				</span>
+				<span class="msg__time">{timestamp}</span>
 				{#if !isInbound}
 					{#if isPending}
-						<Loader2 class="h-3 w-3 animate-spin text-primary-foreground/70" aria-label="Sending" />
+						<i
+							class="ri-loader-4-line animate-spin msg__status msg__status--pending"
+							aria-label="Sending"
+						></i>
 					{:else if isDestructive}
 						{#if isTerminalFailure}
-							<Ban class="h-3 w-3 text-destructive/70" aria-label={m.status} />
+							<i class="ri-forbid-line msg__status msg__status--failed" aria-label={m.status}></i>
 						{:else}
-							<AlertCircle class="h-3 w-3 text-destructive/70" aria-label="Failed" />
+							<i class="ri-error-warning-line msg__status msg__status--failed" aria-label="Failed"
+							></i>
 						{/if}
 					{:else if isRead}
-						<Eye class="h-3.5 w-3.5 text-sky-500" aria-label="Opened" />
+						<i class="ri-eye-line msg__status msg__status--read" aria-label="Opened"></i>
 					{:else if isDelivered}
-						<CheckCheck class="h-3.5 w-3.5 text-primary-foreground/80" aria-label="Delivered" />
+						<i
+							class="ri-check-double-line msg__status msg__status--delivered"
+							aria-label="Delivered"
+						></i>
 					{:else}
-						<Check class="h-3.5 w-3.5 text-primary-foreground/50" aria-label="Sent" />
+						<i class="ri-check-line msg__status msg__status--sent" aria-label="Sent"></i>
 					{/if}
 				{/if}
 			</div>
 
 			{#if !isInbound && isDestructive}
-				<div class="mt-2 flex items-center justify-end gap-2 border-t border-destructive/15 pt-2">
+				<div class="msg__fail msg__fail--email">
 					{#if m.failure_reason}
-						<span class="max-w-[260px] truncate text-[10px] text-destructive/80"
-							>{m.failure_reason}</span
-						>
+						<span class="msg__fail-reason">{m.failure_reason}</span>
 					{/if}
 					{#if isRetryable}
-						<button
-							type="button"
-							onclick={onRetry}
-							disabled={retrying}
-							class="inline-flex min-h-[28px] items-center gap-1 rounded-md border border-destructive/40 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
-						>
+						<button type="button" onclick={onRetry} disabled={retrying} class="msg__retry">
 							{#if retrying}
-								<Loader2 class="h-3 w-3 animate-spin" />
+								<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
 								<span>Retrying…</span>
 							{:else}
-								<RotateCcw class="h-3 w-3" />
+								<i class="ri-refresh-line" aria-hidden="true"></i>
 								<span>Retry</span>
 							{/if}
 						</button>
@@ -218,22 +166,19 @@
 				</div>
 			{/if}
 		</div>
-
-		{#if !isInbound}
-			{#if !grouped}
-				<div
-					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary ring-1 ring-primary/20"
-					aria-hidden="true"
-				>
-					{#if outboundInitials}
-						{outboundInitials}
-					{:else}
-						<Mail class="h-3.5 w-3.5" />
-					{/if}
-				</div>
-			{:else}
-				<div class="w-8 shrink-0"></div>
-			{/if}
-		{/if}
 	</div>
+
+	{#if !isInbound}
+		{#if !grouped}
+			<div class="msg__avatar msg__avatar--out" aria-hidden="true">
+				{#if outboundInitials}
+					{outboundInitials}
+				{:else}
+					<i class="ri-mail-line" aria-hidden="true"></i>
+				{/if}
+			</div>
+		{:else}
+			<div class="msg__spacer"></div>
+		{/if}
+	{/if}
 </div>

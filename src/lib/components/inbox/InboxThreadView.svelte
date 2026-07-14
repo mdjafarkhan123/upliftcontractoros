@@ -2,21 +2,8 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import {
-		ArrowLeft,
-		Info,
-		PanelRightClose,
-		PanelRightOpen,
-		X,
-		Globe,
-		Mail,
-		MessageSquare,
-		Phone,
-		NotebookPen
-	} from '@lucide/svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import MessageBubble from '$lib/components/inbox/MessageBubble.svelte';
 	import LogCallSheet from '$lib/components/inbox/LogCallSheet.svelte';
@@ -26,7 +13,6 @@
 	import ConversationActions from '$lib/components/inbox/ConversationActions.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { getOrgContext } from '$lib/context/org';
-	import { cn } from '$lib/utils/cn';
 	import {
 		inboxStore,
 		type SnoozePreset,
@@ -198,10 +184,10 @@
 			.join('') || ''
 	);
 
-	const channelMeta: Record<string, { label: string; icon: typeof MessageSquare; tint: string }> = {
-		sms: { label: 'SMS', icon: MessageSquare, tint: 'text-muted-foreground' },
-		email: { label: 'Email', icon: Mail, tint: 'text-muted-foreground' },
-		webchat: { label: 'Web Chat', icon: Globe, tint: 'text-muted-foreground' }
+	const channelMeta: Record<string, { label: string; icon: string }> = {
+		sms: { label: 'SMS', icon: 'ri-chat-1-line' },
+		email: { label: 'Email', icon: 'ri-mail-line' },
+		webchat: { label: 'Web Chat', icon: 'ri-global-line' }
 	};
 
 	const groupInfo = $derived.by(() => {
@@ -430,152 +416,129 @@
 	<title>{contact?.full_name ?? 'Conversation'} — Inbox</title>
 </svelte:head>
 
-<div
-	class={cn(
-		'flex flex-col bg-muted/30',
-		fill
-			? 'h-full min-h-0'
-			: 'h-[calc(100dvh-72px-var(--bottom-nav-height)-env(safe-area-inset-bottom))] md:h-[calc(100dvh-104px)]'
-	)}
->
-	<header
-		class="flex shrink-0 items-center gap-3 border-b border-border/50 bg-background px-3 py-3 sm:px-5"
-	>
+<div class="thread" class:thread--fill={fill}>
+	<header class="thread__header">
 		{#if showBackButton}
 			<button
-				class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="thread__icon-btn"
 				onclick={() => goto(resolve('/inbox'))}
 				aria-label="Back to inbox"
 			>
-				<ArrowLeft class="h-5 w-5" />
+				<i class="ri-arrow-left-line" aria-hidden="true"></i>
 			</button>
 		{/if}
-		<div class="flex min-w-0 flex-1 items-center gap-3">
-			<div
-				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-sm font-semibold text-primary ring-1 ring-primary/20"
-			>
+		<div class="thread__identity">
+			<div class="thread__avatar">
 				{#if contactInitials}
 					{contactInitials}
 				{:else}
-					<MessageSquare class="h-4 w-4" />
+					<i class="ri-chat-1-line" aria-hidden="true"></i>
 				{/if}
 			</div>
-			<div class="min-w-0 flex-1">
-				<div class="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
-					{contact?.full_name ?? 'Loading…'}
-				</div>
+			<div>
+				<div class="thread__name">{contact?.full_name ?? 'Loading…'}</div>
 				{#if contact}
-					<div class="truncate text-xs text-muted-foreground">{contact.phone}</div>
+					<div class="thread__phone">{contact.phone}</div>
 				{/if}
 			</div>
 		</div>
 
-		{#if contact?.phone}
-			<div class="flex items-center gap-1.5">
-				<Button
+		<div class="thread__header-actions">
+			{#if contact?.phone}
+				<a
 					href={`tel:${contact.phone}`}
 					onclick={armCallDetection}
-					variant="default"
-					size="sm"
+					class="btn btn--primary btn--sm"
 					aria-label={`Call ${contact.full_name}`}
 				>
-					<Phone class="h-4 w-4" />
+					<i class="ri-phone-line" aria-hidden="true"></i>
 					<span>Call</span>
-				</Button>
+				</a>
 				{#if canSend}
-					<Button onclick={openLogCallManual} variant="outline" size="sm" aria-label="Log a call">
-						<NotebookPen class="h-4 w-4" />
-						<span class="hidden sm:inline">Log call</span>
-					</Button>
+					<button
+						onclick={openLogCallManual}
+						class="btn btn--outline btn--sm"
+						aria-label="Log a call"
+					>
+						<i class="ri-draft-line" aria-hidden="true"></i>
+						<span>Log call</span>
+					</button>
 				{/if}
-			</div>
-		{/if}
-
-		<div class="hidden lg:flex">
-			<ConversationActions
-				{conversation}
-				canManage={canSend}
-				{assignees}
-				currentMemberId={member().id}
-				{orgTags}
-				onSnooze={handleSnooze}
-				onUnsnooze={handleUnsnooze}
-				onClose={handleClose}
-				onReopen={handleReopen}
-				onAssign={handleAssign}
-				onUpdateTags={handleUpdateTags}
-			/>
-		</div>
-
-		<button
-			class="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:hidden"
-			onclick={() => (mobileContextOpen = true)}
-			aria-label="View contact details"
-		>
-			<Info class="h-5 w-5" />
-		</button>
-
-		<button
-			class="hidden h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:inline-flex"
-			onclick={toggleContext}
-			aria-label={showContext ? 'Hide contact details' : 'Show contact details'}
-			aria-pressed={showContext}
-			title={showContext ? 'Hide contact details' : 'Show contact details'}
-		>
-			{#if showContext}
-				<PanelRightClose class="h-5 w-5" />
-			{:else}
-				<PanelRightOpen class="h-5 w-5" />
 			{/if}
-		</button>
+
+			<div class="thread__actions-desktop">
+				<ConversationActions
+					{conversation}
+					canManage={canSend}
+					{assignees}
+					currentMemberId={member().id}
+					{orgTags}
+					onSnooze={handleSnooze}
+					onUnsnooze={handleUnsnooze}
+					onClose={handleClose}
+					onReopen={handleReopen}
+					onAssign={handleAssign}
+					onUpdateTags={handleUpdateTags}
+				/>
+			</div>
+
+			<button
+				class="thread__icon-btn thread__icon-btn--mobile"
+				onclick={() => (mobileContextOpen = true)}
+				aria-label="View contact details"
+			>
+				<i class="ri-information-line" aria-hidden="true"></i>
+			</button>
+
+			<button
+				class="thread__icon-btn thread__icon-btn--desktop"
+				onclick={toggleContext}
+				aria-label={showContext ? 'Hide contact details' : 'Show contact details'}
+				aria-pressed={showContext}
+				title={showContext ? 'Hide contact details' : 'Show contact details'}
+			>
+				<i class={showContext ? 'ri-side-bar-line' : 'ri-side-bar-fill'} aria-hidden="true"></i>
+			</button>
+		</div>
 	</header>
 
 	{#if realtimeFailed}
-		<div
-			class="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-300"
-		>
-			Connection lost — refresh the page to reconnect.
-		</div>
+		<div class="inbox-banner">Connection lost — refresh the page to reconnect.</div>
 	{:else if !isRealtimeConnected}
-		<div
-			class="shrink-0 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-center text-xs text-amber-700 dark:text-amber-300"
-		>
-			Live updates paused — reconnecting…
-		</div>
+		<div class="inbox-banner inbox-banner--muted">Live updates paused — reconnecting…</div>
 	{/if}
 
-	<div class="flex min-h-0 flex-1">
-		<div class="flex min-w-0 flex-1 flex-col">
+	<div class="thread__body">
+		<div class="thread__main">
 			{#if showSkeleton}
-				<div class="flex-1 overflow-hidden p-4 md:p-6">
-					<div class="w-full rounded-xl border border-border/60 bg-card p-4 shadow-card">
-						<SkeletonLoader lines={8} label="Loading messages" />
-					</div>
+				<div class="thread__loading">
+					<SkeletonLoader lines={8} label="Loading messages" />
 				</div>
 			{:else if showError}
-				<div class="flex-1 p-4 md:p-6">
-					<div
-						class="w-full rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-5 text-sm text-destructive shadow-card"
-					>
-						{errorMsg}
-					</div>
+				<div class="thread__error-wrap">
+					<div class="thread__error">{errorMsg}</div>
 				</div>
 			{:else if messages.length === 0}
-				<div class="flex flex-1 items-center justify-center p-4">
+				<div class="thread__empty">
 					<EmptyState
-						icon={MessageSquare}
+						iconClass="ri-chat-3-line"
 						title="No messages yet"
 						description="Send a message to start the conversation."
 					/>
 				</div>
 			{:else}
-				<div bind:this={scrollEl} class="flex-1 overflow-y-auto px-3 py-5 sm:px-5 md:px-6">
-					<div class="flex w-full flex-col">
+				<div bind:this={scrollEl} class="thread__scroll">
+					<div class="thread__messages">
 						{#if nextCursor}
-							<div class="flex justify-center pb-3">
-								<Button variant="outline" size="sm" disabled={loadingMore} onclick={loadMore}>
+							<div class="thread__more">
+								<button
+									type="button"
+									class="btn btn--outline btn--sm"
+									disabled={loadingMore}
+									onclick={loadMore}
+								>
 									{loadingMore ? 'Loading…' : 'Load earlier'}
-								</Button>
+								</button>
 							</div>
 						{/if}
 						{#each messages as m, i (m.id)}
@@ -583,21 +546,15 @@
 							{@const ch = channelMeta[m.channel ?? '']}
 
 							{#if isNewDay(m.created_at, messages[i - 1]?.created_at ?? null)}
-								<div class="flex items-center justify-center py-2">
-									<span
-										class="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
-									>
-										{dayLabel(m.created_at)}
-									</span>
+								<div class="thread__sep">
+									<span class="thread__sep-label">{dayLabel(m.created_at)}</span>
 								</div>
 							{/if}
 
 							{#if gi.channelChanged}
-								<div class="flex items-center justify-center pt-3 pb-1">
-									<span
-										class="inline-flex items-center gap-1.5 rounded-full bg-muted/80 px-3 py-1 text-[11px] font-medium text-muted-foreground ring-1 ring-border/30"
-									>
-										<ch.icon class="h-3.5 w-3.5" />
+								<div class="thread__sep">
+									<span class="thread__sep-label">
+										<i class={ch.icon} aria-hidden="true"></i>
 										Switched to {ch.label}
 									</span>
 								</div>
@@ -617,42 +574,33 @@
 				</div>
 			{/if}
 
-			<div
-				class="shrink-0 border-t border-border/50 bg-background px-3 pb-3 pt-3 shadow-[0_-10px_30px_-20px_hsl(0_0%_0%/0.18)] sm:px-5"
-			>
-				<div class="w-full">
-					{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
-						<div class="mb-2">
-							<OptOutBanner />
-						</div>
-					{/if}
-					<Composer
-						{availableChannels}
-						{suggestedChannel}
-						{emailSubjectDefault}
-						{canSend}
-						smsOptOut={optedOut}
-						doNotContact={contact?.do_not_contact === true}
-						{isClosed}
-						smsQuota={context?.sms_quota ?? null}
-						{quickReplies}
-						contactName={contact?.full_name ?? ''}
-						orgName={org().name}
-						orgSlug={org().slug}
-						contactId={contact?.id ?? ''}
-						onSend={handleSend}
-						onTyping={handleTyping}
-					/>
-				</div>
+			<div class="thread__composer">
+				{#if optedOut && !isClosed && availableChannels.length === 1 && availableChannels[0] === 'sms'}
+					<div class="thread__optout">
+						<OptOutBanner />
+					</div>
+				{/if}
+				<Composer
+					{availableChannels}
+					{suggestedChannel}
+					{emailSubjectDefault}
+					{canSend}
+					smsOptOut={optedOut}
+					doNotContact={contact?.do_not_contact === true}
+					{isClosed}
+					smsQuota={context?.sms_quota ?? null}
+					{quickReplies}
+					contactName={contact?.full_name ?? ''}
+					orgName={org().name}
+					orgSlug={org().slug}
+					contactId={contact?.id ?? ''}
+					onSend={handleSend}
+					onTyping={handleTyping}
+				/>
 			</div>
 		</div>
 
-		<aside
-			class={cn(
-				'hidden w-80 max-w-[360px] shrink-0 overflow-y-auto border-l border-border/50 bg-background px-4 py-4',
-				showAside && 'xl:block'
-			)}
-		>
+		<aside class="thread__aside" class:thread__aside--open={showAside}>
 			<ContactContextPanel {contact} {context} />
 		</aside>
 	</div>
@@ -667,18 +615,18 @@
 />
 
 <Sheet.Root bind:open={mobileContextOpen}>
-	<Sheet.Content side="right" class="w-[85vw] sm:max-w-md">
-		<div class="flex items-center justify-between border-b border-border/60 pb-3">
-			<h2 class="text-base font-semibold tracking-tight">Details</h2>
+	<Sheet.Content side="right" class="dialog-sheet thread__sheet">
+		<div class="thread__sheet-head">
+			<h2 class="thread__sheet-title">Details</h2>
 			<button
-				class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="thread__icon-btn"
 				onclick={() => (mobileContextOpen = false)}
 				aria-label="Close"
 			>
-				<X class="h-4 w-4" />
+				<i class="ri-close-line" aria-hidden="true"></i>
 			</button>
 		</div>
-		<div class="space-y-4">
+		<div class="thread__sheet-body">
 			<ConversationActions
 				{conversation}
 				canManage={canSend}

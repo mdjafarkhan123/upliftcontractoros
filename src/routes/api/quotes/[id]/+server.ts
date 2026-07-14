@@ -9,11 +9,13 @@ import {
 	outboxEvents,
 	quoteChangeRequests,
 	quoteLineItems,
+	quotePackages,
 	quoteViews,
 	quotes
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canDeleteQuote, canEditQuote, canViewAnyQuote } from '$lib/server/quotes/permissions';
+import { canViewCostMargin } from '$lib/server/finance/permissions';
 import { updateQuoteSchema } from '$lib/server/quotes/schemas';
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 import { computeLineTotal, recalcQuoteTotals } from '$lib/server/quotes/recalc';
@@ -51,6 +53,7 @@ export const GET: RequestHandler = async (event) => {
 			accepted_total: quotes.accepted_total,
 			notes: quotes.notes,
 			internal_notes: quotes.internal_notes,
+			terms: quotes.terms,
 			expires_at: quotes.expires_at,
 			sent_at: quotes.sent_at,
 			viewed_at: quotes.viewed_at,
@@ -58,6 +61,7 @@ export const GET: RequestHandler = async (event) => {
 			declined_at: quotes.declined_at,
 			acceptance_signature_name: quotes.acceptance_signature_name,
 			acceptance_signed_at: quotes.acceptance_signed_at,
+			acceptance_signature_media_id: quotes.acceptance_signature_media_id,
 			created_at: quotes.created_at,
 			updated_at: quotes.updated_at,
 			contact_id: quotes.contact_id,
@@ -86,12 +90,14 @@ export const GET: RequestHandler = async (event) => {
 		.select({
 			id: quoteLineItems.id,
 			line_key: quoteLineItems.line_key,
+			package_id: quoteLineItems.package_id,
 			description: quoteLineItems.description,
 			details: quoteLineItems.details,
 			quantity: quoteLineItems.quantity,
 			unit: quoteLineItems.unit,
 			section_label: quoteLineItems.section_label,
 			is_optional: quoteLineItems.is_optional,
+			taxable: quoteLineItems.taxable,
 			accepted_selected: quoteLineItems.accepted_selected,
 			unit_price: quoteLineItems.unit_price,
 			unit_cost: quoteLineItems.unit_cost,
@@ -108,6 +114,34 @@ export const GET: RequestHandler = async (event) => {
 			)
 		)
 		.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));
+
+	// Cost is private: blank it out for members without revenue access so it never
+	// reaches their browser (the margin panel is hidden client-side too).
+	const canCost = canViewCostMargin(auth.member);
+	const safeLineItems = canCost
+		? lineItems
+		: lineItems.map((li) => ({ ...li, unit_cost: null }));
+
+	// Good-Better-Best tiers (empty on a simple quote). Ordered for stable side-by-side render.
+	const packages = await db
+		.select({
+			id: quotePackages.id,
+			package_key: quotePackages.package_key,
+			name: quotePackages.name,
+			is_recommended: quotePackages.is_recommended,
+			position: quotePackages.position,
+			subtotal: quotePackages.subtotal,
+			total: quotePackages.total
+		})
+		.from(quotePackages)
+		.where(
+			and(
+				eq(quotePackages.quote_id, id),
+				eq(quotePackages.org_id, auth.orgId),
+				isNull(quotePackages.deleted_at)
+			)
+		)
+		.orderBy(asc(quotePackages.position), asc(quotePackages.created_at));
 
 	const [{ count: viewCount }] = await db
 		.select({ count: sql<number>`count(*)::int` })
@@ -158,10 +192,12 @@ export const GET: RequestHandler = async (event) => {
 			declined_at: row.declined_at?.toISOString() ?? null,
 			acceptance_signature_name: row.acceptance_signature_name ?? null,
 			acceptance_signed_at: row.acceptance_signed_at?.toISOString() ?? null,
+			acceptance_signature_media_id: row.acceptance_signature_media_id ?? null,
 			expires_at: row.expires_at?.toISOString() ?? null,
 			deposit_paid_at: row.deposit_paid_at?.toISOString() ?? null,
 			view_count: viewCount,
-			line_items: lineItems,
+			packages,
+			line_items: safeLineItems,
 			active_change_request: activeChangeRequest
 				? {
 						id: activeChangeRequest.id,
@@ -216,8 +252,17 @@ export const PATCH: RequestHandler = async (event) => {
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Quote not found');
-		if (existing.status !== 'draft' && existing.status !== 'changes_requested') {
-			throw error(422, 'Only draft or change-requested quotes can be edited');
+		// Edit-after-send: a quote stays editable while it is still out with the customer
+		// (draft, sent, viewed, or change-requested). Accepted/declined/expired quotes are
+		// closed records and stay locked. The deposit-collected financial lock below is the
+		// second gate for a sent quote that has already taken money.
+		if (
+			existing.status !== 'draft' &&
+			existing.status !== 'sent' &&
+			existing.status !== 'viewed' &&
+			existing.status !== 'changes_requested'
+		) {
+			throw error(422, 'This quote can no longer be edited');
 		}
 
 		// Financial-field lock. Defense-in-depth: a quote with a collected deposit must
@@ -231,7 +276,8 @@ export const PATCH: RequestHandler = async (event) => {
 				input.deposit_type !== undefined ||
 				input.deposit_amount !== undefined ||
 				input.deposit_percent !== undefined ||
-				input.line_items !== undefined;
+				input.line_items !== undefined ||
+				input.packages !== undefined;
 			if (financialChange) {
 				throw error(422, 'Financial fields are locked after deposit collection');
 			}
@@ -301,10 +347,56 @@ export const PATCH: RequestHandler = async (event) => {
 			updates.deposit_amount = input.deposit_amount === null ? null : String(input.deposit_amount);
 		if (input.notes !== undefined) updates.notes = input.notes;
 		if (input.internal_notes !== undefined) updates.internal_notes = input.internal_notes;
+		if (input.terms !== undefined) updates.terms = input.terms;
 
 		await tx.update(quotes).set(updates).where(eq(quotes.id, id));
 
 		if (input.line_items !== undefined) {
+			// Cost preservation: a member without revenue access edits the quote with the
+			// cost column hidden, so their payload carries no unit_cost. Rather than blank
+			// the owner's private costs, snapshot the current cost per line_key (captured
+			// BEFORE the wipe below) and carry it forward on the reinsert.
+			const canCost = canViewCostMargin(auth.member);
+			const priorCostByKey = new Map<string, string | null>();
+			if (!canCost) {
+				const priorRows = await tx
+					.select({ line_key: quoteLineItems.line_key, unit_cost: quoteLineItems.unit_cost })
+					.from(quoteLineItems)
+					.where(and(eq(quoteLineItems.quote_id, id), isNull(quoteLineItems.deleted_at)));
+				for (const p of priorRows) priorCostByKey.set(p.line_key, p.unit_cost);
+			}
+
+			// Good-Better-Best: reconcile the tiers before the lines so each line can resolve
+			// its package_id from the client-sent package_key. Only touched when the client
+			// explicitly sends `packages` (a tiered edit always does; a simple edit omits it and
+			// leaves packages alone). packages: [] converts a tiered quote back to simple.
+			const packageKeyToId = new Map<string, string>();
+			if (input.packages !== undefined) {
+				await tx
+					.update(quotePackages)
+					.set({ deleted_at: new Date(), updated_at: new Date() })
+					.where(and(eq(quotePackages.quote_id, id), isNull(quotePackages.deleted_at)));
+				if (input.packages.length > 0) {
+					const insertedPkgs = await tx
+						.insert(quotePackages)
+						.values(
+							input.packages.map((p, idx) => ({
+								org_id: auth.orgId,
+								quote_id: id,
+								package_key: p.package_key ?? undefined,
+								name: p.name.trim(),
+								is_recommended: p.is_recommended ?? false,
+								position: p.position ?? idx
+							}))
+						)
+						.returning({ id: quotePackages.id, package_key: quotePackages.package_key });
+					for (const pk of insertedPkgs) packageKeyToId.set(pk.package_key, pk.id);
+				}
+				// Note: accepted_package_id is only ever set at acceptance, and edits are
+				// restricted to draft/changes_requested quotes, so it is guaranteed null here —
+				// no explicit clear needed when converting a tiered quote back to simple.
+			}
+
 			await tx
 				.update(quoteLineItems)
 				.set({ deleted_at: new Date(), updated_at: new Date() })
@@ -316,15 +408,20 @@ export const PATCH: RequestHandler = async (event) => {
 						quote_id: id,
 						// undefined → DB default (fresh uuid); never pass null (column is NOT NULL).
 						line_key: li.line_key ?? undefined,
+						package_id: li.package_key ? (packageKeyToId.get(li.package_key) ?? null) : null,
 						description: li.description,
 						details: li.details?.trim() || null,
 						quantity: String(li.quantity),
 						unit: li.unit?.trim() || null,
 						section_label: li.section_label?.trim() || null,
 						is_optional: li.is_optional ?? false,
+						taxable: li.taxable ?? true,
 						unit_price: String(li.unit_price),
-						unit_cost:
-							li.unit_cost !== undefined && li.unit_cost !== null ? String(li.unit_cost) : null,
+						unit_cost: canCost
+							? li.unit_cost !== undefined && li.unit_cost !== null
+								? String(li.unit_cost)
+								: null
+							: (li.line_key ? priorCostByKey.get(li.line_key) : null) ?? null,
 						source_catalog_item_id: li.source_catalog_item_id ?? null,
 						total: computeLineTotal(li.quantity, li.unit_price),
 						position: li.position ?? idx

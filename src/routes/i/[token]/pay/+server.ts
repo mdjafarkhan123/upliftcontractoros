@@ -46,10 +46,11 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	let requestedAmountCents: number | null = null;
+	let tipCents = 0;
 	const rawBody = await event.request.text();
 	if (rawBody.trim().length > 0) {
 		try {
-			const parsed = JSON.parse(rawBody) as { amount_cents?: unknown };
+			const parsed = JSON.parse(rawBody) as { amount_cents?: unknown; tip_cents?: unknown };
 			if (parsed.amount_cents !== undefined && parsed.amount_cents !== null) {
 				const n = Number(parsed.amount_cents);
 				if (!Number.isInteger(n) || n <= 0) {
@@ -72,6 +73,23 @@ export const POST: RequestHandler = async (event) => {
 				}
 				requestedAmountCents = n;
 			}
+			// Optional tip (M7). Only accepted when the org enabled tips; otherwise silently
+			// ignored so a stale/hostile client can't attach a tip. A tip is EXTRA money on top
+			// of the balance — capped generously (the greater of the charge or $1,000) to block
+			// abuse without rejecting legitimate large-percentage tips on small invoices.
+			if (invoice.tips_enabled && parsed.tip_cents !== undefined && parsed.tip_cents !== null) {
+				const t = Number(parsed.tip_cents);
+				if (!Number.isInteger(t) || t < 0) {
+					return json(
+						{
+							error: 'Enter a valid tip amount.',
+							field_errors: { tip_cents: 'Enter a valid tip.' }
+						},
+						{ status: 400 }
+					);
+				}
+				tipCents = t;
+			}
 		} catch {
 			return json({ error: 'Invalid request body.' }, { status: 400 });
 		}
@@ -79,6 +97,19 @@ export const POST: RequestHandler = async (event) => {
 
 	const chargeCents = requestedAmountCents ?? amountDueCents;
 	const isPartial = chargeCents < amountDueCents;
+
+	// Cap the tip generously against abuse: allow up to the charge amount or $1,000, whichever
+	// is larger (covers a 20% tip on a small invoice without rejecting it).
+	const tipCapCents = Math.max(chargeCents, 100_000);
+	if (tipCents > tipCapCents) {
+		return json(
+			{
+				error: 'Tip amount is too large.',
+				field_errors: { tip_cents: 'Tip amount is too large.' }
+			},
+			{ status: 400 }
+		);
+	}
 
 	const stripe = getOrgStripeClient(invoice.stripe_secret_key);
 	const invoiceNumberDisplay = formatInvoiceNumber(invoice.invoice_number);
@@ -93,6 +124,15 @@ export const POST: RequestHandler = async (event) => {
 			unit_amount_cents: chargeCents
 		}
 	];
+	// Tip (M7) rides as its own line so the homeowner sees it broken out at checkout. The webhook
+	// re-splits the received total using tip_cents metadata, so this line is display-only.
+	if (tipCents > 0) {
+		stripeLines.push({
+			description: 'Tip',
+			quantity: 1,
+			unit_amount_cents: tipCents
+		});
+	}
 
 	const origin = event.url.origin;
 	const successUrl = `${origin}/i/${token}?paid=1`;
@@ -106,7 +146,8 @@ export const POST: RequestHandler = async (event) => {
 		customerEmail: invoice.contact_email,
 		lineItems: stripeLines,
 		successUrl,
-		cancelUrl
+		cancelUrl,
+		tipCents
 	});
 
 	if (!session.url) {

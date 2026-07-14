@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { cn } from '$lib/utils/cn';
 	import type { NavItem } from '$lib/permissions/nav';
 	import { MORE_ITEM } from '$lib/permissions/nav';
 	import { inboxUnreadStore } from '$lib/stores/inboxUnread.svelte';
@@ -20,47 +19,37 @@
 	}
 </script>
 
-<nav
-	class="fixed inset-x-0 bottom-0 z-30 flex h-[var(--bottom-nav-height)] items-stretch border-t border-border/70 bg-card pb-[env(safe-area-inset-bottom)] shadow-dropdown md:hidden"
-	aria-label="Primary"
->
+<nav class="bottom-nav" aria-label="Primary">
 	{#each primary as item (item.key)}
-		{@const Icon = item.icon}
 		{@const active = isActive(item.href)}
 		<a
 			href={item.href}
-			class={cn(
-				'flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
-				active
-					? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-[hsl(var(--brand-light))]'
-					: 'text-muted-foreground hover:bg-muted/40 hover:text-foreground snake-glow'
-			)}
+			class="bottom-nav__link{active ? ' bottom-nav__link--active' : ''}"
 			aria-current={active ? 'page' : undefined}
 		>
-			<span class="relative">
-				<Icon class="h-5 w-5" />
+			<span class="bottom-nav__icon-wrap">
+				<i class="{item.icon} bottom-nav__icon" aria-hidden="true"></i>
 				{#if item.key === 'inbox' && inboxUnreadStore.count > 0}
 					<span
-						class="absolute -right-2 -top-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[10px] font-semibold leading-none text-white tabular-nums"
+						class="bottom-nav__badge"
 						aria-label="{inboxUnreadStore.count} unread conversations"
 					>
 						{inboxBadge}
 					</span>
 				{/if}
 			</span>
-			<span class="truncate">{item.label}</span>
+			<span class="bottom-nav__label">{item.label}</span>
 		</a>
 	{/each}
 	{#if hasSecondary}
-		{@const MoreIcon = MORE_ITEM.icon}
 		<button
 			type="button"
 			onclick={onMoreClick}
-			class="flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground snake-glow"
+			class="bottom-nav__more"
 			aria-label="More navigation"
 		>
-			<MoreIcon class="h-5 w-5" />
-			<span>More</span>
+			<i class="{MORE_ITEM.icon} bottom-nav__icon" aria-hidden="true"></i>
+			<span class="bottom-nav__label">More</span>
 		</button>
 	{/if}
 </nav>

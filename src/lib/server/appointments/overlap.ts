@@ -44,12 +44,19 @@ export async function findConflictingAssignee(
 ): Promise<string | null> {
 	const { orgId, assigneeIds, start, end, excludeId } = args;
 	if (assigneeIds.length === 0) return null;
+	// Build the uuid[] the way the rest of the codebase does (see contactRepo) —
+	// an explicit ARRAY[...]::uuid[] literal. Interpolating a JS array straight into
+	// `ANY(${arr}::uuid[])` mis-binds under postgres.js and throws at query time.
+	const idArray = sql`ARRAY[${sql.join(
+		assigneeIds.map((id) => sql`${id}`),
+		sql`, `
+	)}]::uuid[]`;
 	const rows = await exec.execute<{ member_id: string }>(sql`
 		SELECT aa.member_id
 		FROM appointment_assignees aa
 		INNER JOIN appointments a ON a.id = aa.appointment_id
 		WHERE aa.org_id = ${orgId}
-			AND aa.member_id = ANY(${assigneeIds}::uuid[])
+			AND aa.member_id = ANY(${idArray})
 			AND a.status = 'scheduled'
 			AND a.deleted_at IS NULL
 			AND a.scheduled_end IS NOT NULL

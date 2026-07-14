@@ -1,10 +1,15 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-
-	let { class: className, children }: { class?: string; children?: import('svelte').Snippet } =
+	let { class: className = '', children }: { class?: string; children?: import('svelte').Snippet } =
 		$props();
 </script>
 
-<div class={cn('flex flex-col gap-1.5 text-left', className)}>
+<div class={['dialog-content__header', className].filter(Boolean).join(' ')}>
 	{@render children?.()}
 </div>
+
+<style lang="scss">
+	// @use '$lib/styles/tokens' as *;
+	.dialog-content__header {
+		flex-direction: column;
+	}
+</style>

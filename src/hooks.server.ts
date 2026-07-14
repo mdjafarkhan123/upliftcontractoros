@@ -79,6 +79,13 @@ function logSuspendedBlock(event: RequestEvent, auth: AuthContext, reason: 'org_
 	);
 }
 
+// Performance guardrail: any API request slower than this logs a structured `slow_api` warning.
+// Correctness has TypeScript + tests; latency had no signal, which is how sequential-await query
+// waterfalls silently accreted (see the job-detail endpoint). This is that missing signal — every
+// API response also carries a `Server-Timing: app;dur=<ms>` header so its cost shows up directly in
+// the browser Network tab (DevTools → Timing), making a slow endpoint obvious on day one.
+const SLOW_API_MS = 800;
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
@@ -222,6 +229,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 				}
 			}
 		}
+	}
+
+	// Time API requests and surface the cost (header + slow-request log). Page/asset requests
+	// are left untouched — this is scoped to the JSON API where the query waterfalls live.
+	if (pathname.startsWith('/api/')) {
+		const started = performance.now();
+		const response = await resolve(event);
+		const durationMs = Math.round(performance.now() - started);
+		try {
+			response.headers.set('Server-Timing', `app;dur=${durationMs}`);
+		} catch {
+			// Some responses (e.g. 304 / immutable) reject header mutation — timing is best-effort.
+		}
+		if (durationMs > SLOW_API_MS) {
+			console.warn(
+				JSON.stringify({
+					request_id: crypto.randomUUID(),
+					route: pathname,
+					method: event.request.method,
+					duration_ms: durationMs,
+					reason: 'slow_api'
+				})
+			);
+		}
+		return response;
 	}
 
 	return resolve(event);

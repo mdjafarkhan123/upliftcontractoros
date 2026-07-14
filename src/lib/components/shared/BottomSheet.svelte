@@ -20,10 +20,20 @@
 			<Sheet.Header>
 				<Sheet.Title>{title}</Sheet.Title>
 				{#if description}
-					<p class="text-sm text-muted-foreground">{description}</p>
+					<p class="bottom-sheet__desc">{description}</p>
 				{/if}
 			</Sheet.Header>
 		{/if}
 		{@render children?.()}
 	</Sheet.Content>
 </Sheet.Root>
+
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.bottom-sheet__desc {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		margin: 0;
+	}
+</style>

@@ -1,22 +1,28 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
+	import { untrack } from 'svelte';
 	import * as Select from '$lib/components/ui/select';
-	import { CalendarDays, Search } from '@lucide/svelte';
 	import AppointmentCard from '$lib/components/appointments/AppointmentCard.svelte';
 	import CalendarDayList from '$lib/components/appointments/CalendarDayList.svelte';
 	import CalendarWeekGrid from '$lib/components/appointments/CalendarWeekGrid.svelte';
 	import CalendarMonthView from '$lib/components/appointments/CalendarMonthView.svelte';
 	import CalendarHeader from '$lib/components/appointments/CalendarHeader.svelte';
+	import QuickCreatePopover from '$lib/components/appointments/QuickCreatePopover.svelte';
 	import MiniCalendar from '$lib/components/appointments/MiniCalendar.svelte';
 	import AppointmentsLayout from '$lib/components/appointments/AppointmentsLayout.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import { eventsStore } from '$lib/stores/events.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { addDays, addMonths, startOfDay, startOfMonth, startOfWeekMonday } from '$lib/utils/calendar';
+	import {
+		addDays,
+		addMonths,
+		startOfDay,
+		startOfMonth,
+		startOfWeekMonday
+	} from '$lib/utils/calendar';
 	import type { AppointmentStatus, AppointmentView, CalendarRange } from '$lib/types/appointments';
-	import { cn } from '$lib/utils/cn';
 
 	const member = getMemberContext();
 	const canViewAll = $derived(member().can_view_all_appointments);
@@ -36,6 +42,23 @@
 	let search = $state('');
 	let filterSheetOpen = $state(false);
 	let assignees = $state<{ id: string; full_name: string }[]>([]);
+
+	// Header "New" → the inline 3-tab quick-create popup (Job · Visit · Event),
+	// available from every view (list / day / week / month, desktop + mobile).
+	let quickCreateOpen = $state(false);
+	// Default slot for a header-initiated create: the next full hour, one hour long.
+	function defaultCreateStart(): Date {
+		const d = new Date();
+		d.setMinutes(0, 0, 0);
+		d.setHours(d.getHours() + 1);
+		return d;
+	}
+	let quickCreateStart = $state<Date>(defaultCreateStart());
+	const quickCreateEnd = $derived(new Date(quickCreateStart.getTime() + 60 * 60 * 1000));
+	function openQuickCreate() {
+		quickCreateStart = defaultCreateStart();
+		quickCreateOpen = true;
+	}
 
 	const searchActive = $derived(search.trim().length > 0);
 
@@ -110,8 +133,38 @@
 	});
 
 	$effect(() => {
-		void appointmentsStore.load(filters);
+		// Depend ONLY on the filter inputs. load() synchronously reads the same cache
+		// slot it later writes, so tracking it here would make an optimistic drag-move
+		// (a cache write) re-trigger this effect and revalidate stale server data over
+		// the move — snapping the card back mid-confirm. untrack keeps that isolated.
+		const f = filters;
+		untrack(() => void appointmentsStore.load(f));
 	});
+
+	// Non-billable calendar Events (Jobber `Event`) — the events API has no status/search,
+	// so they key only on the window + assignee. Loaded for the calendar renderings only
+	// (not the flat 30-day agenda list or search results — v1 scope).
+	const eventFilters = $derived({
+		from: windowStart.toISOString(),
+		to: windowEnd.toISOString(),
+		assignedTo: assignedToFilter
+	});
+	const showEvents = $derived(view === 'calendar' && !searchActive);
+
+	$effect(() => {
+		if (!showEvents) return;
+		const f = eventFilters;
+		untrack(() => void eventsStore.load(f));
+	});
+
+	const events = $derived(showEvents ? eventsStore.items : []);
+
+	// After an inline create, revalidate both windows — the new item may be a visit OR
+	// an Event (the quick-create popover posts to either endpoint).
+	function reloadAfterCreate() {
+		void appointmentsStore.load(filters, true);
+		if (showEvents) void eventsStore.load(eventFilters, true);
+	}
 
 	$effect(() => {
 		if (canViewAll && assignees.length === 0) {
@@ -144,10 +197,10 @@
 	];
 </script>
 
-<svelte:head><title>Appointments</title></svelte:head>
+<svelte:head><title>Schedule</title></svelte:head>
 
-<!-- Mobile: subtract AppHeader (64px) + bottom nav. Desktop: full viewport (AppHeader is md:hidden). -->
-<div class="flex h-[calc(100dvh-64px)] flex-col overflow-hidden md:h-screen">
+<!-- Page sits under the 64px global topbar on every breakpoint. -->
+<div class="appt-page">
 	<!-- Toolbar -->
 	<CalendarHeader
 		bind:view
@@ -159,7 +212,20 @@
 		onGoToday={goToday}
 		onFilterOpen={() => (filterSheetOpen = true)}
 		onRangeChange={handleRangeChange}
+		onNew={openQuickCreate}
 	/>
+
+	<!-- Header "New" quick-create popup (centered modal, works in every view). -->
+	{#if quickCreateOpen}
+		<QuickCreatePopover
+			start={quickCreateStart}
+			end={quickCreateEnd}
+			{assignees}
+			canEditAssignee={canViewAll}
+			onCreated={reloadAfterCreate}
+			onClose={() => (quickCreateOpen = false)}
+		/>
+	{/if}
 
 	<!-- Body: sidebar + main -->
 	<AppointmentsLayout bind:filterSheetOpen>
@@ -167,24 +233,18 @@
 			<!-- Mini month calendar -->
 			<MiniCalendar {anchor} onDateSelect={handleDateSelect} />
 
-			<div class="mx-3 border-t border-border/60"></div>
+			<div class="appt-filters__divider"></div>
 
 			<!-- Status filter -->
-			<div class="px-3 py-3">
-				<p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-					Status
-				</p>
-				<div class="flex flex-col gap-0.5">
+			<div class="appt-filters__group">
+				<p class="appt-filters__label">Status</p>
+				<div class="appt-filters__list">
 					{#each STATUS_OPTIONS as opt (opt.value)}
 						<button
 							type="button"
 							onclick={() => (statusFilter = opt.value)}
-							class={cn(
-								'flex h-8 items-center rounded-md px-2.5 text-sm transition-colors',
-								statusFilter === opt.value
-									? 'bg-primary/10 font-medium text-primary'
-									: 'text-foreground hover:bg-muted'
-							)}
+							class="appt-filters__item"
+							class:appt-filters__item--active={statusFilter === opt.value}
 						>
 							{opt.label}
 						</button>
@@ -194,16 +254,14 @@
 
 			<!-- Assignee filter -->
 			{#if canViewAll && assignees.length > 0}
-				<div class="mx-3 border-t border-border/60"></div>
-				<div class="px-3 py-3">
-					<p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-						Assignee
-					</p>
+				<div class="appt-filters__divider"></div>
+				<div class="appt-filters__group">
+					<p class="appt-filters__label">Assignee</p>
 					<Select.Root
 						value={assignedToFilter ?? ''}
 						onValueChange={(v) => (assignedToFilter = v || null)}
 					>
-						<Select.Trigger class="h-9 w-full text-sm">
+						<Select.Trigger class="field__input">
 							<Select.Value placeholder="All assignees" />
 						</Select.Trigger>
 						<Select.Content>
@@ -219,12 +277,10 @@
 
 		{#snippet filterSheet()}
 			<!-- Same filters for mobile sheet -->
-			<div class="space-y-4">
-				<div>
-					<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-						Status
-					</p>
-					<div class="flex flex-col gap-0.5">
+			<div class="appt-filters">
+				<div class="appt-filters__group">
+					<p class="appt-filters__label">Status</p>
+					<div class="appt-filters__list">
 						{#each STATUS_OPTIONS as opt (opt.value)}
 							<button
 								type="button"
@@ -232,12 +288,8 @@
 									statusFilter = opt.value;
 									filterSheetOpen = false;
 								}}
-								class={cn(
-									'flex h-10 items-center rounded-md px-3 text-sm transition-colors',
-									statusFilter === opt.value
-										? 'bg-primary/10 font-medium text-primary'
-										: 'text-foreground hover:bg-muted'
-								)}
+								class="appt-filters__item appt-filters__item--lg"
+								class:appt-filters__item--active={statusFilter === opt.value}
 							>
 								{opt.label}
 							</button>
@@ -245,10 +297,8 @@
 					</div>
 				</div>
 				{#if canViewAll && assignees.length > 0}
-					<div>
-						<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-							Assignee
-						</p>
+					<div class="appt-filters__group">
+						<p class="appt-filters__label">Assignee</p>
 						<Select.Root
 							value={assignedToFilter ?? ''}
 							onValueChange={(v) => {
@@ -256,7 +306,7 @@
 								filterSheetOpen = false;
 							}}
 						>
-							<Select.Trigger class="h-11 w-full">
+							<Select.Trigger class="field__input">
 								<Select.Value placeholder="All assignees" />
 							</Select.Trigger>
 							<Select.Content>
@@ -272,27 +322,27 @@
 		{/snippet}
 
 		{#snippet children()}
-			<div class="flex-1 overflow-y-auto">
+			<div class="appt-body">
 				{#if showSkeleton}
-					<div class="p-4">
+					<div class="appt-body__pad">
 						<SkeletonLoader lines={6} height="92px" label="Loading appointments" />
 					</div>
 				{:else if showError}
-					<div class="p-4">
-						<p class="text-sm text-destructive">{errorMsg}</p>
+					<div class="appt-body__pad">
+						<p class="appt-body__error">{errorMsg}</p>
 					</div>
 				{:else if searchActive}
 					<!-- Search results -->
 					{#if items.length === 0}
-						<div class="p-4">
+						<div class="appt-body__pad">
 							<EmptyState
-								icon={Search}
+								iconClass="ri-search-line"
 								title="No matches"
 								description="No appointments match your search. Try a different name, title, or address."
 							/>
 						</div>
 					{:else}
-						<ul class="grid gap-3 p-4">
+						<ul class="appt-body__list">
 							{#each items as appointment (appointment.id)}
 								<li><AppointmentCard {appointment} /></li>
 							{/each}
@@ -301,9 +351,9 @@
 				{:else if view === 'list'}
 					<!-- List view -->
 					{#if items.length === 0}
-						<div class="p-4">
+						<div class="appt-body__pad">
 							<EmptyState
-								icon={CalendarDays}
+								iconClass="ri-calendar-line"
 								title="No upcoming appointments"
 								description={canCreate
 									? 'Create your first appointment to see it here.'
@@ -311,7 +361,7 @@
 							/>
 						</div>
 					{:else}
-						<ul class="grid gap-3 p-4">
+						<ul class="appt-body__list">
 							{#each items as appointment (appointment.id)}
 								<li><AppointmentCard {appointment} /></li>
 							{/each}
@@ -319,23 +369,27 @@
 					{/if}
 				{:else if range === 'day'}
 					<!-- Day view -->
-					<CalendarDayList {anchor} days={1} {items} />
+					<CalendarDayList {anchor} days={1} {items} {events} />
 				{:else if range === 'month'}
 					<!-- Month view -->
-					<CalendarMonthView {anchor} {items} onDayClick={openDay} />
+					<CalendarMonthView {anchor} {items} {events} onDayClick={openDay} />
 				{:else}
 					<!-- Week view -->
-					<div class="md:hidden">
-						<CalendarDayList {anchor} days={7} {items} />
+					<div class="appt-body__week-list">
+						<CalendarDayList {anchor} days={7} {items} {events} />
 					</div>
-					<div class="hidden md:block h-full">
+					<div class="appt-body__week-grid">
 						<CalendarWeekGrid
 							{anchor}
 							{items}
+							{events}
 							{dayStartHour}
 							{dayEndHour}
 							{canCreate}
 							{canReschedule}
+							{assignees}
+							canEditAssignee={canViewAll}
+							onCreated={reloadAfterCreate}
 						/>
 					</div>
 				{/if}
@@ -344,5 +398,50 @@
 	</AppointmentsLayout>
 </div>
 
-<style>
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
+	.appt-page {
+		display: flex;
+		flex-direction: column;
+		height: calc(100dvh - 64px);
+		overflow: hidden;
+	}
+
+	.appt-body {
+		flex: 1;
+		overflow-y: auto;
+
+		&__pad {
+			padding: $space-4;
+		}
+
+		&__error {
+			font-size: $fs-body;
+			color: var(--danger-text);
+		}
+
+		&__list {
+			display: grid;
+			gap: $space-3;
+			padding: $space-4;
+			list-style: none;
+		}
+
+		// Week view: stacked day list on small screens, time grid on desktop.
+		&__week-list {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+
+		&__week-grid {
+			display: none;
+
+			@media (min-width: $bp-tablet) {
+				display: block;
+				height: 100%;
+			}
+		}
+	}
 </style>

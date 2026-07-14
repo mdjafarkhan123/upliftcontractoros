@@ -1,0 +1,48 @@
+@use '../tokens' as *;
+
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  thead th {
+    // .eyebrow properties inlined — cross-file @extend not supported in @use modules
+    font-size: $fs-caption;
+    line-height: $lh-caption;
+    font-weight: $weight-semibold;
+    letter-spacing: $tracking-label;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    text-align: left;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+
+    &:first-child { padding-left: $space-6; }
+    &:last-child  { padding-right: $space-6; }
+  }
+
+  tbody tr {
+    transition: background-color $duration-fast $ease-standard;
+    &:hover { background: var(--color-bg-surface-sunk); }
+  }
+
+  tbody td {
+    padding: $space-4;
+    border-bottom: 1px solid var(--color-border);
+    font-size: $fs-body;
+    color: var(--color-text-primary);
+    vertical-align: middle;
+
+    &:first-child { padding-left: $space-6; }
+    &:last-child  { padding-right: $space-6; }
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+}
+
+// Wraps .data-table inside a .card — override card padding to let table fill edge-to-edge
+.table-card {
+  padding: 0;
+  overflow: hidden;
+}

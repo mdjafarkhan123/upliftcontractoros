@@ -1,26 +1,42 @@
 <script lang="ts">
-	import * as Tabs from '$lib/components/ui/tabs';
-	import type { JobsFilterStatus } from '$lib/types/jobs';
+	import type { JobsFilterStatus, JobsStatusCounts } from '$lib/types/jobs';
+	import ListTabs, { type ListTab } from '$lib/components/shared/ListTabs.svelte';
 
 	let {
 		value = $bindable<JobsFilterStatus>('all'),
+		counts = null,
 		onChange
 	}: {
 		value?: JobsFilterStatus;
+		counts?: JobsStatusCounts | null;
 		onChange?: (next: JobsFilterStatus) => void;
 	} = $props();
 
-	function set(next: JobsFilterStatus) {
-		value = next;
-		onChange?.(next);
-	}
+	const total = $derived(
+		counts
+			? counts.pending +
+				counts.upcoming +
+				counts.today +
+				counts.overdue +
+				counts.in_progress +
+				counts.on_hold +
+				counts.completed +
+				counts.cancelled
+			: 0
+	);
+
+	const tabs = $derived<ListTab<JobsFilterStatus>[]>([
+		{ value: 'all', label: 'All', count: total },
+		{ value: 'pending', label: 'Unscheduled', count: counts?.pending },
+		{ value: 'upcoming', label: 'Upcoming', count: counts?.upcoming },
+		{ value: 'today', label: 'Today', count: counts?.today },
+		{ value: 'overdue', label: 'Overdue', count: counts?.overdue },
+		{ value: 'in_progress', label: 'In Progress', count: counts?.in_progress },
+		{ value: 'on_hold', label: 'On Hold', count: counts?.on_hold },
+		{ value: 'completed', label: 'Completed', count: counts?.completed },
+		{ value: 'cancelled', label: 'Cancelled', count: counts?.cancelled },
+		{ value: 'deleted', label: 'Deleted' }
+	]);
 </script>
 
-<Tabs.Root {value} onValueChange={(v: string) => set(v as JobsFilterStatus)}>
-	<Tabs.List class="w-full">
-		<Tabs.Trigger value="all">All</Tabs.Trigger>
-		<Tabs.Trigger value="scheduled">Scheduled</Tabs.Trigger>
-		<Tabs.Trigger value="in_progress">In Progress</Tabs.Trigger>
-		<Tabs.Trigger value="completed">Completed</Tabs.Trigger>
-	</Tabs.List>
-</Tabs.Root>
+<ListTabs {tabs} bind:value {onChange} ariaLabel="Filter jobs by status" />

@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, eq, gte, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { appointments, contacts, jobs, orgMembers, outboxEvents } from '$lib/server/db/schema';
@@ -13,6 +13,7 @@ import {
 	validateAssigneesBelongToOrg
 } from '$lib/server/appointments/assignees';
 import { textMatch } from '$lib/server/search/textSearch';
+import { repinOneOffJobSchedule } from '$lib/server/jobs/repinSchedule';
 
 const MAX_ROWS = 500;
 // Search runs across *all* dates (not the calendar window), so it caps lower
@@ -36,7 +37,11 @@ export const GET: RequestHandler = async (event) => {
 
 	const conditions: SQL[] = [
 		eq(appointments.org_id, auth.orgId),
-		isNull(appointments.deleted_at)
+		isNull(appointments.deleted_at),
+		// Unscheduled visits (Jobber "Schedule later") have no date — they belong only in the
+		// job's Visits list, never on the calendar or in calendar search. Excluding them here
+		// also keeps the search branch (which has no from/to window) null-safe.
+		isNotNull(appointments.scheduled_start)
 	];
 
 	// When searching, query across ALL dates (the user is hunting by name/title,
@@ -68,10 +73,7 @@ export const GET: RequestHandler = async (event) => {
 		if (to.getTime() <= from.getTime()) {
 			return json({ error: 'to must be after from.' }, { status: 400 });
 		}
-		conditions.push(
-			gte(appointments.scheduled_start, from),
-			lt(appointments.scheduled_start, to)
-		);
+		conditions.push(gte(appointments.scheduled_start, from), lt(appointments.scheduled_start, to));
 	}
 
 	if (statusParam && VALID_STATUSES.has(statusParam)) {
@@ -92,6 +94,8 @@ export const GET: RequestHandler = async (event) => {
 			id: appointments.id,
 			contact_id: appointments.contact_id,
 			contact_name: contacts.full_name,
+			contact_phone: contacts.phone,
+			contact_email: contacts.email,
 			job_id: appointments.job_id,
 			assigned_to: appointments.assigned_to,
 			assignee_name: orgMembers.full_name,
@@ -104,6 +108,7 @@ export const GET: RequestHandler = async (event) => {
 			title: appointments.title,
 			scheduled_start: appointments.scheduled_start,
 			scheduled_end: appointments.scheduled_end,
+			all_day: appointments.all_day,
 			location: appointments.location,
 			booking_source: appointments.booking_source
 		})
@@ -126,7 +131,8 @@ export const GET: RequestHandler = async (event) => {
 
 	const items = rows.map((r) => ({
 		...r,
-		scheduled_start: r.scheduled_start.toISOString(),
+		// Non-null: the query filters out unscheduled visits (scheduled_start IS NOT NULL).
+		scheduled_start: r.scheduled_start!.toISOString(),
 		scheduled_end: r.scheduled_end?.toISOString() ?? null
 	}));
 
@@ -223,14 +229,18 @@ export const POST: RequestHandler = async (event) => {
 			);
 		}
 
-		const conflictMember = await findConflictingAssignee(db, {
-			orgId: auth.orgId,
-			assigneeIds,
-			start: input.scheduled_start,
-			end: input.scheduled_end
-		});
-		if (conflictMember) {
-			return json({ error: 'Time conflict' }, { status: 409 });
+		// "Anytime" visits have no clock time, and unscheduled visits have no date at all,
+		// so neither can time-conflict with anyone.
+		if (!input.all_day && input.scheduled_start && input.scheduled_end) {
+			const conflictMember = await findConflictingAssignee(db, {
+				orgId: auth.orgId,
+				assigneeIds,
+				start: input.scheduled_start,
+				end: input.scheduled_end
+			});
+			if (conflictMember) {
+				return json({ error: 'Time conflict' }, { status: 409 });
+			}
 		}
 	}
 
@@ -243,10 +253,13 @@ export const POST: RequestHandler = async (event) => {
 				job_id: input.job_id ?? null,
 				assigned_to: leadMemberId,
 				type: input.type,
-				status: 'scheduled',
+				// No date ⇒ a "Schedule later" placeholder; a date ⇒ a live scheduled visit.
+				status: input.scheduled_start ? 'scheduled' : 'unscheduled',
 				title: input.title,
-				scheduled_start: input.scheduled_start,
-				scheduled_end: input.scheduled_end,
+				all_day: input.all_day,
+				scheduled_start: input.scheduled_start ?? null,
+				// Anytime and unscheduled visits carry no end time.
+				scheduled_end: input.all_day || !input.scheduled_start ? null : input.scheduled_end,
 				location: input.location ?? jobLocation,
 				notes: input.notes ?? null
 			})
@@ -261,23 +274,35 @@ export const POST: RequestHandler = async (event) => {
 			});
 		}
 
-		await tx.insert(outboxEvents).values({
-			org_id: auth.orgId,
-			event_type: 'appointment.created',
-			resource_type: 'appointment',
-			resource_id: inserted.id,
-			payload: {
-				appointment_id: inserted.id,
+		// Keep the parent one-off job's schedule copy in lockstep: a newly added dated visit must
+		// re-point the job to its earliest open visit, so the job badge + "Schedule later" toggle
+		// can't read "Unscheduled" while a visit sits on the calendar. No-op for recurring jobs.
+		if (inserted.job_id) {
+			await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: inserted.job_id });
+		}
+
+		// An unscheduled placeholder has no date to anchor reminders/automations to, so it emits
+		// NO appointment.created (matching the job-create "Schedule later" path). It flows into
+		// the reminder engine later, when a date is added and it's promoted to 'scheduled'.
+		if (inserted.scheduled_start) {
+			await tx.insert(outboxEvents).values({
 				org_id: auth.orgId,
-				contact_id: inserted.contact_id,
-				job_id: inserted.job_id,
-				assigned_to: leadMemberId,
-				assignee_ids: assigneeIds,
-				scheduled_start: inserted.scheduled_start.toISOString(),
-				scheduled_end: inserted.scheduled_end?.toISOString() ?? null
-			},
-			idempotency_key: `appointment.created:${inserted.id}`
-		});
+				event_type: 'appointment.created',
+				resource_type: 'appointment',
+				resource_id: inserted.id,
+				payload: {
+					appointment_id: inserted.id,
+					org_id: auth.orgId,
+					contact_id: inserted.contact_id,
+					job_id: inserted.job_id,
+					assigned_to: leadMemberId,
+					assignee_ids: assigneeIds,
+					scheduled_start: inserted.scheduled_start.toISOString(),
+					scheduled_end: inserted.scheduled_end?.toISOString() ?? null
+				},
+				idempotency_key: `appointment.created:${inserted.id}`
+			});
+		}
 
 		return inserted;
 	});

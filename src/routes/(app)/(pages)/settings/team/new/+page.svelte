@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import PhoneField from '$lib/components/shared/PhoneField.svelte';
+	import { getOrgContext } from '$lib/context/org';
 	import * as Select from '$lib/components/ui/select';
-	import JetEngineButton from '$lib/components/shared/JetEngineButton.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { getMemberContext } from '$lib/context/member';
@@ -13,7 +12,6 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getTemplate } from '$lib/team/permissions-config';
 	import type { PermissionValues } from '$lib/team/permissions-config';
-	import { Eye, EyeOff, CheckCircle2 } from '@lucide/svelte';
 
 	const member = getMemberContext();
 
@@ -32,6 +30,9 @@
 	let saving = $state(false);
 	let errorMsg = $state<string | null>(null);
 	let fieldErrors = $state<Record<string, string>>({});
+
+	const org = getOrgContext();
+	const orgCountry = $derived(org().country ?? 'US');
 
 	let createdPassword = $state<string | null>(null);
 	let createdMemberId = $state<string | null>(null);
@@ -109,135 +110,119 @@
 >
 	{#if createdMemberId}
 		<!-- Success state -->
-		<div class="space-y-4">
-			<div
-				class="overflow-hidden rounded-xl border border-[hsl(var(--status-active))]/30 bg-card shadow-sm"
-			>
-				<div class="border-b border-border/60 px-5 py-4">
-					<div class="flex items-center gap-3">
-						<div
-							class="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--status-active))]/10 text-[hsl(var(--status-active))]"
-						>
-							<CheckCircle2 class="h-5 w-5" />
-						</div>
-						<div>
-							<p class="text-sm font-semibold text-foreground">Team member created</p>
-							<p class="text-xs text-muted-foreground">
-								Share these credentials securely — password shown once
-							</p>
-						</div>
+		<div class="settings-form">
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<span class="settings-card__head-icon">
+						<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+					</span>
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Team member created</p>
+						<p class="settings-card__desc">
+							Share these credentials securely — password shown once
+						</p>
 					</div>
 				</div>
-				<div class="px-5 py-5 space-y-4">
-					<div class="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
-						<div>
-							<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
-								Email
-							</p>
-							<p class="mt-1 font-mono text-sm text-foreground">{email}</p>
+				<div class="settings-card__body">
+					<div class="credentials">
+						<div class="credentials__field">
+							<p class="credentials__label">Email</p>
+							<p class="credentials__value">{email}</p>
 						</div>
-						<div class="border-t border-border/60 pt-3">
-							<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
-								Temporary password
-							</p>
-							<p class="mt-1 font-mono text-sm text-foreground">{createdPassword}</p>
+						<div class="credentials__field">
+							<p class="credentials__label">Temporary password</p>
+							<p class="credentials__value">{createdPassword}</p>
 						</div>
 					</div>
-					<p class="text-xs text-muted-foreground">
+					<p class="field__hint">
 						The team member will be prompted to change their password on first login.
 					</p>
 				</div>
 			</div>
 
-			<label
-				class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 bg-card px-4 py-3.5 transition-colors hover:bg-muted/30"
-			>
-				<input
-					type="checkbox"
-					class="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
-					bind:checked={passwordCopied}
-				/>
-				<span class="text-sm text-foreground">
+			<label class="copy-confirm">
+				<input type="checkbox" bind:checked={passwordCopied} />
+				<span>
 					I have securely copied the password and will share it directly with this team member.
 				</span>
 			</label>
 
-			<div class="flex gap-3">
-				<Button variant="outline" disabled={!passwordCopied} onclick={() => goto('/settings/team')}>
+			<div class="team-actions__group">
+				<Button variant="secondary" disabled={!passwordCopied} onclick={() => goto('/settings/team')}>
 					Back to team
 				</Button>
-				<Button
-					disabled={!passwordCopied}
-					onclick={() => goto(`/settings/team/${createdMemberId}`)}
-				>
+				<Button disabled={!passwordCopied} onclick={() => goto(`/settings/team/${createdMemberId}`)}>
 					View member
 				</Button>
 			</div>
 		</div>
 	{:else}
-		<form class="space-y-4" onsubmit={save}>
+		<form class="settings-form" onsubmit={save}>
 			<!-- Basic info card -->
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Basic Information</p>
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Basic Information</p>
+					</div>
 				</div>
-				<div class="px-5 py-5 space-y-4">
-					<div class="space-y-1.5">
-						<Label for="full_name">Full name <span class="text-destructive">*</span></Label>
-						<Input
+				<div class="settings-card__body">
+					<div class="field">
+						<label class="field__label field__label--required" for="full_name">Full name</label>
+						<input
 							id="full_name"
+							class="field__input"
 							bind:value={full_name}
 							required
 							maxlength={200}
 							autocomplete="name"
 						/>
-						{#if fieldErrors.full_name}
-							<p class="text-xs text-destructive">{fieldErrors.full_name}</p>
-						{/if}
+						{#if fieldErrors.full_name}<p class="field__error">{fieldErrors.full_name}</p>{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<Label for="email">Email <span class="text-destructive">*</span></Label>
-						<Input id="email" type="email" bind:value={email} required autocomplete="off" />
-						{#if fieldErrors.email}
-							<p class="text-xs text-destructive">{fieldErrors.email}</p>
-						{/if}
+					<div class="field">
+						<label class="field__label field__label--required" for="email">Email</label>
+						<input
+							id="email"
+							type="email"
+							class="field__input"
+							bind:value={email}
+							required
+							autocomplete="off"
+						/>
+						{#if fieldErrors.email}<p class="field__error">{fieldErrors.email}</p>{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<Label for="password">Temporary password <span class="text-destructive">*</span></Label>
-						<div class="relative">
-							<Input
+					<div class="field">
+						<label class="field__label field__label--required" for="password">
+							Temporary password
+						</label>
+						<div class="pw-field">
+							<i class="pw-field__icon ri-lock-line" aria-hidden="true"></i>
+							<input
 								id="password"
+								class="field__input"
 								type={showPassword ? 'text' : 'password'}
 								bind:value={password}
 								required
 								minlength={8}
 								autocomplete="new-password"
-								class="pr-10"
 							/>
 							<button
 								type="button"
+								class="pw-field__reveal"
 								onclick={() => (showPassword = !showPassword)}
-								class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors duration-150"
 								aria-label={showPassword ? 'Hide password' : 'Show password'}
 							>
-								{#if showPassword}
-									<EyeOff class="h-4 w-4" />
-								{:else}
-									<Eye class="h-4 w-4" />
-								{/if}
+								<i class={showPassword ? 'ri-eye-off-line' : 'ri-eye-line'} aria-hidden="true"></i>
 							</button>
 						</div>
-						{#if fieldErrors.password}
-							<p class="text-xs text-destructive">{fieldErrors.password}</p>
-						{/if}
+						{#if fieldErrors.password}<p class="field__error">{fieldErrors.password}</p>{/if}
 					</div>
 
-					<div class="space-y-1.5">
-						<Label for="role">Role <span class="text-destructive">*</span></Label>
+					<div class="field">
+						<label class="field__label field__label--required" for="role">Role</label>
 						<Select.Root bind:value={role}>
-							<Select.Trigger class="h-11 w-full">
+							<Select.Trigger>
 								<Select.Value />
 							</Select.Trigger>
 							<Select.Content>
@@ -245,7 +230,7 @@
 								<Select.Item value="manager">Manager — Office / operations</Select.Item>
 							</Select.Content>
 						</Select.Root>
-						<p class="text-xs text-muted-foreground">
+						<p class="field__hint">
 							Role sets the starting permissions below. You can customize them individually.
 						</p>
 					</div>
@@ -253,14 +238,14 @@
 			</div>
 
 			<!-- Permissions card -->
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Permissions</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">
-						Pre-filled from role template — toggle to customize
-					</p>
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Permissions</p>
+						<p class="settings-card__desc">Pre-filled from role template — toggle to customize</p>
+					</div>
 				</div>
-				<div class="px-5 py-5">
+				<div class="settings-card__body">
 					{#if PermissionEditor}
 						<PermissionEditor bind:permissions />
 					{:else}
@@ -270,52 +255,47 @@
 			</div>
 
 			<!-- Notifications card -->
-			<div class="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-				<div class="border-b border-border/60 px-5 py-3.5">
-					<p class="text-sm font-semibold text-foreground">Notifications</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">
-						Where this member gets internal alerts, and which channels they're allowed.
-					</p>
+			<div class="settings-card">
+				<div class="settings-card__header">
+					<div class="settings-card__head-text">
+						<p class="settings-card__title">Notifications</p>
+						<p class="settings-card__desc">
+							Where this member gets internal alerts, and which channels they're allowed.
+						</p>
+					</div>
 				</div>
-				<div class="px-5 py-5 space-y-4">
-					<div class="space-y-1.5">
-						<Label for="notification_phone">Notification phone</Label>
-						<Input
+				<div class="settings-card__body">
+					<div class="field">
+						<label class="field__label" for="notification_phone">Notification phone</label>
+						<PhoneField
 							id="notification_phone"
-							type="tel"
 							bind:value={notificationPhone}
-							placeholder="+1 555-123-4567"
-							autocomplete="off"
+							defaultCountry={orgCountry}
+							invalid={!!fieldErrors.notification_phone}
 						/>
 						{#if fieldErrors.notification_phone}
-							<p class="text-xs text-destructive">{fieldErrors.notification_phone}</p>
+							<p class="field__error">{fieldErrors.notification_phone}</p>
 						{:else}
-							<p class="text-xs text-muted-foreground">
+							<p class="field__hint">
 								Include the country code. Used only for SMS alerts to this member.
 							</p>
 						{/if}
 					</div>
 
-					<div class="flex min-h-[52px] items-center justify-between gap-4">
-						<div class="flex-1 min-w-0">
-							<span class="block text-sm font-medium text-foreground leading-tight">
-								Allow SMS notifications
-							</span>
-							<p class="mt-0.5 text-xs text-muted-foreground">
+					<div class="settings-toggle">
+						<div class="settings-toggle__text">
+							<span class="settings-toggle__label">Allow SMS notifications</span>
+							<p class="settings-toggle__desc">
 								Text-message alerts use SMS credits. Off by default.
 							</p>
 						</div>
 						<Switch bind:checked={smsNotificationsAllowed} />
 					</div>
 
-					<div class="flex min-h-[52px] items-center justify-between gap-4">
-						<div class="flex-1 min-w-0">
-							<span class="block text-sm font-medium text-foreground leading-tight">
-								Allow email notifications
-							</span>
-							<p class="mt-0.5 text-xs text-muted-foreground">
-								Email alerts are free. On by default.
-							</p>
+					<div class="settings-toggle">
+						<div class="settings-toggle__text">
+							<span class="settings-toggle__label">Allow email notifications</span>
+							<p class="settings-toggle__desc">Email alerts are free. On by default.</p>
 						</div>
 						<Switch bind:checked={emailNotificationsAllowed} />
 					</div>
@@ -323,29 +303,29 @@
 			</div>
 
 			{#if errorMsg}
-				<div
-					class="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-				>
-					{errorMsg}
+				<div class="settings-note settings-note--error">
+					<i class="settings-note__icon ri-error-warning-line" aria-hidden="true"></i>
+					<p class="settings-note__text">{errorMsg}</p>
 				</div>
 			{/if}
 
-			<div class="flex justify-end gap-2">
+			<div class="team-actions__group" style:justify-content="flex-end">
 				<Button
-					variant="outline"
+					variant="secondary"
 					type="button"
 					onclick={() => goto('/settings/team')}
 					disabled={saving}
 				>
 					Cancel
 				</Button>
-				<JetEngineButton
+				<Button
 					type="submit"
-					label="Add member"
 					loadingLabel="Creating…"
 					successLabel="Created"
-					state={saving ? 'loading' : 'idle'}
-				/>
+					loading={saving}
+				>
+					Add member
+				</Button>
 			</div>
 		</form>
 	{/if}

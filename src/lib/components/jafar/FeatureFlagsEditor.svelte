@@ -23,62 +23,56 @@
 	}
 </script>
 
-<div class="space-y-5">
+<div class="jafar-flags">
 	{#if !smsEnabled}
-		<div
-			class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200"
-		>
-			SMS master switch is <span class="font-semibold">off</span>. SMS features are blocked org-wide
-			and the SMS toggles below are locked. Stored values are preserved and restore when you
-			re-enable SMS.
+		<div class="jafar-alert jafar-alert--amber" role="alert">
+			SMS master switch is <strong>off</strong>. SMS features are blocked org-wide and the SMS
+			toggles below are locked. Stored values are preserved and restore when you re-enable SMS.
 		</div>
 	{/if}
+
 	{#each FEATURE_FLAG_GROUPS as group (group.id)}
-		<div class="rounded-xl border border-slate-800 bg-slate-950/40">
-			<header class="border-b border-slate-800/80 px-4 py-3">
-				<h3 class="text-sm font-semibold text-white">{group.title}</h3>
-				<p class="mt-0.5 text-[11px] text-slate-500">{group.description}</p>
+		<div class="jafar-flag-group">
+			<header class="jafar-flag-group__head">
+				<h3 class="jafar-flag-group__title">{group.title}</h3>
+				<p class="jafar-flag-group__sub">{group.description}</p>
 			</header>
 
-			<ul class="divide-y divide-slate-800/60">
+			<ul>
 				{#each group.flags as flag (flag.key)}
 					{@const enabled = flags[flag.key]}
 					{@const connected = integrationConnected(flag.requires)}
 					{@const mastered = !smsEnabled && SMS_MASTER_GATED_FLAGS.has(flag.key)}
-					<li
-						class="flex items-start justify-between gap-4 px-4 py-3 {mastered ? 'opacity-50' : ''}"
-					>
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="text-sm font-medium text-white">{flag.label}</span>
+					<li class="jafar-flag-row {mastered ? 'jafar-flag-row--mastered' : ''}">
+						<div class="jafar-flag-row__info">
+							<div class="jafar-flag-row__name">
+								{flag.label}
 								{#if flag.requires === 'stripe'}
 									<span
-										class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide
-											{connected
-											? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-											: 'border-amber-500/30 bg-amber-500/10 text-amber-300'}"
+										class="jafar-req-pill {connected
+											? 'jafar-req-pill--ready'
+											: 'jafar-req-pill--warn'}"
 									>
 										{connected ? 'Stripe ready' : 'Needs Stripe'}
 									</span>
 								{:else if flag.requires === 'twilio'}
 									<span
-										class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide
-											{connected
-											? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-											: 'border-amber-500/30 bg-amber-500/10 text-amber-300'}"
+										class="jafar-req-pill {connected
+											? 'jafar-req-pill--ready'
+											: 'jafar-req-pill--warn'}"
 									>
 										{connected ? 'Twilio ready' : 'Needs Twilio'}
 									</span>
 								{/if}
 							</div>
-							<p class="mt-0.5 text-[11px] leading-snug text-slate-500">{flag.description}</p>
+							<p class="jafar-flag-row__desc">{flag.description}</p>
 							{#if mastered}
-								<p class="mt-1 text-[11px] text-amber-300/90">
+								<p class="jafar-flag-row__warn">
 									Governed by the SMS master switch (currently off). Value preserved — re-enable SMS
 									to restore.
 								</p>
 							{:else if flag.requires && !connected && enabled}
-								<p class="mt-1 text-[11px] text-amber-300/90">
+								<p class="jafar-flag-row__warn">
 									Flag is on, but the {flag.requires} integration is not connected yet. Tenant cannot
 									use this feature until they connect.
 								</p>
@@ -92,3 +86,11 @@
 		</div>
 	{/each}
 </div>
+
+<style lang="scss">
+	.jafar-flags {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+</style>

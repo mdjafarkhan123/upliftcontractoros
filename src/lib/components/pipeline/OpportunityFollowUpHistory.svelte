@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { Phone, MessageSquare, Mail, MapPin, PhoneMissed, Plus, CalendarClock } from '@lucide/svelte';
-	import type { Component } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { cn } from '$lib/utils/cn';
 	import type { OpportunityFollowUp, FollowUpOutcome } from '$lib/types/pipeline';
 
 	type Props = {
@@ -23,38 +20,38 @@
 	let saving = $state(false);
 	let showSchedulePrompt = $state(false);
 
-	type OutcomeConfig = { value: FollowUpOutcome; label: string; Icon: Component };
+	type OutcomeConfig = { value: FollowUpOutcome; label: string; icon: string };
 
 	const OUTCOMES: OutcomeConfig[] = [
-		{ value: 'called', label: 'Called', Icon: Phone },
-		{ value: 'texted', label: 'Texted', Icon: MessageSquare },
-		{ value: 'emailed', label: 'Emailed', Icon: Mail },
-		{ value: 'visited', label: 'Visited', Icon: MapPin },
-		{ value: 'no_answer', label: 'No answer', Icon: PhoneMissed }
+		{ value: 'called',    label: 'Called',    icon: 'ri-phone-line' },
+		{ value: 'texted',    label: 'Texted',    icon: 'ri-message-2-line' },
+		{ value: 'emailed',   label: 'Emailed',   icon: 'ri-mail-line' },
+		{ value: 'visited',   label: 'Visited',   icon: 'ri-map-pin-line' },
+		{ value: 'no_answer', label: 'No answer', icon: 'ri-phone-missed-line' }
 	];
 
-	const OUTCOME_ICONS: Record<FollowUpOutcome, Component> = {
-		called: Phone,
-		texted: MessageSquare,
-		emailed: Mail,
-		visited: MapPin,
-		no_answer: PhoneMissed
+	const OUTCOME_ICONS: Record<FollowUpOutcome, string> = {
+		called:    'ri-phone-line',
+		texted:    'ri-message-2-line',
+		emailed:   'ri-mail-line',
+		visited:   'ri-map-pin-line',
+		no_answer: 'ri-phone-missed-line'
 	};
 
 	const OUTCOME_LABELS: Record<FollowUpOutcome, string> = {
-		called: 'Called',
-		texted: 'Texted',
-		emailed: 'Emailed',
-		visited: 'Visited',
+		called:    'Called',
+		texted:    'Texted',
+		emailed:   'Emailed',
+		visited:   'Visited',
 		no_answer: 'No answer'
 	};
 
 	const OUTCOME_TONES: Record<FollowUpOutcome, string> = {
-		called: 'text-emerald-600 dark:text-emerald-400',
-		texted: 'text-blue-600 dark:text-blue-400',
-		emailed: 'text-violet-600 dark:text-violet-400',
-		visited: 'text-amber-600 dark:text-amber-400',
-		no_answer: 'text-rose-600 dark:text-rose-400'
+		called:    'success',
+		texted:    'info',
+		emailed:   'violet',
+		visited:   'warning',
+		no_answer: 'danger'
 	};
 
 	function relative(iso: string): string {
@@ -108,54 +105,40 @@
 	}
 </script>
 
-<section class="rounded-xl border border-border bg-card">
-	<header class="flex items-center justify-between border-b border-border/60 px-3 py-2">
-		<div class="flex items-center gap-2">
-			<Phone class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-			<h3 class="text-sm font-semibold">Follow-ups</h3>
+<section class="opp-section">
+	<header class="opp-section__header">
+		<div class="opp-section__header-left">
+			<i class="ri-phone-line opp-section__title-icon" aria-hidden="true"></i>
+			<h3 class="opp-section__title">Follow-ups</h3>
 			{#if followUps.length > 0}
-				<span
-					class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground"
-				>
-					{followUps.length}
-				</span>
+				<span class="opp-section__count">{followUps.length}</span>
 			{/if}
 		</div>
 		{#if canEdit && !showForm}
 			<Button
 				variant="ghost"
 				size="sm"
-				class="h-8 gap-1.5 px-2 text-xs"
+				style="height:32px; gap:6px; padding-inline:8px; font-size:12px;"
 				onclick={() => {
 					showSchedulePrompt = false;
 					showForm = true;
 				}}
 			>
-				<Plus class="h-3.5 w-3.5" />
+				<i class="ri-add-line" aria-hidden="true"></i>
 				Log outcome
 			</Button>
 		{/if}
 	</header>
 
 	{#if showSchedulePrompt}
-		<div class="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/40 px-3 py-2.5">
-			<p class="text-xs text-muted-foreground">Schedule the next follow-up?</p>
-			<div class="flex gap-2">
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-8 px-2 text-xs"
-					onclick={() => (showSchedulePrompt = false)}
-				>
+		<div class="opp-section__schedule-prompt">
+			<span>Schedule the next follow-up?</span>
+			<div class="opp-section__schedule-actions">
+				<Button variant="ghost" size="sm" style="height:32px; padding-inline:8px; font-size:12px;" onclick={() => (showSchedulePrompt = false)}>
 					Dismiss
 				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					class="h-8 gap-1.5 px-2 text-xs"
-					onclick={scheduleNext}
-				>
-					<CalendarClock class="h-3.5 w-3.5" />
+				<Button variant="outline" size="sm" style="height:32px; gap:6px; padding-inline:8px; font-size:12px;" onclick={scheduleNext}>
+					<i class="ri-calendar-schedule-line" aria-hidden="true"></i>
 					Schedule
 				</Button>
 			</div>
@@ -163,39 +146,33 @@
 	{/if}
 
 	{#if showForm}
-		<div class="space-y-3 border-b border-border/60 p-3">
-			<p class="text-xs font-medium text-muted-foreground">What did you do?</p>
-			<div class="grid grid-cols-5 gap-1.5">
+		<div class="follow-up-form">
+			<p class="follow-up-form__prompt">What did you do?</p>
+			<div class="follow-up-form__outcomes">
 				{#each OUTCOMES as o (o.value)}
-					{@const active = selectedOutcome === o.value}
 					<button
 						type="button"
 						onclick={() => (selectedOutcome = o.value)}
-						class={cn(
-							'flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg border text-center transition-colors',
-							active
-								? 'border-primary bg-primary/10 text-primary'
-								: 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-						)}
+						class="follow-up-form__outcome-btn{selectedOutcome === o.value ? ' follow-up-form__outcome-btn--active' : ''}"
 					>
-						<o.Icon class="h-4 w-4" aria-hidden="true" />
-						<span class="text-[10px] leading-none">{o.label}</span>
+						<i class={o.icon} aria-hidden="true"></i>
+						<span>{o.label}</span>
 					</button>
 				{/each}
 			</div>
 			<Textarea
 				bind:value={note}
 				placeholder="Add a note… (optional)"
-				class="min-h-[72px] resize-none text-sm"
+				style="min-height:72px; resize:none; font-size:14px;"
 				maxlength={500}
 			/>
-			<div class="flex justify-between gap-2">
-				<Button variant="ghost" size="sm" class="h-9" disabled={saving} onclick={cancel}>
+			<div class="follow-up-form__actions">
+				<Button variant="ghost" size="sm" style="height:36px;" disabled={saving} onclick={cancel}>
 					Cancel
 				</Button>
 				<Button
 					size="sm"
-					class="h-9 px-5"
+					style="height:36px; padding-inline:20px;"
 					disabled={!selectedOutcome || saving}
 					onclick={submit}
 				>
@@ -206,29 +183,28 @@
 	{/if}
 
 	{#if followUps.length === 0 && !showForm}
-		<div class="px-3 py-4 text-center">
-			<p class="text-xs text-muted-foreground">No follow-ups logged yet.</p>
+		<div class="opp-section__empty">
+			<p>No follow-ups logged yet.</p>
 		</div>
 	{:else if followUps.length > 0}
-		<ul class="divide-y divide-border/40">
+		<ul class="opp-section__list">
 			{#each followUps as f (f.id)}
-				{@const Icon = OUTCOME_ICONS[f.outcome]}
-				<li class="flex items-start gap-2.5 px-3 py-2">
-					<Icon
-						class={cn('mt-0.5 h-3.5 w-3.5 shrink-0', OUTCOME_TONES[f.outcome])}
+				<li class="opp-section__item">
+					<i
+						class="{OUTCOME_ICONS[f.outcome]} opp-section__item-icon opp-section__item-icon--{OUTCOME_TONES[f.outcome]}"
 						aria-hidden="true"
-					/>
-					<div class="min-w-0 flex-1">
-						<p class="text-xs font-medium leading-snug text-foreground">
+					></i>
+					<div class="opp-section__item-body">
+						<p class="opp-section__item-text">
 							{OUTCOME_LABELS[f.outcome]}
-							<span class="font-normal text-muted-foreground">· {f.logged_by_name}</span>
+							<span class="opp-section__item-meta">· {f.logged_by_name}</span>
 						</p>
 						{#if f.note}
-							<p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{f.note}</p>
+							<p class="opp-section__item-subtext">{f.note}</p>
 						{/if}
 					</div>
 					<span
-						class="shrink-0 text-[10px] tabular-nums text-muted-foreground"
+						class="opp-section__item-time"
 						title={new Date(f.occurred_at).toLocaleString()}
 					>
 						{relative(f.occurred_at)}

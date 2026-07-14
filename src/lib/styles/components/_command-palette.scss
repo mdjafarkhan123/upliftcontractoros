@@ -1,0 +1,304 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// COMMAND PALETTE — global ⌘K quick-search overlay.
+// Opened from the topbar search button / "Add new" button (commandPalette store).
+// Rendered once in src/routes/(app)/+layout.svelte.
+// =============================================================================
+
+.command-palette {
+	// Backdrop — dim + blur everything behind the panel.
+	&__backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: $z-modal;
+		background: rgba(13, 21, 15, 0.5);
+		backdrop-filter: blur(4px);
+	}
+
+	// Panel — full-bleed sheet on mobile, centered card on desktop.
+	&__panel {
+		position: fixed;
+		inset-inline: $space-4;
+		top: $space-4;
+		z-index: $z-modal + 1;
+		overflow: hidden;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-xl);
+
+		@media (min-width: $bp-mobile) {
+			inset-inline: auto;
+			left: 50%;
+			top: 10vh;
+			width: 640px;
+			max-width: calc(100vw - #{$space-8});
+			transform: translateX(-50%);
+			border-radius: $radius-xl;
+		}
+	}
+
+	// Search input row.
+	&__search {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+
+		@media (min-width: $bp-mobile) {
+			padding: $space-3 $space-5;
+		}
+	}
+
+	&__search-icon {
+		flex-shrink: 0;
+		font-size: 20px;
+		color: var(--color-text-muted);
+	}
+
+	&__input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		background: transparent;
+		color: var(--color-text-primary);
+		font-size: $fs-lg;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+
+		&:focus {
+			outline: none;
+		}
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 18px;
+		}
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		// Mobile-only close button.
+		&--close {
+			@media (min-width: $bp-mobile) {
+				display: none;
+			}
+		}
+	}
+
+	// Scrollable results / state region.
+	&__results {
+		max-height: 60vh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+
+		@media (min-width: $bp-mobile) {
+			max-height: 420px;
+		}
+	}
+
+	// Idle + empty centered states.
+	&__state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: $space-2;
+		padding: $space-10 $space-4;
+		text-align: center;
+	}
+
+	&__state-icon {
+		font-size: 32px;
+		color: var(--color-border-strong);
+	}
+
+	&__state-text {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__state-strong {
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__state-hint {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	// Result groups.
+	&__groups {
+		padding: $space-2 0;
+	}
+
+	&__group {
+		padding: 0 $space-2 $space-1;
+
+		&:last-child {
+			padding-bottom: 0;
+		}
+	}
+
+	&__group-header {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-1 $space-3 6px;
+	}
+
+	&__group-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		letter-spacing: $tracking-label;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	// Result items.
+	&__item {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		width: 100%;
+		min-height: 44px;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+		transition: background $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--active {
+			background: var(--state-active-tint);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__item-body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__item-title {
+		margin: 0;
+		overflow: hidden;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	&__item-subtitle {
+		margin: 0;
+		overflow: hidden;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	// Per-entity icon colors — header + item icons share these modifiers.
+	&__icon {
+		flex-shrink: 0;
+		font-size: 16px;
+
+		&--header {
+			font-size: 13px;
+		}
+
+		&--contacts {
+			color: #10b981;
+		}
+		&--opportunities {
+			color: #f59e0b;
+		}
+		&--jobs {
+			color: #3b82f6;
+		}
+		&--quotes {
+			color: #8b5cf6;
+		}
+		&--invoices {
+			color: #f43f5e;
+		}
+		&--appointments {
+			color: #06b6d4;
+		}
+	}
+
+	// Keyboard hints footer (desktop only).
+	&__footer {
+		display: none;
+		align-items: center;
+		gap: $space-5;
+		padding: $space-2 $space-5;
+		border-top: 1px solid var(--color-border);
+		background: var(--color-bg-surface-sunk);
+
+		@media (min-width: $bp-mobile) {
+			display: flex;
+		}
+	}
+
+	&__hint {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__kbd {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 20px;
+		min-width: 20px;
+		padding: 0 $space-1;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		font-family: ui-monospace, monospace;
+		font-size: 10px;
+		color: var(--color-text-secondary);
+	}
+}

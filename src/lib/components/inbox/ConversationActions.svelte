@@ -1,16 +1,5 @@
 <script lang="ts">
-	import {
-		CheckCircle2,
-		RotateCcw,
-		MoreHorizontal,
-		UserPlus,
-		UserMinus,
-		Tag,
-		X
-	} from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import SnoozeMenu from './SnoozeMenu.svelte';
 	import type { ConversationDetail, SnoozePreset } from '$lib/stores/inbox.svelte';
 
@@ -85,66 +74,54 @@
 	}
 </script>
 
-<div class="flex items-center gap-1.5">
+<div class="convo-actions">
 	{#if !isClosed}
 		<SnoozeMenu {isSnoozed} disabled={!canManage} {onSnooze} {onUnsnooze} />
 	{/if}
 
 	{#if isClosed}
-		<Button
-			variant="ghost"
-			size="sm"
+		<button
+			type="button"
+			class="convo-actions__btn"
 			disabled={!canManage}
-			class="min-h-[36px] gap-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => void onReopen()}
 		>
-			<RotateCcw class="h-4 w-4" />
+			<i class="ri-arrow-go-back-line" aria-hidden="true"></i>
 			Reopen
-		</Button>
+		</button>
 	{:else}
-		<Button
-			variant="ghost"
-			size="sm"
+		<button
+			type="button"
+			class="convo-actions__btn"
 			disabled={!canManage}
-			class="min-h-[36px] gap-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => void onClose()}
 		>
-			<CheckCircle2 class="h-4 w-4" />
+			<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
 			Close
-		</Button>
+		</button>
 	{/if}
 
 	{#if onUpdateTags}
-		<Button
-			variant="ghost"
-			size="sm"
+		<button
+			type="button"
+			class="convo-actions__btn"
 			disabled={!canManage}
-			class="min-h-[36px] gap-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => (tagPanelOpen = !tagPanelOpen)}
 		>
-			<Tag class="h-4 w-4" />
+			<i class="ri-price-tag-3-line" aria-hidden="true"></i>
 			Tags
 			{#if currentTags.length > 0}
-				<span
-					class="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary"
-					>{currentTags.length}</span
-				>
+				<span class="convo-actions__count">{currentTags.length}</span>
 			{/if}
-		</Button>
+		</button>
 	{/if}
 
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}
-				<Button
-					{...props}
-					variant="ghost"
-					size="icon"
-					aria-label="More actions"
-					class="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-				>
-					<MoreHorizontal class="h-4 w-4" />
-				</Button>
+				<button {...props} type="button" class="convo-actions__more" aria-label="More actions">
+					<i class="ri-more-2-fill" aria-hidden="true"></i>
+				</button>
 			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="end" class="w-56">
@@ -158,7 +135,7 @@
 							void onAssign(currentMemberId, me?.full_name ?? 'You');
 						}}
 					>
-						<UserPlus class="mr-2 h-4 w-4" />
+						<i class="ri-user-add-line convo-actions__menu-icon" aria-hidden="true"></i>
 						Assign to me
 					</DropdownMenu.Item>
 				{/if}
@@ -166,14 +143,14 @@
 					<DropdownMenu.Item onclick={() => void onAssign(a.id, a.full_name)}>
 						{a.full_name}
 						{#if a.id === assignedTo}
-							<span class="ml-auto text-xs text-muted-foreground">Current</span>
+							<span class="convo-actions__menu-current">Current</span>
 						{/if}
 					</DropdownMenu.Item>
 				{/each}
 				{#if assignedTo}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item onclick={() => void onAssign(null, null)}>
-						<UserMinus class="mr-2 h-4 w-4" />
+						<i class="ri-user-unfollow-line convo-actions__menu-icon" aria-hidden="true"></i>
 						Unassign
 					</DropdownMenu.Item>
 				{/if}
@@ -183,49 +160,43 @@
 </div>
 
 {#if onUpdateTags && tagPanelOpen}
-	<div class="mt-2 rounded-xl border border-border/60 bg-card p-3 shadow-card">
-		<div class="flex flex-wrap items-center gap-1.5">
+	<div class="convo-tags">
+		<div class="convo-tags__row">
 			{#each currentTags as t (t)}
-				<span
-					class="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-				>
+				<span class="convo-tags__chip">
 					#{t}
 					<button
 						type="button"
+						class="convo-tags__chip-remove"
 						aria-label={`Remove ${t}`}
-						class="rounded-full p-0.5 hover:bg-primary/20"
 						disabled={!canManage}
 						onclick={() => removeTag(t)}
 					>
-						<X class="h-3 w-3" />
+						<i class="ri-close-line" aria-hidden="true"></i>
 					</button>
 				</span>
 			{/each}
 			{#if currentTags.length < 5}
-				<Input
+				<input
 					type="text"
+					class="convo-tags__input"
 					value={tagInput}
 					oninput={(e) => (tagInput = (e.currentTarget as HTMLInputElement).value)}
 					onkeydown={onTagKey}
 					placeholder="Add tag…"
 					disabled={!canManage}
-					class="h-7 w-32 rounded-full border-border/60 bg-background px-3 text-xs shadow-none focus-visible:border-primary/50 focus-visible:ring-primary/20"
 				/>
 			{/if}
 		</div>
 		{#if suggestions.length > 0 && currentTags.length < 5}
-			<div class="mt-2 flex flex-wrap gap-1.5">
+			<div class="convo-tags__suggestions">
 				{#each suggestions as s (s)}
-					<button
-						type="button"
-						class="inline-flex h-6 items-center rounded-full border border-border/60 bg-background px-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-						onclick={() => addTag(s)}
-					>
+					<button type="button" class="convo-tags__suggestion" onclick={() => addTag(s)}>
 						#{s}
 					</button>
 				{/each}
 			</div>
 		{/if}
-		<p class="mt-2 text-[10px] text-muted-foreground">Max 5 tags. Press Enter or comma to add.</p>
+		<p class="convo-tags__hint">Max 5 tags. Press Enter or comma to add.</p>
 	</div>
 {/if}

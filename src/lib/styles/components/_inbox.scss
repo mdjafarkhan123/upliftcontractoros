@@ -1,0 +1,3122 @@
+// =============================================================================
+// INBOX — messaging workspace (S9)
+// Desktop-first split-pane inbox: conversation list (left) + thread (right).
+// S9.0 covers the shell chrome + conversation list. Thread/composer/panel
+// blocks are added by S9.1–S9.3.
+// =============================================================================
+
+@use '../tokens' as *;
+
+// -----------------------------------------------------------------------------
+// CONNECTION BANNER — shared by the list page + thread view realtime states.
+// -----------------------------------------------------------------------------
+.inbox-banner {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	gap: $space-2;
+	min-height: 28px;
+	padding: $space-1 $space-4;
+	font-size: $fs-caption;
+	font-weight: $weight-medium;
+	color: var(--warning-text);
+	background-color: var(--warning-bg);
+	border-bottom: 1px solid var(--color-border);
+
+	&--muted {
+		font-weight: $weight-regular;
+		opacity: 0.85;
+	}
+
+	&__icon {
+		font-size: 1.3rem;
+		line-height: 1;
+	}
+
+	&__action {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--warning-text);
+		background-color: rgba(245, 158, 11, 0.2);
+		border: none;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: rgba(245, 158, 11, 0.3);
+		}
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// COMMAND BAR — single row: search + status segmented control + filters
+// overflow, then the inline message-search results below.
+// -----------------------------------------------------------------------------
+.inbox-cmd {
+	background-color: var(--color-bg-surface);
+
+	&__row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-3 $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__search {
+		position: relative;
+		flex: 1 1 100%;
+		min-width: 0;
+		order: -1;
+
+		@media (min-width: $bp-tablet) {
+			flex: 1 1 auto;
+			order: 0;
+		}
+	}
+
+	&__search-icon {
+		position: absolute;
+		left: $space-3;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 1.6rem;
+		color: var(--color-text-muted);
+		pointer-events: none;
+	}
+
+	&__search-input {
+		width: 100%;
+		height: 38px;
+		padding: 0 $space-3 0 36px;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-app);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		transition: border-color $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	// Filter overflow trigger (popover on desktop, sheet on mobile)
+	&__filter-btn {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+		height: 38px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			color: var(--color-brand);
+			background-color: var(--state-active-tint);
+			border-color: rgba(34, 125, 83, 0.34);
+		}
+
+		&--desktop {
+			display: none;
+			@media (min-width: $bp-tablet) {
+				display: inline-flex;
+			}
+		}
+		&--mobile {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+	}
+
+	&__count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 16px;
+		min-width: 16px;
+		padding: 0 $space-1;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		color: var(--color-text-on-brand);
+		background-color: var(--color-brand);
+	}
+
+	// Status segmented control (primary, lives inline in the toolbar row).
+	&__status {
+		display: inline-flex;
+		flex: 1 1 auto;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+		padding: 3px;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-app);
+		overflow-x: auto;
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+
+		@media (min-width: $bp-tablet) {
+			flex: 0 0 auto;
+		}
+	}
+
+	&__status-btn {
+		display: inline-flex;
+		flex: 1 1 auto;
+		align-items: center;
+		justify-content: center;
+		gap: $space-1;
+		min-height: 32px;
+		padding: 0 $space-3;
+		white-space: nowrap;
+		border: none;
+		border-radius: $radius-sm;
+		background: none;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			color: var(--color-text-primary);
+			background-color: var(--color-bg-surface);
+			box-shadow: var(--shadow-xs);
+		}
+
+		@media (min-width: $bp-tablet) {
+			flex: 0 0 auto;
+		}
+	}
+
+	&__status-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 16px;
+		min-width: 16px;
+		padding: 0 $space-1;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		line-height: 1;
+		color: var(--color-text-secondary);
+		background-color: var(--color-bg-surface-sunk);
+
+		.inbox-cmd__status-btn--active & {
+			color: var(--color-text-on-brand);
+			background-color: var(--color-brand);
+		}
+	}
+
+	// Inline message-search toggle + results
+	&__msg-toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: $space-2 $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__msg-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		border: none;
+		background: none;
+		color: var(--color-brand);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+
+		i {
+			font-size: 1.2rem;
+		}
+		&:hover {
+			opacity: 0.8;
+		}
+	}
+
+	&__msg-spin {
+		font-size: 1.3rem;
+		color: var(--color-text-muted);
+	}
+
+	&__msg-hits {
+		display: grid;
+		gap: $space-1;
+		padding: $space-2 $space-4;
+		background-color: var(--color-bg-app);
+		border-bottom: 1px solid var(--color-border);
+		list-style: none;
+		margin: 0;
+	}
+
+	&__msg-hit {
+		display: block;
+		width: 100%;
+		padding: $space-2 $space-3;
+		text-align: left;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__msg-hit-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__msg-hit-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__msg-hit-preview {
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__msg-empty {
+		padding: $space-2 $space-4;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__popover {
+		width: 320px;
+		padding: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__sheet {
+		border-top-left-radius: $radius-2xl;
+		border-top-right-radius: $radius-2xl;
+	}
+
+	&__sheet-body {
+		padding-bottom: $space-2;
+	}
+
+	&__sheet-foot {
+		padding-top: $space-3;
+		border-top: 1px solid var(--color-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ACTIVE FILTER CHIPS — removable pills shown when filters are applied.
+// -----------------------------------------------------------------------------
+.inbox-active {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: $space-2;
+	padding: $space-2 $space-4;
+	background-color: var(--color-bg-app);
+	border-bottom: 1px solid var(--color-border);
+
+	&__label {
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 24px;
+		padding: 0 $space-1 0 $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		background-color: var(--state-active-tint);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: rgba(34, 125, 83, 0.18);
+		}
+		i {
+			font-size: 1.1rem;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// FILTER PANEL — body of the filters popover/sheet.
+// -----------------------------------------------------------------------------
+.inbox-filters {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	&__head-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__head-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 20px;
+		min-width: 20px;
+		padding: 0 $space-2;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		background-color: var(--state-active-tint);
+	}
+
+	&__section {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	// "Needs attention" quick-triage shortcuts.
+	&__attention {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__attn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--awaiting {
+			color: var(--warning-text);
+			background-color: var(--warning-bg);
+			&:hover {
+				border-color: var(--warning-solid);
+			}
+		}
+		&--unassigned {
+			color: var(--color-text-secondary);
+			background-color: var(--color-bg-surface-sunk);
+			&:hover {
+				border-color: var(--color-border-strong);
+			}
+		}
+		&--failed {
+			color: var(--danger-text);
+			background-color: var(--danger-bg);
+			&:hover {
+				border-color: var(--danger-solid);
+			}
+		}
+	}
+
+	&__section-title {
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	// Radio-style assignee options
+	&__options {
+		display: grid;
+		gap: $space-1;
+	}
+
+	&__option {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-height: 40px;
+		padding: $space-2 $space-3;
+		border: none;
+		border-radius: $radius-md;
+		background: none;
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+		&--active {
+			color: var(--color-brand);
+			background-color: var(--state-active-tint);
+		}
+	}
+
+	&__radio {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border-radius: $radius-full;
+		border: 2px solid var(--color-border-strong);
+		transition: border-color $duration-fast $ease-standard;
+
+		.inbox-filters__option--active & {
+			border-color: var(--color-brand);
+			background-color: var(--color-brand);
+		}
+	}
+
+	&__radio-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: $radius-full;
+		background-color: var(--color-text-on-brand);
+	}
+
+	&__option-icon {
+		flex-shrink: 0;
+		font-size: 1.6rem;
+		color: var(--color-text-muted);
+	}
+
+	&__option-label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	// Tag chips
+	&__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__tag {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		height: 32px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.2rem;
+		}
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&--active {
+			color: var(--color-brand);
+			background-color: var(--state-active-tint);
+			border-color: rgba(34, 125, 83, 0.34);
+		}
+	}
+
+	// Unread switch row
+	&__switch-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-2 $space-3;
+		border-radius: $radius-md;
+		background-color: var(--color-bg-surface-sunk);
+	}
+
+	&__switch-label {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+
+		i {
+			font-size: 1.6rem;
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__clear {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: -$space-1;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CONVERSATION ROW — list item (dense = desktop split list, card = mobile).
+// -----------------------------------------------------------------------------
+.convo-row {
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	width: 100%;
+	text-align: left;
+	border: none;
+	background: none;
+	cursor: pointer;
+	transition:
+		background-color $duration-fast $ease-standard,
+		border-color $duration-fast $ease-standard;
+
+	// Dense (desktop split-pane list rows)
+	&--dense {
+		align-items: center;
+		min-height: 64px;
+		padding: $space-2 $space-3;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+
+	// Card (mobile / standalone list)
+	&--card {
+		min-height: 72px;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		background-color: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&--selected {
+		background-color: var(--state-active-tint);
+		&.convo-row--dense:hover {
+			background-color: var(--state-active-tint);
+		}
+	}
+
+	&--unread.convo-row--card {
+		border-color: rgba(34, 125, 83, 0.28);
+		background-color: var(--state-active-tint);
+	}
+
+	&--failed.convo-row--card {
+		border-color: var(--danger-solid);
+		background-color: var(--danger-bg);
+	}
+
+	&--closed.convo-row--card {
+		opacity: 0.6;
+	}
+
+	// Left accent bar (unread / selected)
+	&__accent {
+		position: absolute;
+		left: 0;
+		top: $space-3;
+		bottom: $space-3;
+		width: 3px;
+		border-radius: 0 $radius-full $radius-full 0;
+		background-color: var(--color-brand);
+	}
+
+	// Avatar + channel badge
+	&__avatar-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	&__avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: $radius-full;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		background-color: var(--avatar-fallback-bg);
+
+		.convo-row--dense & {
+			width: 32px;
+			height: 32px;
+			font-size: $fs-caption;
+		}
+
+		&--unread {
+			color: var(--color-text-on-brand);
+			background-color: var(--color-brand);
+		}
+	}
+
+	&__channel {
+		position: absolute;
+		right: -2px;
+		bottom: -2px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border-radius: $radius-full;
+		border: 2px solid var(--color-bg-surface);
+		background-color: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+
+		i {
+			font-size: 1.1rem;
+		}
+
+		&--sms {
+			color: var(--color-brand);
+		}
+		&--call {
+			color: var(--info-solid);
+		}
+		&--missed_call {
+			color: var(--warning-solid);
+		}
+		&--webchat {
+			color: var(--success-solid);
+		}
+		&--email {
+			color: var(--info-solid);
+		}
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	&__top {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+
+		&--unread {
+			font-weight: $weight-semibold;
+		}
+	}
+
+	&__time {
+		flex-shrink: 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+
+		&--unread {
+			color: var(--color-brand);
+		}
+	}
+
+	&__preview-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		margin-top: 1px;
+	}
+
+	&__preview {
+		min-width: 0;
+		flex: 1 1 auto;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		&--unread {
+			font-weight: $weight-medium;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__badge {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		height: 20px;
+		min-width: 20px;
+		padding: 0 $space-2;
+		border-radius: $radius-full;
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+		line-height: 1;
+		color: var(--color-text-on-brand);
+		background-color: var(--color-brand);
+		box-shadow: var(--shadow-xs);
+	}
+
+	&__meta {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		margin-top: 2px;
+		overflow: hidden;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+
+		&--waiting {
+			color: var(--warning-text);
+		}
+		&--failed {
+			color: var(--danger-text);
+		}
+	}
+
+	&__meta-item {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-1;
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__meta-dot {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		opacity: 0.5;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// THREAD EMPTY STATE — shown in the right pane when nothing is selected.
+// -----------------------------------------------------------------------------
+.thread-empty {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	padding: $space-8;
+	background-color: var(--color-bg-app);
+
+	&__inner {
+		max-width: 360px;
+		text-align: center;
+	}
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 56px;
+		height: 56px;
+		margin: 0 auto $space-4;
+		border-radius: $radius-xl;
+		color: var(--color-brand);
+		background-color: var(--state-active-tint);
+
+		i {
+			font-size: 2.8rem;
+		}
+	}
+
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__action {
+		margin-top: $space-4;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// PAGE LAYOUT — split pane shell (kept global so list page + sheet share it).
+// -----------------------------------------------------------------------------
+.inbox-page {
+	display: flex;
+	flex-direction: column;
+	height: calc(100dvh - 64px);
+
+	&__cmd {
+		flex-shrink: 0;
+	}
+}
+
+.inbox-split {
+	display: flex;
+	flex-direction: row;
+	min-height: 0;
+	height: 100%;
+	margin-top: $space-1;
+	border-top: 1px solid var(--color-border);
+
+	@media (min-width: $bp-tablet) {
+		flex-direction: row;
+		margin-top: 0;
+		border-top: none;
+	}
+}
+
+.inbox-list {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+
+	@media (min-width: $bp-tablet) {
+		width: 100%;
+		max-width: 360px;
+		border-right: 1px solid var(--color-border);
+	}
+
+	&__scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+	}
+
+	&__cards {
+		display: grid;
+		gap: $space-2;
+		padding: $space-3;
+
+		@media (min-width: $bp-tablet) {
+			display: none;
+		}
+	}
+
+	&__rows {
+		display: none;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+
+		@media (min-width: $bp-tablet) {
+			display: block;
+		}
+	}
+
+	&__skeleton {
+		padding: $space-3;
+	}
+
+	&__error {
+		margin: $space-3;
+		padding: $space-3 $space-4;
+		border-radius: $radius-md;
+		border: 1px solid var(--danger-solid);
+		background-color: var(--danger-bg);
+		color: var(--danger-text);
+		font-size: $fs-body;
+	}
+
+	&__more {
+		display: flex;
+		justify-content: center;
+		padding: $space-3;
+	}
+}
+
+.inbox-thread-pane {
+	display: none;
+
+	@media (min-width: $bp-tablet) {
+		display: flex;
+		width: 100%;
+		min-height: 0;
+	}
+
+	&__loading {
+		flex: 1 1 auto;
+		padding: $space-4;
+	}
+}
+
+.inbox-noaccess {
+	padding: $space-12 $space-4;
+	@media (min-width: $bp-mobile) {
+		padding: $space-12 $space-6;
+	}
+}
+
+// =============================================================================
+// THREAD VIEW (S9.1) — open conversation: header + message stream + composer.
+// =============================================================================
+.thread {
+	display: flex;
+	width: 100%;
+	flex-direction: column;
+	background-color: var(--color-bg-app);
+	height: calc(100dvh - 72px - var(--bottom-nav-height) - env(safe-area-inset-bottom));
+
+	@media (min-width: $bp-mobile) {
+		height: calc(100dvh - 104px);
+	}
+
+	// Embedded in the desktop two-pane right panel.
+	&--fill {
+		height: 100%;
+		min-height: 0;
+	}
+
+	&__header {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		background-color: var(--color-bg-surface);
+		border-bottom: 1px solid var(--color-border);
+
+		@media (min-width: $bp-mobile) {
+			padding: $space-3 $space-5;
+		}
+	}
+
+	&__icon-btn {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 2rem;
+		}
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--desktop {
+			display: none;
+			@media (min-width: $bp-tablet) {
+				display: inline-flex;
+			}
+		}
+		&--mobile {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+	}
+
+	&__identity {
+		display: flex;
+		min-width: 0;
+		flex: 1 1 auto;
+		align-items: center;
+		gap: $space-3;
+	}
+
+	&__avatar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: $radius-full;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		background-color: var(--avatar-fallback-bg);
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+
+	&__phone {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__header-actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__actions-desktop {
+		display: none;
+		@media (min-width: $bp-tablet) {
+			display: flex;
+		}
+	}
+
+	&__body {
+		display: flex;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+
+	&__main {
+		display: flex;
+		min-width: 0;
+		flex: 1 1 auto;
+		flex-direction: column;
+	}
+
+	&__scroll {
+		flex: 1 1 auto;
+		overflow-y: auto;
+		padding: $space-5 $space-3;
+
+		@media (min-width: $bp-mobile) {
+			padding: $space-5 $space-5;
+		}
+		@media (min-width: $bp-tablet) {
+			padding: $space-5 $space-6;
+		}
+	}
+
+	&__messages {
+		display: flex;
+		width: 100%;
+		flex-direction: column;
+	}
+
+	&__more {
+		display: flex;
+		justify-content: center;
+		padding-bottom: $space-3;
+	}
+
+	// Centered day / channel separators
+	&__sep {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: $space-2 0;
+	}
+
+	&__sep-label {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		background-color: var(--color-bg-surface-sunk);
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__loading,
+	&__error-wrap {
+		flex: 1 1 auto;
+		padding: $space-4;
+		@media (min-width: $bp-mobile) {
+			padding: $space-6;
+		}
+	}
+
+	&__error {
+		padding: $space-4 $space-4 $space-5;
+		border-radius: $radius-lg;
+		border: 1px solid var(--danger-solid);
+		background-color: var(--danger-bg);
+		color: var(--danger-text);
+		font-size: $fs-body;
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__empty {
+		display: flex;
+		flex: 1 1 auto;
+		align-items: center;
+		justify-content: center;
+		padding: $space-4;
+	}
+
+	// Composer footer
+	&__composer {
+		flex-shrink: 0;
+		padding: $space-3 $space-3;
+		background-color: var(--color-bg-surface);
+		border-top: 1px solid var(--color-border);
+		box-shadow: 0 -10px 30px -20px rgba(13, 21, 15, 0.18);
+
+		@media (min-width: $bp-mobile) {
+			padding: $space-3 $space-5;
+		}
+	}
+
+	&__optout {
+		margin-bottom: $space-2;
+	}
+
+	// Context aside
+	&__aside {
+		display: none;
+		width: 320px;
+		max-width: 360px;
+		flex-shrink: 0;
+		overflow-y: auto;
+		padding: $space-4;
+		background-color: var(--color-bg-surface);
+		border-left: 1px solid var(--color-border);
+
+		&--open {
+			@media (min-width: 1280px) {
+				display: block;
+			}
+		}
+	}
+
+	// Mobile details sheet header
+	&__sheet-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-bottom: $space-3;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__sheet-title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+	}
+
+	&__sheet-body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding-top: $space-4;
+	}
+}
+
+// =============================================================================
+// MESSAGE BUBBLE (S9.1) — shared by text (MessageBubble) + email (EmailMessageCard).
+// =============================================================================
+.msg {
+	display: flex;
+	align-items: flex-end;
+	gap: $space-2;
+	margin-top: $space-4;
+
+	&--grouped {
+		margin-top: 2px;
+	}
+	&--in {
+		justify-content: flex-start;
+	}
+	&--out {
+		justify-content: flex-end;
+	}
+
+	&__avatar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: $radius-full;
+		font-size: 1.1rem;
+		font-weight: $weight-semibold;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&--in {
+			color: var(--color-text-primary);
+			background-color: var(--color-bg-surface-sunk);
+		}
+		&--out {
+			color: var(--color-brand);
+			background-color: var(--avatar-fallback-bg);
+		}
+	}
+
+	&__spacer {
+		width: 32px;
+		flex-shrink: 0;
+	}
+
+	&__col {
+		display: flex;
+		max-width: 78%;
+		flex-direction: column;
+
+		@media (min-width: $bp-mobile) {
+			max-width: 70%;
+		}
+		&--in {
+			align-items: flex-start;
+		}
+		&--out {
+			align-items: flex-end;
+		}
+	}
+
+	&__bubble {
+		padding: $space-2 $space-3;
+		border-radius: $radius-xl;
+		font-size: $fs-body;
+		line-height: $lh-lg;
+		box-shadow: var(--shadow-xs);
+
+		&--in {
+			color: var(--color-text-primary);
+			background-color: var(--color-bg-surface);
+		}
+		&--out {
+			color: var(--color-text-on-brand);
+			background-color: var(--color-brand);
+		}
+		&--email {
+			padding: $space-3 $space-4;
+		}
+		&--pending {
+			opacity: 0.75;
+		}
+		&--failed {
+			box-shadow:
+				var(--shadow-xs),
+				inset 0 0 0 1px var(--danger-solid);
+		}
+		&--terminal {
+			color: var(--color-text-primary);
+			background-color: var(--danger-bg);
+			box-shadow:
+				var(--shadow-xs),
+				inset 0 0 0 2px var(--danger-solid);
+		}
+	}
+
+	&__subject {
+		margin-bottom: $space-1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		line-height: $lh-body;
+	}
+
+	&__text {
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	&__media {
+		margin-bottom: $space-2;
+		&--email {
+			margin-top: $space-3;
+			margin-bottom: 0;
+		}
+	}
+
+	&__foot {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-1;
+		margin-top: $space-1;
+
+		&--tight {
+			margin-top: -$space-1;
+		}
+	}
+
+	&__chan {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		font-size: 1rem;
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	&__chan-label {
+		.msg__bubble--in & {
+			color: var(--color-text-muted);
+		}
+		.msg__bubble--out & {
+			color: rgba(255, 255, 255, 0.55);
+		}
+	}
+
+	&__time {
+		font-size: 1.1rem;
+
+		.msg__bubble--in & {
+			color: var(--color-text-muted);
+		}
+		.msg__bubble--out & {
+			color: rgba(255, 255, 255, 0.6);
+		}
+		.msg__bubble--terminal & {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__auto {
+		font-size: 1.2rem;
+		opacity: 0.6;
+	}
+
+	&__status {
+		font-size: 1.3rem;
+
+		&--pending {
+			opacity: 0.6;
+		}
+		&--delayed {
+			color: var(--warning-solid);
+		}
+		&--failed {
+			color: var(--danger-solid);
+		}
+		&--read {
+			color: var(--info-solid);
+		}
+		&--delivered {
+			color: rgba(255, 255, 255, 0.8);
+		}
+		&--sent {
+			color: rgba(255, 255, 255, 0.5);
+		}
+	}
+
+	// Failure row (status badge + retry)
+	&__fail {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+		margin-top: $space-1;
+
+		&--email {
+			width: 100%;
+			margin-top: $space-2;
+			padding-top: $space-2;
+			border-top: 1px solid rgba(225, 29, 72, 0.2);
+		}
+	}
+
+	&__fail-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-medium;
+		color: var(--danger-text);
+		background-color: var(--danger-bg);
+
+		&--muted {
+			color: var(--color-text-secondary);
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__retry {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 28px;
+		padding: 2px $space-2;
+		border-radius: $radius-sm;
+		border: 1px solid var(--danger-solid);
+		background: none;
+		color: var(--danger-text);
+		font-size: 1rem;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.2rem;
+		}
+		&:hover {
+			background-color: var(--danger-bg);
+		}
+		&:disabled {
+			opacity: 0.6;
+			cursor: default;
+		}
+	}
+
+	&__fail-reason {
+		max-width: 260px;
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 1rem;
+		color: var(--danger-text);
+	}
+}
+
+// Centered system message: missed call.
+.msg-event {
+	display: flex;
+	justify-content: center;
+	padding: 2px 0;
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-1 $space-3;
+		border-radius: $radius-full;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		color: var(--warning-text);
+		background-color: var(--warning-bg);
+		box-shadow: var(--shadow-xs);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+}
+
+// Logged call card.
+.msg-call {
+	display: flex;
+	justify-content: center;
+	padding: $space-1 $space-2;
+
+	&__card {
+		width: 100%;
+		max-width: 85%;
+		padding: $space-2 $space-3;
+		border-radius: $radius-lg;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		box-shadow: var(--shadow-xs);
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		color: var(--color-text-primary);
+	}
+
+	&__icon {
+		flex-shrink: 0;
+		font-size: 1.6rem;
+		color: var(--color-brand);
+	}
+
+	&__label {
+		font-weight: $weight-medium;
+	}
+
+	&__dur {
+		color: var(--color-text-secondary);
+	}
+
+	&__time {
+		margin-left: auto;
+		font-size: 1.1rem;
+		color: var(--color-text-secondary);
+	}
+
+	&__body {
+		margin-top: $space-2;
+		white-space: pre-wrap;
+		word-break: break-word;
+		line-height: $lh-lg;
+		color: var(--color-text-secondary);
+	}
+
+	&__cta {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		margin-top: $space-2;
+		padding: $space-1 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-brand);
+		background-color: var(--state-active-tint);
+		text-decoration: none;
+		transition: background-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+		&:hover {
+			background-color: var(--avatar-fallback-bg);
+		}
+	}
+}
+
+// Internal note card.
+.msg-note {
+	display: flex;
+	justify-content: center;
+	padding: 2px $space-2;
+
+	&__card {
+		max-width: 85%;
+		padding: $space-2 $space-3;
+		border-radius: $radius-lg;
+		border: 1px solid var(--warning-solid);
+		background-color: var(--warning-bg);
+		box-shadow: var(--shadow-xs);
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		margin-bottom: $space-1;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--warning-text);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	&__body {
+		white-space: pre-wrap;
+		word-break: break-word;
+		line-height: $lh-lg;
+		color: var(--color-text-primary);
+	}
+
+	&__time {
+		margin-top: $space-1;
+		text-align: right;
+		font-size: 1rem;
+		color: var(--color-text-secondary);
+	}
+}
+
+// Opt-out banner (shown above composer when contact opted out of SMS).
+.optout-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	padding: $space-3;
+	border-radius: $radius-lg;
+	border: 1px solid var(--danger-solid);
+	background-color: var(--danger-bg);
+	color: var(--danger-text);
+	box-shadow: var(--shadow-xs);
+
+	&__icon {
+		flex-shrink: 0;
+		margin-top: 1px;
+		font-size: 1.6rem;
+	}
+
+	&__body {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+	}
+
+	&__text {
+		font-size: $fs-body;
+		opacity: 0.85;
+	}
+}
+
+// =============================================================================
+// MESSAGE MEDIA (S9.1) — image grid + file chips inside a bubble.
+// =============================================================================
+.msg-media {
+	&__grid {
+		display: grid;
+		gap: $space-1;
+		margin-bottom: $space-2;
+
+		&--single {
+			grid-template-columns: 1fr;
+		}
+		&--multi {
+			grid-template-columns: 1fr 1fr;
+		}
+		&--end {
+			justify-items: end;
+		}
+		&--start {
+			justify-items: start;
+		}
+	}
+
+	&__thumb {
+		position: relative;
+		aspect-ratio: 1 / 1;
+		width: 100%;
+		max-width: 200px;
+		overflow: hidden;
+		border-radius: $radius-md;
+		border: none;
+		background-color: var(--color-bg-surface-sunk);
+		box-shadow: inset 0 0 0 1px var(--color-border);
+		cursor: pointer;
+		transition: transform $duration-fast $ease-standard;
+
+		&:active {
+			transform: scale(0.98);
+		}
+
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			transition: transform $duration-base $ease-standard;
+		}
+		&:hover img {
+			transform: scale(1.05);
+		}
+	}
+
+	&__thumb-loading {
+		display: flex;
+		width: 100%;
+		height: 100%;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 2rem;
+		}
+	}
+
+	&__files {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+		margin-bottom: $space-2;
+
+		&--end {
+			align-items: flex-end;
+		}
+		&--start {
+			align-items: flex-start;
+		}
+	}
+
+	&__file {
+		display: inline-flex;
+		max-width: 240px;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-2 $space-3;
+		text-align: left;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+
+	&__file-icon {
+		flex-shrink: 0;
+		font-size: 1.6rem;
+		color: var(--color-text-secondary);
+	}
+
+	&__file-info {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	&__file-name {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__file-size {
+		display: block;
+		font-size: 1rem;
+		color: var(--color-text-secondary);
+	}
+
+	&__file-dl {
+		flex-shrink: 0;
+		font-size: 1.4rem;
+		color: var(--color-text-secondary);
+	}
+}
+
+// =============================================================================
+// CHANNEL PICKER (S9.2) — segmented reply-channel toggle inside the composer.
+// =============================================================================
+.channel-picker {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	padding: 2px;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border);
+	background-color: var(--color-bg-surface);
+
+	&__opt {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 32px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-sm;
+		background: none;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			color: var(--color-text-primary);
+			background-color: var(--color-bg-surface-sunk);
+		}
+
+		&--active {
+			color: var(--color-text-on-brand);
+			background-color: var(--color-brand);
+			box-shadow: var(--shadow-xs);
+
+			&:hover {
+				color: var(--color-text-on-brand);
+				background-color: var(--color-brand);
+			}
+		}
+
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.6;
+		}
+	}
+
+	// Single-channel read-only label (replaces the toggle when only one channel).
+	&__solo {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 30px;
+		padding: 0 $space-2;
+		border-radius: $radius-sm;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+}
+
+// =============================================================================
+// COMPOSER (S9.2) — reply box: toolbar + subject/from + attachments + input.
+// =============================================================================
+.composer {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+
+	// Top control row — note toggle, channel picker, hints, quick reply, booking.
+	&__toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	// Internal-note toggle pill.
+	&__note-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			color: var(--warning-text);
+			background-color: var(--warning-bg);
+			border-color: var(--warning-solid);
+			box-shadow: var(--shadow-xs);
+
+			&:hover {
+				background-color: var(--warning-bg);
+				color: var(--warning-text);
+			}
+		}
+	}
+
+	&__note-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	// Inline status hint (blocked channel / reopen notice).
+	&__hint {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+
+		&--blocked {
+			color: var(--danger-text);
+		}
+		&--muted {
+			color: var(--color-text-secondary);
+		}
+	}
+
+	// Pill buttons (quick reply, booking link).
+	&__pill {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		// Pushes quick reply to the right edge of the toolbar.
+		&--push {
+			margin-left: auto;
+		}
+
+		// Subtle pulse on the spark icon, paused on hover.
+		&--spark i {
+			animation: composer-spark 2.4s $ease-standard infinite;
+		}
+		&--spark:hover i {
+			animation: none;
+		}
+	}
+
+	// From-address picker trigger (email).
+	&__from {
+		display: inline-flex;
+		max-width: 100%;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.4rem;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.5;
+		}
+	}
+
+	&__from-label {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+	}
+
+	&__from-value {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	// Email subject input.
+	&__subject {
+		width: 100%;
+		height: 40px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		transition: border-color $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.6;
+		}
+	}
+
+	// Attachment chips.
+	&__attachments {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+	}
+
+	&__attachment {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding: $space-1 $space-7 $space-1 $space-1;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+
+		&--error {
+			border-color: var(--danger-solid);
+		}
+	}
+
+	&__attachment-img {
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		border-radius: $radius-sm;
+		object-fit: cover;
+	}
+
+	&__attachment-icon {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: $radius-sm;
+		color: var(--color-text-secondary);
+		background-color: var(--color-bg-surface-sunk);
+
+		i {
+			font-size: 1.6rem;
+		}
+	}
+
+	&__attachment-name {
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-caption;
+		color: var(--color-text-primary);
+	}
+
+	&__attachment-spin {
+		flex-shrink: 0;
+		font-size: 1.4rem;
+		color: var(--color-text-muted);
+		animation: composer-spin 0.8s linear infinite;
+	}
+
+	&__attachment-failed {
+		flex-shrink: 0;
+		font-size: 1rem;
+		font-weight: $weight-medium;
+		color: var(--danger-text);
+	}
+
+	&__attachment-remove {
+		position: absolute;
+		top: $space-1;
+		right: $space-1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		border-radius: $radius-full;
+		background-color: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.3rem;
+		}
+		&:hover {
+			background-color: var(--danger-bg);
+			color: var(--danger-text);
+		}
+	}
+
+	&__file-input {
+		display: none;
+	}
+
+	// Input shell — rounded box holding attach + textarea + send.
+	&__shell {
+		display: flex;
+		align-items: flex-end;
+		gap: $space-2;
+		padding: $space-2;
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+		transition:
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:focus-within {
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-md);
+		}
+
+		&--note {
+			border-color: var(--warning-solid);
+			background-color: var(--warning-bg);
+
+			&:focus-within {
+				border-color: var(--warning-solid);
+			}
+		}
+
+		&--email {
+			border-color: var(--info-solid);
+
+			&:focus-within {
+				border-color: var(--info-solid);
+			}
+		}
+	}
+
+	&__attach {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 2rem;
+		}
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.4;
+		}
+	}
+
+	&__textarea {
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 48px;
+		max-height: 200px;
+		padding: $space-3 $space-2;
+		border: none;
+		background: none;
+		color: var(--color-text-primary);
+		font-family: inherit;
+		font-size: $fs-body;
+		line-height: $lh-lg;
+		resize: none;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+	}
+
+	&__send {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: none;
+		border-radius: $radius-full;
+		color: var(--color-text-on-brand);
+		background: linear-gradient(to bottom, var(--color-brand), var(--color-brand-strong));
+		box-shadow: var(--shadow-sm);
+		cursor: pointer;
+		transition:
+			box-shadow $duration-fast $ease-standard,
+			transform $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&:hover:not(:disabled) {
+			box-shadow: var(--shadow-md);
+		}
+		&:active:not(:disabled) {
+			transform: scale(0.95);
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			cursor: not-allowed;
+			color: var(--color-text-muted);
+			background: var(--color-bg-surface-sunk);
+			box-shadow: none;
+		}
+	}
+}
+
+// Popover panel shared by quick-reply, booking-link, and from-address menus.
+.composer-menu {
+	width: 288px;
+	padding: $space-2;
+
+	&__empty {
+		padding: $space-3 $space-2;
+		text-align: center;
+	}
+
+	&__empty-icon {
+		font-size: 2rem;
+		color: var(--color-text-muted);
+	}
+
+	&__empty-title {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__empty-text {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__cta {
+		display: inline-flex;
+		align-items: center;
+		height: 32px;
+		margin-top: $space-3;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-on-brand);
+		background-color: var(--color-brand);
+		text-decoration: none;
+		transition: opacity $duration-fast $ease-standard;
+
+		&:hover {
+			opacity: 0.9;
+		}
+	}
+
+	&__note {
+		padding: $space-2;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__link {
+		color: var(--color-brand);
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	&__list {
+		display: grid;
+		gap: $space-1;
+		max-height: 288px;
+		overflow-y: auto;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	&__item {
+		display: block;
+		width: 100%;
+		padding: $space-2 $space-3;
+		text-align: left;
+		border: none;
+		border-radius: $radius-sm;
+		background: none;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+
+		&--row {
+			display: flex;
+			align-items: center;
+			gap: $space-2;
+		}
+	}
+
+	&__item-title {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__item-preview {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&__item-icon {
+		flex-shrink: 0;
+		font-size: 1.6rem;
+		color: var(--color-text-muted);
+	}
+
+	&__item-label {
+		min-width: 0;
+		flex: 1 1 auto;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__item-main {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	&__item-check {
+		flex-shrink: 0;
+		font-size: 1.6rem;
+		color: var(--color-brand);
+	}
+
+	&__foot {
+		margin-top: $space-1;
+		padding-top: $space-2;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__foot-link {
+		display: block;
+		padding: $space-1 $space-3;
+		border-radius: $radius-sm;
+		font-size: $fs-caption;
+		color: var(--color-brand);
+		text-decoration: none;
+		transition: background-color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+	}
+}
+
+@keyframes composer-spark {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+
+@keyframes composer-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+// =============================================================================
+// CONTACT CONTEXT PANEL (S9.3) — right-rail summary (contact, pipeline, docs).
+// Rendered in `.thread__aside` (desktop) and the mobile details sheet.
+// =============================================================================
+.contact-ctx {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__section {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__heading {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.4rem;
+		}
+	}
+
+	// Quick actions — 3-up grid of vertical mini-buttons.
+	&__quick {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: $space-2;
+	}
+
+	&__quick-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-2 $space-1;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		text-align: center;
+		text-decoration: none;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+			color: var(--color-brand);
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			border-color: var(--color-border-strong);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__card {
+		padding: $space-4;
+		border-radius: $radius-xl;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		box-shadow: var(--shadow-card);
+	}
+
+	&__name {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+		text-decoration: none;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-brand);
+		}
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-1;
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+
+		i {
+			font-size: 1.3rem;
+		}
+	}
+
+	&__email {
+		margin-top: $space-1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	// Document link rows (next appointment, latest quote / invoice).
+	&__link {
+		display: block;
+		color: inherit;
+		text-decoration: none;
+		transition: color $duration-fast $ease-standard;
+
+		&:hover {
+			color: var(--color-brand);
+		}
+	}
+
+	&__appt-time {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__appt-sub {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__doc {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-2;
+	}
+
+	&__doc-num {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+
+	&__doc-total {
+		margin-top: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	&__muted {
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+}
+
+// =============================================================================
+// CONVERSATION ACTIONS (S9.3) — thread header action bar (close/tags/assign).
+// =============================================================================
+.convo-actions {
+	display: flex;
+	align-items: center;
+	gap: $space-1;
+
+	// Ghost pill button (snooze / close / reopen / tags). Shared with .snooze-menu.
+	&__btn {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		min-height: 36px;
+		padding: 0 $space-3;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: var(--color-text-secondary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.6rem;
+		}
+
+		&:hover:not(:disabled) {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.5;
+		}
+	}
+
+	&__count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 20px;
+		min-width: 20px;
+		margin-left: $space-1;
+		padding: 0 $space-1;
+		border-radius: $radius-full;
+		font-size: 1rem;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		background-color: var(--state-active-tint);
+	}
+
+	// Round icon-only "more" trigger.
+	&__more {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+
+	// Dropdown row helpers (assign list).
+	&__menu-icon {
+		font-size: 1.6rem;
+		color: var(--color-text-muted);
+	}
+
+	&__menu-current {
+		margin-left: auto;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// Tag editor panel (toggles below the header action bar).
+.convo-tags {
+	margin-top: $space-2;
+	padding: $space-3;
+	border-radius: $radius-xl;
+	border: 1px solid var(--color-border);
+	background-color: var(--color-bg-surface);
+	box-shadow: var(--shadow-card);
+
+	&__row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: 2px $space-1 2px $space-2;
+		border-radius: $radius-full;
+		border: 1px solid rgba(34, 125, 83, 0.3);
+		background-color: var(--state-active-tint);
+		color: var(--color-brand);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+	}
+
+	&__chip-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2px;
+		border: none;
+		border-radius: $radius-full;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		transition: background-color $duration-fast $ease-standard;
+
+		i {
+			font-size: 1.2rem;
+		}
+		&:hover:not(:disabled) {
+			background-color: rgba(34, 125, 83, 0.2);
+		}
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.5;
+		}
+	}
+
+	&__input {
+		width: 128px;
+		height: 28px;
+		padding: 0 $space-3;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-app);
+		color: var(--color-text-primary);
+		font-size: $fs-caption;
+		transition: border-color $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.6;
+		}
+	}
+
+	&__suggestions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		margin-top: $space-2;
+	}
+
+	&__suggestion {
+		display: inline-flex;
+		align-items: center;
+		height: 24px;
+		padding: 0 $space-2;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-app);
+		color: var(--color-text-secondary);
+		font-size: 1.1rem;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__hint {
+		margin-top: $space-2;
+		font-size: 1rem;
+		color: var(--color-text-muted);
+	}
+}
+
+// Snooze trigger shares the ghost-pill look; dropdown rows align label + hint.
+.snooze-menu {
+	&__row {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// =============================================================================
+// LOG CALL SHEET (S9.3) — "Log this call?" form inside a bottom sheet.
+// =============================================================================
+.log-call {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding-top: $space-2;
+
+	&__grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	&__outcome {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		min-height: 44px;
+		padding: $space-2 $space-3;
+		border-radius: $radius-xl;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		i {
+			flex-shrink: 0;
+			font-size: 1.6rem;
+		}
+
+		span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		&:hover {
+			background-color: var(--color-bg-surface-sunk);
+		}
+
+		&--active {
+			color: var(--color-brand);
+			background-color: var(--state-active-tint);
+			border-color: var(--color-brand);
+
+			&:hover {
+				background-color: var(--state-active-tint);
+			}
+		}
+	}
+
+	&__field {
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
+	}
+
+	&__label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+	}
+
+	&__input,
+	&__textarea {
+		width: 100%;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-bg-app);
+		color: var(--color-text-primary);
+		font-family: inherit;
+		font-size: $fs-body;
+		transition: border-color $duration-fast $ease-standard;
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
+	&__input {
+		height: 44px;
+	}
+
+	&__textarea {
+		padding: $space-2 $space-3;
+		line-height: $lh-lg;
+		resize: none;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		padding-top: $space-1;
+
+		.btn {
+			flex: 1 1 0;
+		}
+	}
+
+	&__spin {
+		animation: composer-spin 0.8s linear infinite;
+	}
+}

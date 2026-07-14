@@ -1,0 +1,67 @@
+@use '../tokens' as *;
+
+.card {
+  background: var(--color-bg-surface);
+  border-radius: $radius-2xl;
+  padding: $space-7 $space-6;
+  box-shadow: var(--shadow-md);
+  // no border — elevation comes from shadow alone
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-5;
+  }
+
+  &__title {
+    font: $weight-semibold #{$fs-h3}/#{$lh-h3} $font-display;
+    color: var(--color-text-primary);
+  }
+
+  &__description {
+    font-size: $fs-body;
+    color: var(--color-text-muted);
+    margin-top: $space-1;
+  }
+
+  &__body {
+    // semantic wrapper; no extra padding (root .card already padded)
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    margin-top: $space-5;
+  }
+
+  // Dark accent variant — use at most once per view as a focal point
+  &--hero {
+    background: linear-gradient(160deg, var(--surface-hero-from) 0%, var(--surface-hero-to) 100%);
+    color: var(--color-text-on-brand);
+    box-shadow: var(--shadow-glow);
+
+    .card__title { color: var(--color-text-on-brand); }
+  }
+}
+
+// Stat tile — "24 / Total Projects" pattern
+.stat-card {
+  @extend .card;
+
+  &__value {
+    font: $weight-bold #{$fs-display}/#{$lh-display} $font-display;
+  }
+
+  // Small circular ↗ action button in the card's top-right corner
+  &__action {
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-full;
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

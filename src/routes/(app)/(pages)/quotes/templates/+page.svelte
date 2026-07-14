@@ -1,14 +1,13 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import QuoteTemplateListItem from '$lib/components/quotes/QuoteTemplateListItem.svelte';
 	import { quoteTemplatesStore } from '$lib/stores/quoteTemplates.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { goto } from '$app/navigation';
-	import { FileText, Plus } from '@lucide/svelte';
 	import type { QuoteTemplateListItem as TemplateItem } from '$lib/types/quotes';
 
 	const memberAccessor = getMemberContext();
@@ -72,8 +71,9 @@
 
 	// The editor sheet and delete-confirm dialog are click-gated — load them lazily
 	// so the templates list paints instantly; chunks fetch on first open.
-	let TemplateEditorSheet =
-		$state<typeof import('$lib/components/quotes/TemplateEditorSheet.svelte').default | null>(null);
+	let TemplateEditorSheet = $state<
+		typeof import('$lib/components/quotes/TemplateEditorSheet.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!editorOpen || TemplateEditorSheet) return;
 		void import('$lib/components/quotes/TemplateEditorSheet.svelte').then((m) => {
@@ -81,8 +81,9 @@
 		});
 	});
 
-	let ConfirmDialog =
-		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!confirmOpen || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
@@ -120,29 +121,31 @@
 	back="/quotes"
 >
 	{#snippet actions()}
-		<Button variant="outline" onclick={() => goto('/quotes')}>Back to quotes</Button>
+		<Button type="button" variant="outline" onclick={() => goto('/quotes')}>
+			Back to quotes
+		</Button>
 		{#if canManage}
-			<Button onclick={openCreate}>
-				<Plus class="mr-1 h-4 w-4" />New template
+			<Button type="button" onclick={openCreate}>
+				<i class="ri-add-line" aria-hidden="true"></i>New template
 			</Button>
 		{/if}
 	{/snippet}
 
-	<div class="space-y-3">
+	<div class="quote-tpls">
 		{#if showSkeleton}
 			<SkeletonLoader lines={5} height="92px" label="Loading templates" />
 		{:else if showError}
-			<p class="text-sm text-destructive">{errorMsg}</p>
+			<p class="quote-tpls__error">{errorMsg}</p>
 		{:else if items.length === 0}
 			<EmptyState
-				icon={FileText}
+				iconClass="ri-file-text-line"
 				title="No quote templates yet"
 				description="Create reusable templates to speed up quote creation."
 				actionLabel={canManage ? 'Create template' : undefined}
 				onAction={canManage ? openCreate : undefined}
 			/>
 		{:else}
-			<ul class="grid gap-3">
+			<ul class="quote-tpls__list">
 				{#each items as template (template.id)}
 					<li>
 						<QuoteTemplateListItem

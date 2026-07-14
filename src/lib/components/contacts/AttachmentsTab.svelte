@@ -2,7 +2,6 @@
 	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { getMemberContext } from '$lib/context/member';
-	import { FileText } from '@lucide/svelte';
 
 	let { contactId }: { contactId: string } = $props();
 
@@ -28,6 +27,6 @@
 	<EmptyState
 		title="No access to files"
 		description="You don't have permission to view files for this contact."
-		icon={FileText}
+		iconClass="ri-file-text-line"
 	/>
 {/if}

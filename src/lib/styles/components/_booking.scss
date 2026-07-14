@@ -1,0 +1,659 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// SETTINGS — ONLINE BOOKING (S12b) — booking-link list, settings/availability/
+// blocked tabs, and the new-link wizard. Shared BEM blocks across all booking
+// pages; page-only layout stays in each page's scoped <style>.
+// =============================================================================
+
+// In-body "back to …" link (booking list + [id] layout).
+.book-back {
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	margin-bottom: $space-4;
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	color: var(--color-text-muted);
+	transition: color $duration-fast $ease-standard;
+
+	i {
+		font-size: 1.05rem;
+	}
+
+	&:hover {
+		color: var(--color-text-primary);
+	}
+}
+
+// ── Feature-not-enabled notice ──────────────────────────────────────────────
+.book-locked {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: $space-3;
+	padding: $space-12 $space-6;
+	border: 1px dashed var(--color-border-strong);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface-sunk);
+	text-align: center;
+
+	&__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		font-size: 1.5rem;
+	}
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		max-width: 24rem;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// ── Booking-link list ───────────────────────────────────────────────────────
+.book-list {
+	display: grid;
+	gap: $space-3;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.book-card {
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__title-row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__badge {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+
+		&--active {
+			background: var(--success-bg);
+			color: var(--success-text);
+		}
+
+		&--inactive {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__url {
+		margin-top: $space-1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__meta {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $space-2;
+		margin-top: $space-3;
+	}
+}
+
+// ── [id] tab nav ────────────────────────────────────────────────────────────
+.book-tabs {
+	display: flex;
+	gap: $space-1;
+	margin-bottom: $space-6;
+	padding: $space-1;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+	overflow-x: auto;
+
+	&__tab {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 $space-3;
+		border-radius: $radius-md;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		transition:
+			background $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--state-active-tint);
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			background: var(--color-brand);
+			color: #fff;
+
+			&:hover {
+				background: var(--color-brand);
+				color: #fff;
+			}
+		}
+	}
+}
+
+// ── Settings / wizard form column ───────────────────────────────────────────
+.book-form {
+	display: flex;
+	flex-direction: column;
+	gap: $space-6;
+}
+
+// 4-up grid of schedule selects (slot / buffer / advance / horizon).
+.book-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: $space-4;
+
+	@media (min-width: $bp-mobile) {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	@media (min-width: $bp-tablet) {
+		grid-template-columns: repeat(4, 1fr);
+	}
+
+	&--two {
+		@media (min-width: $bp-tablet) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+}
+
+// Read-only public URL row with a copy button (settings tab + success screen).
+.book-url {
+	display: flex;
+	gap: $space-2;
+
+	&__input {
+		flex: 1;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: $fs-caption;
+	}
+}
+
+// Inline URL chip (slug preview + success banner).
+.book-urlchip {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+	padding: $space-2 $space-3;
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	i {
+		flex-shrink: 0;
+		font-size: 0.95rem;
+		color: var(--color-text-muted);
+	}
+
+	span {
+		word-break: break-all;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+	}
+
+	&--strong span {
+		color: var(--color-text-primary);
+	}
+}
+
+// Slug availability status line.
+.book-slug-status {
+	display: flex;
+	align-items: center;
+	gap: $space-1;
+	font-size: $fs-caption;
+	color: var(--color-text-muted);
+
+	&--ok {
+		color: var(--success-text);
+	}
+
+	&--bad {
+		color: var(--danger-text);
+	}
+
+	i {
+		font-size: 0.85rem;
+	}
+}
+
+@keyframes book-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.book-spin {
+	display: inline-block;
+	animation: book-spin 0.7s linear infinite;
+}
+
+// ── Active / availability toggle row ────────────────────────────────────────
+.book-active {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-4;
+	padding: $space-4;
+	border-radius: $radius-lg;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// ── Danger zone ─────────────────────────────────────────────────────────────
+.book-danger {
+	margin-top: $space-10;
+	padding: $space-4;
+	border: 1px solid rgba(225, 29, 72, 0.3);
+	border-radius: $radius-xl;
+	background: var(--danger-bg);
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__action {
+		margin-top: $space-3;
+	}
+}
+
+// ── Availability day editor (availability tab + wizard step 2) ──────────────
+.book-day {
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+	}
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__status {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__windows {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin-top: $space-4;
+	}
+
+	&__window {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__sep {
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+}
+
+// Native time input (availability + override form).
+.book-time {
+	flex: 1;
+	height: 44px;
+	min-width: 0;
+	padding: 0 $space-3;
+	border-radius: $radius-md;
+	border: 1px solid var(--color-border-strong);
+	background: var(--color-bg-surface);
+	font-size: $fs-body;
+	font-family: $font-body;
+	color: var(--color-text-primary);
+
+	&:focus {
+		outline: none;
+		border-color: var(--color-brand);
+		box-shadow: var(--shadow-focus);
+	}
+}
+
+.book-iconbtn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 44px;
+	height: 44px;
+	border: 0;
+	border-radius: $radius-md;
+	background: none;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		background $duration-fast $ease-standard,
+		color $duration-fast $ease-standard;
+
+	&:hover {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+
+	&--sm {
+		width: 36px;
+		height: 36px;
+	}
+}
+
+// ── Block-a-date form (blocked tab + wizard step 3) ─────────────────────────
+.book-ovform {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__types {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	&__times {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-2;
+	}
+
+	&__actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+}
+
+// Selectable type radio (block all day / custom hours).
+.book-radio {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	font-size: $fs-body;
+	color: var(--color-text-primary);
+	cursor: pointer;
+	transition:
+		border-color $duration-fast $ease-standard,
+		background $duration-fast $ease-standard;
+
+	&--active {
+		border-color: var(--color-brand);
+		background: var(--state-active-tint);
+	}
+
+	input {
+		accent-color: var(--color-brand);
+	}
+}
+
+// ── Staged / saved override list rows ───────────────────────────────────────
+.book-overrides {
+	display: grid;
+	gap: $space-2;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.book-override {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: $space-3;
+	padding: $space-3;
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	box-shadow: var(--shadow-sm);
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__date {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__detail {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+.book-overrides-note {
+	font-size: $fs-caption;
+	color: var(--color-text-muted);
+}
+
+// ── Wizard stepper ──────────────────────────────────────────────────────────
+.book-stepper {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+	margin-bottom: $space-6;
+	list-style: none;
+	padding: 0;
+	font-size: $fs-body;
+
+	&__step {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__bullet {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		border-radius: $radius-full;
+		border: 1px solid var(--color-border-strong);
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+
+		&--active {
+			border-color: var(--color-brand);
+			background: var(--state-active-tint);
+			color: var(--color-brand);
+		}
+
+		&--done {
+			border-color: var(--color-brand);
+			background: var(--color-brand);
+			color: #fff;
+		}
+	}
+
+	&__label {
+		white-space: nowrap;
+		color: var(--color-text-muted);
+
+		&--active {
+			font-weight: $weight-semibold;
+			color: var(--color-text-primary);
+		}
+	}
+
+	&__optional {
+		margin-left: $space-1;
+		color: var(--color-text-muted);
+	}
+
+	&__line {
+		flex: 1;
+		height: 1px;
+		background: var(--color-border);
+	}
+}
+
+// Section intro line.
+.book-lead {
+	font-size: $fs-body;
+	color: var(--color-text-muted);
+}
+
+// ── Wizard error banner ─────────────────────────────────────────────────────
+.book-error {
+	margin-bottom: $space-4;
+	padding: $space-3 $space-4;
+	border: 1px solid rgba(225, 29, 72, 0.3);
+	border-radius: $radius-lg;
+	background: var(--danger-bg);
+	font-size: $fs-body;
+	color: var(--danger-text);
+}
+
+// ── Footer button rows ──────────────────────────────────────────────────────
+.book-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: $space-2;
+	padding-top: $space-2;
+
+	&--end {
+		justify-content: flex-end;
+	}
+}
+
+// Step-3 "blocked dates are optional" note.
+.book-info {
+	padding: $space-4;
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface-sunk);
+
+	&__title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__text {
+		margin-top: $space-1;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// ── Success summary list ────────────────────────────────────────────────────
+.book-summary {
+	margin: 0;
+
+	&__row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: $space-3;
+		padding: $space-3 $space-5;
+		font-size: $fs-body;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__term {
+		color: var(--color-text-muted);
+	}
+
+	&__val {
+		text-align: right;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+	}
+}
