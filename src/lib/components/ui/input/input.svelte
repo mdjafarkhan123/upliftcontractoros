@@ -11,8 +11,4 @@
 	} = $props();
 </script>
 
-<input
-	bind:value
-	class={['field__input', className].filter(Boolean).join(' ')}
-	{...rest}
-/>
+<input bind:value class={['field__input', className].filter(Boolean).join(' ')} {...rest} />

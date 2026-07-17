@@ -98,7 +98,11 @@ export function renderMemberEmail(input: { title: string; body?: string | null; 
  * link (Twilio truncates/segments long bodies). Composed at emit time and carried on
  * the outbox payload so the SMS worker stays dumb.
  */
-export function renderMemberSms(input: { title: string; body?: string | null; url: string }): string {
+export function renderMemberSms(input: {
+	title: string;
+	body?: string | null;
+	url: string;
+}): string {
 	const lines = [input.title.trim()];
 	const detail = input.body?.trim();
 	if (detail) lines.push(detail);

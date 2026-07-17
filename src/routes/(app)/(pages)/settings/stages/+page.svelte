@@ -679,9 +679,7 @@
 							Make default
 						</Button>
 					{/if}
-					<Button loading={editSaving} loadingLabel="Saving…" onclick={saveEdit}>
-						Save
-					</Button>
+					<Button loading={editSaving} loadingLabel="Saving…" onclick={saveEdit}>Save</Button>
 				</div>
 			</div>
 		{/if}

@@ -63,9 +63,7 @@ export const PATCH: RequestHandler = async (event) => {
 	const status = parsed.data.status;
 	// Setting back to the default clears any pending expiry; the default never reverts.
 	const expiresAt =
-		status === 'in_office'
-			? null
-			: computeExpiry(parsed.data.clear_after, auth.org.timezone, now);
+		status === 'in_office' ? null : computeExpiry(parsed.data.clear_after, auth.org.timezone, now);
 
 	await db
 		.update(orgMembers)

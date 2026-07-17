@@ -1532,15 +1532,16 @@
 	gap: $space-2;
 }
 
-// Job type chip picker
-.job-type-chips {
+// Shared job chip — used by JobCategoryPicker AND JobTagsEditor (2+ components, so it lives
+// here in the global partial, never in a scoped block).
+.job-chips {
 	display: flex;
 	flex-wrap: wrap;
 	gap: $space-1;
 	margin-bottom: $space-2;
 }
 
-.job-type-chip {
+.job-chip {
 	display: inline-flex;
 	align-items: center;
 	height: 32px;

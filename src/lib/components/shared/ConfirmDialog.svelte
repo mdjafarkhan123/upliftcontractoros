@@ -54,7 +54,7 @@
 				{variant}
 				loadingLabel="Working…"
 				successLabel="Done"
-				loading={loading}
+				{loading}
 				onclick={handleConfirm}
 			>
 				{confirmLabel}

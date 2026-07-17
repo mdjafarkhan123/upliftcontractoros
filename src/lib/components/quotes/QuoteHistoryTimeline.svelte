@@ -169,7 +169,8 @@
 							>
 								<span class="quote-timeline__expand-text">
 									<span class="quote-timeline__label">
-										{labelFor(e)}{#if meta}<span class="quote-timeline__meta">&nbsp;· {meta}</span>{/if}
+										{labelFor(e)}{#if meta}<span class="quote-timeline__meta">&nbsp;· {meta}</span
+											>{/if}
 									</span>
 									<span class="quote-timeline__time">{whenFor(e.at)}</span>
 								</span>

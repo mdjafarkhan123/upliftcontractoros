@@ -467,7 +467,10 @@
 											defaultCountry={orgCountry}
 											invalid={!!fieldErrors.alt_phone}
 										/>
-										<select class="field__select contact-form__alt-type" bind:value={alt_phone_label}>
+										<select
+											class="field__select contact-form__alt-type"
+											bind:value={alt_phone_label}
+										>
 											<option value="">Type</option>
 											<option value="mobile">Mobile</option>
 											<option value="home">Home</option>
@@ -594,368 +597,369 @@
 							</div>
 						</section>
 					{:else}
-						<button
-							type="button"
-							class="contact-form__more"
-							onclick={() => (showMore = true)}
-						>
+						<button type="button" class="contact-form__more" onclick={() => (showMore = true)}>
 							<i class="ri-add-line" aria-hidden="true"></i>
 							More details
 						</button>
 					{/if}
 				</div>
 			{:else}
-			<div class="contact-form__cols">
-				<div class="contact-form__col">
-					<!-- Contact info -->
-					<section class="contact-form__section">
-						<h2 class="contact-form__section-title">Contact info</h2>
-
-						{#if mode === 'edit' && c}
-							<div class="contact-form__avatar-row">
-								<ContactAvatarUploader
-									contactId={c.id}
-									name={full_name || c.full_name}
-									src={avatar_url}
-									status={c.status}
-									size={80}
-									onChange={(r) => {
-										avatar_url = r.avatar_url;
-										if (detail) detail.contact.updated_at = r.updated_at;
-									}}
-								/>
-								<div>
-									<p class="contact-form__avatar-label">Profile photo</p>
-									<p class="contact-form__avatar-hint">
-										Tap the photo to upload. JPEG, PNG, or WebP, up to 5 MB.
-									</p>
-								</div>
-							</div>
-						{/if}
-
-						<div class="contact-form__grid">
-							<div class="field contact-form__span-2">
-								<label class="field__label field__label--required" for="full_name">Name</label>
-								<input
-									id="full_name"
-									class="field__input"
-									bind:value={full_name}
-									required
-									maxlength={200}
-									autocomplete="name"
-								/>
-							</div>
-
-							<div class="field contact-form__span-2">
-								<label class="field__label" for="company_name">Company</label>
-								<input
-									id="company_name"
-									class="field__input"
-									bind:value={company_name}
-									maxlength={200}
-									autocomplete="organization"
-									placeholder="Business, HOA, or property manager"
-								/>
-							</div>
-
-							<div class="field">
-								<label class="field__label" for="phone">Phone</label>
-								<PhoneField
-									id="phone"
-									bind:value={phone}
-									defaultCountry={orgCountry}
-									invalid={!!fieldErrors.phone}
-								/>
-								{#if fieldErrors.phone}
-									<p class="field__error">{fieldErrors.phone}</p>
-								{/if}
-							</div>
-
-							<div class="field">
-								<label class="field__label" for="email">Email</label>
-								<input
-									id="email"
-									type="email"
-									class="field__input"
-									bind:value={email}
-									autocomplete="email"
-								/>
-							</div>
-
-							<div class="field contact-form__span-2">
-								<label class="field__label" for="alt_phone">Alt phone</label>
-								<div class="contact-form__alt-phone">
-									<PhoneField
-										id="alt_phone"
-										bind:value={alt_phone}
-										defaultCountry={orgCountry}
-										invalid={!!fieldErrors.alt_phone}
-									/>
-									<select class="field__select contact-form__alt-type" bind:value={alt_phone_label}>
-										<option value="">Type</option>
-										<option value="mobile">Mobile</option>
-										<option value="home">Home</option>
-										<option value="work">Work</option>
-										<option value="fax">Fax</option>
-										<option value="other">Other</option>
-									</select>
-								</div>
-								{#if fieldErrors.alt_phone}
-									<p class="field__error">{fieldErrors.alt_phone}</p>
-								{/if}
-							</div>
-						</div>
-					</section>
-
-				</div>
-
-				<div class="contact-form__col">
-					<!-- Lead details -->
-					<section class="contact-form__section">
-						<h2 class="contact-form__section-title">Lead details</h2>
-						<div class="contact-form__grid contact-form__grid--2col">
-							<div class="field">
-								<label class="field__label" for="contact_status">Contact type</label>
-								<select id="contact_status" class="field__select" bind:value={status}>
-									<option value="lead">Lead</option>
-									<option value="customer">Customer</option>
-									{#if mode === 'edit'}
-										<option value="archived">Archived</option>
-									{/if}
-								</select>
-								{#if c?.converted_at}
-									<p class="field__hint">Converted on {formatDateTime(c.converted_at)}</p>
-								{:else if c?.status === 'lead' && status === 'customer'}
-									<p class="field__hint">Saving will mark this contact as converted.</p>
-								{/if}
-								{#if archiveBlockCounts}
-									<div class="contact-form__archive-block">
-										<p class="contact-form__archive-block-title">
-											Can't archive — close or reassign these first:
-										</p>
-										<ul class="contact-form__archive-block-list">
-											{#if archiveBlockCounts.opportunities > 0}
-												<li>Opportunities: {archiveBlockCounts.opportunities}</li>
-											{/if}
-											{#if archiveBlockCounts.jobs > 0}<li>Jobs: {archiveBlockCounts.jobs}</li>{/if}
-											{#if archiveBlockCounts.quotes > 0}<li>
-													Quotes: {archiveBlockCounts.quotes}
-												</li>{/if}
-											{#if archiveBlockCounts.invoices > 0}
-												<li>Invoices: {archiveBlockCounts.invoices}</li>
-											{/if}
-											{#if archiveBlockCounts.conversations > 0}
-												<li>Conversations: {archiveBlockCounts.conversations}</li>
-											{/if}
-										</ul>
-									</div>
-								{/if}
-							</div>
-
-							<div class="field">
-								<label class="field__label" for="lead_source">Lead source</label>
-								<select id="lead_source" class="field__select" bind:value={lead_source}>
-									<option value="manual">Manual</option>
-									<option value="referral">Referral</option>
-									<option value="repeat_customer">Repeat customer</option>
-									<option value="website_form">Website form</option>
-									<option value="live_chat">Live chat</option>
-									<option value="missed_call">Missed call</option>
-									<option value="google_ads">Google Ads</option>
-									<option value="facebook">Facebook / Instagram</option>
-									<option value="yelp">Yelp</option>
-									<option value="angi">Angi / HomeAdvisor</option>
-									<option value="nextdoor">Nextdoor</option>
-									<option value="door_hanger">Door hanger</option>
-									<option value="job_sign">Job sign / yard sign</option>
-									<option value="other">Other</option>
-								</select>
-							</div>
-
-							<div class="field">
-								<label class="field__label" for="lead_temperature">Lead temperature</label>
-								<select id="lead_temperature" class="field__select" bind:value={lead_temperature}>
-									<option value="">Not set</option>
-									<option value="hot">Hot</option>
-									<option value="warm">Warm</option>
-									<option value="cold">Cold</option>
-								</select>
-							</div>
-
-							<div class="field">
-								<label class="field__label" for="assigned_to">Assigned to</label>
-								<select id="assigned_to" class="field__select" bind:value={assigned_to}>
-									<option value="">Unassigned</option>
-									{#each assignees as a (a.id)}
-										<option value={a.id}>{a.full_name}</option>
-									{/each}
-								</select>
-								{#if fieldErrors.assigned_to}
-									<p class="field__error">{fieldErrors.assigned_to}</p>
-								{/if}
-							</div>
-
-							<!-- Referred by (combobox) -->
-							<div class="field contact-form__referred">
-								<label class="field__label" for="referred_by">Referred by (optional)</label>
-								{#if referred_by_contact_id}
-									<div class="contact-form__referrer-selected">
-										<span class="contact-form__referrer-name">{referrerName}</span>
-										<button
-											type="button"
-											class="contact-form__referrer-clear"
-											onclick={clearReferrer}
-											aria-label="Clear referrer"
-										>
-											<i class="ri-close-line" aria-hidden="true"></i>
-										</button>
-									</div>
-								{:else}
-									<input
-										id="referred_by"
-										type="search"
-										inputmode="search"
-										class="field__input"
-										placeholder="Search contacts…"
-										value={referrerSearch}
-										oninput={onReferrerInput}
-										onfocus={() => {
-											if (referrerResults.length > 0) showReferrerDropdown = true;
-										}}
-										onblur={() =>
-											setTimeout(() => {
-												showReferrerDropdown = false;
-											}, 150)}
-										autocomplete="off"
-									/>
-									{#if showReferrerDropdown}
-										<ul class="contact-form__dropdown">
-											{#each referrerResults as r (r.id)}
-												<li>
-													<button
-														type="button"
-														class="contact-form__dropdown-item"
-														onmousedown={() => selectReferrer(r)}
-													>
-														<span class="contact-form__dropdown-name">{r.full_name}</span>
-														<span class="contact-form__dropdown-phone">{r.phone}</span>
-													</button>
-												</li>
-											{/each}
-										</ul>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					</section>
-
-					<!-- Follow-up & preferences (edit only) -->
-					{#if mode === 'edit'}
+				<div class="contact-form__cols">
+					<div class="contact-form__col">
+						<!-- Contact info -->
 						<section class="contact-form__section">
-							<h2 class="contact-form__section-title">Follow-up & preferences</h2>
-							<div class="contact-form__grid contact-form__grid--2col">
-								<div class="field">
-									<label class="field__label" for="next_follow_up_at">Next follow-up</label>
-									<DateTimePicker
-										bind:value={next_follow_up_at_local}
-										placeholder="Pick date & time"
+							<h2 class="contact-form__section-title">Contact info</h2>
+
+							{#if mode === 'edit' && c}
+								<div class="contact-form__avatar-row">
+									<ContactAvatarUploader
+										contactId={c.id}
+										name={full_name || c.full_name}
+										src={avatar_url}
+										status={c.status}
+										size={80}
+										onChange={(r) => {
+											avatar_url = r.avatar_url;
+											if (detail) detail.contact.updated_at = r.updated_at;
+										}}
 									/>
-									{#if next_follow_up_at_local}
-										<button
-											type="button"
-											class="field__hint field__hint--link"
-											onclick={() => (next_follow_up_at_local = '')}
-										>
-											Clear
-										</button>
+									<div>
+										<p class="contact-form__avatar-label">Profile photo</p>
+										<p class="contact-form__avatar-hint">
+											Tap the photo to upload. JPEG, PNG, or WebP, up to 5 MB.
+										</p>
+									</div>
+								</div>
+							{/if}
+
+							<div class="contact-form__grid">
+								<div class="field contact-form__span-2">
+									<label class="field__label field__label--required" for="full_name">Name</label>
+									<input
+										id="full_name"
+										class="field__input"
+										bind:value={full_name}
+										required
+										maxlength={200}
+										autocomplete="name"
+									/>
+								</div>
+
+								<div class="field contact-form__span-2">
+									<label class="field__label" for="company_name">Company</label>
+									<input
+										id="company_name"
+										class="field__input"
+										bind:value={company_name}
+										maxlength={200}
+										autocomplete="organization"
+										placeholder="Business, HOA, or property manager"
+									/>
+								</div>
+
+								<div class="field">
+									<label class="field__label" for="phone">Phone</label>
+									<PhoneField
+										id="phone"
+										bind:value={phone}
+										defaultCountry={orgCountry}
+										invalid={!!fieldErrors.phone}
+									/>
+									{#if fieldErrors.phone}
+										<p class="field__error">{fieldErrors.phone}</p>
 									{/if}
 								</div>
 
 								<div class="field">
-									<label class="field__label" for="preferred_contact_method">Preferred method</label
-									>
-									<select
-										id="preferred_contact_method"
-										class="field__select"
-										bind:value={preferred_contact_method}
-									>
-										<option value="">No preference</option>
-										<option value="sms">SMS</option>
-										<option value="call">Call</option>
-										<option value="email">Email</option>
-										<option value="whatsapp">WhatsApp</option>
-										<option value="messenger">Messenger</option>
-									</select>
+									<label class="field__label" for="email">Email</label>
+									<input
+										id="email"
+										type="email"
+										class="field__input"
+										bind:value={email}
+										autocomplete="email"
+									/>
 								</div>
 
-								<div class="contact-form__toggle-row contact-form__span-2">
-									<div>
-										<p class="contact-form__toggle-label">Email opt-in</p>
-										<p class="contact-form__toggle-desc">
-											Independent from SMS opt-out. Controls marketing & broadcast emails only.
-										</p>
+								<div class="field contact-form__span-2">
+									<label class="field__label" for="alt_phone">Alt phone</label>
+									<div class="contact-form__alt-phone">
+										<PhoneField
+											id="alt_phone"
+											bind:value={alt_phone}
+											defaultCountry={orgCountry}
+											invalid={!!fieldErrors.alt_phone}
+										/>
+										<select
+											class="field__select contact-form__alt-type"
+											bind:value={alt_phone_label}
+										>
+											<option value="">Type</option>
+											<option value="mobile">Mobile</option>
+											<option value="home">Home</option>
+											<option value="work">Work</option>
+											<option value="fax">Fax</option>
+											<option value="other">Other</option>
+										</select>
 									</div>
-									<button
-										type="button"
-										role="switch"
-										aria-checked={email_opt_in}
-										class="toggle {email_opt_in ? 'toggle--on' : ''}"
-										onclick={() => (email_opt_in = !email_opt_in)}
-										aria-label="Email opt-in"
-									>
-										<span class="toggle__thumb"></span>
-									</button>
-								</div>
-
-								<div
-									class="contact-form__toggle-row contact-form__span-2 {do_not_contact
-										? 'contact-form__toggle-row--danger'
-										: ''}"
-								>
-									<div>
-										<p class="contact-form__toggle-label">Do Not Contact</p>
-										<p class="contact-form__toggle-desc">
-											Blocks all outbound messages (SMS, email, any channel). Use for legal requests
-											or abusive contacts.
-										</p>
-									</div>
-									<button
-										type="button"
-										role="switch"
-										aria-checked={do_not_contact}
-										class="toggle {do_not_contact ? 'toggle--on' : ''}"
-										onclick={() => (do_not_contact = !do_not_contact)}
-										aria-label="Do not contact"
-									>
-										<span class="toggle__thumb"></span>
-									</button>
+									{#if fieldErrors.alt_phone}
+										<p class="field__error">{fieldErrors.alt_phone}</p>
+									{/if}
 								</div>
 							</div>
 						</section>
-					{/if}
+					</div>
 
-					<!-- Tags -->
-					<section class="contact-form__section">
-						<h2 class="contact-form__section-title">Tags</h2>
-						<ContactTagsEditor bind:value={tags} />
-					</section>
+					<div class="contact-form__col">
+						<!-- Lead details -->
+						<section class="contact-form__section">
+							<h2 class="contact-form__section-title">Lead details</h2>
+							<div class="contact-form__grid contact-form__grid--2col">
+								<div class="field">
+									<label class="field__label" for="contact_status">Contact type</label>
+									<select id="contact_status" class="field__select" bind:value={status}>
+										<option value="lead">Lead</option>
+										<option value="customer">Customer</option>
+										{#if mode === 'edit'}
+											<option value="archived">Archived</option>
+										{/if}
+									</select>
+									{#if c?.converted_at}
+										<p class="field__hint">Converted on {formatDateTime(c.converted_at)}</p>
+									{:else if c?.status === 'lead' && status === 'customer'}
+										<p class="field__hint">Saving will mark this contact as converted.</p>
+									{/if}
+									{#if archiveBlockCounts}
+										<div class="contact-form__archive-block">
+											<p class="contact-form__archive-block-title">
+												Can't archive — close or reassign these first:
+											</p>
+											<ul class="contact-form__archive-block-list">
+												{#if archiveBlockCounts.opportunities > 0}
+													<li>Opportunities: {archiveBlockCounts.opportunities}</li>
+												{/if}
+												{#if archiveBlockCounts.jobs > 0}<li>
+														Jobs: {archiveBlockCounts.jobs}
+													</li>{/if}
+												{#if archiveBlockCounts.quotes > 0}<li>
+														Quotes: {archiveBlockCounts.quotes}
+													</li>{/if}
+												{#if archiveBlockCounts.invoices > 0}
+													<li>Invoices: {archiveBlockCounts.invoices}</li>
+												{/if}
+												{#if archiveBlockCounts.conversations > 0}
+													<li>Conversations: {archiveBlockCounts.conversations}</li>
+												{/if}
+											</ul>
+										</div>
+									{/if}
+								</div>
 
-					<!-- Short note -->
-					<section class="contact-form__section">
-						<h2 class="contact-form__section-title">Short note</h2>
-						<div class="field">
-							<textarea
-								id="notes"
-								class="field__textarea"
-								bind:value={notes}
-								maxlength={2000}
-								rows={3}
-								placeholder="Anything the team should know about this contact…"
-							></textarea>
-						</div>
-					</section>
+								<div class="field">
+									<label class="field__label" for="lead_source">Lead source</label>
+									<select id="lead_source" class="field__select" bind:value={lead_source}>
+										<option value="manual">Manual</option>
+										<option value="referral">Referral</option>
+										<option value="repeat_customer">Repeat customer</option>
+										<option value="website_form">Website form</option>
+										<option value="live_chat">Live chat</option>
+										<option value="missed_call">Missed call</option>
+										<option value="google_ads">Google Ads</option>
+										<option value="facebook">Facebook / Instagram</option>
+										<option value="yelp">Yelp</option>
+										<option value="angi">Angi / HomeAdvisor</option>
+										<option value="nextdoor">Nextdoor</option>
+										<option value="door_hanger">Door hanger</option>
+										<option value="job_sign">Job sign / yard sign</option>
+										<option value="other">Other</option>
+									</select>
+								</div>
+
+								<div class="field">
+									<label class="field__label" for="lead_temperature">Lead temperature</label>
+									<select id="lead_temperature" class="field__select" bind:value={lead_temperature}>
+										<option value="">Not set</option>
+										<option value="hot">Hot</option>
+										<option value="warm">Warm</option>
+										<option value="cold">Cold</option>
+									</select>
+								</div>
+
+								<div class="field">
+									<label class="field__label" for="assigned_to">Assigned to</label>
+									<select id="assigned_to" class="field__select" bind:value={assigned_to}>
+										<option value="">Unassigned</option>
+										{#each assignees as a (a.id)}
+											<option value={a.id}>{a.full_name}</option>
+										{/each}
+									</select>
+									{#if fieldErrors.assigned_to}
+										<p class="field__error">{fieldErrors.assigned_to}</p>
+									{/if}
+								</div>
+
+								<!-- Referred by (combobox) -->
+								<div class="field contact-form__referred">
+									<label class="field__label" for="referred_by">Referred by (optional)</label>
+									{#if referred_by_contact_id}
+										<div class="contact-form__referrer-selected">
+											<span class="contact-form__referrer-name">{referrerName}</span>
+											<button
+												type="button"
+												class="contact-form__referrer-clear"
+												onclick={clearReferrer}
+												aria-label="Clear referrer"
+											>
+												<i class="ri-close-line" aria-hidden="true"></i>
+											</button>
+										</div>
+									{:else}
+										<input
+											id="referred_by"
+											type="search"
+											inputmode="search"
+											class="field__input"
+											placeholder="Search contacts…"
+											value={referrerSearch}
+											oninput={onReferrerInput}
+											onfocus={() => {
+												if (referrerResults.length > 0) showReferrerDropdown = true;
+											}}
+											onblur={() =>
+												setTimeout(() => {
+													showReferrerDropdown = false;
+												}, 150)}
+											autocomplete="off"
+										/>
+										{#if showReferrerDropdown}
+											<ul class="contact-form__dropdown">
+												{#each referrerResults as r (r.id)}
+													<li>
+														<button
+															type="button"
+															class="contact-form__dropdown-item"
+															onmousedown={() => selectReferrer(r)}
+														>
+															<span class="contact-form__dropdown-name">{r.full_name}</span>
+															<span class="contact-form__dropdown-phone">{r.phone}</span>
+														</button>
+													</li>
+												{/each}
+											</ul>
+										{/if}
+									{/if}
+								</div>
+							</div>
+						</section>
+
+						<!-- Follow-up & preferences (edit only) -->
+						{#if mode === 'edit'}
+							<section class="contact-form__section">
+								<h2 class="contact-form__section-title">Follow-up & preferences</h2>
+								<div class="contact-form__grid contact-form__grid--2col">
+									<div class="field">
+										<label class="field__label" for="next_follow_up_at">Next follow-up</label>
+										<DateTimePicker
+											bind:value={next_follow_up_at_local}
+											placeholder="Pick date & time"
+										/>
+										{#if next_follow_up_at_local}
+											<button
+												type="button"
+												class="field__hint field__hint--link"
+												onclick={() => (next_follow_up_at_local = '')}
+											>
+												Clear
+											</button>
+										{/if}
+									</div>
+
+									<div class="field">
+										<label class="field__label" for="preferred_contact_method"
+											>Preferred method</label
+										>
+										<select
+											id="preferred_contact_method"
+											class="field__select"
+											bind:value={preferred_contact_method}
+										>
+											<option value="">No preference</option>
+											<option value="sms">SMS</option>
+											<option value="call">Call</option>
+											<option value="email">Email</option>
+											<option value="whatsapp">WhatsApp</option>
+											<option value="messenger">Messenger</option>
+										</select>
+									</div>
+
+									<div class="contact-form__toggle-row contact-form__span-2">
+										<div>
+											<p class="contact-form__toggle-label">Email opt-in</p>
+											<p class="contact-form__toggle-desc">
+												Independent from SMS opt-out. Controls marketing & broadcast emails only.
+											</p>
+										</div>
+										<button
+											type="button"
+											role="switch"
+											aria-checked={email_opt_in}
+											class="toggle {email_opt_in ? 'toggle--on' : ''}"
+											onclick={() => (email_opt_in = !email_opt_in)}
+											aria-label="Email opt-in"
+										>
+											<span class="toggle__thumb"></span>
+										</button>
+									</div>
+
+									<div
+										class="contact-form__toggle-row contact-form__span-2 {do_not_contact
+											? 'contact-form__toggle-row--danger'
+											: ''}"
+									>
+										<div>
+											<p class="contact-form__toggle-label">Do Not Contact</p>
+											<p class="contact-form__toggle-desc">
+												Blocks all outbound messages (SMS, email, any channel). Use for legal
+												requests or abusive contacts.
+											</p>
+										</div>
+										<button
+											type="button"
+											role="switch"
+											aria-checked={do_not_contact}
+											class="toggle {do_not_contact ? 'toggle--on' : ''}"
+											onclick={() => (do_not_contact = !do_not_contact)}
+											aria-label="Do not contact"
+										>
+											<span class="toggle__thumb"></span>
+										</button>
+									</div>
+								</div>
+							</section>
+						{/if}
+
+						<!-- Tags -->
+						<section class="contact-form__section">
+							<h2 class="contact-form__section-title">Tags</h2>
+							<ContactTagsEditor bind:value={tags} />
+						</section>
+
+						<!-- Short note -->
+						<section class="contact-form__section">
+							<h2 class="contact-form__section-title">Short note</h2>
+							<div class="field">
+								<textarea
+									id="notes"
+									class="field__textarea"
+									bind:value={notes}
+									maxlength={2000}
+									rows={3}
+									placeholder="Anything the team should know about this contact…"
+								></textarea>
+							</div>
+						</section>
+					</div>
 				</div>
-			</div>
 			{/if}
 
 			{#if errorMsg}
@@ -967,26 +971,22 @@
 						</a>
 					{:else if duplicateInfo && duplicateInfo.soft}
 						<div style="margin-top:0.5rem;">
-						<Button
-							variant="secondary"
-							size="sm"
-							loading={restoring}
-							loadingLabel="Restoring…"
-							onclick={restoreContact}
-						>
-							Restore this contact
-						</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								loading={restoring}
+								loadingLabel="Restoring…"
+								onclick={restoreContact}
+							>
+								Restore this contact
+							</Button>
 						</div>
 					{/if}
 				</div>
 			{/if}
 
 			<div class="contact-form__footer">
-				<Button
-					variant="secondary"
-					onclick={() => goto(cancelHref)}
-					disabled={saving}
-				>
+				<Button variant="secondary" onclick={() => goto(cancelHref)} disabled={saving}>
 					Cancel
 				</Button>
 				<Button

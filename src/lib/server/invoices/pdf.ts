@@ -120,7 +120,9 @@ function renderHtml(d: InvoicePdfData): string {
 							<td>${escapeHtml(p.payment_method)}</td>
 							<td>${escapeHtml(p.notes ?? '')}</td>
 							<td class="num">${fmtMoney(p.amount)}${
-								Number(p.tip_amount ?? 0) > 0 ? ` <span class="muted">(+${fmtMoney(p.tip_amount ?? '0')} tip)</span>` : ''
+								Number(p.tip_amount ?? 0) > 0
+									? ` <span class="muted">(+${fmtMoney(p.tip_amount ?? '0')} tip)</span>`
+									: ''
 							}</td>
 						</tr>`
 					)

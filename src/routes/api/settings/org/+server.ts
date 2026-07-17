@@ -120,11 +120,17 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!row) error(404, 'Organization not found.');
 
+	// The logo + signature-image presigns are independent — run them concurrently.
+	const [logoUrl, signatureImageUrl] = await Promise.all([
+		resolveLogoUrl(row.logo_url),
+		resolveLogoUrl(row.signature_image_url)
+	]);
+
 	return json({
 		data: {
 			...row,
-			logo_url: await resolveLogoUrl(row.logo_url),
-			signature_image_url: await resolveLogoUrl(row.signature_image_url)
+			logo_url: logoUrl,
+			signature_image_url: signatureImageUrl
 		}
 	});
 };

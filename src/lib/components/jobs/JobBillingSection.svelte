@@ -142,11 +142,7 @@
 							{#if m.invoice_id}
 								<Button href="/invoices/{m.invoice_id}" variant="secondary" size="sm">View</Button>
 							{:else if canInvoice}
-								<Button
-									size="sm"
-									loading={creatingId === m.id}
-									onclick={() => createInvoice(m)}
-								>
+								<Button size="sm" loading={creatingId === m.id} onclick={() => createInvoice(m)}>
 									Create
 								</Button>
 							{:else}

@@ -11,8 +11,5 @@
 	} = $props();
 </script>
 
-<textarea
-	bind:value
-	class={['field__textarea', className].filter(Boolean).join(' ')}
-	{...rest}
+<textarea bind:value class={['field__textarea', className].filter(Boolean).join(' ')} {...rest}
 ></textarea>

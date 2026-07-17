@@ -160,7 +160,9 @@ export const GET: RequestHandler = async (event) => {
 		const numberClause = isDigits
 			? sql`CAST(${quotes.quote_number} AS text) LIKE ${`${digits}%`}`
 			: null;
-		const match = numberClause ? or(textMatch(term, fields), numberClause) : textMatch(term, fields);
+		const match = numberClause
+			? or(textMatch(term, fields), numberClause)
+			: textMatch(term, fields);
 		if (match) conditions.push(match);
 
 		const rows = await db
@@ -192,7 +194,9 @@ export const GET: RequestHandler = async (event) => {
 		const numberClause = isDigits
 			? sql`CAST(${invoices.invoice_number} AS text) LIKE ${`${digits}%`}`
 			: null;
-		const match = numberClause ? or(textMatch(term, fields), numberClause) : textMatch(term, fields);
+		const match = numberClause
+			? or(textMatch(term, fields), numberClause)
+			: textMatch(term, fields);
 		if (match) conditions.push(match);
 
 		const rows = await db
@@ -228,8 +232,7 @@ export const GET: RequestHandler = async (event) => {
 		];
 		const conditions: SQL[] = [eq(appointments.org_id, orgId), isNull(appointments.deleted_at)];
 		// Restricted members (no view-all) only see appointments assigned to them.
-		if (!member.can_view_all_appointments)
-			conditions.push(eq(appointments.assigned_to, member.id));
+		if (!member.can_view_all_appointments) conditions.push(eq(appointments.assigned_to, member.id));
 		conditions.push(textMatch(term, fields));
 
 		const rows = await db

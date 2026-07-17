@@ -86,7 +86,8 @@
 
 	{#if errorMessage}
 		<div role="alert" class="jafar-alert jafar-alert--error">
-			<span class="jafar-alert__icon"><i class="ri-error-warning-line" aria-hidden="true"></i></span>
+			<span class="jafar-alert__icon"><i class="ri-error-warning-line" aria-hidden="true"></i></span
+			>
 			<div>
 				<p class="jafar-alert__title">Could not create organization</p>
 				<p class="jafar-alert__text">{errorMessage}</p>
@@ -152,26 +153,14 @@
 					<label for="city" class="org-lbl">
 						City <span class="org-req">*</span>
 					</label>
-					<input
-						id="city"
-						name="city"
-						required
-						placeholder="Austin"
-						class="jafar-input"
-					/>
+					<input id="city" name="city" required placeholder="Austin" class="jafar-input" />
 				</div>
 
 				<div class="org-field">
 					<label for="state" class="org-lbl">
 						State <span class="org-req">*</span>
 					</label>
-					<input
-						id="state"
-						name="state"
-						required
-						placeholder="TX"
-						class="jafar-input"
-					/>
+					<input id="state" name="state" required placeholder="TX" class="jafar-input" />
 				</div>
 
 				<div class="org-field org-grid__full">
@@ -281,7 +270,8 @@
 				<div>
 					<h2 class="jafar-panel__title">Initial admin</h2>
 					<p class="jafar-panel__sub">
-						First member of the organization. They will be prompted to change their password on login.
+						First member of the organization. They will be prompted to change their password on
+						login.
 					</p>
 				</div>
 			</header>
@@ -392,10 +382,14 @@
 		display: grid;
 		gap: 1.25rem;
 		padding: 1.25rem;
-		@media (min-width: 640px) { grid-template-columns: 1fr 1fr; }
+		@media (min-width: 640px) {
+			grid-template-columns: 1fr 1fr;
+		}
 
 		&__full {
-			@media (min-width: 640px) { grid-column: 1 / -1; }
+			@media (min-width: 640px) {
+				grid-column: 1 / -1;
+			}
 		}
 	}
 
@@ -412,7 +406,9 @@
 		color: #cbd5e1;
 	}
 
-	.org-req { color: #ef4444; }
+	.org-req {
+		color: #ef4444;
+	}
 
 	.org-hint {
 		font-size: 0.6875rem;

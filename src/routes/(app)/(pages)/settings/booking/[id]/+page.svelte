@@ -176,11 +176,11 @@
 					<Select.Value />
 				</Select.Trigger>
 				<Select.Content>
-					<Select.Item value="estimate">Estimate</Select.Item>
-					<Select.Item value="job_start">Job start</Select.Item>
-					<Select.Item value="follow_up">Follow up</Select.Item>
-					<Select.Item value="inspection">Inspection</Select.Item>
-					<Select.Item value="other">Other</Select.Item>
+					<Select.Item value="estimate" label="Estimate">Estimate</Select.Item>
+					<Select.Item value="job_start" label="Job start">Job start</Select.Item>
+					<Select.Item value="follow_up" label="Follow up">Follow up</Select.Item>
+					<Select.Item value="inspection" label="Inspection">Inspection</Select.Item>
+					<Select.Item value="other" label="Other">Other</Select.Item>
 				</Select.Content>
 			</Select.Root>
 		</div>
@@ -193,11 +193,11 @@
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value={30}>30 min</Select.Item>
-						<Select.Item value={45}>45 min</Select.Item>
-						<Select.Item value={60}>60 min</Select.Item>
-						<Select.Item value={90}>90 min</Select.Item>
-						<Select.Item value={120}>120 min</Select.Item>
+						<Select.Item value={30} label="30 min">30 min</Select.Item>
+						<Select.Item value={45} label="45 min">45 min</Select.Item>
+						<Select.Item value={60} label="60 min">60 min</Select.Item>
+						<Select.Item value={90} label="90 min">90 min</Select.Item>
+						<Select.Item value={120} label="120 min">120 min</Select.Item>
 					</Select.Content>
 				</Select.Root>
 			</div>
@@ -208,9 +208,9 @@
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value={0}>None</Select.Item>
-						<Select.Item value={15}>15 min</Select.Item>
-						<Select.Item value={30}>30 min</Select.Item>
+						<Select.Item value={0} label="None">None</Select.Item>
+						<Select.Item value={15} label="15 min">15 min</Select.Item>
+						<Select.Item value={30} label="30 min">30 min</Select.Item>
 					</Select.Content>
 				</Select.Root>
 			</div>
@@ -221,10 +221,10 @@
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value={1}>1 hour</Select.Item>
-						<Select.Item value={4}>4 hours</Select.Item>
-						<Select.Item value={24}>24 hours</Select.Item>
-						<Select.Item value={48}>48 hours</Select.Item>
+						<Select.Item value={1} label="1 hour">1 hour</Select.Item>
+						<Select.Item value={4} label="4 hours">4 hours</Select.Item>
+						<Select.Item value={24} label="24 hours">24 hours</Select.Item>
+						<Select.Item value={48} label="48 hours">48 hours</Select.Item>
 					</Select.Content>
 				</Select.Root>
 			</div>
@@ -235,9 +235,9 @@
 						<Select.Value />
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value={14}>14 days</Select.Item>
-						<Select.Item value={30}>30 days</Select.Item>
-						<Select.Item value={60}>60 days</Select.Item>
+						<Select.Item value={14} label="14 days">14 days</Select.Item>
+						<Select.Item value={30} label="30 days">30 days</Select.Item>
+						<Select.Item value={60} label="60 days">60 days</Select.Item>
 					</Select.Content>
 				</Select.Root>
 			</div>
@@ -254,12 +254,7 @@
 		</div>
 
 		<div class="book-actions book-actions--end">
-			<Button
-				type="submit"
-				loadingLabel="Saving…"
-				successLabel="Saved"
-				loading={saving}
-			>
+			<Button type="submit" loadingLabel="Saving…" successLabel="Saved" loading={saving}>
 				Save changes
 			</Button>
 		</div>

@@ -11,40 +11,46 @@ import type { JobSignoff } from '$lib/types/jobs';
  * job_signoff_signature, bound to the job). Operational — no cost gating.
  */
 export async function loadJobSignoff(orgId: string, jobId: string): Promise<JobSignoff> {
-	const [job] = await db
-		.select({
-			signer_name: jobs.signoff_signature_name,
-			signed_at: jobs.signoff_signed_at
-		})
-		.from(jobs)
-		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId)))
-		.limit(1);
-
-	const [sig] = await db
-		.select({
-			id: media.id,
-			r2_key: media.r2_key,
-			thumbnail_key: media.thumbnail_key,
-			web_key: media.web_key
-		})
-		.from(media)
-		.where(
-			and(
-				eq(media.job_id, jobId),
-				eq(media.org_id, orgId),
-				eq(media.purpose_tag, 'job_signoff_signature'),
-				isNull(media.deleted_at)
+	// The jobs row and the signature media row are independent (both keyed only by
+	// job_id + org_id) — fire them in one wave instead of stacking two round trips.
+	const [[job], [sig]] = await Promise.all([
+		db
+			.select({
+				signer_name: jobs.signoff_signature_name,
+				signed_at: jobs.signoff_signed_at
+			})
+			.from(jobs)
+			.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId)))
+			.limit(1),
+		db
+			.select({
+				id: media.id,
+				r2_key: media.r2_key,
+				thumbnail_key: media.thumbnail_key,
+				web_key: media.web_key
+			})
+			.from(media)
+			.where(
+				and(
+					eq(media.job_id, jobId),
+					eq(media.org_id, orgId),
+					eq(media.purpose_tag, 'job_signoff_signature'),
+					isNull(media.deleted_at)
+				)
 			)
-		)
-		.orderBy(desc(media.created_at))
-		.limit(1);
+			.orderBy(desc(media.created_at))
+			.limit(1)
+	]);
 
+	// The two presigns (thumb + full) are independent signing calls — run concurrently.
 	const signature = sig
-		? {
-				id: sig.id,
-				thumb_url: await r2Presign(sig.thumbnail_key ?? sig.r2_key, 3600),
-				full_url: await r2Presign(sig.web_key ?? sig.r2_key, 3600)
-			}
+		? await (async () => {
+				const [thumb_url, full_url] = await Promise.all([
+					r2Presign(sig.thumbnail_key ?? sig.r2_key, 3600),
+					r2Presign(sig.web_key ?? sig.r2_key, 3600)
+				]);
+				return { id: sig.id, thumb_url, full_url };
+			})()
 		: null;
 
 	return {

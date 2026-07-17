@@ -163,7 +163,10 @@
 				return 'This contact was changed elsewhere. Reload the page and try again.';
 			if (res.status === 409 && body.code === 'PHONE_DUPLICATE')
 				return 'A contact with this phone already exists.';
-			if (res.status === 422 && (body.code === 'PHONE_INVALID' || body.code === 'ALT_PHONE_INVALID'))
+			if (
+				res.status === 422 &&
+				(body.code === 'PHONE_INVALID' || body.code === 'ALT_PHONE_INVALID')
+			)
 				return body.error ?? 'Invalid phone number.';
 			if (res.status === 422 && body.code === 'INVALID_ASSIGNEE')
 				return body.error ?? 'Invalid assignee.';
@@ -502,7 +505,11 @@
 		<InlineEditRow
 			label="Preferred method"
 			{canEdit}
-			{...rowCtl('method', () => (methodDraft = contact.preferred_contact_method ?? ''), saveMethod)}
+			{...rowCtl(
+				'method',
+				() => (methodDraft = contact.preferred_contact_method ?? ''),
+				saveMethod
+			)}
 		>
 			{#snippet display()}
 				{#if contact.preferred_contact_method}
@@ -527,7 +534,11 @@
 		<InlineEditRow
 			label="Next follow-up"
 			{canEdit}
-			{...rowCtl('followUp', () => (followUpDraft = toLocalInput(contact.next_follow_up_at)), saveFollowUp)}
+			{...rowCtl(
+				'followUp',
+				() => (followUpDraft = toLocalInput(contact.next_follow_up_at)),
+				saveFollowUp
+			)}
 		>
 			{#snippet display()}
 				{#if contact.next_follow_up_at}
@@ -610,7 +621,6 @@
 			</button>
 		</div>
 	</div>
-
 </div>
 
 <style lang="scss">

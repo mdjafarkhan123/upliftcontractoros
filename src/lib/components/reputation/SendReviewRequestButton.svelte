@@ -28,7 +28,7 @@
 	}
 </script>
 
-<Button size="sm" loading={loading} loadingLabel="Sending…" onclick={send}>
+<Button size="sm" {loading} loadingLabel="Sending…" onclick={send}>
 	<i class="ri-send-plane-line" aria-hidden="true"></i>
 	{label}
 </Button>

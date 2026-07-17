@@ -35,17 +35,20 @@ export const GET: RequestHandler = async (event) => {
 
 	const link = await loadBookingLinkForOrg(auth.orgId, event.params.id!);
 
-	const windows = await db
-		.select()
-		.from(availabilityWindows)
-		.where(eq(availabilityWindows.booking_link_id, link.id))
-		.orderBy(asc(availabilityWindows.day_of_week), asc(availabilityWindows.start_time));
-
-	const overrides = await db
-		.select()
-		.from(availabilityOverrides)
-		.where(eq(availabilityOverrides.booking_link_id, link.id))
-		.orderBy(asc(availabilityOverrides.override_date));
+	// Windows and overrides both hang off the (already-gated) link and are independent of
+	// each other — fire them in one wave instead of two sequential round trips.
+	const [windows, overrides] = await Promise.all([
+		db
+			.select()
+			.from(availabilityWindows)
+			.where(eq(availabilityWindows.booking_link_id, link.id))
+			.orderBy(asc(availabilityWindows.day_of_week), asc(availabilityWindows.start_time)),
+		db
+			.select()
+			.from(availabilityOverrides)
+			.where(eq(availabilityOverrides.booking_link_id, link.id))
+			.orderBy(asc(availabilityOverrides.override_date))
+	]);
 
 	return json({ data: { ...link, windows, overrides } });
 };

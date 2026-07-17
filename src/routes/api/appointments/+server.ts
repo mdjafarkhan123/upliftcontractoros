@@ -2,7 +2,14 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq, gte, isNotNull, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { appointments, contacts, jobs, orgMembers, outboxEvents } from '$lib/server/db/schema';
+import {
+	appointments,
+	contacts,
+	jobs,
+	orgMembers,
+	outboxEvents,
+	requests
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateAppointment, canViewAnyAppointment } from '$lib/server/appointments/permissions';
 import { createAppointmentSchema } from '$lib/server/appointments/schemas';
@@ -97,6 +104,9 @@ export const GET: RequestHandler = async (event) => {
 			contact_phone: contacts.phone,
 			contact_email: contacts.email,
 			job_id: appointments.job_id,
+			// Non-null = this visit is a request's on-site assessment (calendar badge +
+			// click-through to /requests/[id]).
+			request_id: appointments.request_id,
 			assigned_to: appointments.assigned_to,
 			assignee_name: orgMembers.full_name,
 			assignee_count: sql<number>`(
@@ -106,6 +116,20 @@ export const GET: RequestHandler = async (event) => {
 			type: appointments.type,
 			status: appointments.status,
 			title: appointments.title,
+			// "Part of a multi-visit series" — drives the repeat badge on the calendar card.
+			// True when the visit's job carries a repeat RULE (recurring job) OR simply has
+			// more than one visit (a one-off can be scheduled across several visits, e.g. a
+			// multi-day job — those are a series too and get the badge). Never keys off
+			// `job_type`. `idx_appointments_job_id` backs the EXISTS; org_id keeps it tenant-safe.
+			is_recurring_visit: sql<boolean>`(
+				${jobs.recurrence} IS NOT NULL
+				OR EXISTS (
+					SELECT 1 FROM appointments a2
+					WHERE a2.job_id = ${appointments.job_id}
+						AND a2.org_id = ${appointments.org_id}
+						AND a2.id <> ${appointments.id}
+				)
+			)`,
 			scheduled_start: appointments.scheduled_start,
 			scheduled_end: appointments.scheduled_end,
 			all_day: appointments.all_day,
@@ -115,6 +139,7 @@ export const GET: RequestHandler = async (event) => {
 		.from(appointments)
 		.innerJoin(contacts, eq(contacts.id, appointments.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, appointments.assigned_to))
+		.leftJoin(jobs, eq(jobs.id, appointments.job_id))
 		.where(and(...conditions))
 		// Search: nearest-in-time first — upcoming before past, then closest to
 		// now (filter-only, no relevance reorder). Calendar: plain chronological.
@@ -207,6 +232,53 @@ export const POST: RequestHandler = async (event) => {
 		jobLocation = addrParts.length > 0 ? addrParts.join(' · ') : null;
 	}
 
+	// Assessment creation: the appointment is a request's on-site visit. Validate
+	// the request is in-org and still open, and that the visit is for the
+	// request's own client. The one-live-assessment rule is pre-checked here and
+	// backstopped by the uq_appointments_live_assessment partial unique index.
+	if (input.request_id) {
+		const [requestRow] = await db
+			.select({
+				id: requests.id,
+				contact_id: requests.contact_id,
+				converted_at: requests.converted_at,
+				archived_at: requests.archived_at
+			})
+			.from(requests)
+			.where(
+				and(
+					eq(requests.id, input.request_id),
+					eq(requests.org_id, auth.orgId),
+					isNull(requests.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!requestRow) return json({ error: 'Request not found' }, { status: 422 });
+		if (requestRow.contact_id !== input.contact_id) {
+			return json({ error: 'Request does not belong to selected contact.' }, { status: 422 });
+		}
+		if (requestRow.converted_at || requestRow.archived_at) {
+			return json(
+				{ error: 'This request is closed and cannot take an assessment.' },
+				{ status: 409 }
+			);
+		}
+		const [existingAssessment] = await db
+			.select({ id: appointments.id })
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.request_id, input.request_id),
+					eq(appointments.org_id, auth.orgId),
+					isNull(appointments.deleted_at)
+				)
+			)
+			.limit(1);
+		if (existingAssessment) {
+			return json({ error: 'This request already has an assessment.' }, { status: 409 });
+		}
+	}
+
 	const resolution = resolveAssigneeInput({
 		assignee_ids: input.assignee_ids,
 		lead_member_id: input.lead_member_id,
@@ -251,8 +323,10 @@ export const POST: RequestHandler = async (event) => {
 				org_id: auth.orgId,
 				contact_id: input.contact_id,
 				job_id: input.job_id ?? null,
+				request_id: input.request_id ?? null,
 				assigned_to: leadMemberId,
-				type: input.type,
+				// An assessment is always an 'estimate' visit, whatever the client sent.
+				type: input.request_id ? 'estimate' : input.type,
 				// No date ⇒ a "Schedule later" placeholder; a date ⇒ a live scheduled visit.
 				status: input.scheduled_start ? 'scheduled' : 'unscheduled',
 				title: input.title,
@@ -295,6 +369,7 @@ export const POST: RequestHandler = async (event) => {
 					org_id: auth.orgId,
 					contact_id: inserted.contact_id,
 					job_id: inserted.job_id,
+					request_id: inserted.request_id,
 					assigned_to: leadMemberId,
 					assignee_ids: assigneeIds,
 					scheduled_start: inserted.scheduled_start.toISOString(),
@@ -305,7 +380,15 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		return inserted;
+	}).catch((e: unknown) => {
+		// Race backstop: two concurrent creates for the same request — the partial
+		// unique index (uq_appointments_live_assessment) rejects the loser.
+		if (input.request_id && (e as { code?: string }).code === '23505') return null;
+		throw e;
 	});
+	if (!created) {
+		return json({ error: 'This request already has an assessment.' }, { status: 409 });
+	}
 
 	return json({ data: { id: created.id } }, { status: 201 });
 };

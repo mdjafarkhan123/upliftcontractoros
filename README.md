@@ -1,1 +1,0 @@
-Cloudflare command: cloudflared tunnel run --url http://localhost:5173 local-crm

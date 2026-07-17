@@ -548,7 +548,13 @@
 
 				<div class="notif-card__actions">
 					{#if pushStatus === 'subscribed'}
-						<Button variant="outline" class="btn--full" loading={testingSend} loadingLabel="Sending…" onclick={sendTestBuzz}>
+						<Button
+							variant="outline"
+							class="btn--full"
+							loading={testingSend}
+							loadingLabel="Sending…"
+							onclick={sendTestBuzz}
+						>
 							<i class="ri-notification-3-line" aria-hidden="true"></i>
 							Send me a test buzz
 						</Button>
@@ -560,7 +566,12 @@
 							</p>
 						</div>
 					{:else if pushStatus !== 'unsupported'}
-						<Button class="btn--full" loading={subscribing} loadingLabel="Setting up…" onclick={subscribeToPush}>
+						<Button
+							class="btn--full"
+							loading={subscribing}
+							loadingLabel="Setting up…"
+							onclick={subscribeToPush}
+						>
 							<i class="ri-notification-3-line" aria-hidden="true"></i>
 							Buzz this phone when it happens
 						</Button>
@@ -603,7 +614,12 @@
 							defaultCountry={orgCountry}
 							invalid={!!phoneError}
 						/>
-						<Button disabled={!phoneDirty} loading={phoneSaving} loadingLabel="Saving…" onclick={savePhone}>
+						<Button
+							disabled={!phoneDirty}
+							loading={phoneSaving}
+							loadingLabel="Saving…"
+							onclick={savePhone}
+						>
 							Save
 						</Button>
 					</div>
@@ -720,7 +736,9 @@
 										</Select.Trigger>
 										<Select.Content>
 											{#each hours as h (h)}
-												<Select.Item value={String(h)}>{formatHour(h)}</Select.Item>
+												<Select.Item value={String(h)} label={formatHour(h)}
+													>{formatHour(h)}</Select.Item
+												>
 											{/each}
 										</Select.Content>
 									</Select.Root>
@@ -736,7 +754,9 @@
 										</Select.Trigger>
 										<Select.Content>
 											{#each hours as h (h)}
-												<Select.Item value={String(h)}>{formatHour(h)}</Select.Item>
+												<Select.Item value={String(h)} label={formatHour(h)}
+													>{formatHour(h)}</Select.Item
+												>
 											{/each}
 										</Select.Content>
 									</Select.Root>
@@ -768,7 +788,7 @@
 								</Select.Trigger>
 								<Select.Content>
 									{#each escalationOptions as m (m)}
-										<Select.Item value={String(m)}>{m} minutes</Select.Item>
+										<Select.Item value={String(m)} label="{m} minutes">{m} minutes</Select.Item>
 									{/each}
 								</Select.Content>
 							</Select.Root>

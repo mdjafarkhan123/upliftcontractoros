@@ -470,7 +470,12 @@
 
 				<footer class="stripe-form__footer">
 					{#if status.is_connected}
-						<Button variant="destructive" loading={disconnecting} loadingLabel="Disconnecting…" onclick={disconnect}>
+						<Button
+							variant="destructive"
+							loading={disconnecting}
+							loadingLabel="Disconnecting…"
+							onclick={disconnect}
+						>
 							Disconnect Stripe
 						</Button>
 					{/if}
@@ -529,9 +534,7 @@
 										}
 									}}
 								/>
-								<Button variant="outline" disabled={tipsSaving} onclick={addPreset}>
-									Add %
-								</Button>
+								<Button variant="outline" disabled={tipsSaving} onclick={addPreset}>Add %</Button>
 							</div>
 						{/if}
 					</div>
@@ -571,7 +574,12 @@
 								Percentage of balance
 							</label>
 							<label class="late-fee__type">
-								<input type="radio" bind:group={lateFeeType} value="flat" disabled={lateFeeSaving} />
+								<input
+									type="radio"
+									bind:group={lateFeeType}
+									value="flat"
+									disabled={lateFeeSaving}
+								/>
 								Flat amount
 							</label>
 						</div>

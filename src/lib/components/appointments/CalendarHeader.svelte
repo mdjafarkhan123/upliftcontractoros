@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { AppointmentView, CalendarRange } from '$lib/types/appointments';
+	import type { AppointmentView, CalendarRange, CalendarDensity } from '$lib/types/appointments';
 
 	const MONTH_NAMES = [
 		'January',
@@ -24,11 +24,13 @@
 		anchor,
 		canCreate,
 		searchValue = $bindable(''),
+		density = 'comfortable',
 		onShiftAnchor,
 		onGoToday,
 		onFilterOpen,
 		onRangeChange,
 		onViewChange,
+		onDensityChange,
 		onNew
 	}: {
 		view: AppointmentView;
@@ -36,11 +38,13 @@
 		anchor: Date;
 		canCreate: boolean;
 		searchValue?: string;
+		density?: CalendarDensity;
 		onShiftAnchor: (dir: 1 | -1) => void;
 		onGoToday: () => void;
 		onFilterOpen: () => void;
 		onRangeChange?: (r: CalendarRange) => void;
 		onViewChange?: (v: AppointmentView) => void;
+		onDensityChange?: (d: CalendarDensity) => void;
 		// Opens the inline 3-tab quick-create popup (Job · Visit · Event).
 		onNew: () => void;
 	} = $props();
@@ -205,6 +209,43 @@
 						Month
 					</button>
 				</div>
+
+				<!-- Density / zoom toggle (time-grid views) -->
+				{#if range !== 'month' && onDensityChange}
+					<div
+						class="cal-header__seg cal-header__seg--density"
+						role="group"
+						aria-label="Grid density"
+					>
+						<button
+							type="button"
+							class="cal-header__seg-btn"
+							class:cal-header__seg-btn--active={density === 'compact'}
+							onclick={() => onDensityChange('compact')}
+							title="Compact — fit more of the day"
+						>
+							<i class="ri-collapse-vertical-line" aria-hidden="true"></i>
+						</button>
+						<button
+							type="button"
+							class="cal-header__seg-btn"
+							class:cal-header__seg-btn--active={density === 'comfortable'}
+							onclick={() => onDensityChange('comfortable')}
+							title="Comfortable"
+						>
+							<i class="ri-equalizer-line" aria-hidden="true"></i>
+						</button>
+						<button
+							type="button"
+							class="cal-header__seg-btn"
+							class:cal-header__seg-btn--active={density === 'spacious'}
+							onclick={() => onDensityChange('spacious')}
+							title="Spacious — bigger cards"
+						>
+							<i class="ri-expand-vertical-line" aria-hidden="true"></i>
+						</button>
+					</div>
+				{/if}
 			{/if}
 
 			<!-- Mobile: filter sheet button -->

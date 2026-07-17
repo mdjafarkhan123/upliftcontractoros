@@ -94,6 +94,7 @@
 		upcoming: 0,
 		today: 0,
 		overdue: 0,
+		action_required: 0,
 		in_progress: 0,
 		on_hold: 0,
 		completed: 0,
@@ -186,8 +187,9 @@
 	let deleteDialogOpen = $state(false);
 	let deleteBusy = $state(false);
 
-	let ConfirmDialog =
-		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!deleteDialogOpen || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
@@ -255,8 +257,9 @@
 
 	let bulkDeleteOpen = $state(false);
 	let bulkBusy = $state(false);
-	let BulkConfirmDialog =
-		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	let BulkConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!bulkDeleteOpen || BulkConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {

@@ -99,9 +99,8 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 	// the balance-applied portion (recalc uses it for amount_paid/amount_due) and tip_amount
 	// holds the tip. Clamp defensively so a malformed tip can't exceed the received total.
 	const parsedTip = Number.parseInt(tipCentsRaw ?? '0', 10);
-	const tipCents = Number.isFinite(parsedTip) && parsedTip > 0
-		? Math.min(parsedTip, amountReceivedCents)
-		: 0;
+	const tipCents =
+		Number.isFinite(parsedTip) && parsedTip > 0 ? Math.min(parsedTip, amountReceivedCents) : 0;
 	const balanceCents = amountReceivedCents - tipCents;
 	const amountStr = (balanceCents / 100).toFixed(2);
 	const tipStr = (tipCents / 100).toFixed(2);

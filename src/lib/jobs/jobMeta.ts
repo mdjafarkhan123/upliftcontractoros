@@ -1,10 +1,11 @@
-// Suggested vocabulary for jobs — surfaced as presets in the New Job form. Both job_type and
-// tags accept free text at the schema level; only these suggestions appear as one-tap chips.
-// Mirrors the contacts/tags.ts pattern.
+// Suggested vocabulary for jobs — surfaced as presets in the New Job form. Both job_category
+// and tags accept free text at the schema level; only these suggestions appear as one-tap
+// chips. Mirrors the contacts/tags.ts pattern.
 
 // Common contractor work categories across trades (fence, lawn, HVAC, plumbing, electrical,
-// cleaning, roofing, remodel, junk removal, …). Stored free-text in jobs.job_type.
-export const SUGGESTED_JOB_TYPES = [
+// cleaning, roofing, remodel, junk removal, …). Stored free-text in jobs.job_category.
+// NOT jobs.job_type — that's the one-off/recurring enum (see $lib/types/jobs → JobType).
+export const SUGGESTED_JOB_CATEGORIES = [
 	'Repair',
 	'Installation',
 	'Maintenance',
@@ -15,7 +16,7 @@ export const SUGGESTED_JOB_TYPES = [
 	'Warranty'
 ] as const;
 
-export type SuggestedJobType = (typeof SUGGESTED_JOB_TYPES)[number];
+export type SuggestedJobCategory = (typeof SUGGESTED_JOB_CATEGORIES)[number];
 
 // Operational descriptors layered on a job (stored in jobs.tags, text[]).
 export const SUGGESTED_JOB_TAGS = [

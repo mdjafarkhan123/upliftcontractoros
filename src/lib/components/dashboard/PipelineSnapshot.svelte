@@ -36,7 +36,8 @@
 		<ul class="widget-card__list">
 			{#each stages as s (s.stage_id)}
 				<li class="pipeline-row widget-card__list-item">
-					<span class="pipeline-row__dot" style:background-color={s.color} aria-hidden="true"></span>
+					<span class="pipeline-row__dot" style:background-color={s.color} aria-hidden="true"
+					></span>
 					<span class="pipeline-row__content">
 						<span class="pipeline-row__name">{s.name}</span>
 						<span class="pipeline-row__track">
@@ -67,7 +68,9 @@
 		padding: $space-3 $space-4;
 		transition: background $duration-fast $ease-standard;
 
-		&:hover { background: var(--color-bg-surface-sunk); }
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
 
 		&__dot {
 			width: 10px;

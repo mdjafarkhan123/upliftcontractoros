@@ -82,44 +82,44 @@
 </script>
 
 <section class="contact-quick-actions" aria-label="Quick actions">
-		{#if phone}
-			<Button variant="secondary" href={`tel:${phone}`}>
-				<i class="ri-phone-line" aria-hidden="true"></i> Call
-			</Button>
-		{/if}
-
-		<Button type="button" variant="secondary" disabled={opening} onclick={openConversation}>
-			<i class="ri-message-2-line" aria-hidden="true"></i> Message
+	{#if phone}
+		<Button variant="secondary" href={`tel:${phone}`}>
+			<i class="ri-phone-line" aria-hidden="true"></i> Call
 		</Button>
+	{/if}
 
-		{#if canQuote}
-			<Button
-				type="button"
-				variant="secondary"
-				onclick={() => goto(`/quotes/new?contact_id=${contactId}`)}
-			>
-				<i class="ri-file-text-line" aria-hidden="true"></i> Quote
-			</Button>
-		{/if}
+	<Button type="button" variant="secondary" disabled={opening} onclick={openConversation}>
+		<i class="ri-message-2-line" aria-hidden="true"></i> Message
+	</Button>
 
-		{#if canAppt}
-			<Button
-				type="button"
-				variant="secondary"
-				onclick={() =>
-					goto(
-						`/appointments/new?contact_id=${contactId}&contact_name=${encodeURIComponent(contactName)}`
-					)}
-			>
-				<i class="ri-calendar-event-line" aria-hidden="true"></i> Book
-			</Button>
-		{/if}
+	{#if canQuote}
+		<Button
+			type="button"
+			variant="secondary"
+			onclick={() => goto(`/quotes/new?contact_id=${contactId}`)}
+		>
+			<i class="ri-file-text-line" aria-hidden="true"></i> Quote
+		</Button>
+	{/if}
 
-		{#if canEdit}
-			<Button type="button" variant="secondary" onclick={onAddNote}>
-				<i class="ri-sticky-note-line" aria-hidden="true"></i> Note
-			</Button>
-		{/if}
+	{#if canAppt}
+		<Button
+			type="button"
+			variant="secondary"
+			onclick={() =>
+				goto(
+					`/appointments/new?contact_id=${contactId}&contact_name=${encodeURIComponent(contactName)}`
+				)}
+		>
+			<i class="ri-calendar-event-line" aria-hidden="true"></i> Book
+		</Button>
+	{/if}
+
+	{#if canEdit}
+		<Button type="button" variant="secondary" onclick={onAddNote}>
+			<i class="ri-sticky-note-line" aria-hidden="true"></i> Note
+		</Button>
+	{/if}
 
 	{#if canEdit}
 		<FollowUpPresetPopover

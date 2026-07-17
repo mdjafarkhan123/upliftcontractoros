@@ -300,10 +300,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				.select({ id: pipelineStages.id })
 				.from(pipelineStages)
 				.where(
-					and(
-						eq(pipelineStages.org_id, link.org_id),
-						sql`${pipelineStages.deleted_at} IS NULL`
-					)
+					and(eq(pipelineStages.org_id, link.org_id), sql`${pipelineStages.deleted_at} IS NULL`)
 				)
 				.orderBy(asc(pipelineStages.position));
 

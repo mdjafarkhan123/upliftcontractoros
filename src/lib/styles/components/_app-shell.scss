@@ -7,53 +7,60 @@
 // =============================================================================
 
 .app-shell {
-  min-height: 100vh;
-  background: var(--color-bg-app);
+	min-height: 100vh;
+	background: var(--color-bg-app);
 
-  // Suspended state: simple pass-through column
-  &--suspended {
-    display: flex;
-    flex-direction: column;
-  }
+	// Suspended state: simple pass-through column
+	&--suspended {
+		display: flex;
+		flex-direction: column;
+	}
 
-  // Content column that sits to the right of the fixed sidebar
-  &__content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 100vh;
+	// Sidebar collapsed to icon-only rail — one var drives both the sidebar's
+	// width and the content offset below.
+	&--nav-collapsed {
+		--sidebar-width: 72px;
+	}
 
-    // Tablet+: offset for icon-only sidebar (72px)
-    @media (min-width: #{$bp-mobile + 1px}) {
-      padding-left: 72px;
-    }
+	// Content column that sits to the right of the fixed sidebar
+	&__content {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 100vh;
+		transition: padding-left $duration-fast $ease-standard;
 
-    // Desktop: offset for full-width sidebar
-    @media (min-width: #{$bp-tablet + 1px}) {
-      padding-left: var(--sidebar-width);
-    }
-  }
+		// Tablet+: offset for icon-only sidebar (72px)
+		@media (min-width: #{$bp-mobile + 1px}) {
+			padding-left: 72px;
+		}
 
-  // Topbar slot — visible on all breakpoints.
-  // On mobile it shows the compact brand+icons bar; on desktop the full 3-column bar.
-  &__topbar {
-    // always visible — topbar SCSS handles responsive differences internally
-  }
+		// Desktop: offset for full-width sidebar
+		@media (min-width: #{$bp-tablet + 1px}) {
+			padding-left: var(--sidebar-width);
+		}
+	}
 
-  // Legacy alias — kept so any existing class references don't break
-  &__mobile-header {
-    @media (min-width: #{$bp-mobile + 1px}) {
-      display: none;
-    }
-  }
+	// Topbar slot — visible on all breakpoints.
+	// On mobile it shows the compact brand+icons bar; on desktop the full 3-column bar.
+	&__topbar {
+		// always visible — topbar SCSS handles responsive differences internally
+	}
 
-  // Page content — fills remaining height, clears the bottom nav on mobile
-  &__main {
-    flex: 1;
-    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+	// Legacy alias — kept so any existing class references don't break
+	&__mobile-header {
+		@media (min-width: #{$bp-mobile + 1px}) {
+			display: none;
+		}
+	}
 
-    @media (min-width: #{$bp-mobile + 1px}) {
-      padding-bottom: 0;
-    }
-  }
+	// Page content — fills remaining height, clears the bottom nav on mobile
+	&__main {
+		flex: 1;
+		padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+
+		@media (min-width: #{$bp-mobile + 1px}) {
+			padding-bottom: 0;
+		}
+	}
 }

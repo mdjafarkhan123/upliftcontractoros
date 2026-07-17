@@ -371,7 +371,11 @@
 		if (depositLocked) return;
 		if (depositRequiredDraft) {
 			if (depositTypeDraft === 'percent') {
-				if (!Number.isFinite(depositPercentNum) || depositPercentNum <= 0 || depositPercentNum >= 100) {
+				if (
+					!Number.isFinite(depositPercentNum) ||
+					depositPercentNum <= 0 ||
+					depositPercentNum >= 100
+				) {
 					sectionError = 'Enter a percentage between 0.01 and 99.99.';
 					return;
 				}
@@ -1031,7 +1035,13 @@
 
 <!-- Shared Cancel + Save row for the text sections (Details / Notes / Terms). -->
 {#snippet sectionFooter(onSave: () => void)}
-	<EditActionBar {onSave} onCancel={cancelSection} saving={sectionSaving} error={sectionError} size="sm" />
+	<EditActionBar
+		{onSave}
+		onCancel={cancelSection}
+		saving={sectionSaving}
+		error={sectionError}
+		size="sm"
+	/>
 {/snippet}
 
 {#if showSkeleton}

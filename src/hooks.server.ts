@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import type { Handle, RequestEvent } from '@sveltejs/kit';
+import type { Handle, HandleServerError, RequestEvent } from '@sveltejs/kit';
 import type { JwtPayload, User } from '@supabase/supabase-js';
 import { createServerClient } from '$lib/server/auth/supabase';
 import { getJafarSession } from '$lib/server/auth/jafarSession';
@@ -257,4 +257,41 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	return resolve(event);
+};
+
+/**
+ * Log the FULL cause chain of any unhandled server error.
+ *
+ * Without this, SvelteKit's default logger prints only the top-level error. Drizzle wraps every
+ * failure — including a connection dying mid-flight — as `Failed query: <sql>`, and hides the
+ * real driver/pooler error (`CONNECTION_CLOSED`, `MaxClientsInSessionMode`, a Postgres code, …)
+ * in `error.cause`. That made a connection-layer fault read as if the SQL itself were broken.
+ *
+ * Returns a generic shape to the client: causes are for the server log only, never the browser.
+ */
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	// 404s and other expected client-side statuses aren't faults — don't log them as such.
+	if (status !== 500) return { message };
+
+	const chain: { name?: string; message?: string; code?: string; severity?: string }[] = [];
+	let cur: unknown = error;
+	// Guard against a self-referential cause chain.
+	for (let depth = 0; cur instanceof Error && depth < 5; depth++) {
+		const e = cur as Error & { code?: string; severity?: string };
+		chain.push({ name: e.name, message: e.message, code: e.code, severity: e.severity });
+		if (e.cause === cur) break;
+		cur = e.cause;
+	}
+
+	console.error(
+		JSON.stringify({
+			reason: 'server_error',
+			route: event.url.pathname,
+			method: event.request.method,
+			cause_chain: chain
+		})
+	);
+	if (error instanceof Error && error.stack) console.error(error.stack);
+
+	return { message: 'Internal Error' };
 };

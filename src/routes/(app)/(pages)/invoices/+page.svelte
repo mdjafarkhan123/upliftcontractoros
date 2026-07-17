@@ -10,7 +10,11 @@
 	import ListSearchBar from '$lib/components/shared/ListSearchBar.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { invoiceStatsStore } from '$lib/stores/invoiceStats.svelte';
-	import type { InvoicesGroup, InvoicesStatusChip, InvoiceListItem as InvoiceRow } from '$lib/types/invoices';
+	import type {
+		InvoicesGroup,
+		InvoicesStatusChip,
+		InvoiceListItem as InvoiceRow
+	} from '$lib/types/invoices';
 	import { goto } from '$app/navigation';
 	import { getMemberContext } from '$lib/context/member';
 	import { toast } from '$lib/stores/toast.svelte';

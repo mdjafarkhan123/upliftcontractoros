@@ -52,11 +52,7 @@
 </script>
 
 <article
-	class={[
-		'appt-card',
-		`appt-card--type-${appointment.type}`,
-		highlight && 'appt-card--highlight'
-	]
+	class={['appt-card', `appt-card--type-${appointment.type}`, highlight && 'appt-card--highlight']
 		.filter(Boolean)
 		.join(' ')}
 >
@@ -109,7 +105,8 @@
 			{#if appointment.assignee_name}
 				<span class="appt-card__assignee-name">{appointment.assignee_name}</span>
 			{:else}
-				<span class="appt-card__assignee-name appt-card__assignee-name--unassigned">Unassigned</span>
+				<span class="appt-card__assignee-name appt-card__assignee-name--unassigned">Unassigned</span
+				>
 			{/if}
 			{#if appointment.booking_source === 'booking_link'}
 				<span class="appt-card__self-booked">Self-booked</span>

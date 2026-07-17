@@ -18,6 +18,10 @@ export type ContactOverviewResponse = {
 			title: string;
 			status: 'scheduled' | 'in_progress';
 			scheduled_start: string | null;
+			is_recurring: boolean;
+			has_series_anchor: boolean;
+			next_open_visit_start: string | null;
+			has_open_visits: boolean;
 			total: number;
 		}>;
 		count: number;

@@ -98,7 +98,11 @@
 		ontouchend={onTouchEnd}
 	>
 		<!-- Close button -->
-		<button class="media-lightbox__btn media-lightbox__btn--close" onclick={onClose} aria-label="Close">
+		<button
+			class="media-lightbox__btn media-lightbox__btn--close"
+			onclick={onClose}
+			aria-label="Close"
+		>
 			<i class="ri-close-line" aria-hidden="true"></i>
 		</button>
 

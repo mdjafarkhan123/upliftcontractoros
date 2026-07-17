@@ -1,0 +1,130 @@
+@use '../tokens' as *;
+
+// =============================================================================
+// COLLAPSIBLE SIDEBAR — reusable wrapper.
+//
+// Industry pattern (Notion, Linear, VS Code):
+//   Expanded (~260px): full content visible — labels, calendar, filters.
+//   Collapsed (~48px): icons/rail only, all content sections hidden.
+//   Toggle: always visible at top-right edge, smooth width transition.
+// =============================================================================
+
+.c-sidebar {
+	--_width: var(--c-sidebar-width, 260px);
+	--_collapsed-width: var(--c-sidebar-collapsed-width, 48px);
+
+	display: flex;
+	flex-direction: column;
+	width: var(--_width);
+	flex-shrink: 0;
+	background: var(--color-bg-surface);
+	border-right: 1px solid var(--color-border);
+	position: relative;
+	overflow: hidden;
+	transition: width $duration-slow $ease-standard;
+
+	&--collapsed {
+		width: var(--_collapsed-width);
+	}
+
+	// ── Header (optional) ────────────────────────────────────────────────
+	&__header {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		height: 72px;
+		padding: 0 $space-5;
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+		overflow: hidden;
+		white-space: nowrap;
+
+		.c-sidebar--collapsed & {
+			visibility: hidden;
+			height: 0;
+			padding: 0;
+			border-bottom: none;
+		}
+	}
+
+	// ── Scrollable body ──────────────────────────────────────────────────
+	&__body {
+		flex: 1;
+		overflow-y: auto;
+		overflow-x: hidden;
+		padding: $space-3;
+		display: flex;
+		flex-direction: column;
+
+		// subtle scrollbar
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-border) transparent;
+		&::-webkit-scrollbar {
+			width: 4px;
+		}
+		&::-webkit-scrollbar-track {
+			background: transparent;
+		}
+		&::-webkit-scrollbar-thumb {
+			background: var(--color-border);
+			border-radius: $radius-full;
+		}
+	}
+
+	// ── Content wrapper (hidden when collapsed, toggle stays visible) ────
+	&__content {
+		flex: 1;
+
+		.c-sidebar--collapsed & {
+			visibility: hidden;
+			padding: 0;
+			pointer-events: none;
+		}
+	}
+
+	// ── Toggle button — sticky inside body, top-right corner ──────────────
+	&__toggle {
+		position: sticky;
+		top: 0;
+		align-self: flex-end;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		margin-bottom: $space-1;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		z-index: 2;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard,
+			border-color $duration-fast $ease-standard,
+			box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+			border-color: var(--color-border-strong);
+		}
+
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+
+		i {
+			font-size: 1.6rem;
+			line-height: 1;
+		}
+	}
+
+	// ── Collapsed: center toggle ─────────────────────────────────────────
+	&--collapsed &__toggle {
+		align-self: center;
+	}
+}

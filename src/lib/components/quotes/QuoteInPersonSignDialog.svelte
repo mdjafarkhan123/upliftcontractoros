@@ -76,9 +76,7 @@
 		}
 		const discountedSubtotalCents = subtotalCents - discountCents;
 		const taxableAfterDiscountCents =
-			subtotalCents > 0
-				? (taxableSubtotalCents * discountedSubtotalCents) / subtotalCents
-				: 0;
+			subtotalCents > 0 ? (taxableSubtotalCents * discountedSubtotalCents) / subtotalCents : 0;
 		const taxCents = Math.round(taxableAfterDiscountCents * taxRate);
 		const totalCents = discountedSubtotalCents + taxCents;
 		return {
@@ -321,8 +319,8 @@
 											class="quote-sign__check"
 										/>
 										<span class="quote-sign__option-desc">
-											{pkg.name}{#if pkg.is_recommended}<span class="quote-sign__pkg-rec"
-													> · Recommended</span
+											{pkg.name}{#if pkg.is_recommended}<span class="quote-sign__pkg-rec">
+													· Recommended</span
 												>{/if}
 										</span>
 									</span>
@@ -412,9 +410,7 @@
 				</div>
 				<div class="quote-sign__actions">
 					{#if step === 'sign' && needsReview}
-						<Button variant="ghost" onclick={() => (step = 'review')} disabled={busy}>
-							Back
-						</Button>
+						<Button variant="ghost" onclick={() => (step = 'review')} disabled={busy}>Back</Button>
 					{/if}
 					{#if step === 'review'}
 						<Button onclick={goToSign}>

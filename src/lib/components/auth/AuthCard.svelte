@@ -175,7 +175,12 @@
 		width: 64px;
 		height: 64px;
 		border-radius: $radius-xl;
-		background: linear-gradient(135deg, #{$brand-light} 0%, #{$brand-primary} 55%, #{$brand-deep} 100%);
+		background: linear-gradient(
+			135deg,
+			#{$brand-light} 0%,
+			#{$brand-primary} 55%,
+			#{$brand-deep} 100%
+		);
 		box-shadow:
 			0 10px 30px -8px rgba(34, 125, 83, 0.55),
 			inset 0 1px 0 rgba(23, 247, 0, 0.6);

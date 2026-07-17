@@ -31,11 +31,7 @@
 	const afterUrl = $derived(afterId ? (webUrls[afterId] ?? null) : null);
 	const ready = $derived(Boolean(beforeUrl && afterUrl));
 
-	async function fetchUrl(
-		id: string,
-		variant: 'web' | 'thumbnail',
-		cache: 'webUrls' | 'thumbs'
-	) {
+	async function fetchUrl(id: string, variant: 'web' | 'thumbnail', cache: 'webUrls' | 'thumbs') {
 		if (cache === 'webUrls' ? webUrls[id] : thumbs[id]) return;
 		try {
 			const res = await fetch(`/api/media/${id}/url?variant=${variant}`);

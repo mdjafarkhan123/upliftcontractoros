@@ -20,7 +20,6 @@
 		disabled = false,
 		type = 'button' as HTMLButtonAttributes['type'],
 		href,
-		// --- loading / state ---
 		loading = false,
 		success = false,
 		onAction,
@@ -38,18 +37,12 @@
 		disabled?: boolean;
 		type?: HTMLButtonAttributes['type'];
 		href?: string;
-		/** Controlled busy state — you own it (set true before the request, false after). */
 		loading?: boolean;
-		/** Controlled success state — shows a checkmark. Ignored while `onAction` is managing state. */
 		success?: boolean;
-		/** Self-managing async handler: idle → loading (awaits) → success flash → idle. */
 		onAction?: (e: MouseEvent) => Promise<void> | void;
-		/** Optional text shown next to the spinner while loading (falls back to the normal content). */
 		loadingLabel?: string;
-		/** Optional text shown next to the checkmark on success. */
 		successLabel?: string;
 		successHoldMs?: number;
-		/** Optional leading icon snippet, rendered only in the idle state. */
 		icon?: Snippet;
 		onclick?: (e: MouseEvent) => void;
 		children?: Snippet;
@@ -129,21 +122,20 @@
 		class={classes}
 		{...rest}
 	>
-		<!-- Width-locking content: always rendered so the button never resizes; hidden when busy -->
-		<span class="btn__content" style:visibility={isBusy ? 'hidden' : null}>
+		<span class="btn__content" style:display={isBusy ? 'none' : null}>
 			{#if icon && current === 'idle'}{@render icon()}{/if}
 			{@render children?.()}
 		</span>
 
-		{#if current === 'loading'}
+		{#if current === 'loading' || current === 'success'}
 			<span class="btn__overlay">
-				<i class="ri-loader-4-line btn__spin" aria-hidden="true"></i>
-				{#if loadingLabel}<span>{loadingLabel}</span>{/if}
-			</span>
-		{:else if current === 'success'}
-			<span class="btn__overlay">
-				<i class="ri-check-line" aria-hidden="true"></i>
-				{#if successLabel}<span>{successLabel}</span>{/if}
+				{#if current === 'loading'}
+					<i class="ri-loader-4-line btn__spin" aria-hidden="true"></i>
+					{#if loadingLabel}<span>{loadingLabel}</span>{/if}
+				{:else}
+					<i class="ri-check-line" aria-hidden="true"></i>
+					{#if successLabel}<span>{successLabel}</span>{/if}
+				{/if}
 			</span>
 		{/if}
 	</button>
@@ -155,17 +147,17 @@
 	.btn__content {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: $space-2;
 		white-space: nowrap;
 	}
 
 	.btn__overlay {
-		position: absolute;
-		inset: 0;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: $space-2;
+		white-space: nowrap;
 	}
 
 	.btn__spin {

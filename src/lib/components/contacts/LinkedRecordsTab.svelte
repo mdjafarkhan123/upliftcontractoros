@@ -25,9 +25,24 @@
 			count: counts.opportunities,
 			icon: 'ri-git-branch-line'
 		},
-		{ label: 'Jobs', href: `/jobs?contact_id=${contactId}`, count: counts.jobs, icon: 'ri-briefcase-line' },
-		{ label: 'Quotes', href: `/quotes?contact=${contactId}`, count: counts.quotes, icon: 'ri-file-text-line' },
-		{ label: 'Invoices', href: `/invoices?contact=${contactId}`, count: counts.invoices, icon: 'ri-receipt-line' },
+		{
+			label: 'Jobs',
+			href: `/jobs?contact_id=${contactId}`,
+			count: counts.jobs,
+			icon: 'ri-briefcase-line'
+		},
+		{
+			label: 'Quotes',
+			href: `/quotes?contact=${contactId}`,
+			count: counts.quotes,
+			icon: 'ri-file-text-line'
+		},
+		{
+			label: 'Invoices',
+			href: `/invoices?contact=${contactId}`,
+			count: counts.invoices,
+			icon: 'ri-receipt-line'
+		},
 		{
 			label: 'Conversations',
 			href: `/inbox?contact=${contactId}`,
@@ -75,7 +90,9 @@
 					{row.label}
 				</span>
 				<span class="contact-linked__right">
-					<span class="contact-linked__count {row.count > 0 ? 'contact-linked__count--active' : ''}">
+					<span
+						class="contact-linked__count {row.count > 0 ? 'contact-linked__count--active' : ''}"
+					>
 						{row.count}
 					</span>
 					{#if row.count > 0}
@@ -88,7 +105,9 @@
 </ul>
 
 {#if referralCount > 0}
-	<div style="margin-top:1rem; border:1px solid var(--color-border); border-radius:var(--radius-lg, 12px); overflow:hidden;">
+	<div
+		style="margin-top:1rem; border:1px solid var(--color-border); border-radius:var(--radius-lg, 12px); overflow:hidden;"
+	>
 		<button
 			type="button"
 			class="contact-linked__row"
@@ -121,7 +140,9 @@
 								<a
 									href={`/contacts/${ref.id}`}
 									style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem; border-radius:0.5rem; text-decoration:none; transition:background-color 0.15s;"
-									onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface-sunk)')}
+									onmouseenter={(e) =>
+										((e.currentTarget as HTMLElement).style.background =
+											'var(--color-bg-surface-sunk)')}
 									onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.background = '')}
 								>
 									<div>

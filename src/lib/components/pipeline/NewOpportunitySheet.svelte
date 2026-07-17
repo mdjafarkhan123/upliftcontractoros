@@ -211,9 +211,9 @@
 						{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value="">Unassigned</Select.Item>
+						<Select.Item value="" label="Unassigned">Unassigned</Select.Item>
 						{#each assignees as m (m.id)}
-							<Select.Item value={m.id}>{m.full_name}</Select.Item>
+							<Select.Item value={m.id} label={m.full_name}>{m.full_name}</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>

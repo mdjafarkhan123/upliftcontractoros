@@ -8,9 +8,9 @@ export type MemberStatusPreset = {
 	label: string;
 	description: string;
 	iconClass: string; // Remix Icon class, e.g. "ri-building-2-line"
-	dotClass: string;  // Tailwind bg-* — kept for MyStatusMenu until full BEM migration
+	dotClass: string; // Tailwind bg-* — kept for MyStatusMenu until full BEM migration
 	textClass: string; // Tailwind text-* — kept for MyStatusMenu until full BEM migration
-	dotColor: string;  // hex — use this for BEM components (status dot, avatar badge)
+	dotColor: string; // hex — use this for BEM components (status dot, avatar badge)
 	textColor: string; // hex — use this for BEM components (icon tint)
 };
 

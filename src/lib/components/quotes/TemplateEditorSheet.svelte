@@ -203,15 +203,8 @@
 				<span class="tpl-editor__subtotal-value">{formatCurrency(subtotal)}</span>
 			</div>
 			<div class="tpl-editor__actions">
-				<Button variant="outline" disabled={saving} onclick={() => (open = false)}>
-					Cancel
-				</Button>
-				<Button
-					loadingLabel="Saving…"
-					successLabel="Saved"
-					loading={saving}
-					onclick={save}
-				>
+				<Button variant="outline" disabled={saving} onclick={() => (open = false)}>Cancel</Button>
+				<Button loadingLabel="Saving…" successLabel="Saved" loading={saving} onclick={save}>
 					{mode === 'edit' ? 'Save changes' : 'Create template'}
 				</Button>
 			</div>

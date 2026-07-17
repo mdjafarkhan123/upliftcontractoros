@@ -56,10 +56,18 @@
 			color: var(--color-text-primary);
 			font: inherit;
 			font-size: $fs-body;
-			transition: border-color $duration-fast $ease-standard, box-shadow $duration-fast $ease-standard;
+			transition:
+				border-color $duration-fast $ease-standard,
+				box-shadow $duration-fast $ease-standard;
 
-			&::placeholder { color: var(--color-text-muted); }
-			&:focus { outline: none; border-color: var(--color-brand); box-shadow: var(--shadow-focus); }
+			&::placeholder {
+				color: var(--color-text-muted);
+			}
+			&:focus {
+				outline: none;
+				border-color: var(--color-brand);
+				box-shadow: var(--shadow-focus);
+			}
 		}
 	}
 </style>

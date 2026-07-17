@@ -138,7 +138,11 @@
 						<Button variant="outline" size="sm" onclick={() => copyUrl(link.slug)}>
 							<i class="ri-file-copy-line" aria-hidden="true"></i> Copy URL
 						</Button>
-						<Button variant="outline" size="sm" onclick={() => goto(`/settings/booking/${link.id}`)}>
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => goto(`/settings/booking/${link.id}`)}
+						>
 							Edit <i class="ri-arrow-right-s-line" aria-hidden="true"></i>
 						</Button>
 					</div>

@@ -40,16 +40,18 @@
 	// Heavy pop-ups (deal detail sheet, new-opportunity form, won/lost dialogs) are
 	// only needed after a later click, so they're loaded on demand — clicking the
 	// Pipeline tab parses just the board shell. Mirrors the Inbox thread-view pattern.
-	let NewOpportunitySheet =
-		$state<typeof import('$lib/components/pipeline/NewOpportunitySheet.svelte').default | null>(null);
-	let OpportunityDetailSheet =
-		$state<typeof import('$lib/components/pipeline/OpportunityDetailSheet.svelte').default | null>(
-			null
-		);
-	let LostReasonDialog =
-		$state<typeof import('$lib/components/pipeline/LostReasonDialog.svelte').default | null>(null);
-	let ConfirmDialog =
-		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	let NewOpportunitySheet = $state<
+		typeof import('$lib/components/pipeline/NewOpportunitySheet.svelte').default | null
+	>(null);
+	let OpportunityDetailSheet = $state<
+		typeof import('$lib/components/pipeline/OpportunityDetailSheet.svelte').default | null
+	>(null);
+	let LostReasonDialog = $state<
+		typeof import('$lib/components/pipeline/LostReasonDialog.svelte').default | null
+	>(null);
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
 
 	// --- Filters ---
 	const DEFAULT_FILTERS: PipelineFilterState = { q: '', assignee: 'all', close: 'all' };
@@ -542,7 +544,9 @@
 >
 	{#snippet actions()}
 		{#if canCreate}
-			<Button onclick={() => openCreate(null)}><i class="ri-add-line" aria-hidden="true"></i> New</Button>
+			<Button onclick={() => openCreate(null)}
+				><i class="ri-add-line" aria-hidden="true"></i> New</Button
+			>
 		{/if}
 	{/snippet}
 
@@ -576,11 +580,16 @@
 				</div>
 				<div class="pipeline-kpi__cell">
 					<div class="pipeline-kpi__label">Won MTD</div>
-					<div class="pipeline-kpi__value pipeline-kpi__value--success">{formatCurrency(wonMtd)}</div>
+					<div class="pipeline-kpi__value pipeline-kpi__value--success">
+						{formatCurrency(wonMtd)}
+					</div>
 				</div>
 			</div>
 		{/if}
-		<div class="pipeline" style="height: calc(100vh - 220px); min-height: 480px; touch-action: pan-x;">
+		<div
+			class="pipeline"
+			style="height: calc(100vh - 220px); min-height: 480px; touch-action: pan-x;"
+		>
 			{#each columns as col (col.stage.id)}
 				<PipelineColumn
 					stageId={col.stage.id}

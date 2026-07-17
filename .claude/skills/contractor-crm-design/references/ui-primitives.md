@@ -22,22 +22,22 @@ defense is this registry + the Styling Law below, applied by hand every time.
 component. Do not hand-roll or use the native element.** When in doubt about
 whether a primitive exists, `grep` `src/lib/components/ui/` FIRST.
 
-| You need…            | Use this built component                                   | Import path                              | BANNED (never do this)                          |
-| -------------------- | ---------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
-| **Date only**        | `Calendar`                                                 | `$lib/components/ui/calendar`            | `<input type="date">`                           |
-| **Date + time**      | `DateTimePicker`                                            | `$lib/components/ui/date-time-picker`   | `<input type="datetime-local">`, separate native date+time inputs |
-| **Time only**        | `DateTimePicker` (or grep `ui/` first for a time-only one) | `$lib/components/ui/date-time-picker`   | `<input type="time">`                           |
-| **Select / dropdown**| `Select.Root/Trigger/Value/Content/Item`                   | `$lib/components/ui/select`              | native `<select>`, the legacy `Select` wrapper for new UI |
-| **Text input**       | `Input`                                                    | `$lib/components/ui/input`              | bare styled `<input>` (unless it's a one-off already-BEM'd field row) |
-| **Textarea**         | `Textarea`                                                 | `$lib/components/ui/textarea`           | bare `<textarea>`                               |
-| **Menu (row/kebab)** | `DropdownMenu.*`                                            | `$lib/components/ui/dropdown-menu`      | hand-rolled popover menu                        |
-| **Dialog / modal**   | `Dialog.*`                                                  | `$lib/components/ui/dialog`             | hand-rolled overlay                             |
-| **Popover**          | `Popover.*`                                                 | `$lib/components/ui/popover`            | hand-rolled absolute-positioned div             |
-| **Sheet / drawer**   | `Sheet.*`                                                   | `$lib/components/ui/sheet`              | —                                               |
-| **Tabs**             | `Tabs.*`                                                    | `$lib/components/ui/tabs`               | —                                               |
-| **Switch / toggle**  | `Switch`                                                    | `$lib/components/ui/switch`             | `<input type="checkbox">` styled as a toggle    |
-| **Phone number**     | `PhoneField`                                                | `$lib/components/PhoneField.svelte` (verify path) | bare `<input>` for phone — see [[phone-field-industry-upgrade]] |
-| **Icons**            | `<i class="ri-*">` (Remix Icon)                            | global (remixicon CSS)                   | Lucide, any raw inline `<svg>` — see [[feedback-remix-icons]] |
+| You need…             | Use this built component                                   | Import path                                       | BANNED (never do this)                                                |
+| --------------------- | ---------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| **Date only**         | `Calendar`                                                 | `$lib/components/ui/calendar`                     | `<input type="date">`                                                 |
+| **Date + time**       | `DateTimePicker`                                           | `$lib/components/ui/date-time-picker`             | `<input type="datetime-local">`, separate native date+time inputs     |
+| **Time only**         | `DateTimePicker` (or grep `ui/` first for a time-only one) | `$lib/components/ui/date-time-picker`             | `<input type="time">`                                                 |
+| **Select / dropdown** | `Select.Root/Trigger/Value/Content/Item`                   | `$lib/components/ui/select`                       | native `<select>`, the legacy `Select` wrapper for new UI             |
+| **Text input**        | `Input`                                                    | `$lib/components/ui/input`                        | bare styled `<input>` (unless it's a one-off already-BEM'd field row) |
+| **Textarea**          | `Textarea`                                                 | `$lib/components/ui/textarea`                     | bare `<textarea>`                                                     |
+| **Menu (row/kebab)**  | `DropdownMenu.*`                                           | `$lib/components/ui/dropdown-menu`                | hand-rolled popover menu                                              |
+| **Dialog / modal**    | `Dialog.*`                                                 | `$lib/components/ui/dialog`                       | hand-rolled overlay                                                   |
+| **Popover**           | `Popover.*`                                                | `$lib/components/ui/popover`                      | hand-rolled absolute-positioned div                                   |
+| **Sheet / drawer**    | `Sheet.*`                                                  | `$lib/components/ui/sheet`                        | —                                                                     |
+| **Tabs**              | `Tabs.*`                                                   | `$lib/components/ui/tabs`                         | —                                                                     |
+| **Switch / toggle**   | `Switch`                                                   | `$lib/components/ui/switch`                       | `<input type="checkbox">` styled as a toggle                          |
+| **Phone number**      | `PhoneField`                                               | `$lib/components/PhoneField.svelte` (verify path) | bare `<input>` for phone — see [[phone-field-industry-upgrade]]       |
+| **Icons**             | `<i class="ri-*">` (Remix Icon)                            | global (remixicon CSS)                            | Lucide, any raw inline `<svg>` — see [[feedback-remix-icons]]         |
 
 ### Value types (important — this project's pickers use plain strings)
 
@@ -54,10 +54,72 @@ store/API boundary:
 So a date-range filter can bind `Calendar` straight to a `yyyy-mm-dd` store
 field and pass it to `/api/*?date_from=…` with no adapter.
 
+### `Select.Item` — `label` is REQUIRED, always
+
+Every `<Select.Item>` must pass a plain-text `label` alongside its markup:
+
+```svelte
+<Select.Item value="week1" label="Weekly on {weekday}">Weekly on {weekday}</Select.Item>
+```
+
+Bits UI does **not** read the rendered children to decide what the closed
+trigger shows — it stores the `label` prop and, when omitted, defaults it to
+the raw `value`. So a missing label makes `<Select.Value />` render `week1` /
+`job_start` / a raw UUID once the dropdown closes, while the list itself looks
+correct. It compiles clean and only shows up in the browser.
+
+Our wrapper types `label` as required (`select-item.svelte`), so forgetting it
+is now an `npm run check` error rather than a silent visual bug. When the item
+renders icons or extra markup, `label` is the plain-text version of it.
+
+### Declare the options as data and pass `items` to `Select.Root`
+
+This is Bits UI's own documented shape: one array, handed to `Root` **and**
+rendered from with `{#each}`.
+
+```svelte
+const options = $derived([
+	{ value: 'week1', label: `Weekly on ${weekday}` },
+	{ value: 'day', label: 'Daily' }
+]);
+
+<Select.Root {value} {items}={options} onValueChange={…}>
+	<Select.Trigger><Select.Value /></Select.Trigger>
+	<Select.Content>
+		{#each options as opt (opt.value)}
+			<Select.Item value={opt.value} label={opt.label}>{opt.label}</Select.Item>
+		{/each}
+	</Select.Content>
+</Select.Root>
+```
+
+Two things depend on `items`, both invisible until you look:
+
+1. **The closed trigger's label on first paint.** Bits resolves the label for
+   the current value by finding the `<Select.Item>` **in the DOM** — but our
+   content is portalled and only mounted while open. A preselected value on a
+   never-opened dropdown has nothing to read, so it prints the raw `value`.
+   `items` resolves it from data instead.
+2. **Typeahead on the closed trigger** — focus it, type, jump to the matching
+   option (what a native `<select>` does). Bits documents `items` as existing
+   for exactly this; it's off entirely without it.
+
+`items` is **required in practice for any select whose `value` is a `$derived`
+of other state** (e.g. `JobScheduleEditor`'s `repeatMode`, computed from the
+schedule): the value settles a tick after the dropdown closes, so the DOM
+lookup always loses the race and always prints the raw value.
+
+`select-root.svelte` also keeps a value→label registry (`labels.svelte.ts`)
+that every `<Select.Item>` writes to and `<Select.Value>` reads, which keeps
+the trigger correct after the dropdown has been opened once even without
+`items`. That's a safety net for the selects not yet migrated — not a reason to
+skip `items` on new code.
+
 ### Reference usage
 
 - `src/lib/components/jobs/JobScheduleEditor.svelte` — canonical
-  `DateTimePicker` usage (start/end, `min` chaining).
+  `DateTimePicker` usage (start/end, `min` chaining), and the "Repeats"
+  `Select` with dynamic `label`s.
 - `src/lib/components/ui/calendar/Calendar.svelte` /
   `date-time-picker/DateTimePicker.svelte` — read the `$props()` block for the
   exact API before using.
@@ -81,8 +143,8 @@ second component ships unstyled.
 — it will not match the identical `class="job-section__edit"` rendered by
 `ComponentB.svelte`. Both compile with zero warnings.
 
-**The test:** *"If I changed this rule, would I expect it to change on every
-page/component that uses the class, or just this one?"*
+**The test:** _"If I changed this rule, would I expect it to change on every
+page/component that uses the class, or just this one?"_
 Every → global partial. Just this one → scoped (and confirm the class name
 appears in no other file).
 

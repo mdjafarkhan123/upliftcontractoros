@@ -24,10 +24,10 @@
 
 ### Terminal statuses (NOT columns — `status = 'won' | 'lost'`)
 
-| Status   | Color | What It Means                | Board Behavior                  |
-| -------- | ----- | ---------------------------- | ------------------------------- |
-| **Won**  | Green | Client accepted              | Leaves board; auto-archive 7d   |
-| **Lost** | Red   | Client declined or ghosted   | Leaves board; auto-archive 30d  |
+| Status   | Color | What It Means              | Board Behavior                 |
+| -------- | ----- | -------------------------- | ------------------------------ |
+| **Won**  | Green | Client accepted            | Leaves board; auto-archive 7d  |
+| **Lost** | Red   | Client declined or ghosted | Leaves board; auto-archive 30d |
 
 ---
 

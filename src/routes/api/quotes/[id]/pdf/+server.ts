@@ -143,8 +143,7 @@ export const POST: RequestHandler = async (event) => {
 		row.quote.status === 'accepted' && row.quote.acceptance_signature_name
 			? {
 					signerName: row.quote.acceptance_signature_name,
-					signedAt:
-						row.quote.acceptance_signed_at ?? row.quote.accepted_at ?? row.quote.created_at,
+					signedAt: row.quote.acceptance_signed_at ?? row.quote.accepted_at ?? row.quote.created_at,
 					imageUrl: acceptanceSignatureUrl,
 					inPerson: !!row.quote.acceptance_signature_media_id
 				}

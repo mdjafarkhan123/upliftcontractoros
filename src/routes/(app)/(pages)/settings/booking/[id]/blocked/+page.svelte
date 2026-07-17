@@ -240,12 +240,7 @@
 				>
 					Cancel
 				</Button>
-				<Button
-					type="submit"
-					loadingLabel="Saving…"
-					successLabel="Added"
-					loading={creating}
-				>
+				<Button type="submit" loadingLabel="Saving…" successLabel="Added" loading={creating}>
 					Add override
 				</Button>
 			</div>

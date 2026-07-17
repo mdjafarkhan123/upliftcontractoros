@@ -12,7 +12,8 @@ import {
 	opportunities,
 	jobFormSubmissions,
 	jobFormSubmissionFields,
-	appointments
+	appointments,
+	requests
 } from '$lib/server/db/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -53,7 +54,8 @@ const ALLOWED_PURPOSE_TAGS = [
 	'job_form_signature',
 	'job_visit_photo',
 	'job_signoff_signature',
-	'quote_signature'
+	'quote_signature',
+	'request_photo'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
 
@@ -66,6 +68,8 @@ const JOB_FORM_PHOTO_CAP = 6;
 // Max photos a single job visit can carry. Crews shoot before/after sets per visit, so this
 // is generous relative to a form field.
 const JOB_VISIT_PHOTO_CAP = 20;
+// Max photos per request ("Share images of the work to be done" — Jobber caps at 10).
+const REQUEST_PHOTO_CAP = 10;
 
 const uploadSchema = z.object({
 	purpose_tag: z.enum(ALLOWED_PURPOSE_TAGS),
@@ -74,6 +78,7 @@ const uploadSchema = z.object({
 	job_id: z.string().uuid().optional(),
 	quote_id: z.string().uuid().optional(),
 	invoice_id: z.string().uuid().optional(),
+	request_id: z.string().uuid().optional(),
 	// Binds a quote_line_item_photo to a specific quote line by its stable line_key.
 	line_key: z.string().uuid().optional()
 });
@@ -114,13 +119,23 @@ export const POST: RequestHandler = async (event) => {
 		job_id: formData.get('job_id') || undefined,
 		quote_id: formData.get('quote_id') || undefined,
 		invoice_id: formData.get('invoice_id') || undefined,
+		request_id: formData.get('request_id') || undefined,
 		line_key: formData.get('line_key') || undefined
 	});
 	if (!parsed.success) {
 		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
-	const { purpose_tag, contact_id, opportunity_id, job_id, quote_id, invoice_id, line_key } =
-		parsed.data;
+	const {
+		purpose_tag,
+		contact_id,
+		opportunity_id,
+		job_id,
+		quote_id,
+		invoice_id,
+		request_id,
+		line_key
+	} = parsed.data;
+	const isRequestPhoto = purpose_tag === 'request_photo';
 	const isLineItemPhoto = purpose_tag === 'quote_line_item_photo';
 	// Photo or captured signature bound to a job-form submission field (job_id + line_key=field id).
 	const isJobFormMedia = purpose_tag === 'job_form_photo' || purpose_tag === 'job_form_signature';
@@ -190,6 +205,12 @@ export const POST: RequestHandler = async (event) => {
 			},
 			{ status: 403 }
 		);
+	}
+
+	// request_id is only ever a parent for request photos — reject it elsewhere so
+	// the exactly-one-parent CHECK can't be tripped by a stray field.
+	if (request_id && !isRequestPhoto) {
+		return json({ error: `${purpose_tag} uploads must not include a request_id` }, { status: 422 });
 	}
 
 	// Validate purpose_tag → parent FK requirements
@@ -315,10 +336,22 @@ export const POST: RequestHandler = async (event) => {
 		if (purpose_tag === 'invoice_attachment' && !invoice_id) {
 			return json({ error: 'invoice_id is required for invoice_attachment' }, { status: 422 });
 		}
+		if (isRequestPhoto) {
+			// Bound to a request ("work to be done" images): parent is the request only.
+			if (!request_id) {
+				return json({ error: 'request_id is required for request_photo' }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || job_id || quote_id || invoice_id) {
+				return json(
+					{ error: 'request_photo must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
 		if (JOB_PURPOSE_TAGS.includes(purpose_tag) && !job_id) {
 			return json({ error: `job_id is required for ${purpose_tag}` }, { status: 422 });
 		}
-		if (!contact_id && !opportunity_id && !job_id && !quote_id && !invoice_id) {
+		if (!contact_id && !opportunity_id && !job_id && !quote_id && !invoice_id && !request_id) {
 			return json(
 				{
 					error:
@@ -464,10 +497,7 @@ export const POST: RequestHandler = async (event) => {
 					)
 				);
 			if (count >= JOB_VISIT_PHOTO_CAP) {
-				return json(
-					{ error: `Up to ${JOB_VISIT_PHOTO_CAP} photos per visit.` },
-					{ status: 422 }
-				);
+				return json({ error: `Up to ${JOB_VISIT_PHOTO_CAP} photos per visit.` }, { status: 422 });
 			}
 		}
 
@@ -518,10 +548,7 @@ export const POST: RequestHandler = async (event) => {
 					)
 				);
 			if (count >= 1) {
-				return json(
-					{ error: 'A signature is already captured for this quote.' },
-					{ status: 422 }
-				);
+				return json({ error: 'A signature is already captured for this quote.' }, { status: 422 });
 			}
 		}
 
@@ -559,6 +586,35 @@ export const POST: RequestHandler = async (event) => {
 			)
 			.limit(1);
 		if (!inv) return json({ error: 'Invoice not found' }, { status: 404 });
+	}
+	if (request_id) {
+		const [r] = await db
+			.select({ id: requests.id })
+			.from(requests)
+			.where(
+				and(
+					eq(requests.id, request_id),
+					eq(requests.org_id, auth.orgId),
+					isNull(requests.deleted_at)
+				)
+			)
+			.limit(1);
+		if (!r) return json({ error: 'Request not found' }, { status: 404 });
+
+		// Cap before spending an R2 round-trip.
+		const [{ count }] = await db
+			.select({ count: sql<number>`count(*)::int` })
+			.from(media)
+			.where(
+				and(
+					eq(media.request_id, request_id),
+					eq(media.purpose_tag, 'request_photo'),
+					isNull(media.deleted_at)
+				)
+			);
+		if (count >= REQUEST_PHOTO_CAP) {
+			return json({ error: `Up to ${REQUEST_PHOTO_CAP} photos per request.` }, { status: 422 });
+		}
 	}
 
 	// Read file bytes
@@ -602,6 +658,11 @@ export const POST: RequestHandler = async (event) => {
 	// Visit photos are images only.
 	if (isJobVisitPhoto && !isImage) {
 		return json({ error: 'Visit photos must be an image (JPEG, PNG, WebP).' }, { status: 422 });
+	}
+
+	// Request photos are images only ("share images of the work to be done").
+	if (isRequestPhoto && !isImage) {
+		return json({ error: 'Request photos must be an image (JPEG, PNG, WebP).' }, { status: 422 });
 	}
 
 	// Sign-off signatures are images only (a PNG from the signature pad).
@@ -686,6 +747,7 @@ export const POST: RequestHandler = async (event) => {
 					job_id: job_id ?? null,
 					quote_id: quote_id ?? null,
 					invoice_id: invoice_id ?? null,
+					request_id: request_id ?? null,
 					line_key: line_key ?? null,
 					r2_key: r2Key,
 					thumbnail_key: thumbnailKey,

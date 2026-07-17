@@ -169,9 +169,9 @@
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
-				<Select.Item value="">No service address</Select.Item>
+				<Select.Item value="" label="No service address">No service address</Select.Item>
 				{#each addresses as a (a.id)}
-					<Select.Item value={a.id}>
+					<Select.Item value={a.id} label={fmt(a)}>
 						<span class="service-address__opt">
 							<span class="service-address__opt-main">{fmt(a)}</span>
 							<span class="service-address__opt-sub">
@@ -222,11 +222,7 @@
 				<p class="service-address__sheet-error">{formError}</p>
 			{/if}
 			<div class="service-address__sheet-actions">
-				<Button
-					variant="secondary"
-					onclick={() => (sheetOpen = false)}
-					disabled={saving}
-				>
+				<Button variant="secondary" onclick={() => (sheetOpen = false)} disabled={saving}>
 					Cancel
 				</Button>
 				<Button

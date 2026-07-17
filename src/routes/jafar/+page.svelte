@@ -83,9 +83,7 @@
 							maxlength="6"
 							class="jafar-login__totp-input"
 						/>
-						<p class="jafar-login__totp-hint">
-							6-digit code from your authenticator app (TOTP).
-						</p>
+						<p class="jafar-login__totp-hint">6-digit code from your authenticator app (TOTP).</p>
 					</div>
 
 					<button type="submit" disabled={loading} class="jafar-btn jafar-btn--red-lg">

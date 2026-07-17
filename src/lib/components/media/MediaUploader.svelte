@@ -18,6 +18,7 @@
 			job_id?: string;
 			quote_id?: string;
 			invoice_id?: string;
+			request_id?: string;
 		};
 		label?: string;
 		onUploaded: (item: LocalMediaItem) => void;
@@ -70,6 +71,7 @@
 				if (parentFk.job_id) formData.append('job_id', parentFk.job_id);
 				if (parentFk.quote_id) formData.append('quote_id', parentFk.quote_id);
 				if (parentFk.invoice_id) formData.append('invoice_id', parentFk.invoice_id);
+				if (parentFk.request_id) formData.append('request_id', parentFk.request_id);
 
 				// Use XHR for reliable upload progress on mobile networks
 				const xhr = new XMLHttpRequest();

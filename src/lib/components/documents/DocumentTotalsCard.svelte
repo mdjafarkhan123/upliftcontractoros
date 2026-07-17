@@ -72,7 +72,9 @@
 		}
 		return 'Deposit due';
 	});
-	const showBalance = $derived(amount_paid !== undefined && amount_paid !== null && Number(amount_paid) > 0);
+	const showBalance = $derived(
+		amount_paid !== undefined && amount_paid !== null && Number(amount_paid) > 0
+	);
 	const tipNum = $derived(Number(tip_total ?? 0));
 	const lateFeeNum = $derived(Number(late_fee_total ?? 0));
 </script>

@@ -2,7 +2,16 @@
 // `tags` are operational descriptors (homeowner, company, vip, hot, …).
 // Never put lifecycle values inside `tags` — UI vocabulary lives in
 // $lib/contacts/tags.ts.
-import { pgTable, pgEnum, uuid, text, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import {
+	pgTable,
+	pgEnum,
+	uuid,
+	text,
+	boolean,
+	integer,
+	jsonb,
+	timestamp
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';

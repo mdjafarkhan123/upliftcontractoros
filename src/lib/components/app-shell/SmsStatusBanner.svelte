@@ -10,13 +10,7 @@
 	//   Case C — SMS enabled, has number, approval pending (carrier details on file) →
 	//            red "pending approval" banner; dismissible but reappears on refresh.
 	// Anything else (SMS disabled, approved, not_required) renders nothing.
-	let {
-		smsEnabled,
-		hasNumber,
-		approvalStatus,
-		country,
-		carrierComplete
-	} = $props<{
+	let { smsEnabled, hasNumber, approvalStatus, country, carrierComplete } = $props<{
 		smsEnabled: boolean;
 		hasNumber: boolean;
 		approvalStatus: 'not_required' | 'pending' | 'approved' | 'rejected';
@@ -50,13 +44,8 @@
 		<i class="ri-alert-line mt-0.5 shrink-0" aria-hidden="true"></i>
 		<div class="flex-1 leading-snug">
 			<span class="font-medium">Finish carrier registration.</span>
-			<span class="ml-1">
-				Outbound texting stays off until you submit your business details.
-			</span>
-			<a
-				href="/settings/integrations"
-				class="ml-1 underline underline-offset-2 hover:no-underline"
-			>
+			<span class="ml-1"> Outbound texting stays off until you submit your business details. </span>
+			<a href="/settings/integrations" class="ml-1 underline underline-offset-2 hover:no-underline">
 				Complete it now
 			</a>
 		</div>
@@ -89,9 +78,8 @@
 		<i class="ri-message-line shrink-0" aria-hidden="true"></i>
 		<div class="flex-1 leading-snug">
 			<span class="font-medium">SMS is now available.</span>
-			<a
-				href="/settings/integrations"
-				class="ml-2 underline underline-offset-2 hover:no-underline">Set up your business number</a
+			<a href="/settings/integrations" class="ml-2 underline underline-offset-2 hover:no-underline"
+				>Set up your business number</a
 			>
 		</div>
 	</div>

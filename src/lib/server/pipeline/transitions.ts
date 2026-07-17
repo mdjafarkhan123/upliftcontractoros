@@ -80,6 +80,10 @@ export async function markOpportunityWon(
 					opportunity_id: updatedOpp.id,
 					contact_id: updatedOpp.contact_id,
 					title: updatedOpp.title,
+					// A won opportunity becomes a one-off job: this path carries no repeat rule and
+					// no schedule, and one-off is the safe default because the type is immutable —
+					// the contractor can duplicate as recurring if the work turns out to repeat.
+					job_type: 'one_off',
 					assigned_to: updatedOpp.assigned_to ?? null,
 					service_address_line_1: addr?.address_line_1 ?? null,
 					service_address_line_2: addr?.address_line_2 ?? null,

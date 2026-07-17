@@ -171,8 +171,7 @@
 					}
 				: null;
 			const result = await onConfirm(channels, edited);
-			const normalized: ConfirmResult =
-				typeof result === 'boolean' ? { ok: result } : result;
+			const normalized: ConfirmResult = typeof result === 'boolean' ? { ok: result } : result;
 			if (normalized.ok) {
 				open = false;
 			} else if (normalized.channelError) {
@@ -299,8 +298,8 @@
 							class="send-doc__textarea"
 						></textarea>
 						<p class="send-doc__count">
-							≈ {smsSegments} text message{smsSegments === 1 ? '' : 's'} · ~{smsCharLen} characters.
-							Keep it short — each segment can add cost. The secure link is always included.
+							≈ {smsSegments} text message{smsSegments === 1 ? '' : 's'} · ~{smsCharLen} characters. Keep
+							it short — each segment can add cost. The secure link is always included.
 						</p>
 						{#if smsPreview.trim().length > 0}
 							<div class="send-doc__preview">
@@ -327,7 +326,12 @@
 								<i class="ri-refresh-line" aria-hidden="true"></i> Reset
 							</button>
 						</div>
-						<input id="notify-subject" bind:value={subjectValue} maxlength="200" class="field__input" />
+						<input
+							id="notify-subject"
+							bind:value={subjectValue}
+							maxlength="200"
+							class="field__input"
+						/>
 						{#if subjectPreview.trim().length > 0 && subjectValue !== defaultSubject}
 							<p class="send-doc__preview-text send-doc__preview-text--single">
 								Preview: {subjectPreview}

@@ -137,7 +137,9 @@
 						</Select.Trigger>
 						<Select.Content>
 							{#each FREQUENCIES as f (f)}
-								<Select.Item value={f}>{INVOICE_FREQUENCY_LABEL[f]}</Select.Item>
+								<Select.Item value={f} label={INVOICE_FREQUENCY_LABEL[f]}>
+									{INVOICE_FREQUENCY_LABEL[f]}
+								</Select.Item>
 							{/each}
 						</Select.Content>
 					</Select.Root>

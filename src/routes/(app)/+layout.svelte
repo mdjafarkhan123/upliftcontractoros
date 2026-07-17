@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, preloadCode } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { onMount, onDestroy } from 'svelte';
 	import { setMemberContext } from '$lib/context/member';
 	import { setOrgContext } from '$lib/context/org';
@@ -28,6 +29,20 @@
 
 	let moreOpen = $state(false);
 	let setupBannerDismissed = $state(false);
+
+	// Desktop sidebar collapse — persisted per browser. SSR renders expanded;
+	// the browser guard prevents state leaking between server requests.
+	const SIDEBAR_COLLAPSED_KEY = 'cos:sidebar-collapsed';
+	let sidebarCollapsed = $state(browser && localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+
+	function toggleSidebar() {
+		sidebarCollapsed = !sidebarCollapsed;
+		try {
+			localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+		} catch {
+			// storage unavailable (private mode) — collapse still works for the session
+		}
+	}
 
 	function handleCmdK(e: KeyboardEvent) {
 		if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -212,8 +227,14 @@
 		<Toaster />
 	</div>
 {:else}
-	<div class="app-shell">
-		<DesktopSidebar items={visibleNav} member={session.member} org={session.org} />
+	<div class="app-shell{sidebarCollapsed ? ' app-shell--nav-collapsed' : ''}">
+		<DesktopSidebar
+			items={visibleNav}
+			member={session.member}
+			org={session.org}
+			collapsed={sidebarCollapsed}
+			onToggle={toggleSidebar}
+		/>
 		<div class="app-shell__content">
 			<div class="app-shell__topbar">
 				<AppHeader org={session.org} member={session.member} />

@@ -7,6 +7,7 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import InlineEditRow from '$lib/components/shared/InlineEditRow.svelte';
 	import { InlineEditController } from '$lib/components/shared/inlineEditController.svelte';
+	import { monthCellsOf } from '$lib/jobs/recurrence';
 	import JobStatusBadge from '$lib/components/jobs/JobStatusBadge.svelte';
 	import JobLineItemsSection from '$lib/components/jobs/JobLineItemsSection.svelte';
 	import JobTasksSection from '$lib/components/jobs/JobTasksSection.svelte';
@@ -24,12 +25,11 @@
 	import JobLinksSection from '$lib/components/jobs/JobLinksSection.svelte';
 	import JobVisitsSection from '$lib/components/jobs/JobVisitsSection.svelte';
 	import JobSignoffSection from '$lib/components/jobs/JobSignoffSection.svelte';
-	import JobTimelineSection from '$lib/components/jobs/JobTimelineSection.svelte';
 	import JobReviewIndicator from '$lib/components/jobs/JobReviewIndicator.svelte';
 	import OnMyWayDialog from '$lib/components/jobs/OnMyWayDialog.svelte';
 	import JobClientCard from '$lib/components/jobs/JobClientCard.svelte';
 	import JobTagsEditor from '$lib/components/jobs/JobTagsEditor.svelte';
-	import JobTypePicker from '$lib/components/jobs/JobTypePicker.svelte';
+	import JobCategoryPicker from '$lib/components/jobs/JobCategoryPicker.svelte';
 	import RecurringScheduleModal from '$lib/components/jobs/RecurringScheduleModal.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import EditActionBar from '$lib/components/shared/EditActionBar.svelte';
@@ -37,7 +37,7 @@
 	import { jobsStore } from '$lib/stores/jobs.svelte';
 	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import type { JobDetail, JobStatus } from '$lib/types/jobs';
+	import type { JobDetail, JobStatus, AppointmentStatusJobEcho } from '$lib/types/jobs';
 	import type { QuoteLineDraft } from '$lib/types/quotes';
 	import { JobFormState, defaultNotifyChannel } from '$lib/jobs/jobForm.svelte';
 	import MediaGallery from '$lib/components/media/MediaGallery.svelte';
@@ -77,7 +77,13 @@
 	const canCancel = $derived(member().can_view_full_pipeline);
 	const canInvoice = $derived(member().can_create_invoices);
 	// A recurring job bills on a schedule (S4); a one-off job uses the payment schedule (S3).
-	const isRecurring = $derived(!!job?.recurrence);
+	// Reads the STORED type: an "as needed" job has no rule but is still recurring, so testing
+	// `!!job.recurrence` here used to mis-read it as one-off and show the wrong billing rail.
+	const isRecurring = $derived(job?.job_type === 'recurring');
+	// Separate question from `isRecurring`: does this job's scheduled_start hold a frozen series
+	// anchor / job window instead of a real visit date? True whenever a repeat rule exists — which
+	// a ONE-OFF job may also have — or the job is "as needed". Only the status badge needs it.
+	const hasSeriesAnchor = $derived(!!job?.recurrence || !!job?.schedule_as_needed);
 
 	const headerVM = $derived.by(() => {
 		if (job) return { contact_name: job.contact_name, title: job.title, status: job.status };
@@ -165,7 +171,7 @@
 		form.notifyChannel = defaultNotifyChannel(!!j.contact_phone, !!j.contact_email);
 		form.scopeOfWork = j.scope_of_work ?? '';
 		form.notes = j.notes ?? '';
-		form.jobType = j.job_type ?? '';
+		form.jobCategory = j.job_category ?? '';
 		form.tags = [...(j.tags ?? [])];
 		form.lineItems = draftsFromJob(j);
 		form.discountType = (j.discount_type as 'none' | 'fixed' | 'percent') ?? 'none';
@@ -211,8 +217,9 @@
 				month_mode: rec.month_mode ?? 'day_of_month',
 				month_days: rec.month_days ?? [],
 				month_last_day: rec.month_last_day ?? false,
-				month_weeks: rec.month_weeks ?? [],
-				month_weekdays: rec.month_weekdays ?? []
+				// Legacy rules stored weeks × weekdays as two lists; monthCellsOf flattens them
+				// into the grid's cells so an old job opens with the right squares lit.
+				month_cells: monthCellsOf(rec)
 			};
 			form.endType = rec.end_type;
 			form.endAfterCount = rec.end_after_count ? String(rec.end_after_count) : '6';
@@ -228,13 +235,31 @@
 				month_mode: 'day_of_month',
 				month_days: [],
 				month_last_day: false,
-				month_weeks: [],
-				month_weekdays: []
+				month_cells: []
 			};
 			form.endType = 'after';
 			form.endAfterCount = '6';
 			form.endAfterUnit = 'months';
 			form.endOn = '';
+		}
+		// Jobber "As needed": recurring-by-intent with no rule and no visits, but WITH a stored
+		// job window (start date + end boundary). Overrides the one-off defaults the (null)
+		// recurrence set above so the editor re-opens in As-needed mode with its window.
+		form.scheduleAsNeeded = j.schedule_as_needed;
+		if (j.schedule_as_needed) {
+			form.jobMode = 'recurring';
+			form.scheduleLater = false;
+			form.recurConfigured = false;
+			// Start is a noon-anchored day bucket — show the date, leave the time blank; the end
+			// boundary lives in the Ends-on field, NOT the day end-time field.
+			form.scheduledStart = toInputValue(j.scheduled_start).split('T')[0];
+			form.scheduledEnd = '';
+			// The stored boundary reads back as an "Ends on" date (an "Ends after N" input was
+			// converted to its concrete date on save).
+			if (j.scheduled_end) {
+				form.endType = 'on';
+				form.endOn = toInputValue(j.scheduled_end).split('T')[0];
+			}
 		}
 	}
 
@@ -260,7 +285,7 @@
 	// so every editor stays in sync. Only one editor is open at a time (`anySectionEditing`).
 	const editCtl = new InlineEditController();
 	let titleDraft = $state('');
-	let jobTypeDraft = $state('');
+	let jobCategoryDraft = $state('');
 	let tagsDraft = $state<string[]>([]);
 	let assigneeDraft = $state('');
 	let scopeDraft = $state('');
@@ -343,13 +368,39 @@
 	}
 
 	// Scheduling/completing a visit from JobVisitsSection re-pins the job's own
-	// scheduled_start/status on the server (the visit IS the one-off job's schedule).
-	// That job row isn't part of the visit fetch, so we must force-refetch it and mirror
-	// the fresh schedule into the LIST store — otherwise the status badge stays stale on
-	// both the detail page and the jobs list (giving a dated visit with an "Unscheduled"
-	// job). jobVersion++ still refreshes the visits list + timeline themselves.
-	async function reloadJobAfterVisitChange() {
+	// scheduled_start on the server (the visit IS the one-off job's schedule). The PATCH
+	// echoes the fresh schedule signals back, so we mirror them into the detail + list
+	// caches locally — no full /api/jobs/:id reload (the ~13-query endpoint). Falls back
+	// to a forced reload only when no echo is supplied. jobVersion++ still refreshes the
+	// visits list + timeline themselves.
+	async function reloadJobAfterVisitChange(echo?: AppointmentStatusJobEcho | null) {
 		jobVersion++;
+		if (echo) {
+			jobDetailStore.patch(id, (prev) => ({
+				...prev,
+				next_open_visit_start: echo.next_open_visit_start,
+				has_open_visits: echo.has_open_visits,
+				...(echo.repinned
+					? { scheduled_start: echo.scheduled_start, scheduled_end: echo.scheduled_end }
+					: {})
+			}));
+			jobsStore.update({
+				id,
+				next_open_visit_start: echo.next_open_visit_start,
+				has_open_visits: echo.has_open_visits,
+				...(echo.repinned
+					? { scheduled_start: echo.scheduled_start, scheduled_end: echo.scheduled_end }
+					: {})
+			});
+			// Keep the schedule editor's seed in sync when it isn't open (mirrors the
+			// resetFormFromJob path the full reload used to take).
+			if (!anySectionEditing && echo.repinned) {
+				form.scheduledStart = toInputValue(echo.scheduled_start);
+				form.scheduledEnd = toInputValue(echo.scheduled_end);
+				form.scheduleLater = !echo.scheduled_start;
+			}
+			return;
+		}
 		await jobDetailStore.load(id, true);
 		const fresh = jobDetailStore.get(id);
 		if (!fresh) return;
@@ -360,7 +411,9 @@
 			assigned_to: fresh.assigned_to,
 			assignee_name: fresh.assignee_name,
 			scheduled_start: fresh.scheduled_start,
-			scheduled_end: fresh.scheduled_end
+			scheduled_end: fresh.scheduled_end,
+			next_open_visit_start: fresh.next_open_visit_start,
+			has_open_visits: fresh.has_open_visits
 		});
 		if (!anySectionEditing) resetFormFromJob(fresh);
 	}
@@ -399,30 +452,40 @@
 
 	async function saveSchedule() {
 		if (!job) return;
+		const asNeeded = form.scheduleAsNeeded;
+		const wasAsNeeded = job.schedule_as_needed;
 		const recurringMode = form.jobMode === 'recurring';
+		// The RULE — not the toggle — decides how this job is scheduled and saved. A one-off may
+		// carry a repeat rule, in which case its start date is a series anchor and its visits are
+		// generated, exactly like a recurring job's. (buildRecurrence returns null for as-needed.)
+		const nextRecurrence = form.buildRecurrence();
+		const seriesMode = !!nextRecurrence;
 
-		// Recurring-schedule validation only — billing validation stays with the billing section.
-		if (recurringMode) {
-			if (!form.recurConfigured) return failSchedule('Set up the repeat rule first.');
-			if (!form.scheduledStart)
-				return failSchedule('Pick a start date for the recurring schedule.');
+		// Schedule validation only — billing validation stays with the billing section.
+		// A recurring job must repeat somehow: either a rule or "as needed".
+		if (recurringMode && !asNeeded && !form.recurConfigured)
+			return failSchedule('Set up the repeat rule first.');
+		// Anything with a rule needs an anchor + end condition. "As needed" has no rule but still
+		// requires the job window (start + end boundary).
+		if (seriesMode || asNeeded) {
+			if (!form.scheduledStart) return failSchedule('Pick a start date for the schedule.');
 			if (form.endType === 'on' && !form.endOn) return failSchedule('Set an end date.');
 			if (
 				form.endType === 'after' &&
 				(!Number(form.endAfterCount) || Number(form.endAfterCount) < 1)
 			)
 				return failSchedule('Set how long the schedule runs.');
-			if (form.preview && form.preview.count === 0)
+			if (seriesMode && form.preview && form.preview.count === 0)
 				return failSchedule('This schedule produces no visits. Adjust the rule.');
 		}
 
 		// Confirm before rebuilding visits — only when the rule/anchor actually changed.
-		const nextRecurrence = recurringMode ? form.buildRecurrence() : null;
 		const recurrenceChanged = JSON.stringify(nextRecurrence ?? null) !== originalRecurrenceJSON;
 		const wasRecurring = originalRecurrenceJSON !== 'null';
+		// Switching a job that HAS visits to "As needed" clears them, so confirm that too.
+		const switchingToAsNeeded = asNeeded && !wasAsNeeded;
 		if (
-			recurrenceChanged &&
-			(wasRecurring || recurringMode) &&
+			((recurrenceChanged && (wasRecurring || seriesMode)) || switchingToAsNeeded) &&
 			!confirm(
 				'This updates the upcoming visits on the calendar. Past visits and any already-invoiced visits stay unchanged. Continue?'
 			)
@@ -430,38 +493,66 @@
 			return;
 		}
 
-		const newStartISO = recurringMode
+		// "As needed" stores the job WINDOW (start day + end boundary from Ends after/on) but
+		// creates no visits. A date-only start anchors at noon (DST-safe day bucket).
+		const newStartISO = asNeeded
 			? form.scheduledStart
-				? new Date(form.scheduledStart).toISOString()
+				? form.scheduledStart.includes('T')
+					? new Date(form.scheduledStart).toISOString()
+					: new Date(`${form.scheduledStart.split('T')[0]}T12:00:00`).toISOString()
 				: null
-			: !form.scheduleLater && !form.anytime && form.scheduledStart.includes('T')
-				? new Date(form.scheduledStart).toISOString()
-				: null;
-		const newEndISO = recurringMode
-			? !form.anytime && form.scheduledEnd
-				? new Date(form.scheduledEnd).toISOString()
-				: null
-			: !form.scheduleLater && !form.anytime && form.scheduledEnd.includes('T')
-				? new Date(form.scheduledEnd).toISOString()
-				: null;
+			: seriesMode
+				? form.scheduledStart
+					? new Date(form.scheduledStart).toISOString()
+					: null
+				: !form.scheduleLater && !form.anytime && form.scheduledStart.includes('T')
+					? new Date(form.scheduledStart).toISOString()
+					: null;
+		const newEndISO = asNeeded
+			? (form.asNeededEndBoundary()?.toISOString() ?? null)
+			: seriesMode
+				? !form.anytime && form.scheduledEnd
+					? new Date(form.scheduledEnd).toISOString()
+					: null
+				: !form.scheduleLater && !form.anytime && form.scheduledEnd.includes('T')
+					? new Date(form.scheduledEnd).toISOString()
+					: null;
 
 		const payload: Record<string, unknown> = {
 			scheduled_start: newStartISO,
-			scheduled_end: newEndISO
+			scheduled_end: newEndISO,
+			// Always send the flag so a job entering OR leaving "As needed" is recorded correctly.
+			schedule_as_needed: asNeeded
 		};
-		if (recurringMode) {
+		if (asNeeded) {
+			// "As needed": strip the rule and any recurring-billing config; the server clears the
+			// job's live visit so it sits in Action Required with nothing on the calendar.
+			payload.recurrence = null;
+			payload.billing_type = null;
+			payload.invoice_frequency = null;
+			payload.fixed_invoice_amount = null;
+		} else if (seriesMode) {
+			// Any job with a rule — including a one-off — sends it; the server freezes past /
+			// invoiced visits and rebuilds the upcoming ones from it.
 			payload.recurrence = nextRecurrence;
 			payload.visit_instructions = form.visitInstructions.trim() || null;
 		} else if (wasRecurring) {
-			// Job is no longer recurring — drop the rule and any recurring-billing config so a
-			// one-off job can't keep an invisible recurring-billing schedule.
+			// The rule was dropped ("Does not repeat"). Clear it, plus any recurring-billing config
+			// so a job can't keep an invisible recurring-billing schedule with nothing generating
+			// visits. job_type itself is immutable and is never sent.
 			payload.recurrence = null;
 			payload.billing_type = null;
 			payload.invoice_frequency = null;
 			payload.fixed_invoice_amount = null;
 		}
 		// Notify the client only when the start moved to a real new date and a channel is chosen.
-		if (newStartISO && newStartISO !== originalStartISO && form.notifyChannel !== 'none') {
+		// Never for "As needed" — its start is a window anchor, not a visit the client attends.
+		if (
+			!asNeeded &&
+			newStartISO &&
+			newStartISO !== originalStartISO &&
+			form.notifyChannel !== 'none'
+		) {
 			payload.notify_channel = form.notifyChannel;
 		}
 
@@ -586,7 +677,8 @@
 
 	async function saveBilling() {
 		if (!job) return;
-		const recurringMode = form.jobMode === 'recurring';
+		// "As needed" jobs use the one-off payment schedule (they have no recurring rule).
+		const recurringMode = form.jobMode === 'recurring' && !form.scheduleAsNeeded;
 		const payload: Record<string, unknown> = {};
 
 		if (recurringMode) {
@@ -655,7 +747,7 @@
 		title: 'Title',
 		scope: 'Scope of work',
 		notes: 'Notes',
-		job_type: 'Job type',
+		job_category: 'Job category',
 		assignee: 'Assigned tech',
 		tags: 'Tags'
 	};
@@ -870,6 +962,7 @@
 				{#if scheduleEditing}
 					<JobScheduleEditor
 						{form}
+						jobTypeLocked
 						notifyVisible={!!form.scheduledStart &&
 							toInputValue(originalStartISO) !== form.scheduledStart}
 						notifyLabel="Notify client of new time"
@@ -897,6 +990,9 @@
 						reloadKey={jobVersion}
 						recurrence={job.recurrence}
 						appointmentCount={job.appointment_count}
+						scheduledStart={job.scheduled_start}
+						scheduledEnd={job.scheduled_end}
+						scheduleAsNeeded={job.schedule_as_needed}
 						onEditAll={canInlineEdit && !anySectionEditing ? startScheduleEdit : undefined}
 						onChanged={reloadJobAfterVisitChange}
 					/>
@@ -975,7 +1071,7 @@
 				<!-- Billing — focused editor. Recurring jobs bill on a schedule; one-off jobs use the
 				     payment schedule. Over-allocation is a hard block here (schedule edited directly). -->
 				{#if billingEditing}
-					{#if form.jobMode === 'recurring'}
+					{#if form.jobMode === 'recurring' && !form.scheduleAsNeeded}
 						<JobRecurringBillingEditor
 							bind:enabled={form.recurBillingEnabled}
 							bind:billingType={form.recurBillingType}
@@ -1084,14 +1180,9 @@
 					</div>
 				{/if}
 
-				<!-- Activity feed (always visible) — Jobber-style job timeline -->
 				{#if job}
 					<!-- Client sign-off (Session 6): customer approves the completed work; capturable anytime -->
 					<JobSignoffSection jobId={job.id} signoff={job.signoff} canManage={canEdit} />
-				{/if}
-				{#if job}
-					<!-- Activity feed (always visible): Jobber-style job timeline -->
-					<JobTimelineSection jobId={job.id} reloadKey={jobVersion} />
 				{/if}
 
 				<!-- Photos & attachments (always visible) -->
@@ -1136,7 +1227,13 @@
 					<div class="job-status-card">
 						<div class="job-status-card__header">
 							<span class="job-eyebrow">Status</span>
-							<JobStatusBadge status={job.status} scheduledStart={job.scheduled_start} />
+							<JobStatusBadge
+								status={job.status}
+								scheduledStart={job.scheduled_start}
+								{hasSeriesAnchor}
+								nextOpenVisitStart={job.next_open_visit_start}
+								hasOpenVisits={job.has_open_visits}
+							/>
 						</div>
 
 						{#if job.review_request_status !== undefined}
@@ -1240,30 +1337,39 @@
 					</div>
 				{/if}
 
-				<!-- Job info (type, tags, assignee) — inline click-to-edit -->
+				<!-- Job info (type, category, tags, assignee) — inline click-to-edit -->
 				{#if job}
 					<div class="job-inline-card">
 						<div class="job-inline-card__head"><span class="job-eyebrow">Job Info</span></div>
 						<div class="job-inline-card__rows">
-							<!-- Job type -->
+							<!-- Job type: read-only by design. Jobber does not allow switching a job
+							     between one-off and recurring after creation — the copy explains the
+							     way out rather than hiding the rule behind a disabled control. -->
+							<InlineEditRow label="Job type" hint="Can’t be changed — duplicate the job to switch">
+								{#snippet display()}
+									{isRecurring ? 'Recurring' : 'One-off'}
+								{/snippet}
+							</InlineEditRow>
+
+							<!-- Job category -->
 							<InlineEditRow
-								label="Job type"
+								label="Job category"
 								canEdit={canInlineEdit}
 								{...rowCtl(
-									'job_type',
-									() => (jobTypeDraft = job?.job_type ?? ''),
-									() => patchJobField({ job_type: jobTypeDraft.trim() || null })
+									'job_category',
+									() => (jobCategoryDraft = job?.job_category ?? ''),
+									() => patchJobField({ job_category: jobCategoryDraft.trim() || null })
 								)}
 							>
 								{#snippet display()}
-									{#if job?.job_type}
-										{job.job_type}
+									{#if job?.job_category}
+										{job.job_category}
 									{:else}
-										<span class="job-inline-muted">Add job type</span>
+										<span class="job-inline-muted">Add job category</span>
 									{/if}
 								{/snippet}
 								{#snippet editor()}
-									<JobTypePicker bind:value={jobTypeDraft} autofocus />
+									<JobCategoryPicker bind:value={jobCategoryDraft} autofocus />
 								{/snippet}
 							</InlineEditRow>
 

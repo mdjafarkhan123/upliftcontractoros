@@ -67,7 +67,12 @@ export const platformEmailCreateSchema = z.object({
 		.regex(/^[a-z0-9._-]+$/, 'Use only letters, numbers and . _ - characters.')
 		.max(64)
 		.default('noreply'),
-	from_name: z.string().trim().min(1, 'Sender name is required.').max(100).default('Uplift Contractor')
+	from_name: z
+		.string()
+		.trim()
+		.min(1, 'Sender name is required.')
+		.max(100)
+		.default('Uplift Contractor')
 });
 
 export type PlatformEmailCreateInput = z.infer<typeof platformEmailCreateSchema>;

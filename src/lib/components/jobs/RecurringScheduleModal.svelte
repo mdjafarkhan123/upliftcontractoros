@@ -2,8 +2,8 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Select from '$lib/components/ui/select';
 	import { Button } from '$lib/components/ui/button';
-	import { WEEKDAY_PILLS } from '$lib/jobs/recurrence';
-	import type { RecurrenceFreq, MonthMode } from '$lib/jobs/recurrence';
+	import { WEEKDAY_PILLS, WEEKDAY_LONG } from '$lib/jobs/recurrence';
+	import type { RecurrenceFreq, MonthMode, MonthCell } from '$lib/jobs/recurrence';
 
 	// The repeat rule's "shape" fields (everything the modal owns). Start/end dates and
 	// the end condition live on the page, not here — the modal only sets HOW it repeats.
@@ -14,8 +14,9 @@
 		month_mode: MonthMode;
 		month_days: number[];
 		month_last_day: boolean;
-		month_weeks: number[];
-		month_weekdays: number[];
+		// Month "Day of week": the tapped grid cells (1st..4th × Sun..Sat). Each cell is one
+		// occurrence a month — independent, never a cartesian product of weeks and weekdays.
+		month_cells: MonthCell[];
 	};
 
 	let {
@@ -50,8 +51,7 @@
 			month_mode: v.month_mode,
 			month_days: [...v.month_days],
 			month_last_day: v.month_last_day,
-			month_weeks: [...v.month_weeks],
-			month_weekdays: [...v.month_weekdays]
+			month_cells: v.month_cells.map((c) => ({ ...c }))
 		};
 	}
 
@@ -62,20 +62,38 @@
 	const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 	const WEEKS = [1, 2, 3, 4];
 
-	// Save is only meaningful once the active mode has a selection.
+	function cellOn(week: number, weekday: number): boolean {
+		return draft.month_cells.some((c) => c.week === week && c.weekday === weekday);
+	}
+
+	function toggleCell(week: number, weekday: number) {
+		draft.month_cells = cellOn(week, weekday)
+			? draft.month_cells.filter((c) => !(c.week === week && c.weekday === weekday))
+			: [...draft.month_cells, { week, weekday }];
+	}
+
+	// Save is only meaningful once the active mode has a selection. 'day' and 'year' are fully
+	// described by the interval + the job's start date, so they're always saveable.
 	const canSave = $derived.by(() => {
+		if (draft.freq === 'day' || draft.freq === 'year') return true;
 		if (draft.freq === 'week') return draft.weekdays.length > 0;
 		if (draft.month_mode === 'day_of_month')
 			return draft.month_days.length > 0 || draft.month_last_day;
-		return draft.month_weeks.length > 0 && draft.month_weekdays.length > 0;
+		return draft.month_cells.length > 0;
 	});
 
+	// Spec: Clear resets the modal to its default state (Every = 1, Unit = Week, nothing
+	// selected) — it does not close the modal.
 	function clearAll() {
-		draft.weekdays = [];
-		draft.month_days = [];
-		draft.month_last_day = false;
-		draft.month_weeks = [];
-		draft.month_weekdays = [];
+		draft = {
+			freq: 'week',
+			interval: 1,
+			weekdays: [],
+			month_mode: 'day_of_month',
+			month_days: [],
+			month_last_day: false,
+			month_cells: []
+		};
 	}
 
 	function save() {
@@ -109,15 +127,30 @@
 				<Select.Root bind:value={draft.freq}>
 					<Select.Trigger><Select.Value /></Select.Trigger>
 					<Select.Content>
-						<Select.Item value="week">Week</Select.Item>
-						<Select.Item value="month">Month</Select.Item>
+						<Select.Item value="day" label="Day">Day</Select.Item>
+						<Select.Item value="week" label="Week">Week</Select.Item>
+						<Select.Item value="month" label="Month">Month</Select.Item>
+						<Select.Item value="year" label="Year">Year</Select.Item>
 					</Select.Content>
 				</Select.Root>
 			</div>
-			<span class="recur-modal__every-on">on</span>
+			{#if draft.freq !== 'day' && draft.freq !== 'year'}
+				<span class="recur-modal__every-on">on</span>
+			{/if}
 		</div>
 
-		{#if draft.freq === 'week'}
+		{#if draft.freq === 'day'}
+			<!-- Every N days needs no day/month selection — the interval is the whole rule. -->
+			<p class="recur-modal__day-note">
+				This visit repeats every {draft.interval > 1 ? `${draft.interval} days` : 'day'}.
+			</p>
+		{:else if draft.freq === 'year'}
+			<!-- Every N years needs no selection either — the start date carries month + day. -->
+			<p class="recur-modal__day-note">
+				This visit repeats every {draft.interval > 1 ? `${draft.interval} years` : 'year'} on the job's
+				start date.
+			</p>
+		{:else if draft.freq === 'week'}
 			<!-- S M T W T F S pills -->
 			<div class="recur-modal__pills">
 				{#each WEEKDAY_PILLS as label, i (i)}
@@ -177,39 +210,26 @@
 					</button>
 				</div>
 			{:else}
-				<!-- Week-of-month × weekday: backend generates every combination, so we pick
-				     the weeks and the weekdays separately (their cartesian product). -->
-				<div class="recur-modal__group">
-					<p class="recur-modal__group-label">On week(s)</p>
-					<div class="recur-modal__pills recur-modal__pills--weeks">
-						{#each WEEKS as w (w)}
-							<button
-								type="button"
-								class="recur-pill recur-pill--wide"
-								class:recur-pill--on={draft.month_weeks.includes(w)}
-								aria-pressed={draft.month_weeks.includes(w)}
-								onclick={() => (draft.month_weeks = toggle(draft.month_weeks, w))}
-							>
-								{w}{['st', 'nd', 'rd', 'th'][w - 1]}
-							</button>
-						{/each}
-					</div>
-				</div>
-				<div class="recur-modal__group">
-					<p class="recur-modal__group-label">On day(s)</p>
-					<div class="recur-modal__pills">
-						{#each WEEKDAY_PILLS as label, i (i)}
-							<button
-								type="button"
-								class="recur-pill"
-								class:recur-pill--on={draft.month_weekdays.includes(i)}
-								aria-pressed={draft.month_weekdays.includes(i)}
-								onclick={() => (draft.month_weekdays = toggle(draft.month_weekdays, i))}
-							>
-								{label}
-							</button>
-						{/each}
-					</div>
+				<!-- Week-of-month × weekday GRID: each cell is one independent occurrence, so
+				     "1st Monday + 3rd Thursday" is exactly two visits a month. -->
+				<div class="recur-grid" role="group" aria-label="Day of week">
+					{#each WEEKS as w (w)}
+						<span class="recur-grid__rowlabel">{w}{['st', 'nd', 'rd', 'th'][w - 1]}</span>
+						<div class="recur-grid__row">
+							{#each WEEKDAY_PILLS as label, i (i)}
+								<button
+									type="button"
+									class="recur-cell"
+									class:recur-cell--on={cellOn(w, i)}
+									aria-pressed={cellOn(w, i)}
+									aria-label="{w}{['st', 'nd', 'rd', 'th'][w - 1]} {WEEKDAY_LONG[i]}"
+									onclick={() => toggleCell(w, i)}
+								>
+									{label}
+								</button>
+							{/each}
+						</div>
+					{/each}
 				</div>
 			{/if}
 		{/if}
@@ -218,9 +238,7 @@
 			<Button variant="ghost" onclick={clearAll}>Clear</Button>
 			<div class="recur-modal__foot-right">
 				<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
-				<Button onclick={save} disabled={!canSave}>
-					Save
-				</Button>
+				<Button onclick={save} disabled={!canSave}>Save</Button>
 			</div>
 		</div>
 	</Dialog.Content>
@@ -273,10 +291,6 @@
 		&__pills {
 			display: flex;
 			gap: $space-2;
-
-			&--weeks {
-				flex-wrap: wrap;
-			}
 		}
 
 		&__mode {
@@ -291,16 +305,9 @@
 			gap: $space-2;
 		}
 
-		&__group {
-			& + & {
-				margin-top: $space-4;
-			}
-		}
-
-		&__group-label {
+		&__day-note {
 			font-size: $fs-body;
-			color: var(--color-text-muted);
-			margin-bottom: $space-2;
+			color: var(--color-text-secondary);
 		}
 
 		&__foot {
@@ -331,11 +338,6 @@
 		cursor: pointer;
 		transition: all 0.12s ease;
 
-		&--wide {
-			width: auto;
-			padding: 0 $space-3;
-		}
-
 		&:hover {
 			border-color: var(--color-brand);
 		}
@@ -343,6 +345,50 @@
 		&--on {
 			background: var(--color-brand);
 			border-color: var(--color-brand);
+			color: var(--color-text-on-brand);
+		}
+	}
+
+	// Month "Day of week": 1st..4th rows × S M T W T F S columns, boxed like the reference.
+	.recur-grid {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: $space-2 $space-3;
+
+		&__rowlabel {
+			font-size: $fs-body;
+			color: var(--color-text-muted);
+		}
+
+		&__row {
+			display: grid;
+			grid-template-columns: repeat(7, 1fr);
+			border: 1px solid var(--color-border);
+			border-radius: $radius-md;
+			overflow: hidden;
+		}
+	}
+
+	.recur-cell {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 40px;
+		border: none;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.12s ease;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+
+		&--on {
+			background: var(--color-brand);
 			color: var(--color-text-on-brand);
 		}
 	}

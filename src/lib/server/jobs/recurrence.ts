@@ -11,14 +11,19 @@
 // wall-clock time-of-day (in UTC terms). The viewing time-zone is a display
 // concern handled the same way every other timestamptz in this app is.
 
-export type RecurrenceFreq = 'week' | 'month';
+export type RecurrenceFreq = 'day' | 'week' | 'month' | 'year';
 export type MonthMode = 'day_of_month' | 'day_of_week';
 export type EndType = 'after' | 'on';
 export type EndUnit = 'days' | 'weeks' | 'months' | 'years';
 
+// One tapped cell of the month "Day of week" grid: week 1..4 (1st..4th) × weekday 0..6 (Sun..Sat).
+// The grid is a set of INDEPENDENT cells — "1st Monday + 3rd Thursday" is exactly two visits a
+// month. This is why cells are pairs and not two separate lists (see month_weeks below).
+export type MonthCell = { week: number; weekday: number };
+
 export type JobRecurrence = {
 	freq: RecurrenceFreq;
-	// "Every N weeks / months".
+	// "Every N days / weeks / months / years".
 	interval: number;
 	// week mode — 0..6 (Sun..Sat), at least one.
 	weekdays?: number[];
@@ -27,7 +32,12 @@ export type JobRecurrence = {
 	// day_of_month: 1..31 selections (+ month_last_day for "Last day").
 	month_days?: number[];
 	month_last_day?: boolean;
-	// day_of_week ("nth weekday"): weeks 1..4 (1st..4th) × weekdays 0..6.
+	// day_of_week ("nth weekday"): the tapped grid cells. Authoritative when present.
+	month_cells?: MonthCell[];
+	// LEGACY day_of_week shape (rules saved before the grid): two independent lists whose
+	// CARTESIAN PRODUCT formed the occurrences — weeks {1,3} × days {Mon,Thu} meant four
+	// visits a month, which the grid can no longer produce. Still read (and normalized into
+	// cells) so existing recurring jobs keep expanding to the same dates. Never written.
 	month_weeks?: number[];
 	month_weekdays?: number[];
 	// end condition.
@@ -58,7 +68,15 @@ function addUtcMonths(d: Date, months: number): Date {
 	const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
 	const day = Math.min(d.getUTCDate(), lastDay);
 	return new Date(
-		Date.UTC(y, m, day, d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds())
+		Date.UTC(
+			y,
+			m,
+			day,
+			d.getUTCHours(),
+			d.getUTCMinutes(),
+			d.getUTCSeconds(),
+			d.getUTCMilliseconds()
+		)
 	);
 }
 
@@ -79,6 +97,16 @@ function resolveHorizon(anchor: Date, rule: JobRecurrence): number {
 		else horizon = addUtcMonths(anchor, n).getTime();
 	}
 	return Math.min(horizon, cap);
+}
+
+// The month "Day of week" selections as grid cells. New rules carry `month_cells`; legacy rules
+// carry the two independent lists, which are expanded into their cartesian product here so they
+// keep generating exactly the dates they always did.
+export function monthCellsOf(rule: JobRecurrence): MonthCell[] {
+	if (rule.month_cells?.length) return rule.month_cells;
+	const weeks = rule.month_weeks ?? [];
+	const weekdays = rule.month_weekdays ?? [];
+	return weeks.flatMap((week) => weekdays.map((weekday) => ({ week, weekday })));
 }
 
 // Build a visit start at the given Y/M/D carrying the anchor's time-of-day.
@@ -126,7 +154,15 @@ export function expandRecurrence(
 		return starts.length < MAX_VISITS;
 	};
 
-	if (rule.freq === 'week') {
+	if (rule.freq === 'day') {
+		// Every N days from the anchor. Whole-day steps in UTC keep the anchor's
+		// time-of-day exactly (MS_DAY is a fixed 24h; DST is a display concern only).
+		for (let i = 0; ; i++) {
+			const t = anchorMs + i * interval * MS_DAY;
+			if (t > horizonMs) break;
+			if (!push(new Date(t))) break;
+		}
+	} else if (rule.freq === 'week') {
 		const weekdays = (rule.weekdays ?? []).filter((d) => d >= 0 && d <= 6);
 		// Midnight (UTC) of the Sunday that opens the anchor's week.
 		const anchorMidnight = Date.UTC(
@@ -146,6 +182,20 @@ export function expandRecurrence(
 				if (!room) break;
 			}
 			if (!room) break;
+		}
+	} else if (rule.freq === 'year') {
+		// Every N years on the anchor's own month + day-of-month. Feb 29 clamps to the 28th in a
+		// common year (same rule addUtcMonths uses). Note MAX_HORIZON_YEARS caps generation at 2
+		// years out, so a yearly rule materializes only its next few visits — the series is
+		// re-expanded on edit, and the cap is the deliberate guard against a "forever" rule.
+		const anchorY = anchorStart.getUTCFullYear();
+		const anchorM = anchorStart.getUTCMonth();
+		const anchorD = anchorStart.getUTCDate();
+		for (let i = 0; ; i += interval) {
+			const y = anchorY + i;
+			if (Date.UTC(y, anchorM, 1) > horizonMs) break;
+			const lastDay = new Date(Date.UTC(y, anchorM + 1, 0)).getUTCDate();
+			if (!push(atAnchorTime(y, anchorM, Math.min(anchorD, lastDay), anchorStart))) break;
 		}
 	} else {
 		const anchorMonthIdx = anchorStart.getUTCFullYear() * 12 + anchorStart.getUTCMonth();
@@ -170,13 +220,11 @@ export function expandRecurrence(
 				}
 			} else {
 				const firstDow = new Date(Date.UTC(y, m, 1)).getUTCDay();
-				for (const wk of rule.month_weeks ?? []) {
-					for (const wd of rule.month_weekdays ?? []) {
-						const day = 1 + ((wd - firstDow + 7) % 7) + (wk - 1) * 7;
-						if (day > lastDay) continue;
-						room = push(atAnchorTime(y, m, day, anchorStart));
-						if (!room) break;
-					}
+				for (const { week, weekday } of monthCellsOf(rule)) {
+					const day = 1 + ((weekday - firstDow + 7) % 7) + (week - 1) * 7;
+					// A 5th-week cell simply has no occurrence in a short month (Jobber skips it).
+					if (day > lastDay) continue;
+					room = push(atAnchorTime(y, m, day, anchorStart));
 					if (!room) break;
 				}
 			}

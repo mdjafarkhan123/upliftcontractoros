@@ -45,10 +45,10 @@
 				Show inactive
 			</label>
 			{#if canCreate}
-			<Button onclick={() => goto('/settings/team/new')}>
-				<i class="ri-add-line" aria-hidden="true"></i>
-				Add member
-			</Button>
+				<Button onclick={() => goto('/settings/team/new')}>
+					<i class="ri-add-line" aria-hidden="true"></i>
+					Add member
+				</Button>
 			{/if}
 		</div>
 	{/snippet}

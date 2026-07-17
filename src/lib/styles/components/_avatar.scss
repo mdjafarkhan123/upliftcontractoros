@@ -1,36 +1,54 @@
 @use '../tokens' as *;
 
 .avatar {
-  border-radius: $radius-full;
-  object-fit: cover;
-  flex-shrink: 0;
-  display: block;
+	border-radius: $radius-full;
+	object-fit: cover;
+	flex-shrink: 0;
+	display: block;
 
-  &--sm { width: 32px; height: 32px; font-size: $fs-body; }
-  &--md { width: 40px; height: 40px; font-size: $fs-body; }
-  &--lg { width: 56px; height: 56px; font-size: $fs-lg; }
-  &--xl { width: 72px; height: 72px; font-size: $fs-h3; }
+	&--sm {
+		width: 32px;
+		height: 32px;
+		font-size: $fs-body;
+	}
+	&--md {
+		width: 40px;
+		height: 40px;
+		font-size: $fs-body;
+	}
+	&--lg {
+		width: 56px;
+		height: 56px;
+		font-size: $fs-lg;
+	}
+	&--xl {
+		width: 72px;
+		height: 72px;
+		font-size: $fs-h3;
+	}
 
-  // Initials fallback — shown when no photo is available
-  &--fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--avatar-fallback-bg);
-    color: var(--avatar-fallback-text);
-    font-weight: $weight-semibold;
-    user-select: none;
-  }
+	// Initials fallback — shown when no photo is available
+	&--fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--avatar-fallback-bg);
+		color: var(--avatar-fallback-text);
+		font-weight: $weight-semibold;
+		user-select: none;
+	}
 }
 
 // Avatar group — stacked row of avatars with overlap
 .avatar-group {
-  display: flex;
+	display: flex;
 
-  .avatar {
-    border: 2px solid var(--color-bg-surface);
-    margin-left: -$space-2;
+	.avatar {
+		border: 2px solid var(--color-bg-surface);
+		margin-left: -$space-2;
 
-    &:first-child { margin-left: 0; }
-  }
+		&:first-child {
+			margin-left: 0;
+		}
+	}
 }

@@ -5,17 +5,25 @@ import { appointments, jobs } from '$lib/server/db/schema';
 type Tx = Parameters<Parameters<typeof DbClient.transaction>[0]>[0];
 
 /**
- * Re-pin a ONE-OFF job's denormalized `scheduled_start`/`scheduled_end` to the earliest still-open
- * (status = 'scheduled') dated visit, or NULL when the job has no dated open visit.
+ * Re-pin a SINGLE-VISIT job's denormalized `scheduled_start`/`scheduled_end` to the earliest
+ * still-open (status = 'scheduled') dated visit, or NULL when the job has no dated open visit.
  *
- * A one-off job keeps its own copy of "the schedule date" (used by the job list scopes —
+ * Such a job keeps its own copy of "the schedule date" (used by the job list scopes —
  * Unscheduled/Today/Upcoming/Overdue — and the "Schedule later" toggle). The visits underneath it
  * are the real schedule (Jobber / Housecall Pro: the visit IS the job's schedule). That copy must
  * therefore follow the visits: every path that creates, dates, completes, or cancels a visit calls
  * this so the badge + toggle can't drift from what the visit rows actually say.
  *
- * Recurring jobs are deliberately excluded (the `recurrence IS NULL` guard): their job row is the
- * SERIES anchor, not a mirror of any single visit — moving/completing one visit must not shift it.
+ * Jobs whose date is a SERIES ANCHOR are deliberately excluded. The anchor is the expansion start
+ * the series is regenerated from, not a mirror of any one visit, so completing or moving a single
+ * visit must never shift it — doing so would silently re-cut the whole series on the next rule
+ * edit. That means any job carrying a repeat rule, plus "as needed" jobs (whose date is a stored
+ * job WINDOW, not work).
+ *
+ * The guard canNOT be `job_type = 'one_off'`: a ONE-OFF job may carry a repeat rule (Jobber — the
+ * toggle sets billing, the rule sets visit generation), and its anchor needs freezing exactly like
+ * a recurring job's. The test is the rule, not the type.
+ *
  * Completed/cancelled/no-show visits are ignored so a job never shows a stale "Overdue" off a visit
  * that's already done.
  *
@@ -23,9 +31,8 @@ type Tx = Parameters<Parameters<typeof DbClient.transaction>[0]>[0];
  *
  * Returns the job's fresh `scheduled_start`/`scheduled_end` after the re-pin so the caller can echo
  * it back to the client (which keeps a SEPARATE jobs cache and would otherwise show a stale badge
- * until reload). Returns `null` when no one-off job row was actually updated — i.e. the job is
- * recurring (series anchor, guarded out) or soft-deleted — so the caller knows there's nothing to
- * echo.
+ * until reload). Returns `null` when no job row was actually updated — i.e. the job is a series
+ * anchor (guarded out) or soft-deleted — so the caller knows there's nothing to echo.
  */
 export async function repinOneOffJobSchedule(
 	tx: Tx,
@@ -62,7 +69,11 @@ export async function repinOneOffJobSchedule(
 			and(
 				eq(jobs.id, jobId),
 				eq(jobs.org_id, orgId),
+				// Series anchors are excluded: a job with a repeat rule regenerates its visits from
+				// this column, and an "as needed" job stores its WINDOW (start + end boundary) here.
+				// Neither is a mirror of a visit, so neither may be overwritten by a visit change.
 				isNull(jobs.recurrence),
+				eq(jobs.schedule_as_needed, false),
 				isNull(jobs.deleted_at)
 			)
 		)

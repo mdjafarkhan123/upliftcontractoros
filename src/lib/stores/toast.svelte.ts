@@ -71,13 +71,22 @@ export const toast = {
 	get items(): Toast[] {
 		return items;
 	},
-	success(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
+	success(
+		message: string,
+		opts?: { description?: string; duration?: number; action?: ToastAction }
+	): string {
 		return push('success', message, opts);
 	},
-	error(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
+	error(
+		message: string,
+		opts?: { description?: string; duration?: number; action?: ToastAction }
+	): string {
 		return push('error', message, opts);
 	},
-	info(message: string, opts?: { description?: string; duration?: number; action?: ToastAction }): string {
+	info(
+		message: string,
+		opts?: { description?: string; duration?: number; action?: ToastAction }
+	): string {
 		return push('info', message, opts);
 	},
 	dismiss,

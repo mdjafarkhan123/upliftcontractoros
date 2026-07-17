@@ -82,9 +82,10 @@
 			font-size: $fs-body;
 			font-weight: $weight-medium;
 			cursor: pointer;
-			transition: background-color $duration-fast $ease-standard,
-			            border-color $duration-fast $ease-standard,
-			            color $duration-fast $ease-standard;
+			transition:
+				background-color $duration-fast $ease-standard,
+				border-color $duration-fast $ease-standard,
+				color $duration-fast $ease-standard;
 
 			&:hover {
 				background: var(--color-bg-surface-sunk);
@@ -100,7 +101,9 @@
 				background: var(--state-active-tint);
 				color: var(--color-brand);
 
-				.more-sheet__icon { color: var(--color-brand); }
+				.more-sheet__icon {
+					color: var(--color-brand);
+				}
 			}
 		}
 

@@ -187,26 +187,43 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Item onclick={() => onQuickFollowUp?.('tomorrow')}>
-							<i class="ri-calendar-schedule-line" style:color="var(--success-solid)" aria-hidden="true"></i>
+							<i
+								class="ri-calendar-schedule-line"
+								style:color="var(--success-solid)"
+								aria-hidden="true"
+							></i>
 							Follow up tomorrow
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={() => onQuickFollowUp?.('in3days')}>
-							<i class="ri-calendar-schedule-line" style:color="var(--success-solid)" aria-hidden="true"></i>
+							<i
+								class="ri-calendar-schedule-line"
+								style:color="var(--success-solid)"
+								aria-hidden="true"
+							></i>
 							Follow up in 3 days
 						</DropdownMenu.Item>
 						{#if next_follow_up_at}
 							<DropdownMenu.Item onclick={() => onQuickFollowUp?.('clear')}>
-								<i class="ri-calendar-close-line" style:color="var(--color-text-muted)" aria-hidden="true"></i>
+								<i
+									class="ri-calendar-close-line"
+									style:color="var(--color-text-muted)"
+									aria-hidden="true"
+								></i>
 								Clear follow-up
 							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Separator />
 						<DropdownMenu.Item onclick={() => onMarkWon?.()}>
-							<i class="ri-checkbox-circle-line" style:color="var(--success-solid)" aria-hidden="true"></i>
+							<i
+								class="ri-checkbox-circle-line"
+								style:color="var(--success-solid)"
+								aria-hidden="true"
+							></i>
 							Mark won
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={() => onMarkLost?.()}>
-							<i class="ri-close-circle-line" style:color="var(--danger-solid)" aria-hidden="true"></i>
+							<i class="ri-close-circle-line" style:color="var(--danger-solid)" aria-hidden="true"
+							></i>
 							Mark lost
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
@@ -244,7 +261,11 @@
 
 		<!-- Row 4: Follow-up signal -->
 		{#if next_follow_up_at}
-			<div class="pipeline-card__followup pipeline-card__followup--{followUpOverdue ? 'overdue' : 'upcoming'}">
+			<div
+				class="pipeline-card__followup pipeline-card__followup--{followUpOverdue
+					? 'overdue'
+					: 'upcoming'}"
+			>
 				<i class="ri-calendar-schedule-line" aria-hidden="true"></i>
 				<span>
 					{followUpOverdue
@@ -258,7 +279,10 @@
 		{#if quote && quoteStatus}
 			<div class="pipeline-card__quote pipeline-card__quote--{quoteStatus}">
 				<div class="pipeline-card__quote-left">
-					<i class="{quoteIcon} pipeline-card__quote-icon pipeline-card__quote-icon--{quoteStatus}" aria-hidden="true"></i>
+					<i
+						class="{quoteIcon} pipeline-card__quote-icon pipeline-card__quote-icon--{quoteStatus}"
+						aria-hidden="true"
+					></i>
 					<span class="pipeline-card__quote-label pipeline-card__quote-label--{quoteStatus}">
 						{quoteLabel}{quoteVersionLabel}
 					</span>

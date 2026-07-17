@@ -21,11 +21,31 @@ import type { FeatureFlagKey } from '$lib/types';
 export type StepChannel = 'sms_first' | 'email_first' | 'both' | 'sms_only' | 'email_only';
 
 export const STEP_CHANNELS: { value: StepChannel; label: string; description: string }[] = [
-	{ value: 'sms_first', label: 'Text first', description: 'Texts the customer — falls back to email if we have no mobile number.' },
-	{ value: 'email_first', label: 'Email first', description: 'Emails the customer — falls back to a text if we have no email address.' },
-	{ value: 'both', label: 'Text & email', description: 'Sends both a text and an email on every channel they’ve consented to.' },
-	{ value: 'sms_only', label: 'Text only', description: 'Text message only — never falls back to email.' },
-	{ value: 'email_only', label: 'Email only', description: 'Email only — never falls back to a text.' }
+	{
+		value: 'sms_first',
+		label: 'Text first',
+		description: 'Texts the customer — falls back to email if we have no mobile number.'
+	},
+	{
+		value: 'email_first',
+		label: 'Email first',
+		description: 'Emails the customer — falls back to a text if we have no email address.'
+	},
+	{
+		value: 'both',
+		label: 'Text & email',
+		description: 'Sends both a text and an email on every channel they’ve consented to.'
+	},
+	{
+		value: 'sms_only',
+		label: 'Text only',
+		description: 'Text message only — never falls back to email.'
+	},
+	{
+		value: 'email_only',
+		label: 'Email only',
+		description: 'Email only — never falls back to a text.'
+	}
 ];
 
 export type TimingMode = 'delay' | 'offset';
@@ -82,7 +102,15 @@ export type AutomationCardDef = {
 const VARS = {
 	base: ['contact_name', 'org_name'],
 	quote: ['contact_name', 'org_name', 'quote_number', 'quote_amount', 'amount', 'phone'],
-	invoice: ['contact_name', 'org_name', 'invoice_number', 'amount', 'payment_link', 'due_date', 'phone'],
+	invoice: [
+		'contact_name',
+		'org_name',
+		'invoice_number',
+		'amount',
+		'payment_link',
+		'due_date',
+		'phone'
+	],
 	appointment: [
 		'contact_name',
 		'org_name',
@@ -199,7 +227,7 @@ export const AUTOMATION_CARDS: AutomationCardDef[] = [
 	{
 		key: 'appointment_no_show',
 		title: 'No-show follow-up',
-		description: "Re-engage customers who miss their appointment and offer to rebook.",
+		description: 'Re-engage customers who miss their appointment and offer to rebook.',
 		category: 'Appointments',
 		resourceType: 'contact',
 		timingMode: 'delay',
@@ -291,7 +319,10 @@ export const VAR_LABELS: Record<string, string> = {
 // Render a template with the sample values (mirror of the server `interpolate`,
 // but operating over an arbitrary variable map for the preview only).
 export function previewTemplate(template: string): string {
-	return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, name: string) => SAMPLE_VARS[name] ?? `{${name}}`);
+	return template.replace(
+		/\{([a-zA-Z0-9_]+)\}/g,
+		(_, name: string) => SAMPLE_VARS[name] ?? `{${name}}`
+	);
 }
 
 // ── Timing presets ───────────────────────────────────────────────────────────

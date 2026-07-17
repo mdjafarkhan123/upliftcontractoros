@@ -1,5 +1,11 @@
 @use '../tokens' as *;
 
+// Width of the calendar's left time rail / gutter. Shared by the head, Anytime lane,
+// and body grids so their columns line up, and wide enough that the "Anytime" label
+// and the current-time pill ("12:30 AM") never clip. Owned here, not inline on the
+// grids, so the three stay in lockstep.
+$cal-rail-w: 88px;
+
 // =============================================================================
 // APPOINTMENTS — S8.0  LIST + SHELL + SHARED  (grows each S8.x session)
 // Global BEM blocks for the appointments / calendar feature.
@@ -243,14 +249,9 @@
 	flex: 1;
 	overflow: hidden;
 
-	&__sidebar {
+	// Hide the CollapsibleSidebar on mobile (BottomSheet takes over)
+	.c-sidebar {
 		display: none;
-		width: 240px;
-		flex-shrink: 0;
-		flex-direction: column;
-		overflow-y: auto;
-		border-right: 1px solid var(--color-border);
-		background: var(--color-bg-surface);
 
 		@media (min-width: $bp-tablet) {
 			display: flex;
@@ -787,12 +788,39 @@
 	overflow-y: auto;
 	background: var(--color-bg-surface);
 
+	// ── Density modifiers ───────────────────────────────────────────────────
+	// Density buys ROOM, never type size: card text is $fs-body (14px) in all three
+	// modes — never $fs-lg. Only the row height and the card's padding change, which
+	// is what makes "how many lines fit" land on a predictable 2 / 3 / 4.
+	&--compact {
+		.cal-week__event,
+		.cal-week__timeblock {
+			padding: 3px $space-1 3px 7px;
+			gap: 2px;
+		}
+		.cal-week__anytime-chip {
+			padding: 1px $space-1;
+		}
+	}
+	&--spacious {
+		.cal-week__event,
+		.cal-week__timeblock {
+			padding: 7px $space-2 7px 11px;
+			// Gap stays 3px (matching Comfortable), NOT 4: the row-reveal thresholds in
+			// the container ladder below are content-box px, so a per-density gap would
+			// make the same px mean a different row count in each density. Spacious buys
+			// its air from the larger PADDING, not from wider inter-row gaps.
+			gap: 3px;
+		}
+	}
+
 	// Sticky day-of-week header row.
 	&__head {
 		position: sticky;
 		top: 0;
-		z-index: 10;
+		z-index: 30;
 		display: grid;
+		grid-template-columns: $cal-rail-w repeat(7, 1fr);
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-bg-surface);
@@ -846,8 +874,15 @@
 	}
 
 	// "Anytime" lane — date-only visits pinned above the time grid (Jobber/Housecall Pro).
+	// Sticks directly under the day header so it stays visible (and stays a valid drop
+	// target) while the time grid scrolls. `--cal-week-head-h` is the measured header
+	// height, set inline by CalendarWeekGrid.
 	&__anytime {
+		position: sticky;
+		top: var(--cal-week-head-h, 0px);
+		z-index: 29; // under __head (30), above grid blocks (<= 20)
 		display: grid;
+		grid-template-columns: $cal-rail-w repeat(7, 1fr);
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-bg-surface);
@@ -869,7 +904,7 @@
 		color: var(--color-text-muted);
 
 		i {
-			font-size: 1.4rem;
+			font-size: 14px; // glyph, not text
 		}
 	}
 
@@ -879,7 +914,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: $space-1;
-		min-height: 38px;
+		// This is a grid track (1fr). Grid items default to `min-width: auto`, which is the
+		// content's min-content size — and the in-flow Anytime card's footer (status pill +
+		// type word + assignee) has a wide, non-shrinking min-content, so without this the
+		// column blows past its 1fr share and the card overflows its slot. `min-width: 0`
+		// lets the track shrink so the card's own `overflow: hidden` + ellipsis clip instead.
+		// (Timed cards never hit this: they're position:absolute, out of flow.)
+		min-width: 0;
+		// Tall enough that one Anytime card (now the full visit card: client + address +
+		// status) has room to breathe. Multiple stacked cards still grow the lane, which is
+		// measured back into --cal-week-anytime-h.
+		min-height: 72px;
 		padding: $space-1;
 		border: none;
 		border-right: 1px solid var(--color-border);
@@ -908,9 +953,30 @@
 			background: var(--state-active-tint);
 			box-shadow: inset 0 0 0 2px var(--color-brand);
 		}
+
+		// Empty "Anytime" cell: show a faint drop hint on hover so users learn
+		// they can drop a timed visit here to make it all-day.
+		&--copy:not(:has(.cal-week__event--anytime, .cal-week__anytime-chip))::after {
+			content: 'Drop for all-day';
+			display: inline-flex;
+			align-items: center;
+			gap: 3px;
+			padding: 2px $space-2;
+			border: 1px dashed var(--color-border-strong);
+			border-radius: $radius-full;
+			font-size: $fs-caption;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+			opacity: 0;
+			transition: opacity $duration-fast $ease-standard;
+		}
+		&--copy:not(:has(.cal-week__event--anytime, .cal-week__anytime-chip)):hover::after {
+			opacity: 1;
+		}
 	}
 
 	&__anytime-chip {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
@@ -969,15 +1035,18 @@
 		}
 	}
 
+	// Chip text is sentence-case (job title, client name), so it sits at the
+	// $fs-body floor — $fs-caption is reserved for uppercase micro-labels/badges.
 	&__anytime-chip-title {
 		overflow: hidden;
-		font-size: $fs-caption;
+		font-size: $fs-body;
 		font-weight: $weight-semibold;
 		color: var(--color-text-primary);
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
 
+	// The chip's second line (client) is secondary to its title — $fs-caption.
 	&__anytime-chip-sub {
 		overflow: hidden;
 		font-size: $fs-caption;
@@ -986,10 +1055,29 @@
 		text-overflow: ellipsis;
 	}
 
+	// Assignee initials badge on anytime chips — positioned top-right.
+	&__anytime-chip-assignee {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border-radius: $radius-full;
+		font-size: 10px; // avatar initials — the token scale's 14px floor is for text
+		font-weight: $weight-semibold;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		border: 1px solid var(--color-bg-surface);
+	}
+
 	// Scrollable grid body: time rail + 7 day columns.
 	&__body {
 		position: relative;
 		display: grid;
+		grid-template-columns: $cal-rail-w repeat(7, 1fr);
 		flex: 1;
 	}
 
@@ -999,18 +1087,19 @@
 		background: var(--color-bg-surface-sunk);
 	}
 
+	// Hour labels ("8 AM") — an uppercase micro-label axis, the one role $fs-caption
+	// is meant for.
 	&__rail-label {
 		position: absolute;
 		right: $space-1;
 		transform: translateY(-50%);
-		font-size: 1rem;
+		font-size: $fs-caption;
 		font-weight: $weight-medium;
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text-secondary);
 
 		&--off {
 			color: var(--color-text-muted);
-			opacity: 0.6;
 		}
 	}
 
@@ -1031,7 +1120,7 @@
 		}
 
 		&--today {
-			background: rgba(34, 125, 83, 0.03);
+			background: var(--state-active-tint);
 		}
 		&--copy {
 			cursor: copy;
@@ -1049,7 +1138,15 @@
 		border-top: 1px solid var(--color-border);
 
 		&--off {
-			background: var(--color-bg-surface-sunk);
+			// Off business hours: distinct diagonal-tinted band so the working
+			// window reads at a glance in both light and dark themes.
+			background: repeating-linear-gradient(
+				-45deg,
+				var(--color-bg-surface-sunk),
+				var(--color-bg-surface-sunk) 7px,
+				transparent 7px,
+				transparent 14px
+			);
 		}
 	}
 
@@ -1061,37 +1158,48 @@
 		opacity: 0.5;
 	}
 
-	// "Now" indicator on today's column.
+	// "Now" line — a thin rule across the column, deliberately BEHIND the cards
+	// (z-index 1, under the events at 9–10) so it shows only in the gaps, the way
+	// Google Calendar and the ref do it. Its time is read from the gutter pill, so the
+	// line itself carries no dot or label.
 	&__now {
 		pointer-events: none;
 		position: absolute;
 		left: 0;
 		right: 0;
-		z-index: 20;
-		display: flex;
-		align-items: center;
+		z-index: 1;
+		height: 2px;
+		background: var(--cal-now-solid);
 	}
 
-	&__now-dot {
-		margin-left: -4px;
-		height: 8px;
-		width: 8px;
-		flex-shrink: 0;
+	// The current time as a filled pill in the time gutter (ref: "9.30 AM"). Centred on
+	// the now-line's row and pulled flush to the rail's right edge so it reads as the
+	// label for the line to its right.
+	&__now-label {
+		pointer-events: none;
+		position: absolute;
+		right: $space-2;
+		z-index: 2;
+		transform: translateY(-50%);
+		padding: 2px $space-2;
 		border-radius: $radius-full;
-		background: var(--danger-solid);
+		background: var(--cal-now-solid);
+		color: $slate-0;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.4;
+		white-space: nowrap;
 		box-shadow: var(--shadow-xs);
-	}
-
-	&__now-bar {
-		height: 1px;
-		flex: 1;
-		background: var(--danger-solid);
 	}
 
 	// Event block.
 	&__event {
 		position: absolute;
 		z-index: 10;
+		// The card measures ITSELF and picks a layout (see "Card layouts" below).
+		// Safe because its height comes from the grid geometry, never its contents.
+		container: cal-card / size;
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
@@ -1099,9 +1207,10 @@
 		padding: 5px $space-2 5px 9px;
 		border: 1px solid transparent;
 		border-radius: $radius-md;
-		font-size: 1.1rem;
-		line-height: 1.25;
+		font-size: $fs-body;
+		line-height: $lh-body;
 		box-shadow: var(--shadow-xs);
+		text-decoration: none;
 		user-select: none;
 		transition:
 			box-shadow $duration-fast $ease-standard,
@@ -1109,48 +1218,82 @@
 
 		&:hover {
 			z-index: 30;
-			box-shadow: var(--shadow-sm);
+			box-shadow: var(--shadow-md);
+			transform: translateY(-1px);
 		}
 
-		// Type accent — only the active ("default") state reads these vars, so
-		// completed/cancelled keep their status colors regardless of type.
-		&--type-estimate {
+		// ── Status states ───────────────────────────────────────────────────────────
+		// The left rail carries STATUS and nothing else — a dispatcher scans a calendar
+		// to find what's late, not to find what's an inspection. (Visit TYPE lost its
+		// colour when the rail was reassigned; it falls back to a word in the footer.)
+		//
+		// Only two of the six states tint the card BODY: Late and the closed states.
+		// Scheduled and Today keep a plain surface, so a normal week reads calm and the
+		// exceptions are the only thing shouting. `--appt-accent` drives the rail, the
+		// time pill, and the status dot together.
+		//
+		// The card's TEXT stays --color-text-primary in every state. Only the rail, the
+		// pill and the dot carry colour — status-coloured body text fails contrast in
+		// dark mode and reads as an error.
+		&--state-scheduled {
 			--appt-accent: var(--info-solid);
 			--appt-tint: var(--info-bg);
-		}
-		&--type-job_start {
-			--appt-accent: var(--color-brand);
-			--appt-tint: var(--state-active-tint);
-		}
-		&--type-follow_up {
-			--appt-accent: var(--warning-solid);
-			--appt-tint: var(--warning-bg);
-		}
-		&--type-inspection {
-			--appt-accent: #7c3aed;
-			--appt-tint: rgba(124, 58, 237, 0.1);
-		}
-		&--type-other {
-			--appt-accent: var(--color-text-muted);
-			--appt-tint: var(--color-bg-surface-sunk);
-		}
-
-		&--default {
-			border-color: var(--color-border);
-			border-left: 3px solid var(--appt-accent, var(--color-brand));
-			background: var(--color-bg-surface);
+			border-color: color-mix(in srgb, var(--appt-accent) 45%, transparent);
+			border-left: 4px solid var(--appt-accent);
+			background: var(--color-bg-surface-sunk);
 			color: var(--color-text-primary);
 		}
-		&--completed {
-			border-color: var(--success-solid);
-			background: var(--success-bg);
-			color: var(--success-text);
+		&--state-today {
+			--appt-accent: var(--success-solid);
+			--appt-tint: var(--success-bg);
+			border-color: color-mix(in srgb, var(--appt-accent) 45%, transparent);
+			border-left: 4px solid var(--appt-accent);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
 		}
-		&--cancelled {
+		&--state-late {
+			--appt-accent: var(--danger-solid);
+			--appt-tint: var(--danger-bg);
 			border-color: var(--danger-solid);
+			border-left: 4px solid var(--appt-accent);
 			background: var(--danger-bg);
-			color: var(--danger-text);
-			text-decoration: line-through;
+			color: var(--color-text-primary);
+		}
+		&--state-no_show {
+			--appt-accent: var(--warning-solid);
+			--appt-tint: var(--warning-bg);
+			border-color: var(--warning-solid);
+			border-left: 4px solid var(--appt-accent);
+			background: var(--warning-bg);
+			color: var(--color-text-primary);
+		}
+		// Done work recedes: grey, not green. A calendar where every finished visit
+		// glows is unreadable by 4pm.
+		&--state-completed {
+			--appt-accent: var(--color-text-muted);
+			--appt-tint: var(--color-bg-surface-sunk);
+			border-color: var(--color-border);
+			border-left: 4px solid var(--appt-accent);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+
+			// Struck TIME + a tick — the pair that tells it apart from Cancelled.
+			.cal-week__event-timepill-text {
+				text-decoration: line-through;
+			}
+		}
+		&--state-cancelled {
+			--appt-accent: var(--color-text-muted);
+			--appt-tint: var(--color-bg-surface-sunk);
+			border-color: var(--color-border);
+			border-left: 4px solid var(--appt-accent);
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-secondary);
+
+			// Struck TITLE + a cross — never the time, or it reads as Completed.
+			.cal-week__event-names {
+				text-decoration: line-through;
+			}
 		}
 		&--reschedulable {
 			touch-action: none;
@@ -1159,16 +1302,44 @@
 		&--dragging {
 			opacity: 0.4;
 		}
-	}
-	&__event {
-		background-color: $green-100;
-	}
 
+		// ── Anytime-lane variant ─────────────────────────────────────────────────────
+		// The SAME visit card as the timed grid, dropped into the untimed lane. Two things
+		// change because it no longer gets an explicit px height from the grid geometry:
+		//   1. It flows in the lane (static/relative) instead of being absolutely placed.
+		//   2. It is AUTO height, and `container-type: size` collapses a content-sized box
+		//      to 0 — so we drop back to `container-type: normal`. That kills the @container
+		//      queries too, so the address + status rows (normally revealed by those queries)
+		//      must be shown explicitly here. The time row and hover-actions are simply never
+		//      rendered (showTime=false at the call site) — an Anytime visit has no time.
+		&--anytime {
+			position: relative;
+			z-index: auto;
+			container-type: normal;
+			// Belt-and-braces with the column's min-width:0 — never let this in-flow card
+			// push wider than the day slot; its own overflow:hidden clips the rows instead.
+			min-width: 0;
+			max-width: 100%;
+
+			.cal-week__event-meta,
+			.cal-week__event-footer {
+				display: flex;
+			}
+
+			// The @container max-height rule that reserves the corner-mark gutter can't run
+			// without size containment, so reserve it here whenever the card is marked (its
+			// top row is the client name, sitting directly under the floating mark).
+			&.cal-week__event--marked .cal-week__event-headline {
+				padding-right: 26px; // clear the 16px recurring/outcome chip at right: $space-2
+			}
+		}
+	}
 	// Non-billable calendar Event block (Jobber `Event`) — neutral grey, read-only.
 	// A distinct class from `&__event` so it never inherits the visit type/status colors.
 	&__timeblock {
 		position: absolute;
 		z-index: 9; // just under visits so an overlapping visit stays clickable on top
+		container: cal-card / size; // same self-measuring layouts as a visit card
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
@@ -1177,16 +1348,13 @@
 		border: 1px solid var(--color-border);
 		border-left: 3px solid var(--color-text-muted);
 		border-radius: $radius-md;
-		background: repeating-linear-gradient(
-			-45deg,
-			var(--color-bg-surface-sunk),
-			var(--color-bg-surface-sunk) 6px,
-			var(--color-bg-surface) 6px,
-			var(--color-bg-surface) 12px
-		);
+		// Flat, not hatched: the diagonal stripes read as noise at small sizes, and a
+		// sunk surface says "not billable work" just as well. No status colour — an
+		// Event has no status, and colouring it would make it compete with real work.
+		background: var(--color-bg-surface-sunk);
 		color: var(--color-text-secondary);
-		font-size: 1.1rem;
-		line-height: 1.25;
+		font-size: $fs-body;
+		line-height: $lh-body;
 		box-shadow: var(--shadow-xs);
 		user-select: none;
 		transition:
@@ -1209,29 +1377,10 @@
 		}
 	}
 
-	&__timeblock-tag {
-		align-self: flex-start;
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		max-width: 100%;
-		overflow: hidden;
-		padding: 1px $space-2;
-		border-radius: $radius-full;
-		font-size: 1rem;
-		font-weight: $weight-semibold;
-		line-height: 1.5;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-		background: var(--color-bg-surface-sunk);
-		color: var(--color-text-muted);
-
-		i {
-			font-size: 1.1rem;
-		}
-	}
-
+	// An Event has no client, so its title takes the client's place in the headline.
 	&__timeblock-title {
+		flex: 1 1 auto;
+		min-width: 0;
 		overflow: hidden;
 		font-weight: $weight-semibold;
 		letter-spacing: -0.01em;
@@ -1240,17 +1389,18 @@
 		color: var(--color-text-primary);
 	}
 
+	// Assignee row on an Event — secondary text, same $fs-caption as a visit's meta.
 	&__timeblock-meta {
-		display: flex;
+		display: none; // revealed by the Large layout
 		align-items: center;
 		gap: 4px;
 		overflow: hidden;
-		font-size: 1.05rem;
+		font-size: $fs-caption;
 		color: var(--color-text-muted);
 
 		i {
 			flex: none;
-			font-size: 1.2rem;
+			font-size: 12px; // glyph, not text — sized to match the row's text
 		}
 
 		span {
@@ -1258,88 +1408,340 @@
 			white-space: nowrap;
 			text-overflow: ellipsis;
 		}
+	}
 
-		&--inline {
-			font-weight: $weight-semibold;
-			font-variant-numeric: tabular-nums;
+	// ── Row 1 (lowest priority): the time pill ──────────────────────────────────
+	// Last to appear: the card's position on the grid already states its time.
+	&__event-top {
+		display: none; // revealed by the 4-row layout
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		padding-right: 26px; // clear of the corner mark chip, which floats above this row
+	}
+
+	&__event-timepill {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		min-width: 0;
+		padding: 1px $space-2;
+		border-radius: $radius-full;
+		background: var(--appt-tint, var(--color-bg-surface-sunk));
+		color: var(--appt-accent, var(--color-text-secondary));
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.5;
+
+		i {
+			flex: none;
+			font-size: 12px; // glyph, not text — sized to match the label
 		}
 	}
 
-	// Accent pill: contact name + appointment type — the card's headline chip.
+	&__event-timepill-text {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	// One mark per corner: the repeat glyph while the visit is open, its outcome
+	// once it closes. Pinned to the card, NOT to the time row — the time row is the
+	// lowest-priority row, and a 30-min recurring visit still has to show it repeats.
+	// At 4 rows it lands exactly where it would have sat anyway (the time pill is
+	// left-aligned), so nothing moves.
+	&__event-mark {
+		position: absolute;
+		top: 5px;
+		right: $space-2;
+		font-size: 14px; // glyph, not text
+		line-height: 1;
+		color: var(--appt-accent, var(--color-text-muted));
+
+		// Recurring/series badge — a filled accent chip with a white repeat glyph so it
+		// reads as a deliberate badge, not a faint tint that blends into the card. Shown on
+		// every OPEN visit that belongs to a multi-visit series; the outcome mark takes over
+		// this corner once the visit is closed.
+		&--repeat {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 16px;
+			height: 16px;
+			border-radius: $radius-full;
+			background: var(--appt-accent, var(--color-text-muted));
+			color: #fff;
+			font-size: 10px; // glyph inside the 16px chip
+			box-shadow: var(--shadow-xs);
+		}
+	}
+
+	// ── Row 2: the one row EVERY card has, at every size ────────────────────────
+	&__event-headline {
+		display: flex;
+		align-items: baseline;
+		gap: 4px;
+		min-width: 0;
+		margin: 0;
+	}
+
+	// Client + job title share ONE truncating line so the ellipsis lands at the end
+	// of the pair ("Jafar Khan – HVAC Install…"), not inside each half.
+	&__event-names {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	&__event-client {
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+	}
+
+	// The job title half of the "client – title" pair. Never dropped: the client row
+	// is defined as "client AND job", and it's the row that always survives. The pair
+	// shares one truncating line, so a short card just ellipsises earlier.
+	&__event-sep,
+	&__event-title {
+		font-weight: $weight-regular;
+		opacity: 0.9;
+	}
+
+	// Icon + text meta row (location) — muted, and the card's most secondary text,
+	// so it takes $fs-caption while the client name / job title hold $fs-body.
+	&__event-meta {
+		display: none; // revealed by the Large layout
+		align-items: center;
+		gap: 4px;
+		overflow: hidden;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+
+		i {
+			flex: none;
+			font-size: 12px; // glyph, not text — sized to match the row's text
+		}
+
+		span {
+			overflow: hidden;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+	}
+
+	// ── Row 4: status pill + assignee ───────────────────────────────────────────
+	// `margin-top: auto` pins it to the card's bottom edge, so a card taller than its
+	// content (a long visit with no address) still reads as a designed block.
+	&__event-footer {
+		display: none; // revealed by the Full layout
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		margin-top: auto;
+	}
+
 	&__event-pill {
-		align-self: flex-start;
-		max-width: 100%;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
 		overflow: hidden;
 		padding: 1px $space-2;
 		border-radius: $radius-full;
-		font-size: 1rem;
+		background: var(--appt-tint, var(--color-bg-surface-sunk));
+		color: var(--appt-accent, var(--color-text-secondary));
+		font-size: $fs-caption;
 		font-weight: $weight-semibold;
 		line-height: 1.5;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		background: var(--appt-tint, var(--state-active-tint));
-		color: var(--appt-accent, var(--color-brand));
+	}
 
-		// Status states keep their own color so the pill reads as the status.
-		.cal-week__event--completed & {
-			background: var(--success-bg);
-			color: var(--success-text);
-		}
-		.cal-week__event--cancelled & {
-			background: var(--danger-bg);
-			color: var(--danger-text);
+	&__event-pill-dot {
+		flex: none;
+		width: 6px;
+		height: 6px;
+		border-radius: $radius-full;
+		background: currentColor;
+
+		// Late is the one state that moves. Nothing else on the calendar animates, so
+		// the pulse is unambiguous — and it's what carries the state to anyone who
+		// can't separate the red from the green.
+		.cal-week__event--state-late & {
+			animation: cal-late-pulse 1.6s $ease-standard infinite;
 		}
 	}
 
-	&__event-title {
+	// Type fallback ("Estimate"), shown only for non-job visits: the rail carries
+	// status now, so type has no colour of its own. Placeholder until estimate and
+	// inspection cards get their own design.
+	&__event-kind {
+		flex: none;
 		overflow: hidden;
+		font-size: $fs-caption;
 		font-weight: $weight-semibold;
-		letter-spacing: -0.01em;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-	}
-
-	// Icon + text meta rows (location, time) — muted, matching the reference card.
-	&__event-meta {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		overflow: hidden;
-		font-size: 1.05rem;
 		color: var(--color-text-muted);
-
-		i {
-			flex: none;
-			font-size: 1.2rem;
-		}
-
-		span {
-			overflow: hidden;
-			white-space: nowrap;
-			text-overflow: ellipsis;
-		}
-
-		&--inline {
-			font-weight: $weight-semibold;
-			font-variant-numeric: tabular-nums;
-			color: inherit;
-			opacity: 0.75;
-		}
 	}
 
-	// Initials avatar (no contact photo is stored) — anchored bottom-left.
-	&__event-avatar {
-		display: flex;
+	// Assigned team member avatar — the footer's right edge. (There is deliberately
+	// no CONTACT avatar: the client's name is the headline on every card, so initials
+	// of the same name would just be saying it twice.) It yields to the hover actions,
+	// which occupy the same corner.
+	&__event-assignee {
+		display: inline-flex;
+		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: 26px;
-		height: 26px;
-		margin-top: auto;
+		width: 20px;
+		height: 20px;
+		margin-left: auto;
 		border-radius: $radius-full;
-		font-size: 1rem;
+		font-size: 10px; // avatar initials — the token scale's 14px floor is for text
 		font-weight: $weight-semibold;
-		background: var(--appt-tint, var(--state-active-tint));
-		color: var(--appt-accent, var(--color-brand));
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		border: 1.5px solid var(--color-border);
+		transition: opacity $duration-fast $ease-standard;
+
+		.cal-week__event:hover & {
+			opacity: 0;
+		}
+	}
+
+	@keyframes cal-late-pulse {
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.9);
+			opacity: 0.55;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		&__event-pill-dot {
+			.cal-week__event--state-late & {
+				animation: none;
+			}
+		}
+	}
+
+	// Quick action buttons — appear on hover for fast client outreach.
+	&__event-actions {
+		position: absolute;
+		bottom: 4px;
+		right: 4px;
+		display: none; // revealed by the Large layout
+		gap: 2px;
+		opacity: 0;
+		transition: opacity $duration-fast $ease-standard;
+
+		.cal-week__event:hover & {
+			opacity: 1;
+		}
+	}
+
+	&__action-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		margin: 0;
+		border: none;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		font-size: 12px; // icon glyph in a 22px round button — not text
+		box-shadow: var(--shadow-xs);
+		cursor: pointer;
+		transition:
+			background-color $duration-fast $ease-standard,
+			color $duration-fast $ease-standard;
+
+		&:hover {
+			background: var(--color-brand);
+			color: var(--color-text-on-brand);
+		}
+	}
+
+	// ── Card layouts ────────────────────────────────────────────────────────────
+	// The card has four rows and reveals them BY PRIORITY, chosen by the card's OWN
+	// measured height — never by the density mode. Density only sets px-per-hour; the
+	// card then measures itself, so a 3-hour visit in Compact shows more than a 30-min
+	// visit in Spacious. The @container query measures the card's CONTENT box (padding
+	// and border already excluded), so these px map straight to rows of content and
+	// hold across all three densities even though their padding differs.
+	//
+	// Thresholds are the exact content height each stage needs, tightest-density first
+	// so a row is never half-painted (rounded UP by a hair for safety):
+	//
+	//   Row heights: client 14px x 1.25 = 18px · status/time pill 12px x 1.5 + 2 = 20px
+	//   · address 12px x 1.25 = 15px · plus the flex gap (2/3/4px by density).
+	//
+	//   Gap is 2px in Compact, 3px in Comfortable and Spacious (see density modifiers).
+	//   1 row  (default)   client – job                                  ~18px
+	//   2 rows (>= 41px)   + the time row              (18 + 3 + 20)     ~41px
+	//   3 rows (>= 60px)   + address                   (+ 15 + 3)        ~59px
+	//   4 rows (>= 82px)   + status pill + assignee. The ref. (+ 20 + 3) ~82px
+	//
+	// Priority order (contractor-friendly): client → time → address → status. The status
+	// WORD is last to fit because it is the most recoverable: the rail already carries
+	// the status as colour (late / today / done), so the pill only names what the colour
+	// already shows. Time and address have no such backup, so they earn their place first.
+	//
+	// Priority never reorders the card — rows are revealed, not moved, so the paint
+	// order stays time / client / address / status at every size.
+	//
+	// The 4-row threshold is why Spacious is 110px/hr: a 1-hour visit then has
+	// 110 - 14 padding - 2 border = 94px of content, clearing the 82px the full card
+	// needs. A 30-min Compact visit has only ~43px and correctly shows 2 rows.
+	//
+	// The contract: a row is revealed WHOLE or not at all — never half-painted.
+	// It holds because the grid refuses to draw a card shorter than the 1-row
+	// layout needs (DENSITY_MIN_BLOCK_PX in calendarDensity.svelte.ts), inflating
+	// 10- and 15-minute visits past their true duration the way Google Calendar
+	// does. Change the card's padding or font-size and these numbers move too.
+	@container cal-card (min-height: 41px) {
+		&__event-top {
+			display: flex;
+		}
+	}
+
+	@container cal-card (min-height: 60px) {
+		&__event-meta,
+		&__timeblock-meta {
+			display: flex;
+		}
+		&__event-actions {
+			display: flex;
+		}
+	}
+
+	@container cal-card (min-height: 82px) {
+		&__event-footer {
+			display: flex;
+		}
+	}
+
+	// On a 1-row card the time row is absent, so the corner mark floats over the client
+	// row instead — reserve its space so a long client name can't run underneath it.
+	// At 2+ rows the time row sits on top and already carries the mark's clearance, so
+	// the client row needs none. Gated on the mark existing: an unmarked card keeps the
+	// full width for its name, where space is tightest. An Event always carries its mark.
+	@container cal-card (max-height: 40.99px) {
+		&__event--marked &__event-headline,
+		&__timeblock &__event-headline {
+			padding-right: 26px;
+		}
 	}
 
 	// Resize handle at an event's bottom edge.
@@ -1369,22 +1771,26 @@
 		display: flex;
 		flex-direction: column;
 		padding: $space-1 6px;
-		border: 2px dashed var(--color-brand);
+		border: 2px solid var(--color-brand);
 		border-radius: $radius-sm;
-		background: rgba(34, 125, 83, 0.2);
+		background: rgba(34, 125, 83, 0.25);
+		box-shadow:
+			var(--shadow-md),
+			0 0 0 1px rgba(34, 125, 83, 0.2);
+		transform: scale(1.02);
 	}
 
 	// Tentative "being created" block — stays painted behind the quick-create
 	// bubble (Google Calendar style) so the drawn slot never appears to vanish.
 	&__ghost--pending {
 		border-style: solid;
-		background: rgba(34, 125, 83, 0.28);
-		box-shadow: 0 0 0 2px rgba(34, 125, 83, 0.15);
+		background: var(--brand-tint-solid);
+		box-shadow: 0 0 0 2px var(--brand-glow-soft);
 	}
 
 	&__ghost-label {
 		overflow: hidden;
-		font-size: 1.1rem;
+		font-size: $fs-caption;
 		font-weight: $weight-semibold;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;

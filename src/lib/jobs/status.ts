@@ -2,11 +2,13 @@ import type { JobStatus } from '$lib/types/jobs';
 
 // The precise, user-facing state shown on a job (badge, tabs, KPI). A job's STORED status is the
 // authority for the manual work states (in_progress / on_hold / completed / cancelled). A job that
-// is still 'scheduled' shows one of four DATE-derived faces instead — matching Jobber's model:
-//   • unscheduled — no date on the calendar yet
-//   • upcoming    — has a future date
-//   • today       — date is today, crew hasn't started
-//   • overdue     — date has passed and it was never started/completed (money-at-risk flag)
+// is still 'scheduled' shows one of five VISIT-derived faces instead — matching Jobber's model:
+//   • unscheduled     — has open visits but none has a date yet (Jobber "Schedule later")
+//   • upcoming        — next open visit is in the future
+//   • today           — next open visit is today, crew hasn't started
+//   • overdue         — next open visit's date has passed and it was never completed (money-at-risk)
+//   • action_required — active but NO open visits remain: all done, or an "as needed" job with none
+//                       yet. Jobber's `action_required` — prompt to schedule more or close the job.
 // The moment the contractor taps "Start" the stored status becomes in_progress and the manual
 // state wins here — so "Today until you start it, then In Progress" falls out for free.
 export type JobScheduleState =
@@ -14,36 +16,72 @@ export type JobScheduleState =
 	| 'upcoming'
 	| 'today'
 	| 'overdue'
+	| 'action_required'
 	| 'in_progress'
 	| 'on_hold'
 	| 'completed'
 	| 'cancelled';
 
-// Derive the display state from the stored status + the job's single scheduled_start. `now` is
-// injectable for consistent day boundaries / tests. Note: this reads the job's one date, so it is
-// exact for single-visit jobs and an approximation for recurring/multi-visit jobs (the fully
-// visit-accurate version is the larger schedule-hub work).
+// The visit-truth signals a display state is derived from. These come from the job's actual visit
+// rows (appointments), NOT the job's single denormalized date — which is why the badge is now exact
+// for recurring / multi-visit jobs (their stored `scheduled_start` is the frozen series anchor and
+// would otherwise show a stale "Overdue").
+//   • nextOpenVisitStart — earliest still-open ('scheduled' status) DATED visit; null if none dated.
+//   • hasOpenVisits      — any still-open visit exists at all ('scheduled' or 'unscheduled' status).
+//   • scheduledStart     — the job's own denormalized date. Used ONLY as a fallback when the job
+//                          somehow has no visit rows (legacy safety net), and only when that column
+//                          actually mirrors a visit — see hasSeriesAnchor.
+//   • hasSeriesAnchor    — the job's `scheduled_start` is a SERIES ANCHOR, not a mirror of a visit:
+//                          true when the job has a repeat rule (the frozen expansion start) or is
+//                          "as needed" (a stored job window). Such a date is never a real visit
+//                          date, so the fallback must not read it. This is NOT "is recurring": a
+//                          ONE-OFF job may carry a repeat rule, and its anchor is just as frozen.
+export type JobScheduleSignals = {
+	status: JobStatus;
+	hasSeriesAnchor?: boolean;
+	scheduledStart?: string | Date | null;
+	nextOpenVisitStart?: string | Date | null;
+	hasOpenVisits?: boolean;
+};
+
+function toDate(value: string | Date | null | undefined): Date | null {
+	if (!value) return null;
+	const d = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Derive the display state from the stored status + the job's visit signals. `now` is injectable
+// for consistent day boundaries / tests. The four dated faces + Action Required all fall out of the
+// next OPEN visit rather than the job's single (possibly stale) date.
 export function deriveJobScheduleState(
-	status: JobStatus,
-	scheduledStart: string | Date | null | undefined,
+	sig: JobScheduleSignals,
 	now: Date = new Date()
 ): JobScheduleState {
-	// Manual work states always win over the date-derived faces.
-	if (status !== 'scheduled') return status;
+	// Manual work states always win over the visit-derived faces.
+	if (sig.status !== 'scheduled') return sig.status;
 
-	if (!scheduledStart) return 'unscheduled';
+	// The date to judge against: the next open dated visit if any; otherwise, for a job that has NO
+	// open visits and no visit rows at all (legacy), fall back to the job's own denormalized date.
+	// A job whose date is a series anchor never falls back — that date is not a visit.
+	const openDate =
+		toDate(sig.nextOpenVisitStart) ??
+		(!sig.hasSeriesAnchor && !sig.hasOpenVisits ? toDate(sig.scheduledStart) : null);
 
-	const start = scheduledStart instanceof Date ? scheduledStart : new Date(scheduledStart);
-	if (Number.isNaN(start.getTime())) return 'unscheduled';
+	if (openDate) {
+		const dayStart = new Date(now);
+		dayStart.setHours(0, 0, 0, 0);
+		const dayEnd = new Date(now);
+		dayEnd.setHours(23, 59, 59, 999);
 
-	const dayStart = new Date(now);
-	dayStart.setHours(0, 0, 0, 0);
-	const dayEnd = new Date(now);
-	dayEnd.setHours(23, 59, 59, 999);
+		if (openDate > dayEnd) return 'upcoming';
+		if (openDate >= dayStart) return 'today';
+		return 'overdue';
+	}
 
-	if (start > dayEnd) return 'upcoming';
-	if (start >= dayStart) return 'today';
-	return 'overdue';
+	// No dated open visit. Open placeholder(s) waiting for a date → Unscheduled; otherwise the job
+	// has run out of open visits entirely → Action Required (schedule more or close).
+	if (sig.hasOpenVisits) return 'unscheduled';
+	return 'action_required';
 }
 
 const LABELS: Record<JobScheduleState, string> = {
@@ -51,6 +89,7 @@ const LABELS: Record<JobScheduleState, string> = {
 	upcoming: 'Upcoming',
 	today: 'Today',
 	overdue: 'Overdue',
+	action_required: 'Action Required',
 	in_progress: 'In Progress',
 	on_hold: 'On Hold',
 	completed: 'Completed',

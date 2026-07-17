@@ -11,16 +11,16 @@
 
 This is the index for the Jobber reference set. Read the specific file for your domain.
 
-| Topic | File | Status |
-| --- | --- | --- |
-| **This file** — vocabulary, full lifecycle, object map, master status table, API basics | `jobber-00-overview-lifecycle.md` | ✅ built |
-| **Clients & Properties** — the customer + location model, tags, custom fields, client hub basics | `jobber-01-clients-properties.md` | ✅ built |
-| **Requests & Leads** — work requests, assessments, lead intake/booking | `jobber-02-requests-leads.md` | ✅ built |
-| **Quotes** — quote object, line items, good-better-best, deposits, approvals | `jobber-03-quotes.md` | ✅ built |
-| **Jobs, Visits & Scheduling** — one-off vs recurring, recurrence, assignments, calendar | `jobber-04-jobs-visits-scheduling.md` | ✅ built |
-| **Invoices & Payments** — invoice object, line items, payment records, Jobber Payments | `jobber-05-invoices-payments.md` | ✅ built |
-| **Automations & Client Hub** — triggers/actions, self-serve client portal | `jobber-06-automations-clienthub.md` | ✅ built |
-| **API model & Mutations** — full query/mutation catalog, pagination, webhooks, rate limits | `jobber-07-api-mutations.md` | ✅ built |
+| Topic                                                                                            | File                                  | Status   |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------- | -------- |
+| **This file** — vocabulary, full lifecycle, object map, master status table, API basics          | `jobber-00-overview-lifecycle.md`     | ✅ built |
+| **Clients & Properties** — the customer + location model, tags, custom fields, client hub basics | `jobber-01-clients-properties.md`     | ✅ built |
+| **Requests & Leads** — work requests, assessments, lead intake/booking                           | `jobber-02-requests-leads.md`         | ✅ built |
+| **Quotes** — quote object, line items, good-better-best, deposits, approvals                     | `jobber-03-quotes.md`                 | ✅ built |
+| **Jobs, Visits & Scheduling** — one-off vs recurring, recurrence, assignments, calendar          | `jobber-04-jobs-visits-scheduling.md` | ✅ built |
+| **Invoices & Payments** — invoice object, line items, payment records, Jobber Payments           | `jobber-05-invoices-payments.md`      | ✅ built |
+| **Automations & Client Hub** — triggers/actions, self-serve client portal                        | `jobber-06-automations-clienthub.md`  | ✅ built |
+| **API model & Mutations** — full query/mutation catalog, pagination, webhooks, rate limits       | `jobber-07-api-mutations.md`          | ✅ built |
 
 ---
 
@@ -36,19 +36,19 @@ Jobber talks about two sides of every account:
 
 The core objects, in the order a job flows through them:
 
-| Term | API type | Plain English |
-| --- | --- | --- |
-| **Account** | `Account` | The contractor's company/tenant. Has `industry`, `countryCode`, `dedicatedPhoneNumber`, features. |
-| **User** | `User` | A team member / staff login on the account. |
-| **Client** | `Client` | The customer (person or company). Can be a **lead** (`isLead: true`) before they become a real client. |
-| **Property** | `Property` | A physical location owned by the client where work happens. A client can have 0, 1, or many. |
-| **Request** | `Request` | An incoming work request / job lead ("customer wants work done"). Often the first object created. |
-| **Assessment** | `Assessment` | An on-site visit to scope/estimate the work before quoting. A schedulable item tied to a request. |
-| **Quote** | `Quote` | A priced estimate sent to the client for approval. Has line items, optional add-ons, deposits. |
-| **Job** | `Job` | The **contract / scope of work** that's been agreed to. Can be **one-off** or **recurring**. |
-| **Visit** | `Visit` | A single scheduled appointment on the calendar at the property to do (part of) the job's work. |
-| **Invoice** | `Invoice` | A bill sent to the client for completed work. |
-| **Payment** | `PaymentRecord` | Money received against an invoice (or a deposit). |
+| Term           | API type        | Plain English                                                                                          |
+| -------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
+| **Account**    | `Account`       | The contractor's company/tenant. Has `industry`, `countryCode`, `dedicatedPhoneNumber`, features.      |
+| **User**       | `User`          | A team member / staff login on the account.                                                            |
+| **Client**     | `Client`        | The customer (person or company). Can be a **lead** (`isLead: true`) before they become a real client. |
+| **Property**   | `Property`      | A physical location owned by the client where work happens. A client can have 0, 1, or many.           |
+| **Request**    | `Request`       | An incoming work request / job lead ("customer wants work done"). Often the first object created.      |
+| **Assessment** | `Assessment`    | An on-site visit to scope/estimate the work before quoting. A schedulable item tied to a request.      |
+| **Quote**      | `Quote`         | A priced estimate sent to the client for approval. Has line items, optional add-ons, deposits.         |
+| **Job**        | `Job`           | The **contract / scope of work** that's been agreed to. Can be **one-off** or **recurring**.           |
+| **Visit**      | `Visit`         | A single scheduled appointment on the calendar at the property to do (part of) the job's work.         |
+| **Invoice**    | `Invoice`       | A bill sent to the client for completed work.                                                          |
+| **Payment**    | `PaymentRecord` | Money received against an invoice (or a deposit).                                                      |
 
 Supporting/adjacent objects seen in the schema: `Event` (calendar event not tied to a job),
 `Task` (to-do, schedulable), `Expense`, `TimeSheetEntry` (time tracking), `ProductOrService`
@@ -152,6 +152,7 @@ Account (the contractor / tenant)
 ```
 
 Key modeling facts:
+
 - **`scheduledItems`** is a polymorphic connection (`ScheduledItemInterface`) — the calendar is a single
   stream of Basic Tasks, **Visits**, Events, **Assessments**, Quote Reminders, and Invoice Reminders.
   This is Jobber's unified "schedule" abstraction. (See `jobber-04`.)
@@ -168,17 +169,19 @@ All core status enums are confirmed from the schema below (each domain file has 
 status's plain-English meaning is the important part for building parity.
 
 ### Quote statuses (`Quote.quoteStatus`) — [[quote approvals]] [[quote basics]]
-| Status | Meaning |
-| --- | --- |
-| **Draft** | Not sent yet; only visible to the contractor. |
-| **Awaiting Response** | Sent to client; waiting for approval or a change request. |
-| **Changes Requested** | Client asked for changes. |
-| **Approved** | Client approved (in Client Hub) or staff marked it approved manually. |
-| **Awaiting Payment** | Quote was sent to collect a **deposit**; waiting for that payment. |
-| **Converted** | Quote has been turned into a job. **Final** — stays Converted even if the job is later deleted. |
-| **Archived** | Quote archived/closed. |
+
+| Status                | Meaning                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| **Draft**             | Not sent yet; only visible to the contractor.                                                   |
+| **Awaiting Response** | Sent to client; waiting for approval or a change request.                                       |
+| **Changes Requested** | Client asked for changes.                                                                       |
+| **Approved**          | Client approved (in Client Hub) or staff marked it approved manually.                           |
+| **Awaiting Payment**  | Quote was sent to collect a **deposit**; waiting for that payment.                              |
+| **Converted**         | Quote has been turned into a job. **Final** — stays Converted even if the job is later deleted. |
+| **Archived**          | Quote archived/closed.                                                                          |
 
 ### Job statuses (`JobStatusTypeEnum`) — [[job basics]] [[jobs list page]] (full detail in `jobber-04` §4)
+
 Derived from visit/invoicing state, not set by hand. Enum (schema): `active`, `upcoming`, `today`, `late`,
 `unscheduled`, `action_required`, `on_hold`, `requires_invoicing`, `expiring_within_30_days`, `archived`.
 | Status | Meaning |
@@ -193,6 +196,7 @@ Derived from visit/invoicing state, not set by hand. Enum (schema): `active`, `u
 | **Archived** | Closed job that no longer needs invoicing — you're done with it. |
 
 ### Visit states (`VisitStatusTypeEnum`) — [[visits]] [[job basics]] (full detail in `jobber-04` §3)
+
 Enum (schema): `ACTIVE`, `UPCOMING`, `TODAY`, `LATE`, `UNSCHEDULED`, `COMPLETED`. Orthogonal to those, a
 visit is one of **three kinds** by how it's placed on the calendar:
 | Kind | Meaning |
@@ -202,6 +206,7 @@ visit is one of **three kinds** by how it's placed on the calendar:
 | **Unscheduled** | Has **neither** date nor time (`startAt`/`endAt` both null — a backlog placeholder). |
 
 ### Request statuses (`RequestStatusTypeEnum`) — [[requests and leads]] (see `jobber-02`)
+
 Enum values (schema): `new`, `unscheduled`, `upcoming`, `today`, `overdue`, `assessment_completed`,
 `completed`, `converted`, `archived`. Plain English:
 | Status | Meaning |
@@ -214,6 +219,7 @@ Enum values (schema): `new`, `unscheduled`, `upcoming`, `today`, `overdue`, `ass
 | **Archived** | Archived/closed. |
 
 ### Invoice statuses (`InvoiceStatusTypeEnum`) — [[invoice basics]] [[bad debt]] (full detail in `jobber-05` §2)
+
 Enum (schema): `draft`, `sent_not_due`, `awaiting_payment`, `paid`, `past_due`, `bad_debt`.
 | Status | Meaning |
 | --- | --- |
@@ -229,6 +235,7 @@ Enum (schema): `draft`, `sent_not_due`, `awaiting_payment`, `paid`, `past_due`, 
 batch invoice creation.
 
 ### Payment "adjustment" types (`IncomeAdjustmentType`) — (full detail in `jobber-05` §5)
+
 Not a status but the money-movement discriminator on the payments ledger (schema): `PAYMENT`, `INVOICE`,
 `DEPOSIT`, `REFUND`, `CORRECTION`, `INITIAL_BALANCE`, `FAILED_ACH_PAYMENT`, `BAD_DEBT`, `VOIDED`. Jobber
 Payments charges also carry a processor status (`JobberPaymentTransactionStatus`: `PENDING`, `SUCCEEDED`,
@@ -278,4 +285,7 @@ Our CRM already mirrors most of this shape; the important deltas to keep in mind
   error shape (`{ error, field_errors }`) is the equivalent — keep field-level errors first-class.
 - **Quote "Converted" is terminal:** worth copying — once a quote becomes a job it never reverts, even if
   the job is deleted. Prevents double-conversion.
+
+```
+
 ```

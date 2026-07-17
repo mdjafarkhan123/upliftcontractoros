@@ -197,7 +197,9 @@
 										</Select.Trigger>
 										<Select.Content>
 											{#each CHANNELS as ch}
-												<Select.Item value={ch}>{channelLabel(ch)}</Select.Item>
+												<Select.Item value={ch} label={channelLabel(ch)}
+													>{channelLabel(ch)}</Select.Item
+												>
 											{/each}
 										</Select.Content>
 									</Select.Root>
@@ -257,18 +259,19 @@
 								</Select.Trigger>
 								<Select.Content>
 									{#each CHANNELS as ch}
-										<Select.Item value={ch}>{channelLabel(ch)}</Select.Item>
+										<Select.Item value={ch} label={channelLabel(ch)}>{channelLabel(ch)}</Select.Item
+										>
 									{/each}
 								</Select.Content>
 							</Select.Root>
-						<Button
-							style="margin-left:auto"
-							disabled={!newTitle.trim() || !newBody.trim() || saving}
-							onclick={() => void create()}
-						>
-							<i class="ri-save-line" aria-hidden="true"></i>
-							Save
-						</Button>
+							<Button
+								style="margin-left:auto"
+								disabled={!newTitle.trim() || !newBody.trim() || saving}
+								onclick={() => void create()}
+							>
+								<i class="ri-save-line" aria-hidden="true"></i>
+								Save
+							</Button>
 						</div>
 					</div>
 				</div>

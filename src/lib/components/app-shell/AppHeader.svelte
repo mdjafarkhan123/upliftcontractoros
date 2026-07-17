@@ -14,6 +14,7 @@
 		'/dashboard': 'Dashboard',
 		'/pipeline': 'Pipeline',
 		'/contacts': 'Contacts',
+		'/requests': 'Requests',
 		'/jobs': 'Jobs',
 		'/quotes': 'Quotes',
 		'/invoices': 'Invoices',

@@ -324,12 +324,7 @@
 			>
 				Cancel
 			</button>
-			<Button
-				loadingLabel="Creating…"
-				successLabel="Created"
-				loading={saving}
-				onclick={start}
-			>
+			<Button loadingLabel="Creating…" successLabel="Created" loading={saving} onclick={start}>
 				Start quote
 			</Button>
 		</div>

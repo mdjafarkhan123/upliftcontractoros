@@ -1,0 +1,9 @@
+{
+	"mcp": {
+		"svelte": {
+			"type": "local",
+			"command": ["npx", "-y", "@sveltejs/mcp@latest"]
+		}
+	},
+	"$schema": "https://mimo.xiaomi.com/mimocode/config.json"
+}

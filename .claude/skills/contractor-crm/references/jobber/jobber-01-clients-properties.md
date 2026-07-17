@@ -13,55 +13,55 @@ happens. This file documents both, their sub-objects, and the behavior around th
 
 ## 1. Client (`Client`)
 
-> Schema description: *"Clients are the customers who pay for services on Jobber's platform — they belong
-> to the Jobber account / service provider."*
+> Schema description: _"Clients are the customers who pay for services on Jobber's platform — they belong
+> to the Jobber account / service provider."_
 
 A client can be a person or a business (`isCompany`), and can be a prospective **lead** (`isLead`) before
 becoming a full client.
 
 ### 1.1 Core fields (from schema)
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `id` | `EncodedId!` | Opaque unique id. |
-| `name` | `String!` | Primary display name of the client. |
-| `firstName` / `lastName` | `String!` | Person's name parts. |
-| `companyName` | `String` | Business name (when `isCompany`). |
-| `title` | `String` | Client's title (e.g. Mr/Ms/Dr). |
-| `secondaryName` | `String` | Secondary contact name (e.g. spouse/partner). |
-| `isCompany` | `Boolean!` | Does the client represent a business. |
-| `isLead` | `Boolean!` | Is this a prospective **lead** (not yet a converted client). |
-| `email` | `String` | Primary email. |
-| `phone` | `String` | Primary phone. |
-| `emails` | `[email]!` | All email addresses (one primary). |
-| `phones` | `[ClientPhoneNumber]!` | All phone numbers (one primary). |
-| `defaultEmails` / `defaultPhones` | list | Email/phone to use for a given message type (SMS vs email). |
-| `billingAddress` | `ClientAddress` | Custom billing address. |
-| `billingAddressPresent` | `Boolean!` | Whether a custom billing address exists (else uses a property). |
-| `balance` | `Float!` | Client's current outstanding balance. |
-| `leadSource` | `String` | Lead-source label, e.g. "Google", or a custom label; null if none. |
-| `sourceAttribution` | `SourceAttribution` | Structured acquisition source of the client record. |
-| `utmMedium` | `String` | UTM medium captured (e.g. "cpc"). |
-| `tags` | `TagConnection!` | Custom grouping labels. |
-| `customFields` | list | Client-level custom field values. |
-| `notes` / `noteAttachments` | `ClientNoteConnection!` / `ClientNoteFileConnection!` | Internal notes + files. |
-| `isArchived` / `isArchivable` | `Boolean!` | Archive state / whether it can be archived. |
-| `sampleData` | `Boolean!` | Whether the record is Jobber demo/sample data. |
-| `createdAt` / `updatedAt` | `ISO8601DateTime!` | Timestamps. |
-| `jobberWebUri` | `String!` | Deep link to this record in Jobber web app. |
+| Field                             | Type                                                  | Meaning                                                            |
+| --------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| `id`                              | `EncodedId!`                                          | Opaque unique id.                                                  |
+| `name`                            | `String!`                                             | Primary display name of the client.                                |
+| `firstName` / `lastName`          | `String!`                                             | Person's name parts.                                               |
+| `companyName`                     | `String`                                              | Business name (when `isCompany`).                                  |
+| `title`                           | `String`                                              | Client's title (e.g. Mr/Ms/Dr).                                    |
+| `secondaryName`                   | `String`                                              | Secondary contact name (e.g. spouse/partner).                      |
+| `isCompany`                       | `Boolean!`                                            | Does the client represent a business.                              |
+| `isLead`                          | `Boolean!`                                            | Is this a prospective **lead** (not yet a converted client).       |
+| `email`                           | `String`                                              | Primary email.                                                     |
+| `phone`                           | `String`                                              | Primary phone.                                                     |
+| `emails`                          | `[email]!`                                            | All email addresses (one primary).                                 |
+| `phones`                          | `[ClientPhoneNumber]!`                                | All phone numbers (one primary).                                   |
+| `defaultEmails` / `defaultPhones` | list                                                  | Email/phone to use for a given message type (SMS vs email).        |
+| `billingAddress`                  | `ClientAddress`                                       | Custom billing address.                                            |
+| `billingAddressPresent`           | `Boolean!`                                            | Whether a custom billing address exists (else uses a property).    |
+| `balance`                         | `Float!`                                              | Client's current outstanding balance.                              |
+| `leadSource`                      | `String`                                              | Lead-source label, e.g. "Google", or a custom label; null if none. |
+| `sourceAttribution`               | `SourceAttribution`                                   | Structured acquisition source of the client record.                |
+| `utmMedium`                       | `String`                                              | UTM medium captured (e.g. "cpc").                                  |
+| `tags`                            | `TagConnection!`                                      | Custom grouping labels.                                            |
+| `customFields`                    | list                                                  | Client-level custom field values.                                  |
+| `notes` / `noteAttachments`       | `ClientNoteConnection!` / `ClientNoteFileConnection!` | Internal notes + files.                                            |
+| `isArchived` / `isArchivable`     | `Boolean!`                                            | Archive state / whether it can be archived.                        |
+| `sampleData`                      | `Boolean!`                                            | Whether the record is Jobber demo/sample data.                     |
+| `createdAt` / `updatedAt`         | `ISO8601DateTime!`                                    | Timestamps.                                                        |
+| `jobberWebUri`                    | `String!`                                             | Deep link to this record in Jobber web app.                        |
 
 ### 1.2 Communication-preference flags (all `Boolean!`)
 
 These are per-client opt-ins that gate Jobber's automated messaging — directly relevant to our automation
 opt-out model:
 
-| Field | Controls |
-| --- | --- |
-| `receivesFollowUps` | Job follow-up messages. |
+| Field                      | Controls                              |
+| -------------------------- | ------------------------------------- |
+| `receivesFollowUps`        | Job follow-up messages.               |
 | `receivesInvoiceFollowUps` | Invoice follow-up / dunning messages. |
-| `receivesQuoteFollowUps` | Quote follow-up messages. |
-| `receivesReminders` | Assessment & visit reminders. |
-| `receivesReviewRequests` | Review-request messages. |
+| `receivesQuoteFollowUps`   | Quote follow-up messages.             |
+| `receivesReminders`        | Assessment & visit reminders.         |
+| `receivesReviewRequests`   | Review-request messages.              |
 
 > **Build note:** Jobber splits notification consent into **five independent per-client toggles** by
 > message category, not one global "don't text me." Our per-contact SMS opt-out is coarser; matching
@@ -74,9 +74,11 @@ opt-out model:
 `scheduledItems` (`ScheduledItemInterfaceConnection` — scheduled + unscheduled), `unallocatedDepositRecords`
 (deposits taken but not yet applied to an invoice / not refunded), and `requestedWorkObjects`
 (`RequestedWorkObjectUnionConnection` — the unified activity timeline: requests + quotes + jobs + invoices
-+ treatments, default newest-modified first).
+
+- treatments, default newest-modified first).
 
 Two performance-guard fields worth copying:
+
 - `scheduledItemsAvailable: Boolean!` — returns **false** when the client has too many attached records to
   query efficiently; then `scheduledItems` returns empty and the UI should send the user to the main
   schedule instead. (Explicit "this list is too big to inline" escape hatch.)
@@ -98,6 +100,7 @@ receive texts), plus links to `client` and `contact`.
 attachments via `ClientNoteAddAttachment`.
 
 **`ClientMeta`** (fetched via the `clientMeta` query, not on `Client` itself):
+
 - `clientHub: Boolean` — whether the client has Client Hub enabled.
 - `counts` (`ClientCounts`) — association counts: `deposits`, `invoices`, `jobs`, `notes`, `payments`,
   `properties`, `quotes`, `requests`, `tasks`, `visits`. (Powers the client-summary badges cheaply.)
@@ -119,27 +122,27 @@ attachments via `ClientNoteAddAttachment`.
 
 ## 2. Property (`Property`)
 
-> Schema description: *"Properties are locations owned by Service Consumers where Service Providers provide
-> service for."* A client can have **0, 1, or many** properties. [[client basics]]
+> Schema description: _"Properties are locations owned by Service Consumers where Service Providers provide
+> service for."_ A client can have **0, 1, or many** properties. [[client basics]]
 
 ### 2.1 Fields (from schema)
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `id` | `EncodedId!` | Unique id. |
-| `client` | `Client` | Owning client. |
-| `address` | `PropertyAddress!` | The physical address (geo-coded). |
-| `name` | `String` | Property label (e.g. "Main house", "Warehouse"). |
-| `contacts` | `ContactModelConnection` | Contacts specific to this property. |
-| `taxRate` | `TaxRate` | **Tax rate lives on the property**, not the client. |
-| `recentPricing` | `ProductOrServiceConnection` | Recently-used line items **for this property** (price memory). |
-| `routingOrder` | `Int` | Property's order in route optimization. |
-| `isBillingAddress` | `Boolean` | Whether this property doubles as the billing address. |
-| `customFields` | list | Property-level custom fields. |
-| `jobs` / `quotes` / `requests` | connections | Work attached to this specific property. |
-| `scheduledItems` | `ScheduledItemInterfaceConnection!` | Visits, tasks, assessments, events, reminders at this property. |
-| `createdAt` | `ISO8601DateTime!` | First created. |
-| `jobberWebUri` | `String!` | Deep link. |
+| Field                          | Type                                | Meaning                                                         |
+| ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
+| `id`                           | `EncodedId!`                        | Unique id.                                                      |
+| `client`                       | `Client`                            | Owning client.                                                  |
+| `address`                      | `PropertyAddress!`                  | The physical address (geo-coded).                               |
+| `name`                         | `String`                            | Property label (e.g. "Main house", "Warehouse").                |
+| `contacts`                     | `ContactModelConnection`            | Contacts specific to this property.                             |
+| `taxRate`                      | `TaxRate`                           | **Tax rate lives on the property**, not the client.             |
+| `recentPricing`                | `ProductOrServiceConnection`        | Recently-used line items **for this property** (price memory).  |
+| `routingOrder`                 | `Int`                               | Property's order in route optimization.                         |
+| `isBillingAddress`             | `Boolean`                           | Whether this property doubles as the billing address.           |
+| `customFields`                 | list                                | Property-level custom fields.                                   |
+| `jobs` / `quotes` / `requests` | connections                         | Work attached to this specific property.                        |
+| `scheduledItems`               | `ScheduledItemInterfaceConnection!` | Visits, tasks, assessments, events, reminders at this property. |
+| `createdAt`                    | `ISO8601DateTime!`                  | First created.                                                  |
+| `jobberWebUri`                 | `String!`                           | Deep link.                                                      |
 
 **`PropertyAddress`** — `street`, `street1`, `street2`, `city`, `province`, `postalCode`, `country`,
 `name`, `coordinates` (`GeoPoint`), and `geoStatus` (`GeoStatus` enum — state of geo-coding the address).
@@ -148,6 +151,7 @@ attachments via `ClientNoteAddAttachment`.
 
 Jobber deliberately puts **tax rate, pricing memory, routing order, and geo-coordinates on the property**.
 Consequences to match:
+
 - **Tax is correct per location** — a client with properties in two tax jurisdictions bills correctly.
 - **Route optimization** needs geo-coded properties with a `routingOrder`.
 - **Price memory** (`recentPricing`) is per property, so repeat work at the same site pre-fills prior pricing.
@@ -161,11 +165,12 @@ exposed for properties in the sampled schema **(unverified whether a `PropertyAr
 
 Full treatment (settings, referrals, documents) is in `jobber-06-automations-clienthub.md`. The essentials:
 
-**What it is:** a self-serve online portal where the client can *"approve quotes, check appointment
-details, pay invoices, print receipts, or request more work — all in one place."* Mobile-friendly, no
+**What it is:** a self-serve online portal where the client can _"approve quotes, check appointment
+details, pay invoices, print receipts, or request more work — all in one place."_ Mobile-friendly, no
 login-password required (accessed via a secure link). [[what do your clients see in client hub]]
 
 **What the client can see/do:**
+
 - **Requests** — submit a new work request via a simple form; it lands in the contractor's account. [[what do your clients see]]
 - **Quotes** — approve a quote or request changes. On the **Grow plan**, the client can also select
   **optional line items** and see **line-item images** (this is Jobber's good-better-best / upsell surface). [[what do your clients see]]
@@ -184,17 +189,17 @@ login-password required (accessed via a secure link). [[what do your clients see
 
 ## 4. Available actions / mutations (Clients & Properties)
 
-| Action | Mutation | Returns |
-| --- | --- | --- |
-| Create client | `ClientCreate` (`ClientCreateInput`) | `client`, `userErrors` |
-| Edit client | `ClientEdit` (`ClientEditInput`) | `client`, `userErrors` |
-| Archive client | `ClientArchive` | `client`, `userErrors` |
-| Add client note | `ClientCreateNote` (`ClientCreateNoteInput`) | `client`, `clientNote`, `userErrors` |
-| Edit client note | `ClientEditNote` | `client`, `clientNote`, `userErrors` |
-| Delete client note | `ClientDeleteNote` | `client`, `deletedNote`, `userErrors` |
-| Attach file to note | `ClientNoteAddAttachment` | `attachmentsToBeAdded`, `userErrors` |
-| Create property | `PropertyCreate` (`PropertyCreateInput`) | `client`, `properties`, `userErrors` |
-| Edit property | `PropertyEdit` (`PropertyEditInput`) | `property`, `userErrors` |
+| Action              | Mutation                                     | Returns                               |
+| ------------------- | -------------------------------------------- | ------------------------------------- |
+| Create client       | `ClientCreate` (`ClientCreateInput`)         | `client`, `userErrors`                |
+| Edit client         | `ClientEdit` (`ClientEditInput`)             | `client`, `userErrors`                |
+| Archive client      | `ClientArchive`                              | `client`, `userErrors`                |
+| Add client note     | `ClientCreateNote` (`ClientCreateNoteInput`) | `client`, `clientNote`, `userErrors`  |
+| Edit client note    | `ClientEditNote`                             | `client`, `clientNote`, `userErrors`  |
+| Delete client note  | `ClientDeleteNote`                           | `client`, `deletedNote`, `userErrors` |
+| Attach file to note | `ClientNoteAddAttachment`                    | `attachmentsToBeAdded`, `userErrors`  |
+| Create property     | `PropertyCreate` (`PropertyCreateInput`)     | `client`, `properties`, `userErrors`  |
+| Edit property       | `PropertyEdit` (`PropertyEditInput`)         | `property`, `userErrors`              |
 
 Read queries: `client(id)`, `clients(filter)` (100 recently updated), `clientMeta`, `clientPhone`,
 `clientPhones`, `clientEmails` (fuzzy search by name/email), `similarClients` (≤10, for de-dup),
@@ -213,6 +218,7 @@ Read queries: `client(id)`, `clients(filter)` (100 recently updated), `clientMet
 ---
 
 ### Help-center sources
+
 - Client Basics — https://help.getjobber.com/hc/en-us/articles/115009450867-Client-Basics
 - Lead Management — https://help.getjobber.com/hc/en-us/articles/360038221373-Lead-Management
 - Custom Fields — https://help.getjobber.com/hc/en-us/articles/115009735928-Custom-Fields

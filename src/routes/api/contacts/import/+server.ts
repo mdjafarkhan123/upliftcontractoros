@@ -8,11 +8,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { analyzeCsv } from '$lib/server/contacts/csvImport';
 import { CANONICAL_FIELD_SET } from '$lib/contacts/csvHeaders';
 import { r2Upload } from '$lib/server/media/r2';
-import {
-	addJob,
-	contactImportQueue,
-	CONTACT_IMPORT_JOB
-} from '$lib/server/queue/bullmq';
+import { addJob, contactImportQueue, CONTACT_IMPORT_JOB } from '$lib/server/queue/bullmq';
 
 const MAX_ROWS = 10_000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -69,9 +65,12 @@ export const POST: RequestHandler = async (event) => {
 		}
 		const result = columnMapSchema.safeParse(parsed);
 		if (!result.success) {
-			return json({ error: result.error.issues[0]?.message ?? 'Invalid column mapping.' }, {
-				status: 400
-			});
+			return json(
+				{ error: result.error.issues[0]?.message ?? 'Invalid column mapping.' },
+				{
+					status: 400
+				}
+			);
 		}
 		columnMap = result.data;
 	}

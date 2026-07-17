@@ -67,7 +67,11 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	const [stage] = await db
-		.select({ id: pipelineStages.id, name: pipelineStages.name, default_follow_up_days: pipelineStages.default_follow_up_days })
+		.select({
+			id: pipelineStages.id,
+			name: pipelineStages.name,
+			default_follow_up_days: pipelineStages.default_follow_up_days
+		})
 		.from(pipelineStages)
 		.where(
 			and(
@@ -78,9 +82,12 @@ export const PATCH: RequestHandler = async (event) => {
 		)
 		.limit(1);
 	if (!stage) {
-		return json({ error: 'Stage not found.', field_errors: { stage_id: 'Stage not found.' } }, {
-			status: 422
-		});
+		return json(
+			{ error: 'Stage not found.', field_errors: { stage_id: 'Stage not found.' } },
+			{
+				status: 422
+			}
+		);
 	}
 
 	if (opp.stage_id === stage_id) {

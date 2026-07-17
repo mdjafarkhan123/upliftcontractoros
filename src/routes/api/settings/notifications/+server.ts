@@ -125,9 +125,7 @@ export const PATCH: RequestHandler = async (event) => {
 						memberNotificationPreferences.notification_type
 					],
 					set: {
-						...(pref.in_app_enabled !== undefined
-							? { in_app_enabled: pref.in_app_enabled }
-							: {}),
+						...(pref.in_app_enabled !== undefined ? { in_app_enabled: pref.in_app_enabled } : {}),
 						...(pref.push_enabled !== undefined ? { push_enabled: pref.push_enabled } : {}),
 						...(pref.email_enabled !== undefined ? { email_enabled: pref.email_enabled } : {}),
 						...(pref.sms_enabled !== undefined ? { sms_enabled: pref.sms_enabled } : {}),
@@ -170,7 +168,10 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 
 		if (Object.keys(fieldErrors).length > 0) {
-			return json({ error: 'Please fix the highlighted fields.', field_errors: fieldErrors }, { status: 400 });
+			return json(
+				{ error: 'Please fix the highlighted fields.', field_errors: fieldErrors },
+				{ status: 400 }
+			);
 		}
 
 		if (Object.keys(updates).length > 0) {

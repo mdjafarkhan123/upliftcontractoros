@@ -51,9 +51,7 @@
 				<i class="ri-checkbox-circle-line"></i>
 			</span>
 			<p class="widget-card__empty-title">You're all caught up.</p>
-			<p class="widget-card__empty-sub">
-				Nothing overdue, no quotes waiting, no unread messages.
-			</p>
+			<p class="widget-card__empty-sub">Nothing overdue, no quotes waiting, no unread messages.</p>
 		</div>
 	{:else}
 		<ul class="widget-card__list">

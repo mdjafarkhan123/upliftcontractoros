@@ -103,7 +103,7 @@ These rules are never overridden by a prompt. If a task conflicts with any of th
 Full patterns and code examples live in skills — these are the guardrails.
 
 1. Update skill whenever you need
-1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
+1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Write code efficiently by Svelte MCP when need. Focus on performance.
 1. SCSS with BEM only. Desktop design first. Always use remix icon. If you see any inline svg remove and use remix icon. **The Styling Law:** any BEM class used by 2+ components MUST be defined in a global `src/lib/styles/components/_*.scss` partial, never in a component's scoped `<style>` (Svelte's scope hash makes a scoped class apply to only that one component — the others ship unstyled and it compiles clean). See `.claude/skills/contractor-crm-design/references/ui-primitives.md`.
 
 1. For any Async operation like: create, read, delete, update... alwasy shows a loading animation whether by animated button or popup until the operation is finished
@@ -111,7 +111,7 @@ Full patterns and code examples live in skills — these are the guardrails.
 1. **SSR layout shell, CSR page content** — The `/(app)/+layout.svelte` shell (sidebar, nav, session) is server-side rendered for instant first paint. All page content lives under `/(app)/(pages)/` and is CSR only — no `+page.server.ts` for page data, no store reads during SSR. The root `+layout.ts` does NOT set `ssr = false`; the `(pages)` group layout does. In `/(app)/+layout.ts`, always guard `sessionStore.update()` with a `browser` check to prevent module-level state leaking between server requests. `$lib/server/*` remains forbidden in `.svelte` files and `+page.ts`.
 1. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
 1. **Workers run standalone** — `npm run worker` in a separate terminal (runs `node --env-file=.env --import tsx worker.ts`; plain `npx tsx worker.ts` fails with `DATABASE_URL is required` because it skips `.env`). Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.
-1. **All permission checks go through `checkPermission()`** — the 40 booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
+1. **All permission checks go through `checkPermission()`** — the 40+ booleans on `org_members` are sole authority. `role` column is display only. Never `if (member.role === 'admin')`.
 1. **Transaction boundary law** — business mutations + `outbox_events` INSERT inside the transaction. BullMQ enqueue, Twilio, Resend, any external call OUTSIDE (via outbox worker only). Never call external services inside a transaction.
 1. **Tenant isolation absolute** — every table has `org_id`, every query filters by it. RLS enforces at DB layer. API layer also enforces.
 1. **Schema is authoritative** — do not invent columns, tables, or enums. If something seems missing, ask. Read the relevant schema section before writing any DB logic.

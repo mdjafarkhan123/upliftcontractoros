@@ -1,56 +1,79 @@
 @use '../tokens' as *;
 
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: $space-1;
-  height: 24px;
-  padding: 0 $space-3;
-  border-radius: $radius-full;
-  font-size: $fs-body;
-  font-weight: $weight-medium;
-  white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	gap: $space-1;
+	height: 24px;
+	padding: 0 $space-3;
+	border-radius: $radius-full;
+	font-size: $fs-body;
+	font-weight: $weight-medium;
+	white-space: nowrap;
 
-  &--success { background: var(--success-bg);  color: var(--success-text); }
-  &--warning { background: var(--warning-bg);  color: var(--warning-text); }
-  &--danger  { background: var(--danger-bg);   color: var(--danger-text);  }
-  &--info    { background: var(--info-bg);     color: var(--info-text);    }
-  &--neutral { background: var(--color-bg-surface-sunk); color: var(--color-text-secondary); }
+	&--success {
+		background: var(--success-bg);
+		color: var(--success-text);
+	}
+	&--warning {
+		background: var(--warning-bg);
+		color: var(--warning-text);
+	}
+	&--danger {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
+	&--info {
+		background: var(--info-bg);
+		color: var(--info-text);
+	}
+	&--neutral {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+	}
 
-  &--solid {
-    color: var(--color-text-on-brand);
-    &.badge--success { background: var(--success-solid); }
-    &.badge--warning { background: var(--warning-solid); }
-    &.badge--danger  { background: var(--danger-solid);  }
-    &.badge--info    { background: var(--info-solid);    }
-  }
+	&--solid {
+		color: var(--color-text-on-brand);
+		&.badge--success {
+			background: var(--success-solid);
+		}
+		&.badge--warning {
+			background: var(--warning-solid);
+		}
+		&.badge--danger {
+			background: var(--danger-solid);
+		}
+		&.badge--info {
+			background: var(--info-solid);
+		}
+	}
 }
 
 // Tiny circular trend indicator — up/down arrows before "Increased from last month"
 .trend-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: $radius-full;
-  background: var(--success-bg);
-  color: var(--success-text);
-  font-size: 11px;
-  font-weight: $weight-semibold;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: $radius-full;
+	background: var(--success-bg);
+	color: var(--success-text);
+	font-size: 11px;
+	font-weight: $weight-semibold;
 
-  &--down {
-    background: var(--danger-bg);
-    color: var(--danger-text);
-  }
+	&--down {
+		background: var(--danger-bg);
+		color: var(--danger-text);
+	}
 }
 
 // Micro uppercase label — sidebar section headers, pipeline column stats
 .eyebrow {
-  font-size: $fs-caption;
-  line-height: $lh-caption;
-  font-weight: $weight-semibold;
-  letter-spacing: $tracking-label;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+	font-size: $fs-caption;
+	line-height: $lh-caption;
+	font-weight: $weight-semibold;
+	letter-spacing: $tracking-label;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
 }

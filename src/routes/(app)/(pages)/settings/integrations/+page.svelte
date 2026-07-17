@@ -344,13 +344,16 @@
 					{#if flags.feature_messenger}
 						<div class="integration__action">
 							{#if messenger?.is_connected}
-								<Button variant="danger-outline" loading={disconnecting} loadingLabel="Disconnecting…" onclick={disconnectMessenger}>
+								<Button
+									variant="danger-outline"
+									loading={disconnecting}
+									loadingLabel="Disconnecting…"
+									onclick={disconnectMessenger}
+								>
 									Disconnect
 								</Button>
 							{:else}
-								<Button onclick={connectMessenger}>
-									Connect Facebook Page
-								</Button>
+								<Button onclick={connectMessenger}>Connect Facebook Page</Button>
 							{/if}
 						</div>
 					{/if}
@@ -446,7 +449,13 @@
 										disabled={searching || purchasing}
 									/>
 								</div>
-							<Button type="submit" variant="outline" disabled={postalCode.trim().length < 2} loading={searching || purchasing} loadingLabel="Searching…">Search</Button>
+								<Button
+									type="submit"
+									variant="outline"
+									disabled={postalCode.trim().length < 2}
+									loading={searching || purchasing}
+									loadingLabel="Searching…">Search</Button
+								>
 							</div>
 
 							{#if postalError}
@@ -485,7 +494,13 @@
 											</span>
 										</label>
 									{/each}
-									<Button class="btn--full" disabled={!selectedNumber} loading={purchasing} loadingLabel="Setting up your number…" onclick={purchaseNumber}>
+									<Button
+										class="btn--full"
+										disabled={!selectedNumber}
+										loading={purchasing}
+										loadingLabel="Setting up your number…"
+										onclick={purchaseNumber}
+									>
 										Get this number
 									</Button>
 								</fieldset>
@@ -515,9 +530,7 @@
 									</div>
 								</div>
 								<div>
-									<Button onclick={openCarrierForm}>
-										Complete carrier registration
-									</Button>
+									<Button onclick={openCarrierForm}>Complete carrier registration</Button>
 								</div>
 							</div>
 						{:else if carrierComplete && !carrierEditing}
@@ -669,7 +682,11 @@
 									<Button type="submit" loading={carrierSubmitting} loadingLabel="Submitting…">
 										Submit for review
 									</Button>
-									<Button variant="outline" disabled={carrierSubmitting} onclick={() => (carrierEditing = false)}>
+									<Button
+										variant="outline"
+										disabled={carrierSubmitting}
+										onclick={() => (carrierEditing = false)}
+									>
 										Cancel
 									</Button>
 								</div>

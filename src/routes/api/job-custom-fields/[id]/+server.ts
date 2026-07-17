@@ -54,7 +54,10 @@ export const PATCH: RequestHandler = async (event) => {
 		const opts = (input.options ?? []).map((o) => o.trim()).filter((o) => o.length > 0);
 		if (opts.length < 1) {
 			return json(
-				{ error: 'Add at least one dropdown option', field_errors: { options: 'Add at least one dropdown option' } },
+				{
+					error: 'Add at least one dropdown option',
+					field_errors: { options: 'Add at least one dropdown option' }
+				},
 				{ status: 422 }
 			);
 		}

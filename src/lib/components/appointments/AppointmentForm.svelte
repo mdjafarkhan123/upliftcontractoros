@@ -226,9 +226,9 @@
 					<Select.Value />
 				</Select.Trigger>
 				<Select.Content>
-					<Select.Item value="">No job</Select.Item>
+					<Select.Item value="" label="No job">No job</Select.Item>
 					{#each jobOptions as j (j.id)}
-						<Select.Item value={j.id}>{j.title}</Select.Item>
+						<Select.Item value={j.id} label={j.title}>{j.title}</Select.Item>
 					{/each}
 				</Select.Content>
 			</Select.Root>
@@ -245,7 +245,7 @@
 			</Select.Trigger>
 			<Select.Content>
 				{#each TYPES as t (t.value)}
-					<Select.Item value={t.value}>{t.label}</Select.Item>
+					<Select.Item value={t.value} label={t.label}>{t.label}</Select.Item>
 				{/each}
 			</Select.Content>
 		</Select.Root>
@@ -326,9 +326,7 @@
 	{/if}
 
 	<div class="appt-form__actions">
-		<Button variant="outline" class="btn--full" disabled={saving} onclick={onCancel}>
-			Cancel
-		</Button>
+		<Button variant="outline" class="btn--full" disabled={saving} onclick={onCancel}>Cancel</Button>
 		<Button
 			class="btn--full"
 			loadingLabel="Saving…"

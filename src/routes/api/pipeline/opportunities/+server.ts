@@ -37,31 +37,50 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(eq(opportunities.status, 'open'));
 	}
 
-	const rows = await db
-		.select({
-			id: opportunities.id,
-			title: opportunities.title,
-			value: opportunities.value,
-			stage_id: opportunities.stage_id,
-			status: opportunities.status,
-			contact_id: opportunities.contact_id,
-			contact_name: contacts.full_name,
-			assigned_to: opportunities.assigned_to,
-			assignee_name: orgMembers.full_name,
-			lost_reason: opportunities.lost_reason,
-			lost_reason_note: opportunities.lost_reason_note,
-			closed_at: opportunities.closed_at,
-			created_at: opportunities.created_at,
-			stage_entered_at: opportunities.stage_entered_at,
-			expected_close_date: opportunities.expected_close_date,
-			next_follow_up_at: opportunities.next_follow_up_at,
-			last_contacted_at: contacts.last_contacted_at
-		})
-		.from(opportunities)
-		.innerJoin(contacts, eq(contacts.id, opportunities.contact_id))
-		.leftJoin(orgMembers, eq(orgMembers.id, opportunities.assigned_to))
-		.where(and(...conditions))
-		.orderBy(asc(opportunities.stage_entered_at));
+	// The deal list and the won-this-month headline are independent reads — fire them
+	// in one wave. The per-deal quote summary below genuinely depends on the deal ids,
+	// so it stays sequential after this wave.
+	const tz = auth.org.timezone || 'America/Chicago';
+	const monthStart = sql`(date_trunc('month', (now() AT TIME ZONE ${tz}))) AT TIME ZONE ${tz}`;
+	const wonScope = scope === 'mine' ? sql`and assigned_to = ${auth.member.id}` : sql``;
+
+	const [rows, [wonRow]] = await Promise.all([
+		db
+			.select({
+				id: opportunities.id,
+				title: opportunities.title,
+				value: opportunities.value,
+				stage_id: opportunities.stage_id,
+				status: opportunities.status,
+				contact_id: opportunities.contact_id,
+				contact_name: contacts.full_name,
+				assigned_to: opportunities.assigned_to,
+				assignee_name: orgMembers.full_name,
+				lost_reason: opportunities.lost_reason,
+				lost_reason_note: opportunities.lost_reason_note,
+				closed_at: opportunities.closed_at,
+				created_at: opportunities.created_at,
+				stage_entered_at: opportunities.stage_entered_at,
+				expected_close_date: opportunities.expected_close_date,
+				next_follow_up_at: opportunities.next_follow_up_at,
+				last_contacted_at: contacts.last_contacted_at
+			})
+			.from(opportunities)
+			.innerJoin(contacts, eq(contacts.id, opportunities.contact_id))
+			.leftJoin(orgMembers, eq(orgMembers.id, opportunities.assigned_to))
+			.where(and(...conditions))
+			.orderBy(asc(opportunities.stage_entered_at)),
+		db.execute<{ won_mtd: string }>(sql`
+			select coalesce(sum(value), 0)::text as won_mtd
+			from opportunities
+			where org_id = ${auth.orgId}
+				and deleted_at is null
+				and status = 'won'
+				and closed_at is not null
+				and closed_at >= ${monthStart}
+				${wonScope}
+		`)
+	]);
 
 	// Per-deal quote summary for the card's quote block: the most recent NON-DRAFT
 	// quote linked to each deal, plus its view activity. One batched query keyed on
@@ -76,7 +95,9 @@ export const GET: RequestHandler = async (event) => {
 				current_version: quotes.current_version,
 				sent_at: quotes.sent_at,
 				view_count: sql<number>`(select count(*)::int from ${quoteViews} where ${quoteViews.quote_id} = ${quotes.id})`,
-				last_viewed_at: sql<string | null>`(select max(${quoteViews.viewed_at}) from ${quoteViews} where ${quoteViews.quote_id} = ${quotes.id})`
+				last_viewed_at: sql<
+					string | null
+				>`(select max(${quoteViews.viewed_at}) from ${quoteViews} where ${quoteViews.quote_id} = ${quotes.id})`
 			})
 			.from(quotes)
 			.where(
@@ -105,23 +126,8 @@ export const GET: RequestHandler = async (event) => {
 
 	const opportunitiesOut = rows.map((r) => ({ ...r, quote: quoteByOpp.get(r.id) ?? null }));
 
-	// Won-this-month headline value. Computed server-side (org timezone, status
-	// model) and scope-aware so it survives the board only loading open deals.
-	const tz = auth.org.timezone || 'America/Chicago';
-	const monthStart = sql`(date_trunc('month', (now() AT TIME ZONE ${tz}))) AT TIME ZONE ${tz}`;
-	const wonScope =
-		scope === 'mine' ? sql`and assigned_to = ${auth.member.id}` : sql``;
-	const [wonRow] = await db.execute<{ won_mtd: string }>(sql`
-		select coalesce(sum(value), 0)::text as won_mtd
-		from opportunities
-		where org_id = ${auth.orgId}
-			and deleted_at is null
-			and status = 'won'
-			and closed_at is not null
-			and closed_at >= ${monthStart}
-			${wonScope}
-	`);
-
+	// Won-this-month headline value (fetched in the wave above): server-side, scope-aware,
+	// so it survives the board only loading open deals.
 	return json({ opportunities: opportunitiesOut, scope, won_mtd: wonRow?.won_mtd ?? '0' });
 };
 
@@ -168,7 +174,10 @@ export const POST: RequestHandler = async (event) => {
 	let stageDefaultFollowUpDays: number | null = null;
 	if (!stageId) {
 		const [defaultStage] = await db
-			.select({ id: pipelineStages.id, default_follow_up_days: pipelineStages.default_follow_up_days })
+			.select({
+				id: pipelineStages.id,
+				default_follow_up_days: pipelineStages.default_follow_up_days
+			})
 			.from(pipelineStages)
 			.where(
 				and(
@@ -189,7 +198,10 @@ export const POST: RequestHandler = async (event) => {
 		stageDefaultFollowUpDays = defaultStage.default_follow_up_days;
 	} else {
 		const [stage] = await db
-			.select({ id: pipelineStages.id, default_follow_up_days: pipelineStages.default_follow_up_days })
+			.select({
+				id: pipelineStages.id,
+				default_follow_up_days: pipelineStages.default_follow_up_days
+			})
 			.from(pipelineStages)
 			.where(
 				and(

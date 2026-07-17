@@ -905,11 +905,13 @@ input, textarea { font: inherit; }
 	}
 
 	function getInitials(name: string): string {
-		return name
-			.split(/\s+/)
-			.map((p) => p[0]?.toUpperCase() ?? '')
-			.slice(0, 2)
-			.join('') || '?';
+		return (
+			name
+				.split(/\s+/)
+				.map((p) => p[0]?.toUpperCase() ?? '')
+				.slice(0, 2)
+				.join('') || '?'
+		);
 	}
 
 	// ── Unread badge ──────────────────────────────────────────────────────────
@@ -919,7 +921,11 @@ input, textarea { font: inherit; }
 		if (unreadCount > 0 && !open) {
 			badgeEl.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
 			badgeEl.setAttribute('data-show', 'true');
-			if (btnEl) btnEl.setAttribute('aria-label', `Open chat, ${unreadCount} new message${unreadCount === 1 ? '' : 's'}`);
+			if (btnEl)
+				btnEl.setAttribute(
+					'aria-label',
+					`Open chat, ${unreadCount} new message${unreadCount === 1 ? '' : 's'}`
+				);
 		} else {
 			badgeEl.setAttribute('data-show', 'false');
 		}
@@ -1007,9 +1013,7 @@ input, textarea { font: inherit; }
 	function focusPanel() {
 		setTimeout(() => {
 			if (!panelEl) return;
-			const target = panelEl.querySelector<HTMLElement>(
-				'textarea, input, button.wc-submit'
-			);
+			const target = panelEl.querySelector<HTMLElement>('textarea, input, button.wc-submit');
 			(target ?? panelEl).focus();
 		}, 80);
 	}

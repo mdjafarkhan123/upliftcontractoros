@@ -146,8 +146,7 @@
 							{/if}
 						</p>
 						<p class="jafar-sms__paused-note">
-							{data.waitingCount} waiting · {data.delayedCount} delayed in queue — they resume on
-							restart.
+							{data.waitingCount} waiting · {data.delayedCount} delayed in queue — they resume on restart.
 						</p>
 					{:else}
 						<p class="jafar-sms__active-title">SMS sending is active</p>

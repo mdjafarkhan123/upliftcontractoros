@@ -93,9 +93,7 @@
 					{/each}
 				{/if}
 			</div>
-			<Button variant="outline" class="btn--full" onclick={() => (open = false)}>
-				Cancel
-			</Button>
+			<Button variant="outline" class="btn--full" onclick={() => (open = false)}>Cancel</Button>
 		</div>
 	</Sheet.Content>
 </Sheet.Root>

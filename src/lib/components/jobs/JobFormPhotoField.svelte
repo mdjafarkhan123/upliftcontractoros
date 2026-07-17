@@ -76,7 +76,13 @@
 		const blob = URL.createObjectURL(file);
 		photos = [
 			...photos,
-			{ id: tempId, purpose_tag: 'job_form_photo', thumb_url: blob, full_url: blob, uploading: true }
+			{
+				id: tempId,
+				purpose_tag: 'job_form_photo',
+				thumb_url: blob,
+				full_url: blob,
+				uploading: true
+			}
 		];
 		try {
 			const fd = new FormData();

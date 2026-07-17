@@ -269,7 +269,9 @@
 		{#if dirty}
 			<footer class="seq-edit__footer">
 				<Button variant="outline" size="sm" disabled={saving} onclick={reset}>Reset</Button>
-				<Button size="sm" loading={saving} loadingLabel="Saving…" onclick={save}>Save changes</Button>
+				<Button size="sm" loading={saving} loadingLabel="Saving…" onclick={save}
+					>Save changes</Button
+				>
 			</footer>
 		{/if}
 	</div>

@@ -163,9 +163,7 @@
 			<i class="ri-attachment-2 media-panel__icon" aria-hidden="true"></i>
 			<h2 class="media-panel__title">{title}</h2>
 			{#if !loading}
-				<span class="media-panel__count"
-					>({items.filter((i) => i.status !== 'error').length})</span
-				>
+				<span class="media-panel__count">({items.filter((i) => i.status !== 'error').length})</span>
 			{/if}
 		</div>
 		{#if canUpload}

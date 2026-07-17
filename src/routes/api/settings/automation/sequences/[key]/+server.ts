@@ -108,7 +108,8 @@ function validateSteps(
 		} else if (card.audience === 'staff') {
 			// Staff nudge: positive offset after the appointment ends.
 			if (step.offset_minutes === null || step.offset_minutes <= 0) {
-				errors[`${p}.offset_minutes`] = 'Choose how long after the appointment to remind your team.';
+				errors[`${p}.offset_minutes`] =
+					'Choose how long after the appointment to remind your team.';
 			}
 			offset_minutes = step.offset_minutes;
 			delay_minutes = 0;
@@ -150,7 +151,8 @@ function validateSteps(
 			if (typeof value === 'string' && value.length > 0) {
 				const r = validateTemplateVariablesAgainst(value, card.allowedVars);
 				if (!r.ok) {
-					errors[`${p}.${field}`] = `Unknown field(s): ${r.unknown.map((u) => `{${u}}`).join(', ')}.`;
+					errors[`${p}.${field}`] =
+						`Unknown field(s): ${r.unknown.map((u) => `{${u}}`).join(', ')}.`;
 				}
 			}
 		}
@@ -256,7 +258,10 @@ export const PUT: RequestHandler = async (event) => {
 	if (card.channelEditable) {
 		const submitted = input.channel ?? card.allowedChannels[0];
 		if (!card.allowedChannels.includes(submitted)) {
-			return json({ error: 'Unsupported channel.', field_errors: { channel: 'Unsupported channel.' } }, { status: 400 });
+			return json(
+				{ error: 'Unsupported channel.', field_errors: { channel: 'Unsupported channel.' } },
+				{ status: 400 }
+			);
 		}
 		sequenceChannel = submitted;
 	} else {
@@ -265,7 +270,10 @@ export const PUT: RequestHandler = async (event) => {
 
 	const stepResult = validateSteps(card, sequenceChannel, input.steps);
 	if ('errors' in stepResult) {
-		return json({ error: 'Please fix the highlighted fields.', field_errors: stepResult.errors }, { status: 400 });
+		return json(
+			{ error: 'Please fix the highlighted fields.', field_errors: stepResult.errors },
+			{ status: 400 }
+		);
 	}
 
 	// Load the existing sequence (for concurrency + id). All provisioned orgs are
@@ -284,60 +292,62 @@ export const PUT: RequestHandler = async (event) => {
 	}
 
 	const now = new Date();
-	const txResult = await db.transaction(async (tx) => {
-		let sequenceId: string;
-		if (existing) {
-			const [updated] = await tx
-				.update(automationSequences)
-				.set({ enabled: input.enabled, channel: sequenceChannel, updated_at: now })
-				.where(
-					and(
-						eq(automationSequences.id, existing.id),
-						sql`${automationSequences.updated_at}::text = ${input.updated_at}`
+	const txResult = await db
+		.transaction(async (tx) => {
+			let sequenceId: string;
+			if (existing) {
+				const [updated] = await tx
+					.update(automationSequences)
+					.set({ enabled: input.enabled, channel: sequenceChannel, updated_at: now })
+					.where(
+						and(
+							eq(automationSequences.id, existing.id),
+							sql`${automationSequences.updated_at}::text = ${input.updated_at}`
+						)
 					)
-				)
-				.returning({ id: automationSequences.id });
-			if (!updated) throw new ConcurrencyError();
-			sequenceId = updated.id;
-			await tx
-				.delete(automationSequenceSteps)
-				.where(eq(automationSequenceSteps.sequence_id, sequenceId));
-		} else {
-			const [created] = await tx
-				.insert(automationSequences)
-				.values({
+					.returning({ id: automationSequences.id });
+				if (!updated) throw new ConcurrencyError();
+				sequenceId = updated.id;
+				await tx
+					.delete(automationSequenceSteps)
+					.where(eq(automationSequenceSteps.sequence_id, sequenceId));
+			} else {
+				const [created] = await tx
+					.insert(automationSequences)
+					.values({
+						org_id: auth.orgId,
+						key,
+						enabled: input.enabled,
+						channel: sequenceChannel,
+						created_at: now,
+						updated_at: now
+					})
+					.returning({ id: automationSequences.id });
+				sequenceId = created.id;
+			}
+
+			await tx.insert(automationSequenceSteps).values(
+				stepResult.rows.map((s) => ({
 					org_id: auth.orgId,
-					key,
-					enabled: input.enabled,
-					channel: sequenceChannel,
+					sequence_id: sequenceId,
+					position: s.position,
+					delay_minutes: s.delay_minutes,
+					offset_minutes: s.offset_minutes,
+					channel: s.channel,
+					audience: s.audience,
+					condition: s.condition,
+					sms_body: s.sms_body,
+					email_subject: s.email_subject,
+					email_body: s.email_body,
 					created_at: now,
 					updated_at: now
-				})
-				.returning({ id: automationSequences.id });
-			sequenceId = created.id;
-		}
-
-		await tx.insert(automationSequenceSteps).values(
-			stepResult.rows.map((s) => ({
-				org_id: auth.orgId,
-				sequence_id: sequenceId,
-				position: s.position,
-				delay_minutes: s.delay_minutes,
-				offset_minutes: s.offset_minutes,
-				channel: s.channel,
-				audience: s.audience,
-				condition: s.condition,
-				sms_body: s.sms_body,
-				email_subject: s.email_subject,
-				email_body: s.email_body,
-				created_at: now,
-				updated_at: now
-			}))
-		);
-	}).catch((err) => {
-		if (err instanceof ConcurrencyError) return 'conflict' as const;
-		throw err;
-	});
+				}))
+			);
+		})
+		.catch((err) => {
+			if (err instanceof ConcurrencyError) return 'conflict' as const;
+			throw err;
+		});
 
 	if (txResult === 'conflict') {
 		const current = await loadSequenceView(auth.orgId, key);

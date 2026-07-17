@@ -50,7 +50,11 @@
 
 	function fmtDate(iso: string | null): string {
 		if (!iso) return '—';
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(iso).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
 
 	function isExpired(iso: string | null): boolean {
@@ -72,35 +76,90 @@
 		return {
 			editable: quote.status === 'draft' || quote.status === 'changes_requested',
 			sendable: quote.status === 'draft',
-			resendable: quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'changes_requested',
+			resendable:
+				quote.status === 'sent' ||
+				quote.status === 'viewed' ||
+				quote.status === 'changes_requested',
 			convertible: quote.status === 'accepted',
 			deletable: quote.status !== 'accepted',
-			markable: quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'changes_requested'
+			markable:
+				quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'changes_requested'
 		};
 	}
 
 	function quoteActions(quote: QuoteListItem): RowAction[] {
 		const a = statusAllows(quote);
 		const actions: RowAction[] = [
-			{ key: 'open', label: 'Open quote', icon: 'ri-external-link-line', onSelect: () => goto(`/quotes/${quote.id}`) },
-			{ key: 'pdf', label: 'Download PDF', icon: 'ri-download-line', onSelect: () => downloadPdf(quote) }
+			{
+				key: 'open',
+				label: 'Open quote',
+				icon: 'ri-external-link-line',
+				onSelect: () => goto(`/quotes/${quote.id}`)
+			},
+			{
+				key: 'pdf',
+				label: 'Download PDF',
+				icon: 'ri-download-line',
+				onSelect: () => downloadPdf(quote)
+			}
 		];
 		if (canEdit && a.editable)
-			actions.push({ key: 'edit', label: 'Edit quote', icon: 'ri-pencil-line', onSelect: () => goto(`/quotes/${quote.id}`) });
+			actions.push({
+				key: 'edit',
+				label: 'Edit quote',
+				icon: 'ri-pencil-line',
+				onSelect: () => goto(`/quotes/${quote.id}`)
+			});
 		if (canSend && a.sendable && onSend)
-			actions.push({ key: 'send', label: 'Send to client', icon: 'ri-send-plane-line', onSelect: () => onSend(quote) });
+			actions.push({
+				key: 'send',
+				label: 'Send to client',
+				icon: 'ri-send-plane-line',
+				onSelect: () => onSend(quote)
+			});
 		if (canSend && a.resendable && onResend)
-			actions.push({ key: 'resend', label: 'Resend to client', icon: 'ri-refresh-line', onSelect: () => onResend(quote) });
+			actions.push({
+				key: 'resend',
+				label: 'Resend to client',
+				icon: 'ri-refresh-line',
+				onSelect: () => onResend(quote)
+			});
 		if (canEdit && a.markable && onMarkAccepted)
-			actions.push({ key: 'accept', label: 'Mark accepted', icon: 'ri-checkbox-circle-line', onSelect: () => onMarkAccepted(quote) });
+			actions.push({
+				key: 'accept',
+				label: 'Mark accepted',
+				icon: 'ri-checkbox-circle-line',
+				onSelect: () => onMarkAccepted(quote)
+			});
 		if (canEdit && a.markable && onMarkDeclined)
-			actions.push({ key: 'decline', label: 'Mark declined', icon: 'ri-close-circle-line', onSelect: () => onMarkDeclined(quote) });
+			actions.push({
+				key: 'decline',
+				label: 'Mark declined',
+				icon: 'ri-close-circle-line',
+				onSelect: () => onMarkDeclined(quote)
+			});
 		if (canConvert && a.convertible && onConvert)
-			actions.push({ key: 'convert', label: 'Convert to invoice', icon: 'ri-file-list-3-line', onSelect: () => onConvert(quote) });
+			actions.push({
+				key: 'convert',
+				label: 'Convert to invoice',
+				icon: 'ri-file-list-3-line',
+				onSelect: () => onConvert(quote)
+			});
 		if (canDuplicate && onDuplicate)
-			actions.push({ key: 'duplicate', label: 'Duplicate', icon: 'ri-file-copy-line', onSelect: () => onDuplicate(quote) });
+			actions.push({
+				key: 'duplicate',
+				label: 'Duplicate',
+				icon: 'ri-file-copy-line',
+				onSelect: () => onDuplicate(quote)
+			});
 		if (canDelete && a.deletable && onDelete)
-			actions.push({ key: 'delete', label: 'Delete quote', icon: 'ri-delete-bin-line', destructive: true, onSelect: () => onDelete(quote) });
+			actions.push({
+				key: 'delete',
+				label: 'Delete quote',
+				icon: 'ri-delete-bin-line',
+				destructive: true,
+				onSelect: () => onDelete(quote)
+			});
 		return actions;
 	}
 </script>
@@ -199,7 +258,11 @@
 				<!-- Expires -->
 				<td class="list-table__td list-table__td--xl">
 					{#if quote.expires_at}
-						<span class="quote-tbl__date {isExpired(quote.expires_at) && quote.status !== 'accepted' ? 'quote-tbl__date--expired' : ''}">
+						<span
+							class="quote-tbl__date {isExpired(quote.expires_at) && quote.status !== 'accepted'
+								? 'quote-tbl__date--expired'
+								: ''}"
+						>
 							{fmtDate(quote.expires_at)}
 						</span>
 					{:else}

@@ -129,7 +129,10 @@
 >
 	<ContactAvatar {name} src={displaySrc} {status} fill />
 
-	<span class="contact-avatar-uploader__overlay" class:contact-avatar-uploader__overlay--busy={uploading}>
+	<span
+		class="contact-avatar-uploader__overlay"
+		class:contact-avatar-uploader__overlay--busy={uploading}
+	>
 		{#if uploading}
 			<i class="ri-loader-4-line contact-avatar-uploader__spin" aria-hidden="true"></i>
 		{:else}

@@ -234,12 +234,8 @@
 								<span class="unsaved-bar__dot"></span>
 								Unsaved changes
 							</span>
-							<Button variant="secondary" disabled={saving} onclick={resetForm}>
-								Discard
-							</Button>
-							<Button type="submit" loading={saving} loadingLabel="Saving…">
-								Save changes
-							</Button>
+							<Button variant="secondary" disabled={saving} onclick={resetForm}>Discard</Button>
+							<Button type="submit" loading={saving} loadingLabel="Saving…">Save changes</Button>
 						</div>
 					{/if}
 				</div>
@@ -338,7 +334,12 @@
 						{/if}
 					</div>
 					<div class="settings-card__footer">
-						<Button type="submit" disabled={pwForm.password.length === 0} loading={pwSaving} loadingLabel="Updating…">
+						<Button
+							type="submit"
+							disabled={pwForm.password.length === 0}
+							loading={pwSaving}
+							loadingLabel="Updating…"
+						>
 							Update password
 						</Button>
 					</div>

@@ -1,5 +1,7 @@
 <script lang="ts">
-	import RecycleBinList, { type RecycleBinItem } from '$lib/components/shared/RecycleBinList.svelte';
+	import RecycleBinList, {
+		type RecycleBinItem
+	} from '$lib/components/shared/RecycleBinList.svelte';
 	import { formatPhoneDisplay } from '$lib/utils/phone';
 	import type { ContactListItem } from '$lib/stores/contacts.svelte';
 

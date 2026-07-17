@@ -21,8 +21,18 @@
 	let minTimeStr = $derived(min && min.includes('T') ? min.split('T')[1].slice(0, 5) : '');
 
 	const MONTH_NAMES = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
+		'January',
+		'February',
+		'March',
+		'April',
+		'May',
+		'June',
+		'July',
+		'August',
+		'September',
+		'October',
+		'November',
+		'December'
 	];
 	const DAY_HEADERS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -125,13 +135,21 @@
 	})();
 
 	function prevMonth() {
-		if (viewMonth === 0) { viewMonth = 11; viewYear--; }
-		else { viewMonth--; }
+		if (viewMonth === 0) {
+			viewMonth = 11;
+			viewYear--;
+		} else {
+			viewMonth--;
+		}
 	}
 
 	function nextMonth() {
-		if (viewMonth === 11) { viewMonth = 0; viewYear++; }
-		else { viewMonth++; }
+		if (viewMonth === 11) {
+			viewMonth = 0;
+			viewYear++;
+		} else {
+			viewMonth++;
+		}
 	}
 
 	function pickDate(dateStr: string) {
@@ -156,7 +174,11 @@
 		if (!datePart) return '';
 		const d = new Date(datePart + 'T' + (timePart ?? '00:00'));
 		if (isNaN(d.getTime())) return '';
-		const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		const dateLabel = d.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 		const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 		return `${dateLabel} · ${timeLabel}`;
 	});
@@ -189,7 +211,12 @@
 			<!-- Calendar panel -->
 			<div class="dtp__cal">
 				<div class="dtp__nav">
-					<button type="button" class="dtp__nav-btn" onclick={prevMonth} aria-label="Previous month">
+					<button
+						type="button"
+						class="dtp__nav-btn"
+						onclick={prevMonth}
+						aria-label="Previous month"
+					>
 						<i class="ri-arrow-left-s-line" aria-hidden="true"></i>
 					</button>
 					<span class="dtp__month-label">{MONTH_NAMES[viewMonth]} {viewYear}</span>
@@ -235,7 +262,10 @@
 				{#each TIME_SLOTS as slot}
 					{@const isSelected = slot.value === selectedTimeStr}
 					{@const belowMin =
-						!!minDateStr && selectedDateStr === minDateStr && !!minTimeStr && slot.value < minTimeStr}
+						!!minDateStr &&
+						selectedDateStr === minDateStr &&
+						!!minTimeStr &&
+						slot.value < minTimeStr}
 					<button
 						type="button"
 						data-time={slot.value}

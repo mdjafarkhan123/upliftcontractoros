@@ -11,12 +11,42 @@ import { recalcJobTotals } from '$lib/server/jobs/recalc';
 // UNSCHEDULED: no dates, no recurrence, no visits on the calendar, and NO client
 // notifications. The contractor schedules the copy fresh. Keeping it side-effect-free is
 // deliberate — a copy must never fire reminders or regenerate a whole recurring visit series.
+//
+// This is also the sanctioned way to CHANGE a job's one-off/recurring type, which PATCH
+// forbids: pass an optional `job_type` in the body to create the copy as the other type.
+// That's safe precisely because a duplicate carries no rule and no visits, so there is
+// nothing to reconcile — omit it and the source's type is kept.
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
 	assertOrgActive(auth);
 	if (!auth.member.can_view_full_pipeline) error(403, 'Forbidden');
 
 	const id = event.params.id!;
+
+	// Body is optional — a plain copy sends none.
+	let jobTypeOverride: 'one_off' | 'recurring' | null = null;
+	const raw = await event.request.text();
+	if (raw.trim()) {
+		let body: unknown;
+		try {
+			body = JSON.parse(raw);
+		} catch {
+			error(400, 'Invalid JSON body');
+		}
+		const sent = (body as { job_type?: unknown } | null)?.job_type;
+		if (sent !== undefined) {
+			if (sent !== 'one_off' && sent !== 'recurring') {
+				return json(
+					{
+						error: 'Invalid job type.',
+						field_errors: { job_type: 'Choose one-off or recurring.' }
+					},
+					{ status: 422 }
+				);
+			}
+			jobTypeOverride = sent;
+		}
+	}
 
 	const [source] = await db
 		.select()
@@ -43,7 +73,9 @@ export const POST: RequestHandler = async (event) => {
 				// 'scheduled' enum + null start = the derived "Pending" (unscheduled) state.
 				status: 'scheduled',
 				assigned_to: source.assigned_to,
-				job_type: source.job_type,
+				// The copy keeps the source's type unless the caller deliberately switches it.
+				job_type: jobTypeOverride ?? source.job_type,
+				job_category: source.job_category,
 				tags: source.tags ?? [],
 				notes: source.notes,
 				scope_of_work: source.scope_of_work,

@@ -59,7 +59,11 @@
 				toast.error(body.error ?? 'Could not create invoice.');
 				return;
 			}
-			const d = body.data as { id: string; invoice_number_display: string; already_existed: boolean };
+			const d = body.data as {
+				id: string;
+				invoice_number_display: string;
+				already_existed: boolean;
+			};
 			if (d.already_existed) {
 				toast.info(`Invoice ${d.invoice_number_display} already exists`);
 			} else {

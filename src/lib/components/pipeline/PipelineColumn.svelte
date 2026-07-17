@@ -75,10 +75,7 @@
 	}
 </script>
 
-<section
-	class="pipeline-column{fill ? ' pipeline-column--fill' : ''}"
-	data-stage-id={stageId}
->
+<section class="pipeline-column{fill ? ' pipeline-column--fill' : ''}" data-stage-id={stageId}>
 	<div class="pipeline-column__accent" style:background-color={stageColor} aria-hidden="true"></div>
 
 	<header class="pipeline-column__header">
@@ -147,11 +144,7 @@
 	</div>
 
 	{#if canAdd && onAdd}
-		<button
-			type="button"
-			class="pipeline-column__add-btn"
-			onclick={() => onAdd?.(stageId)}
-		>
+		<button type="button" class="pipeline-column__add-btn" onclick={() => onAdd?.(stageId)}>
 			<i class="ri-add-line" aria-hidden="true"></i>
 			Add opportunity
 		</button>

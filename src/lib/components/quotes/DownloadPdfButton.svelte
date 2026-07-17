@@ -15,12 +15,7 @@
 	}
 </script>
 
-<Button
-	variant="outline"
-	loadingLabel="Generating…"
-	successLabel="Ready"
-	onAction={download}
->
+<Button variant="outline" loadingLabel="Generating…" successLabel="Ready" onAction={download}>
 	Download PDF
 	{#snippet icon()}<i class="ri-download-line" aria-hidden="true"></i>{/snippet}
 </Button>

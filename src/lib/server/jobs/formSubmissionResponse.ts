@@ -22,59 +22,66 @@ export async function loadJobFormSubmissions(
 	const submitter = alias(orgMembers, 'form_submitter');
 	const creator = alias(orgMembers, 'form_creator');
 
-	const submissions = await db
-		.select({
-			id: jobFormSubmissions.id,
-			template_id: jobFormSubmissions.template_id,
-			template_name: jobFormSubmissions.template_name,
-			status: jobFormSubmissions.status,
-			submitted_at: jobFormSubmissions.submitted_at,
-			submitted_by_name: submitter.full_name,
-			created_by_name: creator.full_name,
-			created_at: jobFormSubmissions.created_at,
-			updated_at: jobFormSubmissions.updated_at
-		})
-		.from(jobFormSubmissions)
-		.leftJoin(submitter, eq(submitter.id, jobFormSubmissions.submitted_by))
-		.leftJoin(creator, eq(creator.id, jobFormSubmissions.created_by))
-		.where(
-			and(
-				eq(jobFormSubmissions.job_id, jobId),
-				eq(jobFormSubmissions.org_id, orgId),
-				isNull(jobFormSubmissions.deleted_at)
+	// Submissions and their fields are both keyed by job_id (the fields query inner-joins
+	// submissions but doesn't need the submissions RESULT), so fire both in one wave instead
+	// of stacking two round trips. The empty-submissions early-return moves below the wave.
+	const [submissions, fields] = await Promise.all([
+		db
+			.select({
+				id: jobFormSubmissions.id,
+				template_id: jobFormSubmissions.template_id,
+				template_name: jobFormSubmissions.template_name,
+				status: jobFormSubmissions.status,
+				submitted_at: jobFormSubmissions.submitted_at,
+				submitted_by_name: submitter.full_name,
+				created_by_name: creator.full_name,
+				created_at: jobFormSubmissions.created_at,
+				updated_at: jobFormSubmissions.updated_at
+			})
+			.from(jobFormSubmissions)
+			.leftJoin(submitter, eq(submitter.id, jobFormSubmissions.submitted_by))
+			.leftJoin(creator, eq(creator.id, jobFormSubmissions.created_by))
+			.where(
+				and(
+					eq(jobFormSubmissions.job_id, jobId),
+					eq(jobFormSubmissions.org_id, orgId),
+					isNull(jobFormSubmissions.deleted_at)
+				)
 			)
-		)
-		.orderBy(asc(jobFormSubmissions.created_at));
+			.orderBy(asc(jobFormSubmissions.created_at)),
+		// One flat read of every field across this job's submissions, then group in memory —
+		// avoids an N+1 per form. Ordered by submission then field position for stable grouping.
+		db
+			.select({
+				id: jobFormSubmissionFields.id,
+				submission_id: jobFormSubmissionFields.submission_id,
+				field_type: jobFormSubmissionFields.field_type,
+				label: jobFormSubmissionFields.label,
+				help_text: jobFormSubmissionFields.help_text,
+				required: jobFormSubmissionFields.required,
+				options: jobFormSubmissionFields.options,
+				position: jobFormSubmissionFields.position,
+				value_text: jobFormSubmissionFields.value_text,
+				value_number: jobFormSubmissionFields.value_number,
+				value_bool: jobFormSubmissionFields.value_bool,
+				value_date: jobFormSubmissionFields.value_date
+			})
+			.from(jobFormSubmissionFields)
+			.innerJoin(
+				jobFormSubmissions,
+				eq(jobFormSubmissions.id, jobFormSubmissionFields.submission_id)
+			)
+			.where(
+				and(
+					eq(jobFormSubmissions.job_id, jobId),
+					eq(jobFormSubmissionFields.org_id, orgId),
+					isNull(jobFormSubmissions.deleted_at)
+				)
+			)
+			.orderBy(asc(jobFormSubmissionFields.submission_id), asc(jobFormSubmissionFields.position))
+	]);
 
 	if (submissions.length === 0) return [];
-
-	// One flat read of every field across this job's submissions, then group in memory — avoids
-	// an N+1 per form. Ordered by submission then field position for a stable grouping.
-	const fields = await db
-		.select({
-			id: jobFormSubmissionFields.id,
-			submission_id: jobFormSubmissionFields.submission_id,
-			field_type: jobFormSubmissionFields.field_type,
-			label: jobFormSubmissionFields.label,
-			help_text: jobFormSubmissionFields.help_text,
-			required: jobFormSubmissionFields.required,
-			options: jobFormSubmissionFields.options,
-			position: jobFormSubmissionFields.position,
-			value_text: jobFormSubmissionFields.value_text,
-			value_number: jobFormSubmissionFields.value_number,
-			value_bool: jobFormSubmissionFields.value_bool,
-			value_date: jobFormSubmissionFields.value_date
-		})
-		.from(jobFormSubmissionFields)
-		.innerJoin(jobFormSubmissions, eq(jobFormSubmissions.id, jobFormSubmissionFields.submission_id))
-		.where(
-			and(
-				eq(jobFormSubmissions.job_id, jobId),
-				eq(jobFormSubmissionFields.org_id, orgId),
-				isNull(jobFormSubmissions.deleted_at)
-			)
-		)
-		.orderBy(asc(jobFormSubmissionFields.submission_id), asc(jobFormSubmissionFields.position));
 
 	const fieldsBySubmission = new Map<string, JobFormSubmissionRow['fields']>();
 	// Flat index by field id so we can hang each field's attached media onto it after presigning.

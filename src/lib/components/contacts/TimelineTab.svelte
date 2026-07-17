@@ -258,7 +258,9 @@
 			{#if activeFilters.size > 0}
 				<button
 					type="button"
-					onclick={() => { activeFilters = new Set(); }}
+					onclick={() => {
+						activeFilters = new Set();
+					}}
 					class="timeline__filter-chip timeline__filter-chip--clear"
 				>
 					<i class="ri-close-line" aria-hidden="true"></i>
@@ -294,7 +296,11 @@
 					</li>
 				{/if}
 
-				<li class="timeline__entry timeline__entry--{entry.tone} {clickable ? 'timeline__entry--clickable' : ''}">
+				<li
+					class="timeline__entry timeline__entry--{entry.tone} {clickable
+						? 'timeline__entry--clickable'
+						: ''}"
+				>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<div
 						class="timeline__entry-inner"
@@ -308,7 +314,10 @@
 							}
 						}}
 					>
-						<span class="timeline__entry-icon timeline__entry-icon--{entry.tone}" aria-hidden="true">
+						<span
+							class="timeline__entry-icon timeline__entry-icon--{entry.tone}"
+							aria-hidden="true"
+						>
 							<i class={iconClass}></i>
 						</span>
 						<div class="timeline__entry-body">
@@ -341,9 +350,7 @@
 				<div class="timeline__load-more">
 					<Button type="button" variant="ghost" size="sm" onclick={() => (expanded = !expanded)}>
 						{collapsed ? 'Show more' : 'Show less'}
-						<i
-							class={collapsed ? 'ri-arrow-down-s-line' : 'ri-arrow-up-s-line'}
-							aria-hidden="true"
+						<i class={collapsed ? 'ri-arrow-down-s-line' : 'ri-arrow-up-s-line'} aria-hidden="true"
 						></i>
 					</Button>
 					{#if !collapsed && nextCursor}

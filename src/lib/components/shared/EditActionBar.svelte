@@ -39,16 +39,18 @@
 	const btnSize = $derived(size === 'sm' ? ('sm' as const) : ('default' as const));
 </script>
 
-<div class={['edit-action-bar', variant === 'card' && 'edit-action-bar--card'].filter(Boolean).join(' ')}>
+<div
+	class={['edit-action-bar', variant === 'card' && 'edit-action-bar--card']
+		.filter(Boolean)
+		.join(' ')}
+>
 	{#if error}
 		<p class="edit-action-bar__error field__error" role="alert">{error}</p>
 	{:else if label}
 		<span class="edit-action-bar__label">{label}</span>
 	{/if}
 	<div class="edit-action-bar__btns">
-		<Button variant="ghost" size={btnSize} disabled={saving} onclick={onCancel}>
-			Cancel
-		</Button>
+		<Button variant="ghost" size={btnSize} disabled={saving} onclick={onCancel}>Cancel</Button>
 		<Button
 			size={btnSize}
 			loading={saving}

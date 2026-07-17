@@ -87,7 +87,8 @@ export const PATCH: RequestHandler = async (event) => {
 	if (input.description !== undefined) patch.description = input.description;
 	if (input.probability !== undefined) patch.probability = input.probability;
 	if (input.stale_after_days !== undefined) patch.stale_after_days = input.stale_after_days;
-	if (input.default_follow_up_days !== undefined) patch.default_follow_up_days = input.default_follow_up_days;
+	if (input.default_follow_up_days !== undefined)
+		patch.default_follow_up_days = input.default_follow_up_days;
 
 	// Set-default is a transactional swap: unset every other default first so the
 	// exactly-one-default invariant always holds.
@@ -167,14 +168,20 @@ export const DELETE: RequestHandler = async (event) => {
 	if (moveTo) {
 		if (moveTo === id) {
 			return json(
-				{ error: 'Choose a different stage to move deals to.', field_errors: { move_to: 'Invalid destination' } },
+				{
+					error: 'Choose a different stage to move deals to.',
+					field_errors: { move_to: 'Invalid destination' }
+				},
 				{ status: 422 }
 			);
 		}
 		const dest = await loadStage(auth.orgId, moveTo);
 		if (!dest) {
 			return json(
-				{ error: 'Destination stage not found.', field_errors: { move_to: 'Destination stage not found' } },
+				{
+					error: 'Destination stage not found.',
+					field_errors: { move_to: 'Destination stage not found' }
+				},
 				{ status: 422 }
 			);
 		}

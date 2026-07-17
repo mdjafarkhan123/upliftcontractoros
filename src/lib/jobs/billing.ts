@@ -1,7 +1,12 @@
 // Client-side helpers for one-off job billing (payment schedule). Pure math + status
 // derivation shared by the Billing editor (jobs/new + detail edit) and the read-only
 // Billing card (job detail view). No date math, no fetching.
-import type { JobBillingBadge, JobBillingSignals, JobPaymentMilestoneRow, JobStatus } from '$lib/types/jobs';
+import type {
+	JobBillingBadge,
+	JobBillingSignals,
+	JobPaymentMilestoneRow,
+	JobStatus
+} from '$lib/types/jobs';
 
 export type MilestoneStatus = 'upcoming' | 'draft' | 'awaiting' | 'paid' | 'cancelled';
 

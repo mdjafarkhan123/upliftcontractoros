@@ -18,7 +18,11 @@
 	const customTags = $derived(value.filter((t) => !SUGGESTED_JOB_TAGS.includes(t as never)));
 
 	function normalize(raw: string): string {
-		return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+		return raw
+			.trim()
+			.toLowerCase()
+			.replace(/\s+/g, '-')
+			.replace(/[^a-z0-9-]/g, '');
 	}
 
 	function toggle(tag: string) {
@@ -33,16 +37,31 @@
 	function addCustom() {
 		customError = null;
 		const tag = normalize(customDraft);
-		if (!tag) { customError = 'Enter a tag'; return; }
-		if (tag.length > MAX_TAG_LEN) { customError = `Tag too long (max ${MAX_TAG_LEN} chars).`; return; }
-		if (selectedSet.has(tag)) { customDraft = ''; return; }
-		if (value.length >= MAX_TAGS) { customError = `Limit ${MAX_TAGS} tags.`; return; }
+		if (!tag) {
+			customError = 'Enter a tag';
+			return;
+		}
+		if (tag.length > MAX_TAG_LEN) {
+			customError = `Tag too long (max ${MAX_TAG_LEN} chars).`;
+			return;
+		}
+		if (selectedSet.has(tag)) {
+			customDraft = '';
+			return;
+		}
+		if (value.length >= MAX_TAGS) {
+			customError = `Limit ${MAX_TAGS} tags.`;
+			return;
+		}
 		value = [...value, tag];
 		customDraft = '';
 	}
 
 	function onCustomKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') { e.preventDefault(); addCustom(); }
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			addCustom();
+		}
 	}
 </script>
 
@@ -53,8 +72,8 @@
 				type="button"
 				onclick={() => toggle(tag)}
 				aria-pressed={selectedSet.has(tag)}
-				class="job-type-chip"
-				class:job-type-chip--active={selectedSet.has(tag)}
+				class="job-chip"
+				class:job-chip--active={selectedSet.has(tag)}
 			>
 				{formatJobTagLabel(tag)}
 			</button>

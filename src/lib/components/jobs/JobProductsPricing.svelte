@@ -81,9 +81,9 @@
 						<Select.Root bind:value={form.discountType}>
 							<Select.Trigger><Select.Value /></Select.Trigger>
 							<Select.Content>
-								<Select.Item value="none">None</Select.Item>
-								<Select.Item value="percent">Percent</Select.Item>
-								<Select.Item value="fixed">Fixed $</Select.Item>
+								<Select.Item value="none" label="None">None</Select.Item>
+								<Select.Item value="percent" label="Percent">Percent</Select.Item>
+								<Select.Item value="fixed" label="Fixed $">Fixed $</Select.Item>
 							</Select.Content>
 						</Select.Root>
 						{#if form.discountType !== 'none'}

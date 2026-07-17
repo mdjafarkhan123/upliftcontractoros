@@ -4,13 +4,17 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { calendarEvents, contacts, orgMembers, type CalendarEvent } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import {
-	canRescheduleAppointment,
-	canViewAppointment
-} from '$lib/server/appointments/permissions';
+import { canRescheduleAppointment, canViewAppointment } from '$lib/server/appointments/permissions';
 import { updateEventSchema } from '$lib/server/events/schemas';
-import { resolveAssigneeInput, validateAssigneesBelongToOrg } from '$lib/server/appointments/assignees';
-import { loadEventAssignees, syncEventAssignees, type EventAssigneeRow } from '$lib/server/events/assignees';
+import {
+	resolveAssigneeInput,
+	validateAssigneesBelongToOrg
+} from '$lib/server/appointments/assignees';
+import {
+	loadEventAssignees,
+	syncEventAssignees,
+	type EventAssigneeRow
+} from '$lib/server/events/assignees';
 
 function serialize(
 	row: CalendarEvent & { contact_name: string | null; assignee_name: string | null },
@@ -46,7 +50,11 @@ async function loadDetail(orgId: string, id: string) {
 		.leftJoin(contacts, eq(contacts.id, calendarEvents.contact_id))
 		.leftJoin(orgMembers, eq(orgMembers.id, calendarEvents.assigned_to))
 		.where(
-			and(eq(calendarEvents.id, id), eq(calendarEvents.org_id, orgId), isNull(calendarEvents.deleted_at))
+			and(
+				eq(calendarEvents.id, id),
+				eq(calendarEvents.org_id, orgId),
+				isNull(calendarEvents.deleted_at)
+			)
 		)
 		.limit(1);
 	if (!row) return null;

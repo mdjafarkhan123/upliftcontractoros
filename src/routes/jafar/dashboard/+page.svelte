@@ -148,14 +148,14 @@
 												href="{resolveRoute('/jafar/orgs/[id]', { id: org.id })}?tab=details"
 												data-sveltekit-preload-code="viewport"
 												data-sveltekit-preload-data="hover"
-												class="jafar-btn jafar-btn--sm"
-											>View Details</a>
+												class="jafar-btn jafar-btn--sm">View Details</a
+											>
 											<a
 												href={resolveRoute('/jafar/orgs/[id]', { id: org.id })}
 												data-sveltekit-preload-code="viewport"
 												data-sveltekit-preload-data="hover"
-												class="jafar-btn jafar-btn--sm"
-											>Open</a>
+												class="jafar-btn jafar-btn--sm">Open</a
+											>
 										</div>
 									</td>
 								</tr>
@@ -222,14 +222,14 @@
 												type="button"
 												disabled={busyEventId === event.id}
 												onclick={() => postEventAction(event.id, 'retry')}
-												class="jafar-btn jafar-btn--sm"
-											>Retry</button>
+												class="jafar-btn jafar-btn--sm">Retry</button
+											>
 											<button
 												type="button"
 												disabled={busyEventId === event.id}
 												onclick={() => postEventAction(event.id, 'dismiss')}
-												class="jafar-btn jafar-btn--sm jafar-btn--ghost"
-											>Dismiss</button>
+												class="jafar-btn jafar-btn--sm jafar-btn--ghost">Dismiss</button
+											>
 										</div>
 									</td>
 								</tr>
@@ -270,7 +270,9 @@
 			font-weight: 700;
 			letter-spacing: -0.02em;
 			color: #fff;
-			@media (min-width: 640px) { font-size: 1.875rem; }
+			@media (min-width: 640px) {
+				font-size: 1.875rem;
+			}
 		}
 
 		&__sub {
@@ -286,20 +288,39 @@
 			gap: 0.25rem;
 			font-size: 0.75rem;
 			color: #64748b;
-			i { animation: jafar-spin 0.7s linear infinite; font-size: 0.625rem; }
+			i {
+				animation: jafar-spin 0.7s linear infinite;
+				font-size: 0.625rem;
+			}
 		}
 
-		&__scroll { overflow-x: auto; }
+		&__scroll {
+			overflow-x: auto;
+		}
 
 		&__empty {
 			padding: 3rem 1.25rem;
 			text-align: center;
-			p:first-child { font-size: 0.875rem; color: #94a3b8; }
-			p + p { margin-top: 0.25rem; font-size: 0.75rem; color: #64748b; }
+			p:first-child {
+				font-size: 0.875rem;
+				color: #94a3b8;
+			}
+			p + p {
+				margin-top: 0.25rem;
+				font-size: 0.75rem;
+				color: #64748b;
+			}
 		}
 
-		&__ok    { font-size: 0.75rem; font-weight: 500; color: #34d399; }
-		&__muted { font-size: 0.75rem; color: #64748b; }
+		&__ok {
+			font-size: 0.75rem;
+			font-weight: 500;
+			color: #34d399;
+		}
+		&__muted {
+			font-size: 0.75rem;
+			color: #64748b;
+		}
 
 		&__action-err {
 			border-bottom: 1px solid rgba(239, 68, 68, 0.3);

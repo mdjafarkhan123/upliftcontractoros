@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "schedule_as_needed" boolean DEFAULT false NOT NULL;

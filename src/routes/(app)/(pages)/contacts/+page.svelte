@@ -83,10 +83,9 @@
 	// The recycle-bin list is only ever seen on the Deleted tab. Load it lazily so
 	// the contacts list paints without its chunk on the critical path — it fetches
 	// the moment the Deleted tab is opened and is cached thereafter.
-	let DeletedContactsList =
-		$state<typeof import('$lib/components/contacts/DeletedContactsList.svelte').default | null>(
-			null
-		);
+	let DeletedContactsList = $state<
+		typeof import('$lib/components/contacts/DeletedContactsList.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!isDeletedView || DeletedContactsList) return;
 		void import('$lib/components/contacts/DeletedContactsList.svelte').then((m) => {
@@ -286,8 +285,9 @@
 
 	// The CSV import modal (drag-drop, column mapping, parsing) is heavy and only
 	// needed when the user chooses Import. Load it the first time they open it.
-	let ContactImportModal =
-		$state<typeof import('$lib/components/contacts/ContactImportModal.svelte').default | null>(null);
+	let ContactImportModal = $state<
+		typeof import('$lib/components/contacts/ContactImportModal.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!importOpen || ContactImportModal) return;
 		void import('$lib/components/contacts/ContactImportModal.svelte').then((m) => {
@@ -296,8 +296,9 @@
 	});
 
 	// The delete confirmation dialog only renders once a delete is requested.
-	let ConfirmDialog =
-		$state<typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null>(null);
+	let ConfirmDialog = $state<
+		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
+	>(null);
 	$effect(() => {
 		if (!deleteDialogOpen || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
@@ -334,10 +335,7 @@
 			<Button type="button" variant="secondary" onclick={exitSelect}>Done</Button>
 		{:else if !isDeletedView}
 			<DropdownMenu.Root>
-				<DropdownMenu.Trigger
-					class="btn btn--secondary btn--icon"
-					aria-label="More actions"
-				>
+				<DropdownMenu.Trigger class="btn btn--secondary btn--icon" aria-label="More actions">
 					<i class="ri-more-2-fill" aria-hidden="true"></i>
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
@@ -493,7 +491,10 @@
 							<span class="contacts-page__select-count">{selected.size} selected</span>
 						</div>
 					{/if}
-					<ul class="contacts-page__card-list" class:contacts-page__card-list--pad={selectionMode && selected.size > 0}>
+					<ul
+						class="contacts-page__card-list"
+						class:contacts-page__card-list--pad={selectionMode && selected.size > 0}
+					>
 						{#each items as c (c.id)}
 							<li>
 								<ContactListCard
@@ -560,10 +561,14 @@
 	.contacts-page {
 		&__table {
 			display: none;
-			@media (min-width: $bp-tablet) { display: block; }
+			@media (min-width: $bp-tablet) {
+				display: block;
+			}
 		}
 		&__cards {
-			@media (min-width: $bp-tablet) { display: none; }
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
 		}
 
 		&__select-head {
@@ -582,12 +587,17 @@
 			font-weight: $weight-medium;
 			cursor: pointer;
 		}
-		&__select-count { font-size: $fs-caption; color: var(--color-text-secondary); }
+		&__select-count {
+			font-size: $fs-caption;
+			color: var(--color-text-secondary);
+		}
 
 		&__card-list {
 			display: grid;
 			gap: $space-3;
-			&--pad { padding-bottom: 6rem; }
+			&--pad {
+				padding-bottom: 6rem;
+			}
 		}
 	}
 </style>

@@ -29,7 +29,10 @@ export const GET: RequestHandler = async (event) => {
 	const assignedToParam = url.searchParams.get('assigned_to');
 
 	if (!fromParam || !toParam) {
-		return json({ error: 'from and to query params are required (ISO timestamps).' }, { status: 400 });
+		return json(
+			{ error: 'from and to query params are required (ISO timestamps).' },
+			{ status: 400 }
+		);
 	}
 	const from = new Date(fromParam);
 	const to = new Date(toParam);

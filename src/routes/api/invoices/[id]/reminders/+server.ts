@@ -58,7 +58,10 @@ export const POST: RequestHandler = async (event) => {
 		// A live (sent) invoice already has — or should have — a dunning enrollment;
 		// signal the worker to re-enroll or stop it. Drafts have no enrollment yet, so
 		// there's nothing to change until they're sent (the flag is read at send time).
-		const live = existing.status === 'sent' || existing.status === 'partially_paid' || existing.status === 'overdue';
+		const live =
+			existing.status === 'sent' ||
+			existing.status === 'partially_paid' ||
+			existing.status === 'overdue';
 		if (live) {
 			await tx.insert(outboxEvents).values(
 				invoiceRemindersToggledEvent({

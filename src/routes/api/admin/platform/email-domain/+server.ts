@@ -36,7 +36,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	const result = await createPlatformEmailDomain(parsed.data);
 	if (!result.ok) {
 		return json(
-			{ error: result.error, ...(result.field_errors ? { field_errors: result.field_errors } : {}) },
+			{
+				error: result.error,
+				...(result.field_errors ? { field_errors: result.field_errors } : {})
+			},
 			{ status: result.status }
 		);
 	}

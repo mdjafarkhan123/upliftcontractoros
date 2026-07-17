@@ -88,7 +88,10 @@
 
 	// Reset draft when dialog closes
 	$effect(() => {
-		if (!composerOpen) { draft = ''; errorMsg = null; }
+		if (!composerOpen) {
+			draft = '';
+			errorMsg = null;
+		}
 	});
 </script>
 
@@ -149,22 +152,14 @@
 			</div>
 			<div class="contact-notes__composer">
 				<div class="field">
-					<textarea
-						class="field__textarea"
-						bind:value={draft}
-						placeholder="Write a note…"
-						rows={5}
+					<textarea class="field__textarea" bind:value={draft} placeholder="Write a note…" rows={5}
 					></textarea>
 				</div>
 				{#if errorMsg}
 					<p class="field__error">{errorMsg}</p>
 				{/if}
 				<div class="contact-notes__composer-actions">
-					<Button
-						variant="secondary"
-						disabled={saving}
-						onclick={() => (composerOpen = false)}
-					>
+					<Button variant="secondary" disabled={saving} onclick={() => (composerOpen = false)}>
 						Cancel
 					</Button>
 					<Button

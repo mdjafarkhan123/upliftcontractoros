@@ -84,19 +84,21 @@ const paymentMilestoneBase = z
 const paymentMilestonesSchema = z.array(paymentMilestoneBase).max(50).optional();
 
 // Cross-field validation for recurring billing. A 'fixed' billing type needs a positive
-// fixed_invoice_amount. On create, billing config only makes sense on a recurring job, so we
-// also require recurrence to be present (skipped on PATCH, where recurrence isn't editable).
+// fixed_invoice_amount. On create, billing config only makes sense on a recurring job — which
+// is now checked against the STORED job_type, not the presence of a recurrence rule. Those are
+// not the same test: an "as needed" job is recurring with NO rule, and the old rule-based check
+// wrongly rejected billing on it. On PATCH the job is already recurring, so the check is skipped.
 function validateBilling(
 	val: {
 		billing_type?: 'visit_based' | 'fixed' | null;
 		fixed_invoice_amount?: number | null;
-		recurrence?: unknown;
+		job_type?: 'one_off' | 'recurring';
 	},
 	ctx: z.RefinementCtx,
-	opts: { requireRecurrence: boolean }
+	opts: { requireRecurringType: boolean }
 ): void {
 	if (!val.billing_type) return;
-	if (opts.requireRecurrence && !val.recurrence) {
+	if (opts.requireRecurringType && val.job_type !== 'recurring') {
 		ctx.addIssue({
 			code: z.ZodIssueCode.custom,
 			path: ['billing_type'],
@@ -171,7 +173,12 @@ function validatePaymentScheduleCap(
 }
 
 const jobTagsSchema = z.array(z.string().trim().min(1).max(50)).max(20).optional();
-const jobTypeSchema = z.string().trim().max(100).nullable().optional();
+// Free-text WORK category ("Repair", "Installation"). Called job_type before 0159 — not to
+// be confused with jobTypeSchema below, which is Jobber's one-off/recurring enum.
+const jobCategorySchema = z.string().trim().max(100).nullable().optional();
+// Jobber `jobType`: the user's One-off/Recurring decision. Required on create (Jobber's
+// field is non-null) and rejected on update (the type is immutable — duplicate instead).
+const jobTypeSchema = z.enum(['one_off', 'recurring']);
 
 // Recurring billing (manual, S4). billing_type 'visit_based' bills past visits grouped on one
 // invoice (priced at the job's line-item total); 'fixed' bills a flat fixed_invoice_amount each
@@ -194,12 +201,23 @@ const fixedInvoiceAmountSchema = z.coerce
 // Cross-field shape (week needs weekdays; month needs a mode + its selections;
 // end needs its matching fields) is enforced in validateRecurrence below.
 export const recurrenceSchema = z.object({
-	freq: z.enum(['week', 'month']),
+	freq: z.enum(['day', 'week', 'month', 'year']),
 	interval: z.coerce.number().int().min(1).max(52),
 	weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
 	month_mode: z.enum(['day_of_month', 'day_of_week']).optional(),
 	month_days: z.array(z.number().int().min(1).max(31)).max(31).optional(),
 	month_last_day: z.boolean().optional(),
+	// day_of_week grid cells (1st..4th × Sun..Sat) — 28 possible, so max 28.
+	month_cells: z
+		.array(
+			z.object({
+				week: z.number().int().min(1).max(4),
+				weekday: z.number().int().min(0).max(6)
+			})
+		)
+		.max(28)
+		.optional(),
+	// Legacy day_of_week shape — still accepted so an untouched rule round-trips through PATCH.
 	month_weeks: z.array(z.number().int().min(1).max(4)).max(4).optional(),
 	month_weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
 	end_type: z.enum(['after', 'on']),
@@ -216,7 +234,11 @@ export function validateRecurrence(
 	rec: z.infer<typeof recurrenceSchema>,
 	ctx: z.RefinementCtx
 ): void {
-	if (rec.freq === 'week') {
+	// 'day' (every N days) and 'year' (every N years on the anchor's date) need no day/month
+	// selection — the interval plus the start date is the whole rule.
+	if (rec.freq === 'day' || rec.freq === 'year') {
+		// nothing to validate beyond the interval bounds already enforced by the schema.
+	} else if (rec.freq === 'week') {
 		if (!rec.weekdays || rec.weekdays.length === 0) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
@@ -241,16 +263,14 @@ export function validateRecurrence(
 				});
 			}
 		} else {
-			if (
-				!rec.month_weeks ||
-				rec.month_weeks.length === 0 ||
-				!rec.month_weekdays ||
-				rec.month_weekdays.length === 0
-			) {
+			// The grid needs at least one tapped cell. A legacy rule (weeks + weekdays lists)
+			// still satisfies this so an untouched recurring job can round-trip through PATCH.
+			const legacy = (rec.month_weeks?.length ?? 0) > 0 && (rec.month_weekdays?.length ?? 0) > 0;
+			if ((rec.month_cells?.length ?? 0) === 0 && !legacy) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					path: ['recurrence', 'month_weekdays'],
-					message: 'Pick at least one week and weekday'
+					path: ['recurrence', 'month_cells'],
+					message: 'Pick at least one day in the grid'
 				});
 			}
 		}
@@ -322,7 +342,9 @@ export const createJobSchema = z
 		// Status is not client-settable on create — a new job is always 'scheduled' (shown as
 		// "Pending" until a date is added). It advances only via the /status transition endpoint.
 		assigned_to: z.string().uuid().nullable().optional(),
+		// The One-off/Recurring toggle. Required: the user decides, we never infer it.
 		job_type: jobTypeSchema,
+		job_category: jobCategorySchema,
 		tags: jobTagsSchema,
 		scheduled_start: datetimeNullable.optional(),
 		scheduled_end: datetimeNullable.optional(),
@@ -334,6 +356,11 @@ export const createJobSchema = z
 		// no date) instead of a dated calendar visit. Only meaningful on a one-off job with no
 		// scheduled_start; ignored for recurring jobs (which always expand to dated visits).
 		schedule_later: z.boolean().optional(),
+		// Jobber "As Needed — We Won't Prompt You": create a recurring job with NO rule and NO
+		// visits. Any recurrence sent alongside is ignored; scheduled_start/scheduled_end are
+		// STORED as the job's window (start day + end boundary) without creating any visit.
+		// The job lands in "Action Required" until the contractor adds a visit.
+		schedule_as_needed: z.boolean().optional(),
 		scope_of_work: nullableTrimmed(10000),
 		notes: nullableTrimmed(5000),
 		service_address_line_1: nullableTrimmed(200),
@@ -387,7 +414,7 @@ export const createJobSchema = z
 	.superRefine(validateJobDiscount)
 	.superRefine((d, ctx) => {
 		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
-		validateBilling(d, ctx, { requireRecurrence: true });
+		validateBilling(d, ctx, { requireRecurringType: true });
 		validatePaymentScheduleCap(d, ctx);
 	});
 
@@ -396,7 +423,10 @@ export const createJobSchema = z
 export const updateJobLineItemsSchema = z
 	.object({
 		assigned_to: z.string().uuid().nullable().optional(),
-		job_type: jobTypeSchema,
+		// NOTE: job_type is deliberately absent — the one-off/recurring type is immutable after
+		// create (Jobber: "the job type cannot be switched… it would need to be recreated").
+		// The route rejects it explicitly rather than silently ignoring it; see +server.ts.
+		job_category: jobCategorySchema,
 		tags: jobTagsSchema,
 		scheduled_start: datetimeNullable.optional(),
 		scheduled_end: datetimeNullable.optional(),
@@ -412,10 +442,16 @@ export const updateJobLineItemsSchema = z
 		line_items: z.array(jobLineItemBase).max(200).optional(),
 		// Recurring schedule edit. Sending `recurrence` (a rule or null) makes the PATCH
 		// recurrence-aware: the route freezes past/invoiced visits and rebuilds the upcoming
-		// ones from this rule. `null` turns a recurring job back into a one-off. `visit_instructions`
-		// is copied onto every newly generated visit (same as create). When a rule is sent,
-		// scheduled_start must accompany it (the anchor for expansion) — enforced below.
+		// ones from this rule. `visit_instructions` is copied onto every newly generated visit
+		// (same as create). When a rule is sent, scheduled_start must accompany it (the anchor
+		// for expansion) — enforced below.
+		// `null` clears the RULE only; it does NOT convert the job to one-off (job_type is
+		// immutable since 0159). A recurring job with no rule is exactly Jobber's "as needed".
 		recurrence: recurrenceSchema.nullable().optional(),
+		// Switch a job to/from Jobber "As needed" on edit. When true the recurrence-aware PATCH
+		// clears future open visits and leaves the job with none (Action Required); when false it
+		// resumes normal one-off/recurring behavior. Omitted = leave the flag untouched.
+		schedule_as_needed: z.boolean().optional(),
 		visit_instructions: nullableTrimmed(2000),
 		// One-off billing (S3). On PATCH the schedule is wipe-and-reinserted by `key`,
 		// except rows already turned into invoices (those are locked server-side).
@@ -440,7 +476,7 @@ export const updateJobLineItemsSchema = z
 	.superRefine(validateJobDiscount)
 	.superRefine((d, ctx) => {
 		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
-		validateBilling(d, ctx, { requireRecurrence: false });
+		validateBilling(d, ctx, { requireRecurringType: false });
 		validatePaymentScheduleCap(d, ctx);
 	});
 

@@ -70,46 +70,49 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!row) error(404, 'Invoice not found');
 
-	const lineItems = await db
-		.select({
-			id: invoiceLineItems.id,
-			description: invoiceLineItems.description,
-			quantity: invoiceLineItems.quantity,
-			unit: invoiceLineItems.unit,
-			unit_price: invoiceLineItems.unit_price,
-			taxable: invoiceLineItems.taxable,
-			unit_cost: invoiceLineItems.unit_cost,
-			source_catalog_item_id: invoiceLineItems.source_catalog_item_id,
-			total: invoiceLineItems.total,
-			is_late_fee: invoiceLineItems.is_late_fee,
-			position: invoiceLineItems.position
-		})
-		.from(invoiceLineItems)
-		.where(
-			and(
-				eq(invoiceLineItems.invoice_id, id),
-				eq(invoiceLineItems.org_id, auth.orgId),
-				isNull(invoiceLineItems.deleted_at)
+	// row gates (404); line items and payments are independent of each other — one wave.
+	const [lineItems, paymentsRows] = await Promise.all([
+		db
+			.select({
+				id: invoiceLineItems.id,
+				description: invoiceLineItems.description,
+				quantity: invoiceLineItems.quantity,
+				unit: invoiceLineItems.unit,
+				unit_price: invoiceLineItems.unit_price,
+				taxable: invoiceLineItems.taxable,
+				unit_cost: invoiceLineItems.unit_cost,
+				source_catalog_item_id: invoiceLineItems.source_catalog_item_id,
+				total: invoiceLineItems.total,
+				is_late_fee: invoiceLineItems.is_late_fee,
+				position: invoiceLineItems.position
+			})
+			.from(invoiceLineItems)
+			.where(
+				and(
+					eq(invoiceLineItems.invoice_id, id),
+					eq(invoiceLineItems.org_id, auth.orgId),
+					isNull(invoiceLineItems.deleted_at)
+				)
 			)
-		)
-		.orderBy(asc(invoiceLineItems.position), asc(invoiceLineItems.created_at));
+			.orderBy(asc(invoiceLineItems.position), asc(invoiceLineItems.created_at)),
 
-	const paymentsRows = await db
-		.select({
-			id: payments.id,
-			amount: payments.amount,
-			tip_amount: payments.tip_amount,
-			payment_method: payments.payment_method,
-			stripe_payment_intent_id: payments.stripe_payment_intent_id,
-			notes: payments.notes,
-			recorded_by_name: orgMembers.full_name,
-			paid_at: payments.paid_at,
-			created_at: payments.created_at
-		})
-		.from(payments)
-		.leftJoin(orgMembers, eq(orgMembers.id, payments.recorded_by))
-		.where(and(eq(payments.invoice_id, id), eq(payments.org_id, auth.orgId)))
-		.orderBy(desc(payments.paid_at));
+		db
+			.select({
+				id: payments.id,
+				amount: payments.amount,
+				tip_amount: payments.tip_amount,
+				payment_method: payments.payment_method,
+				stripe_payment_intent_id: payments.stripe_payment_intent_id,
+				notes: payments.notes,
+				recorded_by_name: orgMembers.full_name,
+				paid_at: payments.paid_at,
+				created_at: payments.created_at
+			})
+			.from(payments)
+			.leftJoin(orgMembers, eq(orgMembers.id, payments.recorded_by))
+			.where(and(eq(payments.invoice_id, id), eq(payments.org_id, auth.orgId)))
+			.orderBy(desc(payments.paid_at))
+	]);
 
 	return json({
 		data: {
@@ -203,8 +206,7 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 		if (input.discount_type !== 'none') {
 			if (input.discount_value !== undefined) {
-				updates.discount_value =
-					input.discount_value != null ? String(input.discount_value) : null;
+				updates.discount_value = input.discount_value != null ? String(input.discount_value) : null;
 				discountChanged = true;
 			}
 			if (input.discount_label !== undefined) updates.discount_label = input.discount_label;

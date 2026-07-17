@@ -34,7 +34,9 @@
 	{/each}
 </div>
 
-<p class="plan-note">Templates pre-fill flags and limits. Every value below stays manually overridable.</p>
+<p class="plan-note">
+	Templates pre-fill flags and limits. Every value below stays manually overridable.
+</p>
 
 <style lang="scss">
 	.plan-grid {

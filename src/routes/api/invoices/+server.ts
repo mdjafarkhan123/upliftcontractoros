@@ -313,10 +313,7 @@ export const POST: RequestHandler = async (event) => {
 						eq(quoteLineItems.org_id, auth.orgId),
 						isNull(quoteLineItems.deleted_at),
 						// Required lines plus only the optional add-ons the customer accepted.
-						or(
-							eq(quoteLineItems.is_optional, false),
-							eq(quoteLineItems.accepted_selected, true)
-						)
+						or(eq(quoteLineItems.is_optional, false), eq(quoteLineItems.accepted_selected, true))
 					)
 				)
 				.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));

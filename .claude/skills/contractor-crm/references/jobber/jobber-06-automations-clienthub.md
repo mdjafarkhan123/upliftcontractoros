@@ -5,10 +5,10 @@
 > **(unverified)** marks anything not confirmed by schema or help center.
 >
 > **Schema-coverage caveat (important):** Jobber's **Automations** feature is **not represented in the public
-> GraphQL schema** — there are *no* `Automation`, `Trigger`, `Action`, `Workflow`, or `Campaign` object/enum
+> GraphQL schema** — there are _no_ `Automation`, `Trigger`, `Action`, `Workflow`, or `Campaign` object/enum
 > types in `JobberJson.md` (grep confirms only `ICalendarRule`, unrelated). Automations are a **web-app-only**
 > feature; everything in §1–§2 is from the help center. **Client Hub** is likewise a client-facing web surface,
-> not a first-class API object — but the schema *does* expose the plumbing it runs on: `clientHubUri` /
+> not a first-class API object — but the schema _does_ expose the plumbing it runs on: `clientHubUri` /
 > `clientHubViewedAt` / `dateViewedInClientHub` on Quote/Invoice, `OnlineBookingConfiguration`,
 > `SelfServeBooking`, `BookingType` (covered in `jobber-01`/`jobber-02`), and the `SelfServeBooking` enum here.
 
@@ -30,23 +30,23 @@ Two customer-facing growth systems sit on top of the core lifecycle:
 These ship as named features you toggle/configure; each sends **email or text**, matching the channel the
 original document was sent on where applicable.
 
-| Automation | What it does | Key rule |
-| --- | --- | --- |
-| **Quote follow-ups** | Auto-remind a client who hasn't responded to a quote in **awaiting-response** status. | Up to **two** follow-ups; gated per-client by `receivesQuoteFollowUps` (see `jobber-01`). [[quote approvals]] |
-| **Invoice follow-ups** | Dunning: remind a client whose invoice is **past due** to pay. | Up to **two**; you set **days-after-due**, **max 90 days**. Suppressed if automatic payments are on. [[invoice reminders]] |
-| **Job follow-ups** | Email sent (auto or manual) **on job completion** — feedback, referral survey, future-work discount, etc. | Content is up to the SP. [[job follow-ups]] |
-| **Visit / assessment reminders** | Remind the client of an upcoming **visit or assessment**, on a schedule or sent manually. | Separate email + text templates. [[assessment and visit reminders]] |
-| **"On My Way" messages** | From the Jobber app, tech sends a client an *"on my way, ~N minutes"* text for the day's appointment. | Manual, per-visit, tech picks the ETA. [[assessment and visit reminders]] |
-| **Draft quote from request** | Auto-create a **draft quote** when a client submits a request. | Named in the Automations overview. [[automations]] |
-| **High-value opportunity alert** | Alerts *you* about high-value opportunities. | Named in the Automations overview (internal alert). [[automations]] |
-| **Review requests** | Post-payment SMS asking for a **Google review** (gated by `allowReviewRequest` / `nextDateToSendReviewSms` on the invoice). | Reputation domain — later file. |
+| Automation                       | What it does                                                                                                                | Key rule                                                                                                                   |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Quote follow-ups**             | Auto-remind a client who hasn't responded to a quote in **awaiting-response** status.                                       | Up to **two** follow-ups; gated per-client by `receivesQuoteFollowUps` (see `jobber-01`). [[quote approvals]]              |
+| **Invoice follow-ups**           | Dunning: remind a client whose invoice is **past due** to pay.                                                              | Up to **two**; you set **days-after-due**, **max 90 days**. Suppressed if automatic payments are on. [[invoice reminders]] |
+| **Job follow-ups**               | Email sent (auto or manual) **on job completion** — feedback, referral survey, future-work discount, etc.                   | Content is up to the SP. [[job follow-ups]]                                                                                |
+| **Visit / assessment reminders** | Remind the client of an upcoming **visit or assessment**, on a schedule or sent manually.                                   | Separate email + text templates. [[assessment and visit reminders]]                                                        |
+| **"On My Way" messages**         | From the Jobber app, tech sends a client an _"on my way, ~N minutes"_ text for the day's appointment.                       | Manual, per-visit, tech picks the ETA. [[assessment and visit reminders]]                                                  |
+| **Draft quote from request**     | Auto-create a **draft quote** when a client submits a request.                                                              | Named in the Automations overview. [[automations]]                                                                         |
+| **High-value opportunity alert** | Alerts _you_ about high-value opportunities.                                                                                | Named in the Automations overview (internal alert). [[automations]]                                                        |
+| **Review requests**              | Post-payment SMS asking for a **Google review** (gated by `allowReviewRequest` / `nextDateToSendReviewSms` on the invoice). | Reputation domain — later file.                                                                                            |
 
 ### 1.2 Custom Automation Builder (help center) — [[custom automation builder]]
 
 A rules engine on **select plans** (Gear → **Settings → Automations → New Automation**). Three parts:
 
-1. **Trigger — "When this happens."** The event that starts it. Day-offset triggers (e.g. *X days after a
-   quote is sent*) allow a **maximum of 90 days**. Time-of-day: **"in the morning" = 8 AM local**, **"in the
+1. **Trigger — "When this happens."** The event that starts it. Day-offset triggers (e.g. _X days after a
+   quote is sent_) allow a **maximum of 90 days**. Time-of-day: **"in the morning" = 8 AM local**, **"in the
    evening" = 7 PM local**.
 2. **Condition(s) — "And only if."** Criteria that must be true for it to run. **Max 6 conditions** per
    automation.
@@ -56,6 +56,7 @@ A rules engine on **select plans** (Gear → **Settings → Automations → New 
    - **Update status** — **only available on quotes.**
 
 **Lifecycle rules:**
+
 - Save → the automation goes **live**. Deactivate via the automation's **More → Deactivate**.
 - **Not retroactive** — an automation only fires on items that meet the trigger **after** it's created; it
   never back-applies to past items.
@@ -64,12 +65,12 @@ A rules engine on **select plans** (Gear → **Settings → Automations → New 
 > can trigger, and every action type). Confirmed: quote/invoice/request-based triggers exist; actions include
 > **Notify** and **Update status (quotes only)**. A complete matrix is **(unverified)**.
 
-### 1.3 Related, but *not* the Custom Automation Builder
+### 1.3 Related, but _not_ the Custom Automation Builder
 
 - **Campaigns (Marketing Tools)** — bulk email marketing to client segments; separate from automations.
 - **Zapier integration** — connect Jobber events to 1000s of external apps ("Task Automation Powered by
   Zapier") when a rule needs to leave Jobber. [[jobber and zapier]]
-- **Social/marketing items** — the schema *does* model marketing posts (`SocialMediaPost`,
+- **Social/marketing items** — the schema _does_ model marketing posts (`SocialMediaPost`,
   `SocialMarketingItem*`, Google Business Profile / Facebook channels), i.e. the Marketing Suite — distinct
   from lifecycle automations.
 
@@ -79,18 +80,18 @@ A rules engine on **select plans** (Gear → **Settings → Automations → New 
 
 ### 2.1 What clients can do (help center) — [[what clients see in client hub]]
 
-Client Hub is *"a self-serve, online experience that allows clients to approve quotes, check appointment
-details, pay invoices, print receipts, or request more work — all in one place."* Mobile-friendly (works on
+Client Hub is _"a self-serve, online experience that allows clients to approve quotes, check appointment
+details, pay invoices, print receipts, or request more work — all in one place."_ Mobile-friendly (works on
 computer or phone).
 
-| Capability | Detail |
-| --- | --- |
-| **Approve quotes** | View a quote, **approve** (sign — draw/type), or **request changes**; **pay the deposit** if one is required ("Approve and Pay Deposit"). See `jobber-03` §5. |
-| **Pay invoices** | With **Jobber Payments** (or a 3rd-party payment integration), pay invoices online; **add a tip**. See `jobber-05` §5.6. |
-| **View appointments** | See **all past** appointments and the **next five upcoming**. |
-| **Book / request more work** | **New Request** tab → fill the request form → creates a request (and, with **Online Booking**, can create a **job** or **assessment** directly — see §2.3). |
-| **Print receipts / billing history** | Print receipts and see their billing history. |
-| **Contact us** | The nav's *Contact Us* shows the SP's full address + contact info (from the branding page). |
+| Capability                           | Detail                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Approve quotes**                   | View a quote, **approve** (sign — draw/type), or **request changes**; **pay the deposit** if one is required ("Approve and Pay Deposit"). See `jobber-03` §5. |
+| **Pay invoices**                     | With **Jobber Payments** (or a 3rd-party payment integration), pay invoices online; **add a tip**. See `jobber-05` §5.6.                                      |
+| **View appointments**                | See **all past** appointments and the **next five upcoming**.                                                                                                 |
+| **Book / request more work**         | **New Request** tab → fill the request form → creates a request (and, with **Online Booking**, can create a **job** or **assessment** directly — see §2.3).   |
+| **Print receipts / billing history** | Print receipts and see their billing history.                                                                                                                 |
+| **Contact us**                       | The nav's _Contact Us_ shows the SP's full address + contact info (from the branding page).                                                                   |
 
 ### 2.2 Client Hub settings & branding (help center) — [[client hub settings]]
 
@@ -99,17 +100,17 @@ computer or phone).
   OFF = they can only open a quote/invoice from the **direct link** in the email/text you sent (no list in the
   side nav).
 - **Branding:** the side nav shows your **logo + business name** (top-left); logos/brand colors come from your
-  **Business Profile** and auto-apply to Client Hub *and* request/booking forms so everything matches.
+  **Business Profile** and auto-apply to Client Hub _and_ request/booking forms so everything matches.
 
 ### 2.3 Online Booking / self-serve (schema + help center)
 
 Client Hub's "request/book work" is powered by **Online Booking** (detailed in `jobber-02`). The schema's
 **`SelfServeBooking`** enum defines what a self-serve booking creates:
 
-| `SelfServeBooking` value | Creates |
-| --- | --- |
-| `WORK_ORDER` | A **job** (books work directly). |
-| `WORK_REQUEST` | An **assessment** (books a scoping/estimate visit first). |
+| `SelfServeBooking` value | Creates                                                   |
+| ------------------------ | --------------------------------------------------------- |
+| `WORK_ORDER`             | A **job** (books work directly).                          |
+| `WORK_REQUEST`           | An **assessment** (books a scoping/estimate visit first). |
 
 Config lives in **`OnlineBookingConfiguration`** + `RequestSettings` (see `jobber-02`); `BookingType` /
 `EfficientSchedulingType` control how slots are offered. Branding is shared with Client Hub (§2.2).
@@ -120,7 +121,7 @@ Config lives in **`OnlineBookingConfiguration`** + `RequestSettings` (see `jobbe
 
 - **Two-layer automation model to match:** (1) a handful of **built-in, one-toggle** automations covering the
   90% cases — quote follow-up ×2, invoice dunning ×2 (days-after-due, max 90), visit reminders, on-my-way, job
-  follow-up on completion, review request, draft-quote-from-request — *plus* (2) a **custom builder**
+  follow-up on completion, review request, draft-quote-from-request — _plus_ (2) a **custom builder**
   (trigger → conditions → action) for everything else. Don't ship only the builder; contractors want the
   presets on by default. This aligns with our automation-engine roadmap and the outbox pattern (Rule 12).
 - **Builder guardrails worth copying verbatim:** day-offset triggers capped at **90 days**, **max 6
@@ -130,19 +131,20 @@ Config lives in **`OnlineBookingConfiguration`** + `RequestSettings` (see `jobbe
 - **"Update status" action is quote-only** in Jobber — a deliberate constraint. When we build actions, scope
   status-changing actions carefully rather than allowing arbitrary status writes on every entity.
 - **Automatic payments suppress dunning** — the automation engine must know about billing state so it doesn't
-  chase an invoice that will auto-charge. Keep automations *aware of* payment state, not blind senders.
+  chase an invoice that will auto-charge. Keep automations _aware of_ payment state, not blind senders.
 - **Client Hub is the conversion surface.** The highest-value pieces to reach parity: **approve + sign + pay
   deposit** on quotes, **pay + tip** on invoices, **request more work** (self-serve upsell), and **view
   upcoming/past appointments**. Our public booking + document-send links already cover parts; the gap is a
   **logged-in, branded, all-in-one portal** with the Quotes/Invoices visibility toggle.
-- **Self-serve booking = job *or* assessment.** Match Jobber's `WORK_ORDER` vs `WORK_REQUEST` choice: some
+- **Self-serve booking = job _or_ assessment.** Match Jobber's `WORK_ORDER` vs `WORK_REQUEST` choice: some
   trades want instant job booking, others want an estimate visit first. Config, not hardcode.
-- **Branding once, applied everywhere:** logo/colors set in one Business Profile flow into Client Hub *and*
+- **Branding once, applied everywhere:** logo/colors set in one Business Profile flow into Client Hub _and_
   booking/request forms. Single source of truth for branding — worth matching so contractors set it once.
 
 ---
 
 ### Help-center sources
+
 - Automations — https://help.getjobber.com/hc/en-us/articles/24244124296471-Automations
 - Custom Automation Builder — https://help.getjobber.com/hc/en-us/articles/26980855822231-Custom-Automation-Builder
 - Quote Approvals — https://help.getjobber.com/hc/en-us/articles/115012715008-Quote-Approvals

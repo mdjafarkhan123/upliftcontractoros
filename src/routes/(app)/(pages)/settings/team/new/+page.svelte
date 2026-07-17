@@ -148,10 +148,17 @@
 			</label>
 
 			<div class="team-actions__group">
-				<Button variant="secondary" disabled={!passwordCopied} onclick={() => goto('/settings/team')}>
+				<Button
+					variant="secondary"
+					disabled={!passwordCopied}
+					onclick={() => goto('/settings/team')}
+				>
 					Back to team
 				</Button>
-				<Button disabled={!passwordCopied} onclick={() => goto(`/settings/team/${createdMemberId}`)}>
+				<Button
+					disabled={!passwordCopied}
+					onclick={() => goto(`/settings/team/${createdMemberId}`)}
+				>
 					View member
 				</Button>
 			</div>
@@ -226,8 +233,12 @@
 								<Select.Value />
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="member">Member — Field worker / crew</Select.Item>
-								<Select.Item value="manager">Manager — Office / operations</Select.Item>
+								<Select.Item value="member" label="Member — Field worker / crew">
+									Member — Field worker / crew
+								</Select.Item>
+								<Select.Item value="manager" label="Manager — Office / operations">
+									Manager — Office / operations
+								</Select.Item>
 							</Select.Content>
 						</Select.Root>
 						<p class="field__hint">
@@ -318,12 +329,7 @@
 				>
 					Cancel
 				</Button>
-				<Button
-					type="submit"
-					loadingLabel="Creating…"
-					successLabel="Created"
-					loading={saving}
-				>
+				<Button type="submit" loadingLabel="Creating…" successLabel="Created" loading={saving}>
 					Add member
 				</Button>
 			</div>

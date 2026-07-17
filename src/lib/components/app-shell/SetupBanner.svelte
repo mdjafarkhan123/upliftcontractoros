@@ -8,7 +8,9 @@
 	<i class="ri-sparkling-line h-4 w-4 shrink-0" aria-hidden="true"></i>
 	<div class="flex-1 leading-snug">
 		<span class="font-medium">Finish setting up your workspace.</span>
-		<a href="/settings" class="ml-2 underline underline-offset-2 hover:no-underline">Open settings</a>
+		<a href="/settings" class="ml-2 underline underline-offset-2 hover:no-underline"
+			>Open settings</a
+		>
 	</div>
 	<button
 		type="button"

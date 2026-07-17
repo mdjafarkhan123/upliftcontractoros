@@ -67,7 +67,9 @@ export const POST: RequestHandler = async (event) => {
 
 		// Tip (M7) is EXTRA money on top of the balance — never checked against amount_due, and
 		// only honored when the org has tips enabled (a stale client can't sneak one in).
-		const tipStr = (existing.tips_enabled && existing.accept_tips ? (input.tip_amount ?? 0) : 0).toFixed(2);
+		const tipStr = (
+			existing.tips_enabled && existing.accept_tips ? (input.tip_amount ?? 0) : 0
+		).toFixed(2);
 
 		const paidAt = input.paid_at ? new Date(input.paid_at) : new Date();
 

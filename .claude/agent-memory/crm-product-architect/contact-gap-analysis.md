@@ -26,23 +26,14 @@ Supporting tables: `contact_addresses` (multi-address, label: billing/service/ma
 ## Confirmed gaps (P0/P1/P2)
 
 **P0 — Table stakes missing:**
+
 1. **No multi-tag filter.** `tag` state is a single string; API accepts one tag. No AND/OR multi-tag query. GHL/HubSpot both do multi-tag.
 2. **Import fires no outbox events.** Raw `db.insert()` in `/api/contacts/import` — no `contact.created` events, no automations triggered for imported leads. Silent adoption killer.
 3. **No saved segments / smart lists.** No persisted filter combinations. Jobber has segments; GHL has smart lists.
 4. **Import missing fields.** HEADER_MAP in import route does not map: company_name, lead_temperature, assigned_to. These fields silently fail.
 
-**P1 — Meaningful gaps:**
-5. **No sort control.** Hard-coded `ORDER BY created_at DESC`. No sort by last_contacted_at (stale lead queue) or name.
-6. **Notes capped at 10.** `contactRepo.ts` loadContactDetail: `.limit(10)`. Notes 11+ are silently invisible. No pagination in NotesTab.
-7. **Export missing fields.** Omits: company_name, lead_temperature, alt_phone_label, next_follow_up_at, converted_at, referred_by name/id.
-8. **No referral filter on list.** referred_by_contact_id exists in schema and detail, but no list filter for "referred contacts" or "contacts who referred others."
-9. **Timeline search/filter confirmed working.** TimelineTab.svelte has search input + 8 category chips wired to API. This gap from prior memory is RESOLVED.
-10. **Quick Actions confirmed complete.** Call, Message (opens inbox/compose), Quote, Book, Note, Follow-up, Convert all present. This gap from prior memory is RESOLVED.
+**P1 — Meaningful gaps:** 5. **No sort control.** Hard-coded `ORDER BY created_at DESC`. No sort by last_contacted_at (stale lead queue) or name. 6. **Notes capped at 10.** `contactRepo.ts` loadContactDetail: `.limit(10)`. Notes 11+ are silently invisible. No pagination in NotesTab. 7. **Export missing fields.** Omits: company_name, lead_temperature, alt_phone_label, next_follow_up_at, converted_at, referred_by name/id. 8. **No referral filter on list.** referred_by_contact_id exists in schema and detail, but no list filter for "referred contacts" or "contacts who referred others." 9. **Timeline search/filter confirmed working.** TimelineTab.svelte has search input + 8 category chips wired to API. This gap from prior memory is RESOLVED. 10. **Quick Actions confirmed complete.** Call, Message (opens inbox/compose), Quote, Book, Note, Follow-up, Convert all present. This gap from prior memory is RESOLVED.
 
-**P2 — Nice-to-have / overkill for segment:**
-11. No custom fields (skip for $200K–$2M contractors).
-12. No duplicate detection beyond same-phone.
-13. No contact scoring.
-14. No bulk SMS/email blast (needs campaign module).
+**P2 — Nice-to-have / overkill for segment:** 11. No custom fields (skip for $200K–$2M contractors). 12. No duplicate detection beyond same-phone. 13. No contact scoring. 14. No bulk SMS/email blast (needs campaign module).
 
 **Why:** Full re-read of all contact files 2026-06-12 to verify prior memory and resolve gaps 9/10.

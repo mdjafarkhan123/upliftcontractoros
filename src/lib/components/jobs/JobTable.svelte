@@ -40,12 +40,28 @@
 
 	function jobActions(job: JobListItem): RowAction[] {
 		const actions: RowAction[] = [
-			{ key: 'edit', label: 'Edit job', icon: 'ri-pencil-line', onSelect: () => goto(`/jobs/${job.id}`) }
+			{
+				key: 'edit',
+				label: 'Edit job',
+				icon: 'ri-pencil-line',
+				onSelect: () => goto(`/jobs/${job.id}`)
+			}
 		];
 		if (onDuplicate)
-			actions.push({ key: 'duplicate', label: 'Duplicate', icon: 'ri-file-copy-line', onSelect: () => onDuplicate(job.id) });
+			actions.push({
+				key: 'duplicate',
+				label: 'Duplicate',
+				icon: 'ri-file-copy-line',
+				onSelect: () => onDuplicate(job.id)
+			});
 		if (canDelete && onDeleteRequest)
-			actions.push({ key: 'delete', label: 'Delete job', icon: 'ri-delete-bin-line', destructive: true, onSelect: () => onDeleteRequest(job.id, job.title) });
+			actions.push({
+				key: 'delete',
+				label: 'Delete job',
+				icon: 'ri-delete-bin-line',
+				destructive: true,
+				onSelect: () => onDeleteRequest(job.id, job.title)
+			});
 		return actions;
 	}
 </script>
@@ -108,11 +124,7 @@
 					{#if selectable}
 						<span class="job-table__title">{job.title}</span>
 					{:else}
-						<a
-							href="/jobs/{job.id}"
-							onclick={(e) => e.stopPropagation()}
-							class="job-table__title"
-						>
+						<a href="/jobs/{job.id}" onclick={(e) => e.stopPropagation()} class="job-table__title">
 							{job.title}
 						</a>
 					{/if}
@@ -152,7 +164,13 @@
 
 				<!-- Status -->
 				<td class="list-table__td">
-					<JobStatusBadge status={job.status} scheduledStart={job.scheduled_start} />
+					<JobStatusBadge
+						status={job.status}
+						scheduledStart={job.scheduled_start}
+						hasSeriesAnchor={job.has_series_anchor}
+						nextOpenVisitStart={job.next_open_visit_start}
+						hasOpenVisits={job.has_open_visits}
+					/>
 				</td>
 
 				<!-- Billing -->

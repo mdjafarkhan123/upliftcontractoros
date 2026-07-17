@@ -225,9 +225,7 @@
 			<Button variant="ghost" size="sm" onclick={clearPad} disabled={!hasDrawn || saving}>
 				Clear
 			</Button>
-			<Button size="sm" loading={saving} onclick={save}>
-				Save sign-off
-			</Button>
+			<Button size="sm" loading={saving} onclick={save}>Save sign-off</Button>
 		</div>
 	{:else}
 		<p class="job-signoff__hint">Not signed yet.</p>

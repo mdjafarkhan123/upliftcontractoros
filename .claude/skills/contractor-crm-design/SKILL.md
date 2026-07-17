@@ -9,7 +9,7 @@ description: Visual design system for this contractor CRM, built with SvelteKit,
 
 Left to its own devices, an LLM generating UI tends toward generic
 defaults: 8px radii, harsh 1px borders, cramped padding, Tailwind's stock
-gray/blue. None of that is *wrong*, exactly — it's just forgettable, and
+gray/blue. None of that is _wrong_, exactly — it's just forgettable, and
 this project's whole goal is to avoid forgettable. Two real product
 screenshots define what "done well" looks like here, and this skill exists
 to translate that look into rules concrete enough to apply consistently
@@ -69,6 +69,7 @@ src/lib/styles/
 ```
 
 **The rule that makes this "hybrid":**
+
 - A pattern that shows up in more than one route (a button, a badge, a
   card, the sidebar) is a **global BEM block** — defined once under
   `components/`, forwarded through `global.scss`, and reused everywhere by
@@ -80,8 +81,8 @@ src/lib/styles/
   but owns its own grid/positioning rules locally, so that changing one
   page's layout can never accidentally shift another page's.
 
-When you're not sure which side a new style belongs on, ask: *"if I changed
-this, would I expect it to change on every page, or just this one?"* Every
+When you're not sure which side a new style belongs on, ask: _"if I changed
+this, would I expect it to change on every page, or just this one?"_ Every
 page → global. Just this one → scoped.
 
 ## Token usage
@@ -137,6 +138,7 @@ Svelte, because the same `var(--color-bg-surface)` already resolves to the
 right value either way.
 
 **Three states, in priority order:**
+
 1. User has explicitly chosen a theme in this app → `<html data-theme="dark">`
    (or `"light"`) is set, and that wins regardless of OS setting.
 2. User hasn't chosen yet, OS is in dark mode → the `prefers-color-scheme`
@@ -151,33 +153,33 @@ there's no flash of the wrong theme on load:
 ```svelte
 <!-- src/lib/theme.svelte.ts -->
 <script module>
-  export function setTheme(theme: 'light' | 'dark' | 'system') {
-    if (theme === 'system') {
-      document.documentElement.removeAttribute('data-theme');
-      localStorage.removeItem('theme');
-    } else {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('theme', theme);
-    }
-  }
+	export function setTheme(theme: 'light' | 'dark' | 'system') {
+		if (theme === 'system') {
+			document.documentElement.removeAttribute('data-theme');
+			localStorage.removeItem('theme');
+		} else {
+			document.documentElement.setAttribute('data-theme', theme);
+			localStorage.setItem('theme', theme);
+		}
+	}
 </script>
 ```
 
 **Avoiding the flash-of-wrong-theme on load** — by the time Svelte
 hydrates, the page has already painted once with no `data-theme` set,
 which is visible as a flash if the stored preference differs from the OS
-default. Fix this with a tiny inline script in `src/app.html`, *before* any
+default. Fix this with a tiny inline script in `src/app.html`, _before_ any
 stylesheet or app JS loads, so the attribute is correct on the very first
 paint:
 
 ```html
 <script>
-  (function () {
-    var stored = localStorage.getItem('theme');
-    if (stored === 'light' || stored === 'dark') {
-      document.documentElement.setAttribute('data-theme', stored);
-    }
-  })();
+	(function () {
+		var stored = localStorage.getItem('theme');
+		if (stored === 'light' || stored === 'dark') {
+			document.documentElement.setAttribute('data-theme', stored);
+		}
+	})();
 </script>
 ```
 
@@ -188,7 +190,6 @@ table in `references/visual-reference.md` and the dark-mode notes inline in
 lighter/darker swap (the hero card gradient, status badges, avatar
 fallbacks, and the two sidebar variants all call this out explicitly where
 it applies).
-
 
 ## Component & layout references
 
@@ -223,10 +224,13 @@ that class, the same way you'd handle `:hover` —
 ```svelte
 <Dialog.Content class="dialog-content">…</Dialog.Content>
 ```
+
 ```scss
 .dialog-content {
-  // base styles…
-  &[data-state="open"] { animation: dialog-in $duration-base $ease-standard; }
+	// base styles…
+	&[data-state='open'] {
+		animation: dialog-in $duration-base $ease-standard;
+	}
 }
 ```
 

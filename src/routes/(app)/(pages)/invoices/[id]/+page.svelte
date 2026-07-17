@@ -43,15 +43,15 @@
 		return rows
 			.filter((li) => !li.is_late_fee)
 			.map((li) => ({
-			client_id: li.id,
-			description: li.description,
-			quantity: li.quantity,
-			unit: li.unit ?? '',
-			unit_price: li.unit_price,
-			taxable: li.taxable ?? true,
-			unit_cost: li.unit_cost ?? null,
-			source_catalog_item_id: li.source_catalog_item_id ?? null
-		}));
+				client_id: li.id,
+				description: li.description,
+				quantity: li.quantity,
+				unit: li.unit ?? '',
+				unit_price: li.unit_price,
+				taxable: li.taxable ?? true,
+				unit_cost: li.unit_cost ?? null,
+				source_catalog_item_id: li.source_catalog_item_id ?? null
+			}));
 	}
 
 	let lineItems = $state<QuoteLineDraft[]>([]);
@@ -404,7 +404,11 @@
 		if (!inv) return [];
 		const out: DocumentHeaderDate[] = [{ label: 'Issued', value: formatDate(inv.created_at) }];
 		if (inv.due_date) {
-			out.push({ label: 'Due', value: formatDate(inv.due_date), tone: overdue ? 'danger' : 'default' });
+			out.push({
+				label: 'Due',
+				value: formatDate(inv.due_date),
+				tone: overdue ? 'danger' : 'default'
+			});
 		}
 		if (inv.sent_at) out.push({ label: 'Sent', value: formatDate(inv.sent_at) });
 		if (inv.paid_at) out.push({ label: 'Paid', value: formatDate(inv.paid_at), tone: 'success' });
@@ -592,8 +596,7 @@
 				body: JSON.stringify({
 					discount_type: discountTypeDraft,
 					discount_value: discountTypeDraft === 'none' ? null : discountValueNum,
-					discount_label:
-						discountTypeDraft === 'none' ? null : discountLabelDraft.trim() || null,
+					discount_label: discountTypeDraft === 'none' ? null : discountLabelDraft.trim() || null,
 					line_items: lineItems.map((li, idx) => ({
 						description: li.description.trim(),
 						quantity: Number(li.quantity),
@@ -689,7 +692,13 @@
 
 <!-- Shared Cancel + Save row for the text sections (Details / Notes / Terms). -->
 {#snippet sectionFooter(onSave: () => void)}
-	<EditActionBar {onSave} onCancel={cancelSection} saving={sectionSaving} error={sectionError} size="sm" />
+	<EditActionBar
+		{onSave}
+		onCancel={cancelSection}
+		saving={sectionSaving}
+		error={sectionError}
+		size="sm"
+	/>
 {/snippet}
 
 {#if showSkeleton}
@@ -776,7 +785,11 @@
 							{#if showPdf}
 								<DropdownMenu.Item closeOnSelect={false} onclick={downloadPdf} disabled={pdfBusy}>
 									{#if pdfBusy}
-										<i class="ri-loader-4-line" aria-hidden="true" style="animation: spin 1s linear infinite;"></i> Preparing PDF…
+										<i
+											class="ri-loader-4-line"
+											aria-hidden="true"
+											style="animation: spin 1s linear infinite;"
+										></i> Preparing PDF…
 									{:else}
 										<i class="ri-download-line" aria-hidden="true"></i> Download PDF
 									{/if}
@@ -1227,7 +1240,8 @@
 							/>
 						</div>
 						{#if reminderOrgEnabled && reminderSummary}
-							<a class="invoice-reminders-card__link" href="/settings/automation">Edit schedule →</a>
+							<a class="invoice-reminders-card__link" href="/settings/automation">Edit schedule →</a
+							>
 						{/if}
 					</div>
 				{/if}
@@ -1375,8 +1389,12 @@
 	}
 
 	@keyframes spin {
-		from { transform: rotate(0deg); }
-		to   { transform: rotate(360deg); }
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.invoice-deposit {

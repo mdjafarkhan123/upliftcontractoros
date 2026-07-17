@@ -23,34 +23,34 @@
 	type OutcomeConfig = { value: FollowUpOutcome; label: string; icon: string };
 
 	const OUTCOMES: OutcomeConfig[] = [
-		{ value: 'called',    label: 'Called',    icon: 'ri-phone-line' },
-		{ value: 'texted',    label: 'Texted',    icon: 'ri-message-2-line' },
-		{ value: 'emailed',   label: 'Emailed',   icon: 'ri-mail-line' },
-		{ value: 'visited',   label: 'Visited',   icon: 'ri-map-pin-line' },
+		{ value: 'called', label: 'Called', icon: 'ri-phone-line' },
+		{ value: 'texted', label: 'Texted', icon: 'ri-message-2-line' },
+		{ value: 'emailed', label: 'Emailed', icon: 'ri-mail-line' },
+		{ value: 'visited', label: 'Visited', icon: 'ri-map-pin-line' },
 		{ value: 'no_answer', label: 'No answer', icon: 'ri-phone-missed-line' }
 	];
 
 	const OUTCOME_ICONS: Record<FollowUpOutcome, string> = {
-		called:    'ri-phone-line',
-		texted:    'ri-message-2-line',
-		emailed:   'ri-mail-line',
-		visited:   'ri-map-pin-line',
+		called: 'ri-phone-line',
+		texted: 'ri-message-2-line',
+		emailed: 'ri-mail-line',
+		visited: 'ri-map-pin-line',
 		no_answer: 'ri-phone-missed-line'
 	};
 
 	const OUTCOME_LABELS: Record<FollowUpOutcome, string> = {
-		called:    'Called',
-		texted:    'Texted',
-		emailed:   'Emailed',
-		visited:   'Visited',
+		called: 'Called',
+		texted: 'Texted',
+		emailed: 'Emailed',
+		visited: 'Visited',
 		no_answer: 'No answer'
 	};
 
 	const OUTCOME_TONES: Record<FollowUpOutcome, string> = {
-		called:    'success',
-		texted:    'info',
-		emailed:   'violet',
-		visited:   'warning',
+		called: 'success',
+		texted: 'info',
+		emailed: 'violet',
+		visited: 'warning',
 		no_answer: 'danger'
 	};
 
@@ -134,10 +134,20 @@
 		<div class="opp-section__schedule-prompt">
 			<span>Schedule the next follow-up?</span>
 			<div class="opp-section__schedule-actions">
-				<Button variant="ghost" size="sm" style="height:32px; padding-inline:8px; font-size:12px;" onclick={() => (showSchedulePrompt = false)}>
+				<Button
+					variant="ghost"
+					size="sm"
+					style="height:32px; padding-inline:8px; font-size:12px;"
+					onclick={() => (showSchedulePrompt = false)}
+				>
 					Dismiss
 				</Button>
-				<Button variant="outline" size="sm" style="height:32px; gap:6px; padding-inline:8px; font-size:12px;" onclick={scheduleNext}>
+				<Button
+					variant="outline"
+					size="sm"
+					style="height:32px; gap:6px; padding-inline:8px; font-size:12px;"
+					onclick={scheduleNext}
+				>
 					<i class="ri-calendar-schedule-line" aria-hidden="true"></i>
 					Schedule
 				</Button>
@@ -153,7 +163,9 @@
 					<button
 						type="button"
 						onclick={() => (selectedOutcome = o.value)}
-						class="follow-up-form__outcome-btn{selectedOutcome === o.value ? ' follow-up-form__outcome-btn--active' : ''}"
+						class="follow-up-form__outcome-btn{selectedOutcome === o.value
+							? ' follow-up-form__outcome-btn--active'
+							: ''}"
 					>
 						<i class={o.icon} aria-hidden="true"></i>
 						<span>{o.label}</span>
@@ -191,7 +203,9 @@
 			{#each followUps as f (f.id)}
 				<li class="opp-section__item">
 					<i
-						class="{OUTCOME_ICONS[f.outcome]} opp-section__item-icon opp-section__item-icon--{OUTCOME_TONES[f.outcome]}"
+						class="{OUTCOME_ICONS[
+							f.outcome
+						]} opp-section__item-icon opp-section__item-icon--{OUTCOME_TONES[f.outcome]}"
 						aria-hidden="true"
 					></i>
 					<div class="opp-section__item-body">
@@ -203,10 +217,7 @@
 							<p class="opp-section__item-subtext">{f.note}</p>
 						{/if}
 					</div>
-					<span
-						class="opp-section__item-time"
-						title={new Date(f.occurred_at).toLocaleString()}
-					>
+					<span class="opp-section__item-time" title={new Date(f.occurred_at).toLocaleString()}>
 						{relative(f.occurred_at)}
 					</span>
 				</li>

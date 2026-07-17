@@ -5,8 +5,16 @@
 	import type {
 		AppointmentDetail,
 		AppointmentListItem,
-		AppointmentType
+		AppointmentType,
+		CalendarDensity
 	} from '$lib/types/appointments';
+	import { DENSITY_HOUR_HEIGHT, DENSITY_MIN_BLOCK_PX } from '$lib/stores/calendarDensity.svelte';
+	import {
+		deriveVisitCardState,
+		visitCardStateIcon,
+		visitCardStateLabel,
+		type VisitCardState
+	} from '$lib/appointments/cardState';
 	import type { EventListItem } from '$lib/types/events';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
@@ -29,6 +37,7 @@
 		canReschedule = false,
 		assignees = [],
 		canEditAssignee = false,
+		density = 'comfortable',
 		onCreated
 	}: {
 		anchor: Date;
@@ -43,6 +52,9 @@
 		canReschedule?: boolean;
 		assignees?: { id: string; full_name: string }[];
 		canEditAssignee?: boolean;
+		// Time-grid zoom: compact / comfortable / spacious (see DENSITY_HOUR_HEIGHT).
+		// Drives row height + card content thresholds.
+		density?: CalendarDensity;
 		// Fired after an inline quick-create so the page can revalidate the window.
 		onCreated?: () => void;
 	} = $props();
@@ -76,7 +88,20 @@
 	// link is injected server-side at send time via the {manage_link} token.
 	const RESCHEDULE_LINK_FOR_COUNT = 'https://yourapp.com/book/manage/' + 'x'.repeat(40);
 
-	const HOUR_HEIGHT = 56; // px
+	// Row height follows the chosen density (compact/comfortable/spacious). The
+	// whole grid derives its geometry from HOUR_HEIGHT, so changing it re-renders.
+	const HOUR_HEIGHT = $derived(DENSITY_HOUR_HEIGHT[density] ?? 56); // px
+	// Which rows a card shows is NOT decided here — the card measures itself in CSS
+	// (@container) and switches between named layouts, so the tiers can never drift
+	// out of step with the type scale. See `.cal-week__event` in _appointments.scss.
+	//
+	// The one thing CSS can't do is reserve the space: a 15-min visit is ~18px, too
+	// short for even one line. So the grid draws short visits taller than their true
+	// duration (DENSITY_MIN_BLOCK_PX) — and, critically, does that inflation HERE, in
+	// the same minutes the column packer reasons about. Inflating only at paint time
+	// would let two back-to-back 10-min visits (which don't overlap in time, so they
+	// share a column) paint straight through each other.
+	const MIN_BLOCK_MIN = $derived(((DENSITY_MIN_BLOCK_PX[density] ?? 30) / HOUR_HEIGHT) * 60);
 	const TOP_GUTTER = 10; // px — breathing room so the first hour label clears the sticky day-header
 	const DEFAULT_DURATION_MIN = 60;
 	const SNAP_MINUTES = 15;
@@ -126,7 +151,13 @@
 	type LaidOut = {
 		block: CalBlock;
 		startMin: number;
+		// The visit's REAL end — drives its duration on drag, its resize anchor, and
+		// the time it prints. Never use paintEndMin for any of those.
 		endMin: number;
+		// The end of the DRAWN box: endMin, or far enough down to fit one readable
+		// line, whichever is later. Column packing uses this too, so an inflated card
+		// is given room instead of overlapping the next one.
+		paintEndMin: number;
 		col: number;
 		cols: number;
 	};
@@ -139,29 +170,43 @@
 		anytime: CalBlock[];
 	};
 
-	function layoutDay(dayItems: { block: CalBlock; startMin: number; endMin: number }[]): LaidOut[] {
-		const sorted = [...dayItems].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+	// Packs a day's blocks into side-by-side columns. Overlap is judged on
+	// `paintEndMin` (the drawn box), not the real end, so a card inflated to the
+	// one-line minimum claims its painted space and neighbours step aside.
+	function layoutDay(
+		dayItems: { block: CalBlock; startMin: number; endMin: number; paintEndMin: number }[]
+	): LaidOut[] {
+		const sorted = [...dayItems].sort(
+			(a, b) => a.startMin - b.startMin || a.paintEndMin - b.paintEndMin
+		);
 		const colEnds: number[] = [];
 		const assigned: LaidOut[] = [];
 		for (const ev of sorted) {
 			let col = colEnds.findIndex((end) => end <= ev.startMin);
 			if (col === -1) {
 				col = colEnds.length;
-				colEnds.push(ev.endMin);
+				colEnds.push(ev.paintEndMin);
 			} else {
-				colEnds[col] = ev.endMin;
+				colEnds[col] = ev.paintEndMin;
 			}
-			assigned.push({ block: ev.block, startMin: ev.startMin, endMin: ev.endMin, col, cols: 1 });
+			assigned.push({
+				block: ev.block,
+				startMin: ev.startMin,
+				endMin: ev.endMin,
+				paintEndMin: ev.paintEndMin,
+				col,
+				cols: 1
+			});
 		}
-		// Cluster pass: connected components of time overlap.
+		// Cluster pass: connected components of overlap.
 		let i = 0;
 		while (i < assigned.length) {
 			let j = i;
-			let clusterEnd = assigned[i].endMin;
+			let clusterEnd = assigned[i].paintEndMin;
 			let maxCol = assigned[i].col;
 			while (j + 1 < assigned.length && assigned[j + 1].startMin < clusterEnd) {
 				j++;
-				clusterEnd = Math.max(clusterEnd, assigned[j].endMin);
+				clusterEnd = Math.max(clusterEnd, assigned[j].paintEndMin);
 				maxCol = Math.max(maxCol, assigned[j].col);
 			}
 			const size = maxCol + 1;
@@ -202,7 +247,10 @@
 	}
 
 	const days = $derived.by<DayLane[]>(() => {
-		const buckets = new Map<string, { block: CalBlock; startMin: number; endMin: number }[]>();
+		const buckets = new Map<
+			string,
+			{ block: CalBlock; startMin: number; endMin: number; paintEndMin: number }[]
+		>();
 		const anytimeBuckets = new Map<string, CalBlock[]>();
 		for (let i = 0; i < 7; i++) {
 			const k = dayKey(addDays(anchor, i));
@@ -219,7 +267,12 @@
 				continue;
 			}
 			const { startMin, endMin } = timedMinutes(item.scheduled_start, item.scheduled_end);
-			buckets.get(matchedKey)?.push({ block: { kind: 'appt', appt: item }, startMin, endMin });
+			buckets.get(matchedKey)?.push({
+				block: { kind: 'appt', appt: item },
+				startMin,
+				endMin,
+				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
+			});
 		}
 		// Events share the grid: all-day → anytime lane, timed → a neutral block.
 		for (const ev of events) {
@@ -231,7 +284,12 @@
 				continue;
 			}
 			const { startMin, endMin } = timedMinutes(ev.start_at, ev.end_at);
-			buckets.get(matchedKey)?.push({ block: { kind: 'event', event: ev }, startMin, endMin });
+			buckets.get(matchedKey)?.push({
+				block: { kind: 'event', event: ev },
+				startMin,
+				endMin,
+				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
+			});
 		}
 		const out: DayLane[] = [];
 		for (let i = 0; i < 7; i++) {
@@ -247,22 +305,11 @@
 		return out;
 	});
 
-	// Compute visible hour range: prefer org hours but expand to include any event.
-	const range = $derived.by(() => {
-		let minH = dayStartHour;
-		let maxH = dayEndHour;
-		for (const day of days) {
-			for (const ev of day.laidOut) {
-				const eventStartH = Math.floor(ev.startMin / 60);
-				const eventEndH = Math.ceil(ev.endMin / 60);
-				if (eventStartH < minH) minH = eventStartH;
-				if (eventEndH > maxH) maxH = eventEndH;
-			}
-		}
-		minH = Math.max(0, Math.min(23, minH));
-		maxH = Math.max(minH + 1, Math.min(24, maxH));
-		return { startMin: minH * 60, endMin: maxH * 60, hours: maxH - minH, startHour: minH };
-	});
+	// The grid always renders the full 24 hours (Jobber / Google Calendar): hours
+	// outside the org's business window are shaded but still there, so an early
+	// start or an after-hours callout can be seen and drag-created like any other.
+	// The view simply *opens* parked at the org's start hour — see the scroll effect.
+	const range = { startMin: 0, endMin: 24 * 60, hours: 24, startHour: 0 };
 
 	const hourLabels = $derived.by(() => {
 		const out: { hour: number; label: string; isOffHours: boolean }[] = [];
@@ -278,6 +325,37 @@
 		return ((min - range.startMin) / 60) * HOUR_HEIGHT + TOP_GUTTER;
 	}
 
+	// ── Open at business hours ──────────────────────────────────────────────
+	// The grid renders every hour an item touches (an early-morning visit can push
+	// range.startHour to 5 AM), but the contractor's working day is what they came
+	// to look at — so park the org's start hour at the top of the viewport, like
+	// Jobber/Google Calendar. Earlier hours stay one scroll up.
+	let scrollerEl = $state<HTMLDivElement | null>(null);
+	// Set the moment the user scrolls themselves; from then on we never yank the
+	// viewport back, even if late-arriving items change the visible hour range.
+	let userScrolled = false;
+
+	$effect(() => {
+		// Read reactively first: re-aligns when the row height changes (density), for
+		// as long as the user hasn't scrolled themselves.
+		const y = Math.max(0, pxFromMin(dayStartHour * 60) - TOP_GUTTER);
+		if (!scrollerEl || userScrolled) return;
+		scrollerEl.scrollTop = y;
+	});
+
+	// Any real scroll gesture hands the viewport back to the user for good.
+	$effect(() => {
+		const el = scrollerEl;
+		if (!el) return;
+		const mark = () => (userScrolled = true);
+		el.addEventListener('wheel', mark, { passive: true });
+		el.addEventListener('touchmove', mark, { passive: true });
+		return () => {
+			el.removeEventListener('wheel', mark);
+			el.removeEventListener('touchmove', mark);
+		};
+	});
+
 	// Live "now" line — ticks every minute.
 	let now = $state(new Date());
 	$effect(() => {
@@ -288,11 +366,20 @@
 	const nowParts = $derived(partsInOrgTz(now, orgTz));
 	const nowMin = $derived(nowParts.hour * 60 + nowParts.minute);
 	const nowVisible = $derived(nowMin >= range.startMin && nowMin <= range.endMin);
+	// The current time as a gutter pill (e.g. "9:30 AM"), shown only when the visible
+	// week actually contains today — otherwise "now" has no row to sit on.
+	const weekHasToday = $derived(days.some((d) => isSameDay(d.date, today)));
+	const nowLabel = $derived(formatTimeInOrgTz(now, orgTz));
 
 	// ── Coordinate / time helpers ───────────────────────────────────────────
 	const DRAG_THRESHOLD = 4; // px before a pointerdown becomes a drag
 
 	let gridBodyEl = $state<HTMLDivElement | null>(null);
+	// Measured heights of the two pinned lanes — they drive the sticky offsets of
+	// whatever pins beneath them (Anytime lane under the header, business-hours
+	// caption under both).
+	let headH = $state(0);
+	let anytimeH = $state(0);
 	// The pinned "Anytime" lane, used to hit-test whether a drag is over it
 	// (Google Calendar / Jobber all-day row). Drop here → visit becomes untimed.
 	let anytimeEl = $state<HTMLDivElement | null>(null);
@@ -557,8 +644,10 @@
 	// Click an empty spot in the Anytime lane → create a date-only visit for that day.
 	function onAnytimeColumnClick(e: MouseEvent, colIndex: number) {
 		if (!canCreate || justDragged) return;
-		// Clicks on an existing chip are its own navigation / drag — ignore here.
-		if ((e.target as HTMLElement).closest('.cal-week__anytime-chip')) return;
+		// Clicks on an existing card/chip are its own navigation / drag — ignore here.
+		// (Anytime visits now render as `.cal-week__event--anytime`; Events stay chips.)
+		if ((e.target as HTMLElement).closest('.cal-week__event--anytime, .cal-week__anytime-chip'))
+			return;
 		const date = days[colIndex]?.date;
 		if (!date) return;
 		// Browser-local noon — the /new form reinterprets the date part (matches create).
@@ -1130,16 +1219,130 @@
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}
 
-	function statusClasses(s: AppointmentListItem['status']): string {
-		if (s === 'cancelled' || s === 'no_show') return 'cal-week__event--cancelled';
-		if (s === 'completed') return 'cal-week__event--completed';
-		return 'cal-week__event--default';
+	// The card's time pill leads with a glyph that matches its state: an alarm on a
+	// late visit, a calendar on an Anytime visit, a clock otherwise.
+	function timeIcon(state: VisitCardState, allDay: boolean): string {
+		if (state === 'late') return 'ri-alarm-warning-line';
+		if (allDay) return 'ri-calendar-event-line';
+		return 'ri-time-line';
 	}
 </script>
 
-<div class="cal-week">
-	<!-- Day headers — sticky so they stay visible while the grid body scrolls -->
-	<div class="cal-week__head" style="grid-template-columns: 64px repeat(7, 1fr);">
+<div
+	bind:this={scrollerEl}
+	class={['cal-week', `cal-week--${density}`]}
+	style="--cal-week-head-h: {headH}px; --cal-week-anytime-h: {anytimeH}px;"
+>
+	<!-- Shared visit-card rows — rendered identically by the timed grid card and the
+	     Anytime-lane card so the two never drift (Rule 23, one source of truth). The only
+	     difference is `showTime`: the Anytime card is untimed, so it never paints the time
+	     row. Timed cards additionally get a resize handle at their call site (not here). -->
+	{#snippet visitRows(
+		appt: AppointmentListItem,
+		state: VisitCardState,
+		mark: string | null,
+		showTime: boolean
+	)}
+		{@const startTime = formatTimeInOrgTz(appt.scheduled_start, orgTz)}
+		{@const endTime = appt.scheduled_end ? formatTimeInOrgTz(appt.scheduled_end, orgTz) : null}
+		<!-- The corner holds ONE mark: the repeat glyph while the visit is OPEN (part of a
+		     multi-visit series), replaced by its outcome (✓/✕/⚠) once the visit is marked
+		     done/closed. Pinned to the card, not to the time row, which is the first to drop. -->
+		{#if mark}
+			<i
+				class={['cal-week__event-mark', mark]}
+				title={visitCardStateLabel(state)}
+				aria-hidden="true"
+			></i>
+		{:else if appt.is_recurring_visit}
+			<i
+				class="cal-week__event-mark cal-week__event-mark--repeat ri-repeat-2-line"
+				title="Part of a multi-visit series"
+				aria-hidden="true"
+			></i>
+		{/if}
+		{#if showTime}
+			<span class="cal-week__event-top">
+				<span class="cal-week__event-timepill">
+					<i class={timeIcon(state, appt.all_day)} aria-hidden="true"></i>
+					<span class="cal-week__event-timepill-text">
+						{#if appt.all_day}
+							Anytime
+						{:else}
+							{startTime}{#if endTime}&nbsp;– {endTime}{/if}
+						{/if}
+					</span>
+				</span>
+			</span>
+		{/if}
+		<p class="cal-week__event-headline">
+			<!-- Client and job title share ONE truncating line, so a long pair ellipsises at
+			     the end ("Jafar Khan – HVAC Install…") instead of each half clipping on its
+			     own. This is the row that always survives. -->
+			<span class="cal-week__event-names">
+				<span class="cal-week__event-client">{appt.contact_name}</span><span
+					class="cal-week__event-sep"
+					>&nbsp;–
+				</span><span class="cal-week__event-title">{appt.title}</span>
+			</span>
+		</p>
+		{#if appt.location}
+			<p class="cal-week__event-meta">
+				<i class="ri-map-pin-2-line" aria-hidden="true"></i>
+				<span>{appt.location}</span>
+			</p>
+		{/if}
+		<div class="cal-week__event-footer">
+			<span class="cal-week__event-pill">
+				<span class="cal-week__event-pill-dot" aria-hidden="true"></span>
+				{visitCardStateLabel(state)}
+			</span>
+			{#if appt.type !== 'job_start'}
+				<!-- Placeholder until estimate/inspection cards get their own design: the rail
+				     now carries STATUS, so type falls back to a plain word. -->
+				<span class="cal-week__event-kind">{TYPE_LABELS[appt.type]}</span>
+			{/if}
+			{#if appt.assignee_name}
+				<span class="cal-week__event-assignee" title={appt.assignee_name}>
+					{initials(appt.assignee_name)}
+				</span>
+			{/if}
+		</div>
+		{#if showTime && (appt.contact_phone || appt.contact_email)}
+			<div class="cal-week__event-actions">
+				{#if appt.contact_phone}
+					<button
+						type="button"
+						class="cal-week__action-btn"
+						title="Call {appt.contact_name}"
+						onclick={(e) => {
+							e.stopPropagation();
+							window.location.href = `tel:${appt.contact_phone}`;
+						}}
+					>
+						<i class="ri-phone-line" aria-hidden="true"></i>
+					</button>
+				{/if}
+				{#if appt.contact_email}
+					<button
+						type="button"
+						class="cal-week__action-btn"
+						title="Message {appt.contact_name}"
+						onclick={(e) => {
+							e.stopPropagation();
+							window.location.href = `/conversations?contact=${appt.contact_id}`;
+						}}
+					>
+						<i class="ri-message-3-line" aria-hidden="true"></i>
+					</button>
+				{/if}
+			</div>
+		{/if}
+	{/snippet}
+
+	<!-- Day headers — sticky so they stay visible while the grid body scrolls.
+	     Its measured height pins the Anytime lane directly beneath it. -->
+	<div bind:clientHeight={headH} class="cal-week__head">
 		<div class="cal-week__head-gutter"></div>
 		{#each days as day (day.key)}
 			{@const today_ = isSameDay(day.date, today)}
@@ -1156,11 +1359,7 @@
 
 	<!-- Anytime lane: date-only visits, always pinned above the time grid (Jobber/Housecall Pro).
 	     Shown even when empty so it reads as a persistent slot, like the hour rows. -->
-	<div
-		bind:this={anytimeEl}
-		class="cal-week__anytime"
-		style="grid-template-columns: 64px repeat(7, 1fr);"
-	>
+	<div bind:this={anytimeEl} bind:clientHeight={anytimeH} class="cal-week__anytime">
 		<div class="cal-week__anytime-gutter">
 			<i class="ri-calendar-event-line" aria-hidden="true"></i>
 			<span>Anytime</span>
@@ -1185,6 +1384,12 @@
 				{#each day.anytime as blk (blk.kind === 'appt' ? blk.appt.id : blk.event.id)}
 					{#if blk.kind === 'appt'}
 						{@const ev = blk.appt}
+						{@const state = deriveVisitCardState(ev, now)}
+						{@const mark = visitCardStateIcon(state)}
+						<!-- Anytime visits render the EXACT timed-grid card, minus the time row
+						     (showTime=false). Same state colours, status pill, and corner mark — so a
+						     past Anytime visit goes Late for free. See _appointments.scss
+						     `&__event--anytime` for the container-collapse override. -->
 						<a
 							href={`/appointments/${ev.id}`}
 							draggable="false"
@@ -1193,18 +1398,14 @@
 							ondragstart={(e) => e.preventDefault()}
 							onclick={(e) => openDetail(e, ev)}
 							class={[
-								'cal-week__anytime-chip',
-								`cal-week__anytime-chip--type-${ev.type}`,
-								canReschedule && 'cal-week__anytime-chip--draggable',
-								ev.status === 'cancelled' || ev.status === 'no_show'
-									? 'cal-week__anytime-chip--cancelled'
-									: ev.status === 'completed'
-										? 'cal-week__anytime-chip--completed'
-										: ''
+								'cal-week__event',
+								'cal-week__event--anytime',
+								`cal-week__event--state-${state}`,
+								(mark || ev.is_recurring_visit) && 'cal-week__event--marked',
+								canReschedule && 'cal-week__event--reschedulable'
 							]}
 						>
-							<span class="cal-week__anytime-chip-title">{ev.title}</span>
-							<span class="cal-week__anytime-chip-sub">{ev.contact_name}</span>
+							{@render visitRows(ev, state, mark, false)}
 						</a>
 					{:else}
 						{@const evt = blk.event}
@@ -1229,8 +1430,7 @@
 	<div
 		bind:this={gridBodyEl}
 		class="cal-week__body"
-		style="grid-template-columns: 64px repeat(7, 1fr); min-height: {range.hours * HOUR_HEIGHT +
-			TOP_GUTTER}px;"
+		style="min-height: {range.hours * HOUR_HEIGHT + TOP_GUTTER}px;"
 	>
 		<!-- Time rail -->
 		<div class="cal-week__rail">
@@ -1242,6 +1442,13 @@
 					{h.label}
 				</div>
 			{/each}
+			<!-- Current-time pill in the gutter (the line itself lives in the columns, behind
+			     the cards). Only when today is in view. -->
+			{#if weekHasToday && nowVisible}
+				<div class="cal-week__now-label" style="top: {pxFromMin(nowMin)}px;">
+					{nowLabel}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Day columns -->
@@ -1268,31 +1475,25 @@
 					<div class="cal-week__subline" style="top: {pxFromMin(h.hour * 60 + 30)}px;"></div>
 				{/each}
 
-				<!-- Now-line: only on today's column -->
-				{#if today_ && nowVisible}
-					<div class="cal-week__now" style="top: {pxFromMin(nowMin)}px;">
-						<span class="cal-week__now-dot"></span>
-						<span class="cal-week__now-bar"></span>
-					</div>
+				<!-- Now-line: a thin rule across every column, BEHIND the cards (its time label
+				     is the gutter pill). Shown on the whole week that contains today. -->
+				{#if weekHasToday && nowVisible}
+					<div class="cal-week__now" style="top: {pxFromMin(nowMin)}px;"></div>
 				{/if}
 
 				<!-- Blocks: visits (colored, draggable) + Events (neutral grey, read-only) -->
 				{#each day.laidOut as ev (ev.block.kind === 'appt' ? ev.block.appt.id : ev.block.event.id)}
 					{@const top = pxFromMin(ev.startMin)}
-					{@const height = Math.max(20, pxFromMin(ev.endMin) - top)}
+					{@const height = pxFromMin(ev.paintEndMin) - top}
 					{@const widthPct = 100 / ev.cols}
 					{@const leftPct = ev.col * widthPct}
-					{@const showPill = height >= 40}
-					{@const showMeta = height >= 84}
-					{@const blockStyle = `top: ${top}px; height: ${height}px; left: calc(${leftPct}% + 2px); width: calc(${widthPct}% - 4px);`}
+					{@const depthOffset = ev.cols > 1 ? ev.col * 2 : 0}
+					{@const blockStyle = `top: ${top + depthOffset}px; height: ${height}px; left: calc(${leftPct}% + 2px); width: calc(${widthPct}% - 4px);`}
 					{#if ev.block.kind === 'appt'}
 						{@const appt = ev.block.appt}
 						{@const dragging = drag?.mode === 'move' && drag.item?.id === appt.id}
-						{@const showAvatar = height >= 124}
-						{@const startTime = formatTimeInOrgTz(appt.scheduled_start, orgTz)}
-						{@const endTime = appt.scheduled_end
-							? formatTimeInOrgTz(appt.scheduled_end, orgTz)
-							: null}
+						{@const state = deriveVisitCardState(appt, now)}
+						{@const mark = visitCardStateIcon(state)}
 						<a
 							href={`/appointments/${appt.id}`}
 							draggable="false"
@@ -1302,38 +1503,20 @@
 							onclick={(e) => openDetail(e, appt)}
 							class={[
 								'cal-week__event',
-								statusClasses(appt.status),
-								`cal-week__event--type-${appt.type}`,
+								`cal-week__event--state-${state}`,
+								(mark || appt.is_recurring_visit) && 'cal-week__event--marked',
 								canReschedule && 'cal-week__event--reschedulable',
 								dragging && 'cal-week__event--dragging'
 							]}
 							style={blockStyle}
 						>
-							{#if showPill}
-								<span class="cal-week__event-pill">
-									{appt.contact_name} · {TYPE_LABELS[appt.type]}
-								</span>
-							{/if}
-							<p class="cal-week__event-title">{appt.title}</p>
-							{#if showMeta && appt.location}
-								<p class="cal-week__event-meta">
-									<i class="ri-map-pin-2-line" aria-hidden="true"></i>
-									<span>{appt.location}</span>
-								</p>
-							{/if}
-							{#if showMeta}
-								<p class="cal-week__event-meta">
-									<i class="ri-time-line" aria-hidden="true"></i>
-									<span
-										>{startTime}{#if endTime}&nbsp;– {endTime}{/if}</span
-									>
-								</p>
-							{:else if !showPill}
-								<p class="cal-week__event-meta cal-week__event-meta--inline">{startTime}</p>
-							{/if}
-							{#if showAvatar}
-								<span class="cal-week__event-avatar">{initials(appt.contact_name)}</span>
-							{/if}
+							<!-- Every row below is always rendered; the card's own @container rules
+							     decide which survive at this height (see _appointments.scss). Rows are
+							     revealed by PRIORITY but painted in this order, so the card never
+							     reorders itself as it grows. The rows are the shared `visitRows`
+							     snippet (also used by the Anytime lane); showTime=true adds the time row
+							     and the hover call/message actions that only make sense on a timed card. -->
+							{@render visitRows(appt, state, mark, true)}
 							{#if canReschedule}
 								<!-- Resize handle (bottom edge) -->
 								<span
@@ -1362,22 +1545,36 @@
 							title={evt.description ?? evt.title}
 							onpointerdown={(e) => onTimeblockPointerDown(e, ev, evt, i)}
 						>
-							{#if showPill}
-								<span class="cal-week__timeblock-tag">
-									<i class="ri-calendar-event-line" aria-hidden="true"></i> Event
-								</span>
-							{/if}
-							<p class="cal-week__timeblock-title">{evt.title}</p>
-							{#if showMeta}
-								<p class="cal-week__timeblock-meta">
+							<!-- Same layout skeleton and container rules as a visit card, but no status
+							     rail and no status pill: an Event is time that's BLOCKED, not work to be
+							     done, so it stays the quietest thing on the grid. Placeholder design. -->
+							<i
+								class="cal-week__event-mark ri-calendar-event-line"
+								title="Event"
+								aria-hidden="true"
+							></i>
+							<span class="cal-week__event-top">
+								<span class="cal-week__event-timepill">
 									<i class="ri-time-line" aria-hidden="true"></i>
-									<span
-										>{startTime}{#if endTime}&nbsp;– {endTime}{/if}</span
-									>
+									<span class="cal-week__event-timepill-text">
+										{startTime}{#if endTime}&nbsp;– {endTime}{/if}
+									</span>
+								</span>
+							</span>
+							<p class="cal-week__event-headline">
+								<span class="cal-week__event-names">
+									<span class="cal-week__timeblock-title">{evt.title}</span>
+								</span>
+							</p>
+							{#if evt.assignee_name}
+								<p class="cal-week__timeblock-meta">
+									<i class="ri-user-line" aria-hidden="true"></i>
+									<span>{evt.assignee_name}</span>
 								</p>
-							{:else if !showPill}
-								<p class="cal-week__timeblock-meta cal-week__timeblock-meta--inline">{startTime}</p>
 							{/if}
+							<div class="cal-week__event-footer">
+								<span class="cal-week__event-kind">Event</span>
+							</div>
 							{#if canReschedule}
 								<!-- Resize handle (bottom edge) — drag to change the end time. -->
 								<span

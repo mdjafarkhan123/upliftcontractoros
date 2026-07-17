@@ -226,12 +226,8 @@
 				{/each}
 
 				<div class="job-cf__actions">
-					<Button variant="ghost" size="sm" onclick={cancelEdit} disabled={saving}>
-						Cancel
-					</Button>
-					<Button size="sm" loading={saving} onclick={save}>
-						Save
-					</Button>
+					<Button variant="ghost" size="sm" onclick={cancelEdit} disabled={saving}>Cancel</Button>
+					<Button size="sm" loading={saving} onclick={save}>Save</Button>
 				</div>
 			</div>
 		{:else}

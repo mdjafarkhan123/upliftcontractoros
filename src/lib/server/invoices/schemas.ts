@@ -41,7 +41,12 @@ const lineItemBase = z.object({
 	taxable: z.boolean().optional(),
 	// Snapshot of cost-to-business captured when added from catalog. Feeds the internal
 	// cost/margin panel only — never shown to the customer.
-	unit_cost: z.coerce.number().min(0, 'Cost cannot be negative').max(9999999.99).nullable().optional(),
+	unit_cost: z.coerce
+		.number()
+		.min(0, 'Cost cannot be negative')
+		.max(9999999.99)
+		.nullable()
+		.optional(),
 	// Analytics-only soft link back to the catalog item this line came from.
 	source_catalog_item_id: z.string().uuid().nullable().optional(),
 	position: z.coerce.number().int().min(0).optional()

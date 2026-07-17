@@ -269,8 +269,8 @@
 			</div>
 			<h1 class="book-manage__status-title">Appointment cancelled</h1>
 			<p class="book-manage__status-text">
-				Your {view.type.replaceAll('_', ' ')} with {view.org_name} has been cancelled. We've let the
-				team know.
+				Your {view.type.replaceAll('_', ' ')} with {view.org_name} has been cancelled. We've let the team
+				know.
 			</p>
 		</div>
 	{:else}
@@ -378,11 +378,7 @@
 						{selectedSlot}
 						onSelect={handleSelectSlot}
 					/>
-					<button
-						type="button"
-						onclick={() => (selectedDate = null)}
-						class="book-manage__day-link"
-					>
+					<button type="button" onclick={() => (selectedDate = null)} class="book-manage__day-link">
 						Pick a different day
 					</button>
 					{#if selectedSlot}

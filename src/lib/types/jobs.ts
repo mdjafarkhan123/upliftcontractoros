@@ -1,7 +1,21 @@
 import type { JobRecurrence } from '$lib/jobs/recurrence';
 
+// Echoed back by the appointment-status PATCH so the client can refresh a job's schedule
+// badge + list row locally (no full /api/jobs/:id reload). `scheduled_start`/`scheduled_end`
+// are only meaningful when `repinned` is true (one-off, non-"as needed" jobs).
+export type AppointmentStatusJobEcho = {
+	repinned: boolean;
+	scheduled_start: string | null;
+	scheduled_end: string | null;
+	next_open_visit_start: string | null;
+	has_open_visits: boolean;
+} | null;
+
 export type JobStatus = 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
 export type JobSource = 'opportunity' | 'manual';
+// Jobber's `JobTypeTypeEnum`. The user picks this with the One-off/Recurring toggle at
+// creation and it can never change (jobs.job_type, NOT NULL) — to switch, duplicate the job.
+export type JobType = 'one_off' | 'recurring';
 
 export type JobListItem = {
 	id: string;
@@ -17,8 +31,19 @@ export type JobListItem = {
 	created_at: string;
 	// Set only in the recycle-bin view (deleted=1); null on active rows.
 	deleted_at: string | null;
+	// Visit-truth signals for the status badge (see deriveJobScheduleState). next_open_visit_start =
+	// earliest still-open dated visit; has_open_visits = any still-open visit exists. These make the
+	// badge exact for multi-visit jobs (whose scheduled_start is a frozen series anchor).
+	// has_series_anchor = scheduled_start is that frozen anchor (job has a repeat rule, or is "as
+	// needed") rather than a mirror of a real visit, so the badge must not fall back to it. NOT the
+	// same as is_recurring — a one-off may carry a repeat rule.
+	next_open_visit_start: string | null;
+	has_open_visits: boolean;
+	has_series_anchor: boolean;
 	// Redesigned list row (Contacts-style table): total value + service address columns.
-	// total is a numeric string. Recurrence flag distinguishes one-off vs recurring at a glance.
+	// total is a numeric string. is_recurring is `job_type = 'recurring'` — read from the
+	// stored type, never re-derived from the rule (an as-needed job has no rule but IS
+	// recurring).
 	total: string;
 	is_recurring: boolean;
 	service_address_line_1: string | null;
@@ -229,12 +254,7 @@ export type JobVisitPhoto = {
 	full_url: string;
 };
 
-export type JobVisitStatus =
-	| 'scheduled'
-	| 'unscheduled'
-	| 'completed'
-	| 'cancelled'
-	| 'no_show';
+export type JobVisitStatus = 'scheduled' | 'unscheduled' | 'completed' | 'cancelled' | 'no_show';
 
 // One visit (appointment) on a job, with its per-visit completion record + photos (S5).
 export type JobVisitRow = {
@@ -261,7 +281,13 @@ export type JobVisitRow = {
 // Custom fields (Session 7). Org-defined extra fields shown on every job (Jobber "Custom
 // Fields"). `field_type` is fixed at creation. `options` only for dropdown. Live metadata —
 // NOT snapshotted per job (unlike job forms).
-export type JobCustomFieldType = 'short_text' | 'number' | 'date' | 'dropdown' | 'checkbox' | 'link';
+export type JobCustomFieldType =
+	| 'short_text'
+	| 'number'
+	| 'date'
+	| 'dropdown'
+	| 'checkbox'
+	| 'link';
 
 // A custom-field definition as managed in Settings.
 export type JobCustomFieldDef = {
@@ -324,7 +350,11 @@ export type JobDetail = {
 	source: JobSource;
 	assigned_to: string | null;
 	assignee_name: string | null;
-	job_type: string | null;
+	// One-off vs recurring — stored, user-decided, immutable (Jobber `jobType`). Never infer
+	// this from `recurrence` or the visit count: a one-off job may have several visits.
+	job_type: JobType;
+	// Free-text work category ("Repair", "Installation"). Called job_type before 0159.
+	job_category: string | null;
 	tags: string[];
 	notes: string | null;
 	scope_of_work: string | null;
@@ -336,6 +366,12 @@ export type JobDetail = {
 	scheduled_start: string | null;
 	scheduled_end: string | null;
 	recurrence: JobRecurrence | null;
+	// Jobber "As needed": job was created with no rule and no visits (recurrence stays null).
+	// The schedule editor re-opens in As-needed mode; the badge derives to Action Required.
+	schedule_as_needed: boolean;
+	// Visit-truth signals for the status badge (see deriveJobScheduleState / JobListItem).
+	next_open_visit_start: string | null;
+	has_open_visits: boolean;
 	completed_at: string | null;
 	cancelled_at: string | null;
 	created_at: string;
@@ -396,6 +432,8 @@ export type JobsFilterStatus =
 	| 'upcoming'
 	| 'today'
 	| 'overdue'
+	// Active job with no open visits left (Jobber action_required) — schedule more or close.
+	| 'action_required'
 	| 'in_progress'
 	| 'on_hold'
 	| 'completed'
@@ -432,6 +470,7 @@ export type JobsStatusCounts = {
 	upcoming: number;
 	today: number;
 	overdue: number;
+	action_required: number;
 	in_progress: number;
 	on_hold: number;
 	completed: number;

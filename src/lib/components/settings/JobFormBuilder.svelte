@@ -232,7 +232,7 @@
 						</Select.Trigger>
 						<Select.Content>
 							{#each FIELD_TYPES as t (t.value)}
-								<Select.Item value={t.value}>
+								<Select.Item value={t.value} label={t.label}>
 									<i class={t.icon} aria-hidden="true"></i>
 									{t.label}
 								</Select.Item>

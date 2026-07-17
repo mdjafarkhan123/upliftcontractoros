@@ -204,7 +204,8 @@
 								<p class="contact-address-item__line">{a.address_line_2}</p>
 							{/if}
 							<p class="contact-address-item__line contact-address-item__line--city">
-								{a.city}, {a.state} {a.zip}
+								{a.city}, {a.state}
+								{a.zip}
 							</p>
 						</div>
 						{#if canEdit}
@@ -264,19 +265,10 @@
 				{/if}
 			</div>
 			<div class="dialog-content__footer">
-				<Button
-					variant="secondary"
-					disabled={saving}
-					onclick={() => (editorOpen = false)}
-				>
+				<Button variant="secondary" disabled={saving} onclick={() => (editorOpen = false)}>
 					Cancel
 				</Button>
-				<Button
-					loadingLabel="Saving…"
-					successLabel="Saved"
-					loading={saving}
-					onclick={save}
-				>
+				<Button loadingLabel="Saving…" successLabel="Saved" loading={saving} onclick={save}>
 					Save address
 				</Button>
 			</div>

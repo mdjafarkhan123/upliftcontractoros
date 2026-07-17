@@ -22,7 +22,13 @@
 		startOfMonth,
 		startOfWeekMonday
 	} from '$lib/utils/calendar';
-	import type { AppointmentStatus, AppointmentView, CalendarRange } from '$lib/types/appointments';
+	import type {
+		AppointmentStatus,
+		AppointmentView,
+		CalendarRange,
+		CalendarDensity
+	} from '$lib/types/appointments';
+	import { calendarDensity } from '$lib/stores/calendarDensity.svelte';
 
 	const member = getMemberContext();
 	const canViewAll = $derived(member().can_view_all_appointments);
@@ -208,10 +214,12 @@
 		bind:searchValue
 		{anchor}
 		{canCreate}
+		density={calendarDensity.value}
 		onShiftAnchor={shiftAnchor}
 		onGoToday={goToday}
 		onFilterOpen={() => (filterSheetOpen = true)}
 		onRangeChange={handleRangeChange}
+		onDensityChange={(d: CalendarDensity) => calendarDensity.set(d)}
 		onNew={openQuickCreate}
 	/>
 
@@ -229,49 +237,51 @@
 
 	<!-- Body: sidebar + main -->
 	<AppointmentsLayout bind:filterSheetOpen>
-		{#snippet sidebar()}
+		{#snippet sidebar(collapsed: boolean)}
 			<!-- Mini month calendar -->
 			<MiniCalendar {anchor} onDateSelect={handleDateSelect} />
 
-			<div class="appt-filters__divider"></div>
-
-			<!-- Status filter -->
-			<div class="appt-filters__group">
-				<p class="appt-filters__label">Status</p>
-				<div class="appt-filters__list">
-					{#each STATUS_OPTIONS as opt (opt.value)}
-						<button
-							type="button"
-							onclick={() => (statusFilter = opt.value)}
-							class="appt-filters__item"
-							class:appt-filters__item--active={statusFilter === opt.value}
-						>
-							{opt.label}
-						</button>
-					{/each}
-				</div>
-			</div>
-
-			<!-- Assignee filter -->
-			{#if canViewAll && assignees.length > 0}
+			{#if !collapsed}
 				<div class="appt-filters__divider"></div>
+
+				<!-- Status filter -->
 				<div class="appt-filters__group">
-					<p class="appt-filters__label">Assignee</p>
-					<Select.Root
-						value={assignedToFilter ?? ''}
-						onValueChange={(v) => (assignedToFilter = v || null)}
-					>
-						<Select.Trigger class="field__input">
-							<Select.Value placeholder="All assignees" />
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="">All assignees</Select.Item>
-							{#each assignees as a (a.id)}
-								<Select.Item value={a.id}>{a.full_name}</Select.Item>
-							{/each}
-						</Select.Content>
-					</Select.Root>
+					<p class="appt-filters__label">Status</p>
+					<div class="appt-filters__list">
+						{#each STATUS_OPTIONS as opt (opt.value)}
+							<button
+								type="button"
+								onclick={() => (statusFilter = opt.value)}
+								class="appt-filters__item"
+								class:appt-filters__item--active={statusFilter === opt.value}
+							>
+								{opt.label}
+							</button>
+						{/each}
+					</div>
 				</div>
+
+				<!-- Assignee filter -->
+				{#if canViewAll && assignees.length > 0}
+					<div class="appt-filters__divider"></div>
+					<div class="appt-filters__group">
+						<p class="appt-filters__label">Assignee</p>
+						<Select.Root
+							value={assignedToFilter ?? ''}
+							onValueChange={(v) => (assignedToFilter = v || null)}
+						>
+							<Select.Trigger class="field__input">
+								<Select.Value placeholder="All assignees" />
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="" label="All assignees">All assignees</Select.Item>
+								{#each assignees as a (a.id)}
+									<Select.Item value={a.id} label={a.full_name}>{a.full_name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					</div>
+				{/if}
 			{/if}
 		{/snippet}
 
@@ -310,9 +320,9 @@
 								<Select.Value placeholder="All assignees" />
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="">All assignees</Select.Item>
+								<Select.Item value="" label="All assignees">All assignees</Select.Item>
 								{#each assignees as a (a.id)}
-									<Select.Item value={a.id}>{a.full_name}</Select.Item>
+									<Select.Item value={a.id} label={a.full_name}>{a.full_name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>
@@ -387,6 +397,7 @@
 							{dayEndHour}
 							{canCreate}
 							{canReschedule}
+							density={calendarDensity.value}
 							{assignees}
 							canEditAssignee={canViewAll}
 							onCreated={reloadAfterCreate}

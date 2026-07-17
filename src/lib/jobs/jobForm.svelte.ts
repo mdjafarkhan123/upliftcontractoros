@@ -20,6 +20,22 @@ import type { MilestoneDraft } from '$lib/components/jobs/JobBillingEditor.svelt
 export type NotifyChannel = 'sms' | 'email' | 'both' | 'none';
 export type NotifyTemplate = { sms: string; subject: string; body: string; enabled: boolean };
 export type JobMode = 'one_off' | 'recurring';
+// The single inline "Repeats" dropdown value (Jobber / Google-Calendar model). It is DERIVED
+// from the underlying schedule state (jobMode + recurShape + scheduleAsNeeded) and written back
+// via setRepeatMode. The three preset values (week1/week2/month) are computed off the chosen
+// start date's weekday; 'custom_saved' is anything the preset matcher doesn't recognize.
+// 'custom' is the ACTION value ("Custom schedule…" — opens the modal) and is never a resting
+// state; 'custom_saved' is the injected option that holds a saved custom rule and is what the
+// dropdown rests on once one exists.
+export type RepeatMode =
+	| 'none'
+	| 'day'
+	| 'week1'
+	| 'week2'
+	| 'month'
+	| 'as_needed'
+	| 'custom'
+	| 'custom_saved';
 export type DiscountType = 'none' | 'fixed' | 'percent';
 export type JobAssignee = { id: string; full_name: string };
 export type RecurrencePreview = { count: number; first: string | null; last: string | null };
@@ -32,8 +48,7 @@ function emptyRecurShape(): RecurrenceShape {
 		month_mode: 'day_of_month',
 		month_days: [],
 		month_last_day: false,
-		month_weeks: [],
-		month_weekdays: []
+		month_cells: []
 	};
 }
 
@@ -49,7 +64,9 @@ export function defaultNotifyChannel(hasPhone: boolean, hasEmail: boolean): Noti
 export class JobFormState {
 	// ── Basics ──────────────────────────────────────────────────────────────────
 	title = $state('');
-	jobType = $state('');
+	// Free-text work category ("Repair", "Installation") — NOT the one-off/recurring type,
+	// which is `jobMode` below and maps to the job_type column.
+	jobCategory = $state('');
 	tags = $state<string[]>([]);
 	scopeOfWork = $state('');
 	notes = $state('');
@@ -69,6 +86,9 @@ export class JobFormState {
 
 	// ── Recurring schedule ───────────────────────────────────────────────────────
 	jobMode = $state<JobMode>('one_off');
+	// Jobber "As Needed — We Won't Prompt You": a recurring job with NO rule and NO visits.
+	// Mutually exclusive with a real repeat rule; drives the job into "Action Required".
+	scheduleAsNeeded = $state(false);
 	recurModalOpen = $state(false);
 	// Whether the contractor has saved a repeat rule yet (vs the empty default shape).
 	recurConfigured = $state(false);
@@ -218,6 +238,37 @@ export class JobFormState {
 		return `https://maps.google.com/?q=${encodeURIComponent(parts)}`;
 	});
 
+	// ── Derived: which inline "Repeats" option is currently active ───────────────────
+	// Matches the underlying schedule state back to one dropdown value. Presets are matched
+	// against the anchor date's weekday / nth-of-month; anything else reads as 'custom_saved'.
+	repeatMode = $derived.by<RepeatMode>(() => {
+		if (this.scheduleAsNeeded) return 'as_needed';
+		// Deliberately independent of jobMode: a ONE-OFF job may carry a repeat rule (Jobber shows
+		// the same Repeats dropdown under both toggle positions). The rule generates visits; the
+		// toggle decides how the job bills. Reading jobMode here would blank a one-off's rule.
+		if (!this.recurConfigured) return 'none';
+		const s = this.recurShape;
+		const anchor = this.anchorDate();
+		const dow = anchor.getDay();
+		const eq = (a: number[] = [], b: number[] = []) =>
+			a.length === b.length && a.every((x, i) => x === b[i]);
+		if (s.freq === 'day' && s.interval === 1) return 'day';
+		if (s.freq === 'week' && s.interval === 1 && eq(s.weekdays, [dow])) return 'week1';
+		if (s.freq === 'week' && s.interval === 2 && eq(s.weekdays, [dow])) return 'week2';
+		const nth = Math.min(4, Math.ceil(anchor.getDate() / 7));
+		if (
+			s.freq === 'month' &&
+			s.month_mode === 'day_of_week' &&
+			s.interval === 1 &&
+			s.month_cells.length === 1 &&
+			s.month_cells[0].week === nth &&
+			s.month_cells[0].weekday === dow
+		)
+			return 'month';
+		// Anything the preset matcher doesn't recognize is a saved custom rule.
+		return 'custom_saved';
+	});
+
 	// ── Derived: recurrence labels ──────────────────────────────────────────────────
 	repeatLabel = $derived(
 		this.recurConfigured
@@ -234,14 +285,20 @@ export class JobFormState {
 	// Build the JobRecurrence payload from the modal shape + the page's end condition.
 	// Returns null when not in recurring mode or no rule has been saved yet.
 	buildRecurrence = (): JobRecurrence | null => {
-		if (this.jobMode !== 'recurring' || !this.recurConfigured) return null;
+		// "As needed" carries NO rule (no visits are generated). Otherwise a saved rule is sent
+		// whatever the job type is — a one-off can repeat (see `repeatMode`).
+		if (this.scheduleAsNeeded || !this.recurConfigured) return null;
 		const r: JobRecurrence = {
 			freq: this.recurShape.freq,
 			interval: Math.max(1, Math.floor(Number(this.recurShape.interval) || 1)),
 			end_type: this.endType,
 			anytime: this.anytime
 		};
-		if (this.recurShape.freq === 'week') {
+		// 'day' (every N days) and 'year' (every N years on the start date) need no
+		// weekday/month fields — the interval plus the anchor date is the whole rule.
+		if (this.recurShape.freq === 'day' || this.recurShape.freq === 'year') {
+			// nothing extra
+		} else if (this.recurShape.freq === 'week') {
 			r.weekdays = [...this.recurShape.weekdays].sort((a, b) => a - b);
 		} else {
 			r.month_mode = this.recurShape.month_mode;
@@ -249,8 +306,9 @@ export class JobFormState {
 				r.month_days = [...this.recurShape.month_days].sort((a, b) => a - b);
 				r.month_last_day = this.recurShape.month_last_day;
 			} else {
-				r.month_weeks = [...this.recurShape.month_weeks].sort((a, b) => a - b);
-				r.month_weekdays = [...this.recurShape.month_weekdays].sort((a, b) => a - b);
+				r.month_cells = [...this.recurShape.month_cells].sort(
+					(a, b) => a.week - b.week || a.weekday - b.weekday
+				);
 			}
 		}
 		if (this.endType === 'after') {
@@ -264,6 +322,120 @@ export class JobFormState {
 
 	onRecurSaved = (v: RecurrenceShape) => {
 		this.recurShape = v;
+		this.recurConfigured = true;
+		// Saving a custom rule clears any as-needed intent (the two are mutually exclusive). The
+		// toggle is deliberately left alone: the modal opens from either job type's dropdown, and
+		// giving a one-off a custom rule does not make it recurring.
+		this.scheduleAsNeeded = false;
+		this.scheduleLater = false;
+		if (!this.scheduledStart) this.setDateQuick(0);
+	};
+
+	// The local anchor Date the presets read their weekday / nth-of-month from: the chosen
+	// start date, or today when none is set yet (mirrors the create page's default-to-today).
+	anchorDate = (): Date => {
+		const s = this.scheduledStart ? this.scheduledStart.split('T')[0] : '';
+		if (s) {
+			const [y, m, d] = s.split('-').map(Number);
+			return new Date(y, (m ?? 1) - 1, d ?? 1);
+		}
+		return new Date();
+	};
+
+	// Build the recurrence shape for a preset dropdown choice off the anchor date's weekday.
+	presetShape = (mode: 'day' | 'week1' | 'week2' | 'month'): RecurrenceShape => {
+		const anchor = this.anchorDate();
+		const dow = anchor.getDay();
+		const base = emptyRecurShape();
+		if (mode === 'day') return { ...base, freq: 'day', interval: 1 };
+		if (mode === 'week1') return { ...base, freq: 'week', interval: 1, weekdays: [dow] };
+		if (mode === 'week2') return { ...base, freq: 'week', interval: 2, weekdays: [dow] };
+		const nth = Math.min(4, Math.ceil(anchor.getDate() / 7));
+		return {
+			...base,
+			freq: 'month',
+			interval: 1,
+			month_mode: 'day_of_week',
+			month_cells: [{ week: nth, weekday: dow }]
+		};
+	};
+
+	// "As needed" job window (Jobber): the job stores a start date + an end boundary but no
+	// visits. The boundary comes from the same Ends after / Ends on controls a rule uses:
+	// 'on' → end of that day; 'after' → start + N units. Null when the condition is incomplete.
+	asNeededEndBoundary = (): Date | null => {
+		if (this.endType === 'on') {
+			if (!this.endOn) return null;
+			const [y, m, d] = this.endOn.split('-').map(Number);
+			return new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59);
+		}
+		const n = Math.floor(Number(this.endAfterCount) || 0);
+		if (n < 1) return null;
+		const end = this.anchorDate();
+		if (this.endAfterUnit === 'days') end.setDate(end.getDate() + n);
+		else if (this.endAfterUnit === 'weeks') end.setDate(end.getDate() + n * 7);
+		else if (this.endAfterUnit === 'months') end.setMonth(end.getMonth() + n);
+		else end.setFullYear(end.getFullYear() + n);
+		end.setHours(23, 59, 59, 0);
+		return end;
+	};
+
+	// The Jobber-style One-off / Recurring toggle — the SOLE authority for job_type. It sets
+	// `jobMode` and, deliberately, nothing else: the repeat rule is NOT recurring-only state, so
+	// switching to one-off must PRESERVE it. Jobber shows the same Repeats dropdown under both
+	// toggle positions because the two answer different questions — the rule decides how visits
+	// are generated, the toggle decides how the job bills. A one-off may repeat.
+	//
+	// The one exception is seeding: a recurring job must repeat somehow and its dropdown carries
+	// no "Does not repeat", so flipping to recurring with neither a rule nor an as-needed intent
+	// seeds the weekly default rather than resting on an option that isn't offered.
+	setJobMode = (mode: JobMode): void => {
+		if (mode === this.jobMode) return;
+		this.jobMode = mode;
+		if (mode === 'recurring' && !this.recurConfigured && !this.scheduleAsNeeded) {
+			this.setRepeatMode('week1');
+			return;
+		}
+		if (!this.scheduledStart) this.setDateQuick(0);
+	};
+
+	// Apply an inline "Repeats" dropdown selection. It never touches `jobMode` — the toggle owns
+	// that and is the single source of truth for one-off vs recurring. This control is shown for
+	// BOTH types (Jobber): it configures how visits are generated, which is independent of how the
+	// job bills. Presets compute their rule from the start date; 'custom' opens the modal (which
+	// commits via onRecurSaved); 'as_needed' keeps the schedule fields as-is but leaves the job
+	// with no rule and no visits.
+	setRepeatMode = (mode: RepeatMode): void => {
+		if (mode === 'custom') {
+			// The action row: open the modal. Nothing changes until the modal saves — cancelling
+			// leaves the previous selection intact (the derive still reads the old state).
+			this.recurModalOpen = true;
+			return;
+		}
+		// Re-picking the already-saved custom rule is a no-op; it's just the resting label.
+		if (mode === 'custom_saved') return;
+		if (mode === 'none') {
+			// "Does not repeat" — offered in one-off mode only (a recurring job must repeat).
+			// Clears the rule; the toggle is untouched.
+			this.scheduleAsNeeded = false;
+			this.recurConfigured = false;
+			this.recurShape = emptyRecurShape();
+			return;
+		}
+		if (mode === 'as_needed') {
+			// Jobber renders "As needed" like any other repeat option — the date/time and end
+			// fields stay visible (and keep their values); only visit generation is skipped.
+			this.scheduleAsNeeded = true;
+			this.recurConfigured = false;
+			this.scheduleLater = false;
+			if (!this.scheduledStart) this.setDateQuick(0);
+			return;
+		}
+		// A concrete preset (Daily / Weekly / Every 2 weeks / Monthly).
+		this.scheduleAsNeeded = false;
+		this.scheduleLater = false;
+		if (!this.scheduledStart) this.setDateQuick(0);
+		this.recurShape = this.presetShape(mode);
 		this.recurConfigured = true;
 	};
 
@@ -392,7 +564,7 @@ export class JobFormState {
 			anytime: this.anytime,
 			scopeOfWork: this.scopeOfWork,
 			notes: this.notes,
-			jobType: this.jobType,
+			jobCategory: this.jobCategory,
 			tags: [...this.tags].sort().join(','),
 			lineItems: JSON.stringify($state.snapshot(this.lineItems)),
 			discountType: this.discountType,
@@ -408,6 +580,7 @@ export class JobFormState {
 			invoiceFrequency: this.invoiceFrequency,
 			fixedInvoiceAmount: this.fixedInvoiceAmount,
 			jobMode: this.jobMode,
+			scheduleAsNeeded: this.scheduleAsNeeded,
 			recurConfigured: this.recurConfigured,
 			recurShape: JSON.stringify($state.snapshot(this.recurShape)),
 			endType: this.endType,

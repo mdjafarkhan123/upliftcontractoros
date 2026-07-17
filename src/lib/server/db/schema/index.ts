@@ -283,6 +283,20 @@ export type {
 	NewMessengerContact
 } from './15_messenger';
 
+// Domain 19 — Requests (Jobber-style lead intake → assessment → convert)
+export {
+	requestSourceEnum,
+	requestApprovalStateEnum,
+	requests,
+	requestLineItems
+} from './19_requests';
+export type {
+	Request,
+	NewRequest,
+	RequestLineItem,
+	NewRequestLineItem
+} from './19_requests';
+
 // Domain 18 — Automation Engine (card/template multi-step sequences)
 export {
 	automationStepChannelEnum,

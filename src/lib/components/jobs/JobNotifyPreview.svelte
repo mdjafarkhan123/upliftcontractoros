@@ -115,13 +115,17 @@
 			</div>
 			{#if wantsSms}
 				<div class="notify-preview__msg">
-					<span class="notify-preview__chan"><i class="ri-message-2-line" aria-hidden="true"></i> Text</span>
+					<span class="notify-preview__chan"
+						><i class="ri-message-2-line" aria-hidden="true"></i> Text</span
+					>
 					<p class="notify-preview__text">{smsPreview}</p>
 				</div>
 			{/if}
 			{#if wantsEmail}
 				<div class="notify-preview__msg">
-					<span class="notify-preview__chan"><i class="ri-mail-line" aria-hidden="true"></i> Email</span>
+					<span class="notify-preview__chan"
+						><i class="ri-mail-line" aria-hidden="true"></i> Email</span
+					>
 					<p class="notify-preview__subject">{subjectPreview}</p>
 					<p class="notify-preview__text">{bodyPreview}</p>
 				</div>
@@ -140,7 +144,9 @@
 					Use default
 				</button>
 			</div>
-			<p class="notify-preview__note">Changes apply to this job only — your saved default isn't affected.</p>
+			<p class="notify-preview__note">
+				Changes apply to this job only — your saved default isn't affected.
+			</p>
 
 			{#if wantsSms}
 				<div class="notify-preview__field">
@@ -151,7 +157,8 @@
 						<button
 							type="button"
 							class="notify-preview__reset"
-							onclick={() => form.notifyTemplate && (form.notifySmsOverride = form.notifyTemplate.sms)}
+							onclick={() =>
+								form.notifyTemplate && (form.notifySmsOverride = form.notifyTemplate.sms)}
 							disabled={form.notifySmsOverride === form.notifyTemplate?.sms}
 						>
 							<i class="ri-refresh-line" aria-hidden="true"></i> Reset
@@ -159,7 +166,11 @@
 					</div>
 					<div class="notify-preview__tokens">
 						{#each MERGE_FIELDS as f (f.token)}
-							<button type="button" class="notify-preview__token" onclick={() => insertToken('sms', f.token)}>
+							<button
+								type="button"
+								class="notify-preview__token"
+								onclick={() => insertToken('sms', f.token)}
+							>
 								+ {f.label}
 							</button>
 						{/each}
@@ -173,7 +184,10 @@
 						class="notify-preview__textarea"
 					></textarea>
 					{#if smsPreview.trim().length > 0}
-						<p class="notify-preview__live"><i class="ri-eye-line" aria-hidden="true"></i> {smsPreview}</p>
+						<p class="notify-preview__live">
+							<i class="ri-eye-line" aria-hidden="true"></i>
+							{smsPreview}
+						</p>
 					{/if}
 				</div>
 			{/if}
@@ -207,7 +221,8 @@
 						<button
 							type="button"
 							class="notify-preview__reset"
-							onclick={() => form.notifyTemplate && (form.notifyBodyOverride = form.notifyTemplate.body)}
+							onclick={() =>
+								form.notifyTemplate && (form.notifyBodyOverride = form.notifyTemplate.body)}
 							disabled={form.notifyBodyOverride === form.notifyTemplate?.body}
 						>
 							<i class="ri-refresh-line" aria-hidden="true"></i> Reset
@@ -215,7 +230,11 @@
 					</div>
 					<div class="notify-preview__tokens">
 						{#each MERGE_FIELDS as f (f.token)}
-							<button type="button" class="notify-preview__token" onclick={() => insertToken('body', f.token)}>
+							<button
+								type="button"
+								class="notify-preview__token"
+								onclick={() => insertToken('body', f.token)}
+							>
 								+ {f.label}
 							</button>
 						{/each}
@@ -229,7 +248,10 @@
 						class="notify-preview__textarea notify-preview__textarea--tall"
 					></textarea>
 					{#if bodyPreview.trim().length > 0}
-						<p class="notify-preview__live"><i class="ri-eye-line" aria-hidden="true"></i> {bodyPreview}</p>
+						<p class="notify-preview__live">
+							<i class="ri-eye-line" aria-hidden="true"></i>
+							{bodyPreview}
+						</p>
 					{/if}
 				</div>
 			{/if}

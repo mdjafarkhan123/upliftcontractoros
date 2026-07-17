@@ -164,13 +164,19 @@
 							<button
 								type="button"
 								onclick={() => (survivorId = c.id)}
-								class="contact-merge__option-btn {survivorId === c.id ? 'contact-merge__option-btn--selected' : ''}"
+								class="contact-merge__option-btn {survivorId === c.id
+									? 'contact-merge__option-btn--selected'
+									: ''}"
 							>
 								<div style="min-width:0;">
 									<p class="contact-merge__option-name">{c.full_name}</p>
 									<p class="contact-merge__option-phone">{formatPhoneDisplay(c.phone)}</p>
 								</div>
-								<span class="contact-merge__badge {survivorId === c.id ? 'contact-merge__badge--keep' : 'contact-merge__badge--archive'}">
+								<span
+									class="contact-merge__badge {survivorId === c.id
+										? 'contact-merge__badge--keep'
+										: 'contact-merge__badge--archive'}"
+								>
 									{survivorId === c.id ? 'Keep this' : 'Will be archived'}
 								</span>
 							</button>
@@ -181,13 +187,13 @@
 						<i class="ri-alert-line" aria-hidden="true"></i>
 						<div>
 							<p>
-								This can't be undone. All conversations, jobs, quotes, invoices, appointments, notes,
-								and addresses move to the kept record.
+								This can't be undone. All conversations, jobs, quotes, invoices, appointments,
+								notes, and addresses move to the kept record.
 							</p>
 							{#if survivor && source && survivor.phone !== source.phone}
 								<p>
-									{source.full_name}'s number ({formatPhoneDisplay(source.phone)}) is kept on the merged
-									contact as a secondary number.
+									{source.full_name}'s number ({formatPhoneDisplay(source.phone)}) is kept on the
+									merged contact as a secondary number.
 								</p>
 							{/if}
 						</div>

@@ -278,10 +278,10 @@
 								<Select.Value />
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="newest">Newest first</Select.Item>
-								<Select.Item value="oldest">Oldest first</Select.Item>
-								<Select.Item value="score_high">Highest rating</Select.Item>
-								<Select.Item value="score_low">Lowest rating</Select.Item>
+								<Select.Item value="newest" label="Newest first">Newest first</Select.Item>
+								<Select.Item value="oldest" label="Oldest first">Oldest first</Select.Item>
+								<Select.Item value="score_high" label="Highest rating">Highest rating</Select.Item>
+								<Select.Item value="score_low" label="Lowest rating">Lowest rating</Select.Item>
 							</Select.Content>
 						</Select.Root>
 					</div>
@@ -292,10 +292,10 @@
 								<Select.Value />
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="newest">Newest first</Select.Item>
-								<Select.Item value="oldest">Oldest first</Select.Item>
-								<Select.Item value="score_high">Highest rating</Select.Item>
-								<Select.Item value="score_low">Lowest rating</Select.Item>
+								<Select.Item value="newest" label="Newest first">Newest first</Select.Item>
+								<Select.Item value="oldest" label="Oldest first">Oldest first</Select.Item>
+								<Select.Item value="score_high" label="Highest rating">Highest rating</Select.Item>
+								<Select.Item value="score_low" label="Lowest rating">Lowest rating</Select.Item>
 							</Select.Content>
 						</Select.Root>
 					</div>
@@ -306,10 +306,10 @@
 								<Select.Value />
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="newest">Newest first</Select.Item>
-								<Select.Item value="oldest">Oldest first</Select.Item>
-								<Select.Item value="status">By status</Select.Item>
-								<Select.Item value="name">Customer name</Select.Item>
+								<Select.Item value="newest" label="Newest first">Newest first</Select.Item>
+								<Select.Item value="oldest" label="Oldest first">Oldest first</Select.Item>
+								<Select.Item value="status" label="By status">By status</Select.Item>
+								<Select.Item value="name" label="Customer name">Customer name</Select.Item>
 							</Select.Content>
 						</Select.Root>
 					</div>

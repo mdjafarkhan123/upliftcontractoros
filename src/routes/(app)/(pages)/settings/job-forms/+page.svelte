@@ -103,10 +103,7 @@
 			<ul class="job-forms__list">
 				{#each items as t (t.id)}
 					<li class="job-forms__card">
-						<a
-							class="job-forms__card-link"
-							href={resolve(`/settings/job-forms/${t.id}`)}
-						>
+						<a class="job-forms__card-link" href={resolve(`/settings/job-forms/${t.id}`)}>
 							<span class="job-forms__icon"><i class="ri-survey-line" aria-hidden="true"></i></span>
 							<span class="job-forms__body">
 								<span class="job-forms__name">{t.name}</span>

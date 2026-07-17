@@ -22,36 +22,39 @@ fluid content area. Lives in `src/routes/(app)/+layout.svelte`.
 
 ```scss
 .app-shell {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: 100vh;
-  background: var(--color-bg-app);
+	display: grid;
+	grid-template-columns: 280px 1fr;
+	min-height: 100vh;
+	background: var(--color-bg-app);
 
-  &__main {
-    display: flex;
-    flex-direction: column;
-    padding: $space-6 $space-8;
-    gap: $space-6;
-    min-width: 0; // prevents kanban/table overflow from blowing out the grid
-  }
+	&__main {
+		display: flex;
+		flex-direction: column;
+		padding: $space-6 $space-8;
+		gap: $space-6;
+		min-width: 0; // prevents kanban/table overflow from blowing out the grid
+	}
 }
 
 @media (max-width: $bp-tablet) {
-  .app-shell {
-    grid-template-columns: 72px 1fr; // sidebar collapses to icon-only
+	.app-shell {
+		grid-template-columns: 72px 1fr; // sidebar collapses to icon-only
 
-    &__main { padding: $space-5; }
-  }
+		&__main {
+			padding: $space-5;
+		}
+	}
 }
 
 @media (max-width: $bp-mobile) {
-  .app-shell {
-    grid-template-columns: 1fr; // sidebar becomes an off-canvas drawer, see below
-  }
+	.app-shell {
+		grid-template-columns: 1fr; // sidebar becomes an off-canvas drawer, see below
+	}
 }
 ```
 
 **Sidebar collapse behavior:**
+
 - **≥1025px** — full sidebar (280px, icon + label, as specced in `components.md`).
 - **641–1024px** — primary sidebar narrows to icon-only (72px, use `.sidebar--icon-only`), still bound to the normal light/dark surface tokens. Labels move into tooltips on hover. (Don't reach for `.sidebar--compact` here — that's a separate, permanently-dark rail style, not the responsive state of the main nav. See `components.md`.)
 - **≤640px** — sidebar becomes a Bits UI `Dialog`-based drawer triggered by a hamburger button in the topbar, sliding in from the left over the content (not pushing it).
@@ -66,38 +69,40 @@ split) → collaboration/progress/time-tracker row.
 
 ```scss
 .dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: $space-5;
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: $space-5;
 
-  &__row--analytics {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 2fr 1.4fr 1.6fr;
-    gap: $space-5;
-  }
+	&__row--analytics {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: 2fr 1.4fr 1.6fr;
+		gap: $space-5;
+	}
 
-  &__row--collab {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1.6fr 1.2fr 1.2fr;
-    gap: $space-5;
-  }
+	&__row--collab {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: 1.6fr 1.2fr 1.2fr;
+		gap: $space-5;
+	}
 }
 
 @media (max-width: $bp-tablet) {
-  .dashboard-grid {
-    grid-template-columns: repeat(2, 1fr); // stat tiles: 4 → 2 per row
+	.dashboard-grid {
+		grid-template-columns: repeat(2, 1fr); // stat tiles: 4 → 2 per row
 
-    &__row--analytics,
-    &__row--collab {
-      grid-template-columns: 1fr; // stacked, one card per row
-    }
-  }
+		&__row--analytics,
+		&__row--collab {
+			grid-template-columns: 1fr; // stacked, one card per row
+		}
+	}
 }
 
 @media (max-width: $bp-mobile) {
-  .dashboard-grid { grid-template-columns: 1fr; } // stat tiles: 1 per row
+	.dashboard-grid {
+		grid-template-columns: 1fr;
+	} // stat tiles: 1 per row
 }
 ```
 
@@ -115,22 +120,22 @@ width columns.
 
 ```scss
 .pipeline-page {
-  display: flex;
-  flex-direction: column;
-  gap: $space-6;
-  height: 100%;
-  min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: $space-6;
+	height: 100%;
+	min-height: 0;
 
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
 
-  &__board {
-    flex: 1;
-    min-height: 0; // lets .pipeline (in components.md) own its own scroll
-  }
+	&__board {
+		flex: 1;
+		min-height: 0; // lets .pipeline (in components.md) own its own scroll
+	}
 }
 ```
 
@@ -150,20 +155,20 @@ provide internal rhythm.
 
 ```scss
 .table-page {
-  display: flex;
-  flex-direction: column;
-  gap: $space-5;
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
 
-  &__toolbar {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-  }
+	&__toolbar {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
 
-  &__card {
-    @extend .card;
-    padding: $space-4;
-  }
+	&__card {
+		@extend .card;
+		padding: $space-4;
+	}
 }
 ```
 

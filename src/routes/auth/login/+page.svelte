@@ -59,9 +59,7 @@
 				required
 			>
 				{#snippet trailing()}
-					<a href="/auth/forgot-password" class="login-form__forgot">
-						Forgot password?
-					</a>
+					<a href="/auth/forgot-password" class="login-form__forgot"> Forgot password? </a>
 				{/snippet}
 			</AuthField>
 
@@ -74,18 +72,9 @@
 						viewBox="0 0 24 24"
 						aria-hidden="true"
 					>
-						<circle
-							cx="12"
-							cy="12"
-							r="10"
-							stroke="currentColor"
-							stroke-width="4"
-							opacity="0.25"
+						<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"
 						></circle>
-						<path
-							fill="currentColor"
-							opacity="0.75"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+						<path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
 						></path>
 					</svg>
 					Signing in…
@@ -138,7 +127,9 @@
 		text-decoration: none;
 		transition: color $duration-fast $ease-standard;
 
-		&:hover { color: var(--color-brand-strong); }
+		&:hover {
+			color: var(--color-brand-strong);
+		}
 	}
 
 	.login-form__submit {

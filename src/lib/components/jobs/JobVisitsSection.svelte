@@ -7,11 +7,17 @@
 	import SectionEditButton from '$lib/components/shared/SectionEditButton.svelte';
 	import JobVisitPhotos from './JobVisitPhotos.svelte';
 	import VisitScheduleModal, { type VisitJobInfo } from './VisitScheduleModal.svelte';
+	import VisitDetailModal from './VisitDetailModal.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { formatDateInOrgTz, formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { summarizeRecurrence, type JobRecurrence } from '$lib/jobs/recurrence';
-	import type { JobVisitRow, JobVisitPhoto, JobVisitStatus } from '$lib/types/jobs';
+	import type {
+		JobVisitRow,
+		JobVisitPhoto,
+		JobVisitStatus,
+		AppointmentStatusJobEcho
+	} from '$lib/types/jobs';
 
 	// This is the job's single "Schedule" section (Session 3.3): the standalone Start/End/Assigned
 	// summary card was folded in here, since the per-visit list already carries those facts. The
@@ -28,6 +34,9 @@
 		reloadKey = 0,
 		recurrence = null,
 		appointmentCount = 0,
+		scheduledStart = null,
+		scheduledEnd = null,
+		scheduleAsNeeded = false,
 		onEditAll,
 		onChanged
 	}: {
@@ -37,9 +46,15 @@
 		reloadKey?: number;
 		recurrence?: JobRecurrence | null;
 		appointmentCount?: number;
+		// Job-level schedule WINDOW (Jobber "As needed"): the job stores a start date + an end
+		// boundary but materializes NO visits. Surfaced in the summary so the dates the contractor
+		// picked are still visible even though the visit list is empty by design.
+		scheduledStart?: string | null;
+		scheduledEnd?: string | null;
+		scheduleAsNeeded?: boolean;
 		// When provided, an "Edit all visits" button opens the job-level schedule editor.
 		onEditAll?: () => void;
-		onChanged?: () => void;
+		onChanged?: (job?: AppointmentStatusJobEcho) => void;
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
@@ -92,6 +107,36 @@
 			.slice()
 			.reverse()
 	);
+
+	// ── Schedule summary range (Start date → End date) ───────────────────────────────
+	// The card summarizes the job's span: Start = the FIRST visit's date, End = the LAST
+	// visit's date (Jobber). All dated visits, ascending — the loader lists unscheduled
+	// (NULL start) first then dated ascending, so we filter + sort defensively.
+	const datedVisits = $derived(
+		visits
+			.filter((v) => v.scheduled_start)
+			.slice()
+			.sort((a, b) => (a.scheduled_start! < b.scheduled_start! ? -1 : 1))
+	);
+
+	// The "Start – End" label shown on the summary card. Prefers the real visit span; falls
+	// back to the job-level stored window when the job has NO visits (Jobber "As needed", which
+	// keeps a start/end but generates no visits). Collapses to a single date when start = end.
+	const scheduleRange = $derived.by(() => {
+		let startISO: string | null = null;
+		let endISO: string | null = null;
+		if (datedVisits.length > 0) {
+			startISO = datedVisits[0].scheduled_start;
+			endISO = datedVisits[datedVisits.length - 1].scheduled_start;
+		} else if (scheduledStart) {
+			startISO = scheduledStart;
+			endISO = scheduledEnd ?? scheduledStart;
+		}
+		if (!startISO) return null;
+		const start = formatDateInOrgTz(startISO, orgTz);
+		const end = formatDateInOrgTz(endISO ?? startISO, orgTz);
+		return start === end ? start : `${start} – ${end}`;
+	});
 
 	type StatusFilter = 'all' | 'unscheduled' | 'scheduled' | 'completed';
 	let statusFilter = $state<StatusFilter>('all');
@@ -149,18 +194,40 @@
 		modalOpen = true;
 	}
 
+	// ── Visit Details modal (row click) ─────────────────────────────────────────────
+	// Keyed by id (not a snapshot) so the modal's notes/photos stay live as `visits` mutates.
+	let detailOpen = $state(false);
+	let detailVisitId = $state<string | null>(null);
+	const detailVisit = $derived(visits.find((v) => v.id === detailVisitId) ?? null);
+
+	function openDetail(v: JobVisitRow) {
+		detailVisitId = v.id;
+		detailOpen = true;
+	}
+
+	// From the detail modal's Mark Complete — close it, then run the shared completeVisit so the
+	// last-visit "Final visit completed" popup still fires from this component.
+	function completeFromDetail(v: JobVisitRow) {
+		void completeVisit(v);
+	}
+
+	function patchVisitNotes(visitId: string, notes: string | null) {
+		visits = visits.map((v) => (v.id === visitId ? { ...v, completion_notes: notes } : v));
+	}
+
 	// ── Complete a visit (Jobber: one tap for any visit type) ────────────────────────
 	// The tick on ANY visit — dated OR unscheduled placeholder — runs the same flow:
 	// show a per-row spinner, mark it complete, then (only if it was the LAST open visit)
-	// raise the "Final visit completed" popup. `completingId` drives the spinner and
-	// blocks a double-tap on the same row.
-	let completingId = $state<string | null>(null);
+	// raise the "Final visit completed" popup. `busyId` drives the spinner and
+	// blocks a double-tap on any row — for BOTH the "Complete visit" tick and the
+	// "Mark as incomplete" action.
+	let busyId = $state<string | null>(null);
 
 	async function transitionStatus(
 		id: string,
 		status: 'completed' | 'incomplete',
 		completionNotes?: string | null
-	): Promise<boolean> {
+	): Promise<{ ok: boolean; job: AppointmentStatusJobEcho }> {
 		const res = await fetch(`/api/appointments/${id}/status`, {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
@@ -169,9 +236,19 @@
 		if (!res.ok) {
 			const body = await res.json().catch(() => ({}));
 			toast.error(body.error ?? 'Could not update the visit.');
-			return false;
+			return { ok: false, job: null };
 		}
-		return true;
+		const body = (await res.json()) as {
+			data: {
+				id: string;
+				status: JobVisitStatus;
+				job: AppointmentStatusJobEcho;
+			};
+		};
+		// Reflect the server-authoritative status locally right away so the row moves to
+		// its new bucket (e.g. Upcoming → Past) on the spot instead of waiting for a refetch.
+		visits = visits.map((v) => (v.id === id ? { ...v, status: body.data.status } : v));
+		return { ok: true, job: body.data.job ?? null };
 	}
 
 	// The "Final visit completed" popup (Jobber ref/2) — shown only after the LAST open
@@ -190,18 +267,18 @@
 	// the follow-up popup. When other visits remain, completion is silent (toast only),
 	// matching Jobber's "prompt to close only on the last visit" behaviour.
 	async function completeVisit(v: JobVisitRow) {
-		if (completingId) return;
+		if (busyId) return;
 		// Open = still schedulable/doable: a dated 'scheduled' visit OR a dateless
 		// 'unscheduled' placeholder. v itself is open, so <= 1 means it's the only one left.
 		const openCount = visits.filter(
 			(x) => x.status === 'scheduled' || x.status === 'unscheduled'
 		).length;
 		const wasLast = openCount <= 1;
-		completingId = v.id;
+		busyId = v.id;
 		try {
-			const ok = await transitionStatus(v.id, 'completed');
+			const { ok, job } = await transitionStatus(v.id, 'completed');
 			if (!ok) return;
-			onChanged?.();
+			onChanged?.(job);
 			if (wasLast) {
 				finalVisit = v;
 				finalBusy = false;
@@ -209,7 +286,7 @@
 				toast.success('Visit completed');
 			}
 		} finally {
-			completingId = null;
+			busyId = null;
 		}
 	}
 
@@ -244,11 +321,19 @@
 	}
 
 	// ── Mark a completed visit back to incomplete ────────────────────────────────────
+	// Shows a per-row spinner (via `busyId`) so the user sees the in-flight operation,
+	// matching the "Complete visit" button feedback.
 	async function markIncomplete(v: JobVisitRow) {
-		const ok = await transitionStatus(v.id, 'incomplete');
-		if (!ok) return;
-		toast.success('Visit marked incomplete');
-		onChanged?.();
+		if (busyId) return;
+		busyId = v.id;
+		try {
+			const { ok, job } = await transitionStatus(v.id, 'incomplete');
+			if (!ok) return;
+			toast.success('Visit marked incomplete');
+			onChanged?.(job);
+		} finally {
+			busyId = null;
+		}
 	}
 
 	const STATUS_LABEL: Record<JobVisitStatus, string> = {
@@ -268,6 +353,10 @@
 			{#if recurrence}
 				<span class="badge badge--brand">
 					<i class="ri-repeat-line" aria-hidden="true"></i> Recurring
+				</span>
+			{:else if scheduleAsNeeded}
+				<span class="badge badge--neutral">
+					<i class="ri-calendar-todo-line" aria-hidden="true"></i> As needed
 				</span>
 			{/if}
 		</div>
@@ -322,12 +411,45 @@
 		</div>
 	{/if}
 
+	<!-- Schedule summary (Start date → End date). Shows whenever the job has any date: the span
+	     across all visits (first → last), or — for a visitless job (Jobber "As needed") — the
+	     stored job-level window. Gated on !loading so it settles to the true span once visits
+	     load rather than flashing the first-visit anchor. -->
+	{#if !loading && scheduleRange}
+		<div class="job-recur-line">
+			<i class="ri-calendar-line job-recur-line__icon" aria-hidden="true"></i>
+			<span>{scheduleRange}</span>
+			{#if scheduleAsNeeded}
+				<span class="job-recur-line__count">· As needed</span>
+			{/if}
+		</div>
+	{/if}
+
 	{#if loading}
-		<p class="job-section__empty">Loading…</p>
+		<div class="job-visits__skeleton" aria-busy="true" aria-label="Loading visits">
+			{#each Array.from({ length: 3 }) as _, i (i)}
+				<div class="job-visits__skel-row">
+					<div class="job-visits__skel-main">
+						<div class="job-visits__skel-line job-visits__skel-line--title skeleton-shimmer"></div>
+						<div class="job-visits__skel-line job-visits__skel-line--meta skeleton-shimmer"></div>
+					</div>
+					<div class="job-visits__skel-actions">
+						<div class="job-visits__skel-btn skeleton-shimmer"></div>
+						<div class="job-visits__skel-btn skeleton-shimmer"></div>
+					</div>
+				</div>
+			{/each}
+		</div>
 	{:else if errorMsg}
 		<p class="job-section__empty job-section__empty--error">{errorMsg}</p>
 	{:else if visits.length === 0}
-		<p class="job-visits__empty">No visits on this job yet.</p>
+		<p class="job-visits__empty">
+			{#if scheduleAsNeeded}
+				No visits yet — this job is scheduled as needed. Add a visit when you're ready.
+			{:else}
+				No visits on this job yet.
+			{/if}
+		</p>
 	{:else if !anyVisible}
 		<p class="job-visits__empty">No {statusFilterLabel.toLowerCase()} visits.</p>
 	{:else}
@@ -337,23 +459,23 @@
 				{#each toBeScheduled as v (v.id)}
 					<li class="job-visits__item">
 						<div class="job-visits__row">
-							<div class="job-visits__main">
+							<button type="button" class="job-visits__main" onclick={() => openDetail(v)}>
 								<span class="job-visits__date">{v.title || 'Unscheduled visit'}</span>
 								<span class="job-visits__meta">
 									<i class="ri-user-line" aria-hidden="true"></i>
 									{v.assignee_name ?? 'Unassigned'}
 								</span>
-							</div>
+							</button>
 							{#if canManage}
 								<div class="job-visits__actions">
 									<button
 										type="button"
 										class="job-visits__icon-btn job-visits__icon-btn--check"
 										onclick={() => completeVisit(v)}
-										disabled={completingId !== null}
+										disabled={busyId !== null}
 										aria-label="Complete visit"
 									>
-										{#if completingId === v.id}
+										{#if busyId === v.id}
 											<i class="ri-loader-4-line job-section__spin" aria-hidden="true"></i>
 										{:else}
 											<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
@@ -383,7 +505,7 @@
 				{#each upcoming as v (v.id)}
 					<li class="job-visits__item">
 						<div class="job-visits__row">
-							<div class="job-visits__main">
+							<button type="button" class="job-visits__main" onclick={() => openDetail(v)}>
 								<span class="job-visits__date">{dateLabel(v)}</span>
 								<span class="job-visits__meta">
 									<i class="ri-user-line" aria-hidden="true"></i>
@@ -393,13 +515,13 @@
 										<span class="job-visits__loc">{v.location}</span>
 									{/if}
 								</span>
-							</div>
+							</button>
 							{#if canManage}
 								<div class="job-visits__actions">
 									<Button
 										size="sm"
-										loading={completingId === v.id}
-										disabled={completingId !== null}
+										loading={busyId === v.id}
+										disabled={busyId !== null}
 										onclick={() => completeVisit(v)}
 									>
 										<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
@@ -440,28 +562,36 @@
 				{#each past as v (v.id)}
 					<li class="job-visits__item job-visits__item--past">
 						<div class="job-visits__row">
-							<div class="job-visits__main">
+							<button type="button" class="job-visits__main" onclick={() => openDetail(v)}>
 								<span class="job-visits__date">{dateLabel(v)}</span>
 								{#if v.status === 'completed'}
 									<span class="job-visits__meta">{completedLabel(v)}</span>
 								{:else}
 									<span class="job-visits__meta">{STATUS_LABEL[v.status]}</span>
 								{/if}
-							</div>
+							</button>
 							<div class="job-visits__actions">
 								<AppointmentStatusBadge status={v.status} />
 								{#if canManage && v.status === 'completed'}
-									<RowActionsMenu
-										label="Visit actions"
-										actions={[
-											{
-												key: 'incomplete',
-												label: 'Mark as incomplete',
-												icon: 'ri-arrow-go-back-line',
-												onSelect: () => markIncomplete(v)
-											}
-										]}
-									/>
+									{#if busyId === v.id}
+										<i
+											class="ri-loader-4-line job-section__spin job-visits__busy"
+											aria-label="Marking visit incomplete"
+										></i>
+									{:else}
+										<RowActionsMenu
+											label="Visit actions"
+											actions={[
+												{
+													key: 'incomplete',
+													label: 'Mark as incomplete',
+													icon: 'ri-arrow-go-back-line',
+													disabled: busyId !== null,
+													onSelect: () => markIncomplete(v)
+												}
+											]}
+										/>
+									{/if}
 								{/if}
 							</div>
 						</div>
@@ -495,6 +625,23 @@
 	{jobInfo}
 	visit={modalVisit}
 	onSaved={() => onChanged?.()}
+/>
+
+<!-- Visit Details modal — opened by clicking a visit row (Jobber ref job-detail/6-7). -->
+<VisitDetailModal
+	bind:open={detailOpen}
+	visit={detailVisit}
+	{jobId}
+	{jobInfo}
+	{canManage}
+	onComplete={completeFromDetail}
+	onEdit={(v) => {
+		detailOpen = false;
+		openEdit(v);
+	}}
+	onNotesSaved={patchVisitNotes}
+	onPhotoAdded={(id, item) => patchVisitPhotos(id, (p) => [...p, item])}
+	onPhotoRemoved={(id, pid) => patchVisitPhotos(id, (p) => p.filter((x) => x.id !== pid))}
 />
 
 <!-- "Final visit completed" popup — raised only after the last open visit is completed (Jobber ref/2). -->
@@ -568,6 +715,59 @@
 			align-items: center;
 			gap: $space-2;
 			flex-shrink: 0;
+		}
+
+		&__skeleton {
+			display: flex;
+			flex-direction: column;
+		}
+
+		&__skel-row {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: $space-3;
+			padding: $space-3 0;
+			border-bottom: 1px solid var(--color-border);
+
+			&:last-child {
+				border-bottom: none;
+			}
+		}
+
+		&__skel-main {
+			display: flex;
+			flex-direction: column;
+			gap: $space-2;
+			flex: 1 1 auto;
+			min-width: 0;
+		}
+
+		&__skel-line {
+			border-radius: $radius-sm;
+
+			&--title {
+				height: 16px;
+				width: 55%;
+			}
+
+			&--meta {
+				height: 13px;
+				width: 35%;
+			}
+		}
+
+		&__skel-actions {
+			display: inline-flex;
+			align-items: center;
+			gap: $space-2;
+			flex-shrink: 0;
+		}
+
+		&__skel-btn {
+			width: 34px;
+			height: 34px;
+			border-radius: $radius-md;
 		}
 
 		&__empty {
@@ -650,8 +850,20 @@
 		&__main {
 			display: flex;
 			flex-direction: column;
+			align-items: flex-start;
 			gap: $space-1;
 			min-width: 0;
+			// Reset the button chrome — the row body is a click target opening Visit Details.
+			padding: 0;
+			border: none;
+			background: none;
+			font: inherit;
+			text-align: left;
+			cursor: pointer;
+
+			&:hover .job-visits__date {
+				color: var(--color-brand);
+			}
 		}
 
 		&__actions {
@@ -659,6 +871,18 @@
 			align-items: center;
 			gap: $space-2;
 			flex-shrink: 0;
+		}
+
+		// In-flight spinner that replaces the 3-dot kebab while "Mark as incomplete"
+		// runs — same footprint as the trigger so the row doesn't shift.
+		&__busy {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			font-size: 1.5rem;
+			color: var(--color-text-secondary);
 		}
 
 		&__icon-btn {

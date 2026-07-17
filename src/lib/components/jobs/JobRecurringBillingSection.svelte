@@ -86,12 +86,7 @@
 
 		<div class="recur-billing__view-actions">
 			{#if canInvoice}
-				<Button
-					size="sm"
-					loading={generating}
-					loadingLabel="Generating…"
-					onclick={generateInvoice}
-				>
+				<Button size="sm" loading={generating} loadingLabel="Generating…" onclick={generateInvoice}>
 					<i class="ri-add-line" aria-hidden="true"></i> Generate invoice
 				</Button>
 				<p class="recur-billing__view-hint">

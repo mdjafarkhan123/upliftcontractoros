@@ -46,14 +46,14 @@ reminder fires exactly once; re-dating the field arms a fresh reminder.
 
 ### Domain: Pipeline
 
-| Event Type                     | Trigger                                               | Routing                              |
-| ------------------------------ | ----------------------------------------------------- | ------------------------------------ |
-| `opportunity.created`          | New opportunity added to pipeline                     | notification + activity feed         |
-| `opportunity.assignee_changed` | `assigned_to` changes on an existing opportunity      | notification (new assignee only)     |
-| `opportunity.stage_changed`    | Opportunity moved between pipeline stages             | activity feed only (no notification) |
-| `opportunity.won`              | PATCH opportunities/[id]/status → won — triggers job creation | notification + activity feed |
-| `opportunity.lost`             | PATCH opportunities/[id]/status → lost                | notification + activity feed         |
-| `opportunity.follow_up_due`    | `opportunity-follow-up-due-sweep` cron finds `next_follow_up_at <= now()` on an open deal | notification |
+| Event Type                     | Trigger                                                                                   | Routing                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------ |
+| `opportunity.created`          | New opportunity added to pipeline                                                         | notification + activity feed         |
+| `opportunity.assignee_changed` | `assigned_to` changes on an existing opportunity                                          | notification (new assignee only)     |
+| `opportunity.stage_changed`    | Opportunity moved between pipeline stages                                                 | activity feed only (no notification) |
+| `opportunity.won`              | PATCH opportunities/[id]/status → won — triggers job creation                             | notification + activity feed         |
+| `opportunity.lost`             | PATCH opportunities/[id]/status → lost                                                    | notification + activity feed         |
+| `opportunity.follow_up_due`    | `opportunity-follow-up-due-sweep` cron finds `next_follow_up_at <= now()` on an open deal | notification                         |
 
 > Removed: `opportunity.updated`. The previous catch-all "PATCH happened"
 > event was never routed to a consumer. Granular per-field events
@@ -167,13 +167,13 @@ Notification deep-links to `/pipeline?deal={id}` (auto-opens the detail sheet).
 
 ### Domain: Communication
 
-| Event Type             | Trigger                                 | Resource     |
-| ---------------------- | --------------------------------------- | ------------ |
-| `conversation.created` | New conversation opened                 | conversation |
-| `message.received`     | Inbound message from contact            | message      |
-| `message.sent`         | Outbound message to contact             | message      |
-| `call.missed`          | Missed call received via Twilio webhook | conversation |
-| `call.logged`          | Staff manually logs a phone call (POST /api/conversations/[id]/calls) | message |
+| Event Type             | Trigger                                                               | Resource     |
+| ---------------------- | --------------------------------------------------------------------- | ------------ |
+| `conversation.created` | New conversation opened                                               | conversation |
+| `message.received`     | Inbound message from contact                                          | message      |
+| `message.sent`         | Outbound message to contact                                           | message      |
+| `call.missed`          | Missed call received via Twilio webhook                               | conversation |
+| `call.logged`          | Staff manually logs a phone call (POST /api/conversations/[id]/calls) | message      |
 
 > `message.received` and `call.logged` (outcome=`spoke`) both route to the
 > `pipeline_auto_advance` automation job — the first two-way contact ratchets the
@@ -232,22 +232,22 @@ These fire via BullMQ after a triggering domain event. Idempotency key uses
 `automation_job_id`, not `resource_id` — same resource may receive multiple
 automation events over its lifetime.
 
-| Event Type                            | BullMQ Trigger                           | Resource       |
-| ------------------------------------- | ---------------------------------------- | -------------- |
-| `automation.missed_call_textback`     | `call.missed` + near-instant delay       | conversation   |
-| `automation.speed_to_lead`            | `contact.created` + near-instant delay   | contact        |
-| `pipeline_auto_create`                | `lead.created` (gated on `automation_settings.auto_create_opp_on_lead`) | opportunity |
-| `pipeline_auto_advance`               | `message.received` or `call.logged` (spoke) — ratchet entry→next stage  | opportunity |
-| `automation.quote_followup`           | `quote.sent` + 24h delay / 72h delay     | quote          |
-| `automation.invoice_reminder`         | `invoice.overdue` + configurable delay   | invoice        |
-| `automation.payment_receipt`          | `payment.recorded` + near-instant delay  | payment        |
-| `automation.review.send`              | `job.completed` + configurable delay     | job            |
-| `automation.review.unengaged`         | `review_request.sent` + 72h              | review_request |
-| `automation.review.nudge_1`           | `review_request.engaged` + 24h           | review_request |
-| `automation.review.nudge_2`           | `review_request.engaged` + 72h           | review_request |
-| `automation.review.expire`            | `review_request.sent` + 14d              | review_request |
-| `automation.appointment_reminder_24h` | `appointment.created` + calculated delay | appointment    |
-| `automation.appointment_reminder_1h`  | `appointment.created` + calculated delay | appointment    |
+| Event Type                            | BullMQ Trigger                                                          | Resource       |
+| ------------------------------------- | ----------------------------------------------------------------------- | -------------- |
+| `automation.missed_call_textback`     | `call.missed` + near-instant delay                                      | conversation   |
+| `automation.speed_to_lead`            | `contact.created` + near-instant delay                                  | contact        |
+| `pipeline_auto_create`                | `lead.created` (gated on `automation_settings.auto_create_opp_on_lead`) | opportunity    |
+| `pipeline_auto_advance`               | `message.received` or `call.logged` (spoke) — ratchet entry→next stage  | opportunity    |
+| `automation.quote_followup`           | `quote.sent` + 24h delay / 72h delay                                    | quote          |
+| `automation.invoice_reminder`         | `invoice.overdue` + configurable delay                                  | invoice        |
+| `automation.payment_receipt`          | `payment.recorded` + near-instant delay                                 | payment        |
+| `automation.review.send`              | `job.completed` + configurable delay                                    | job            |
+| `automation.review.unengaged`         | `review_request.sent` + 72h                                             | review_request |
+| `automation.review.nudge_1`           | `review_request.engaged` + 24h                                          | review_request |
+| `automation.review.nudge_2`           | `review_request.engaged` + 72h                                          | review_request |
+| `automation.review.expire`            | `review_request.sent` + 14d                                             | review_request |
+| `automation.appointment_reminder_24h` | `appointment.created` + calculated delay                                | appointment    |
+| `automation.appointment_reminder_1h`  | `appointment.created` + calculated delay                                | appointment    |
 
 ---
 

@@ -15,6 +15,7 @@ import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
 import { jobs } from './04_jobs';
 import { invoices } from './06_revenue';
+import { requests } from './19_requests';
 
 export const appointmentTypeEnum = pgEnum('appointment_type', [
 	'estimate',
@@ -38,64 +39,81 @@ export const appointmentStatusEnum = pgEnum('appointment_status', [
 
 export const bookingSourceEnum = pgEnum('booking_source', ['internal', 'booking_link']);
 
-export const appointments = pgTable('appointments', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	org_id: uuid('org_id')
-		.notNull()
-		.references(() => organizations.id),
-	contact_id: uuid('contact_id')
-		.notNull()
-		.references(() => contacts.id),
-	job_id: uuid('job_id').references(() => jobs.id),
-	assigned_to: uuid('assigned_to').references(() => orgMembers.id),
-	type: appointmentTypeEnum('type').notNull(),
-	status: appointmentStatusEnum('status').notNull().default('scheduled'),
-	title: text('title').notNull(),
-	// NULL = an unscheduled visit (Jobber "Schedule later"): a placeholder with no date yet.
-	// Every dated query (calendar window, reminder worker, visit-based billing scan) compares
-	// against a range or `<= now()`, so a NULL start is naturally excluded — an unscheduled
-	// visit never lands on the calendar or fires a reminder. It only surfaces in the job's
-	// Visits list, where it can be completed or given a date.
-	scheduled_start: timestamp('scheduled_start', { withTimezone: true }),
-	scheduled_end: timestamp('scheduled_end', { withTimezone: true }),
-	// "Anytime" visit (Jobber/Housecall Pro pattern): a date with no specific clock time.
-	// When true, `scheduled_start` anchors the DATE (stored at noon org-time so day-bucketing
-	// is DST-safe) and `scheduled_end` is NULL. Calendar renders these in the top "Anytime"
-	// lane instead of a time row, and the reminder worker skips them (no time to remind before).
-	all_day: boolean('all_day').notNull().default(false),
-	location: text('location'),
-	notes: text('notes'),
-	reminder_24h_sent: boolean('reminder_24h_sent').notNull().default(false),
-	reminder_1h_sent: boolean('reminder_1h_sent').notNull().default(false),
-	// Recurring billing (manual, visit-based): set when this visit has been rolled into a
-	// generated invoice. NULL = not yet billed. This is the idempotency anchor that stops
-	// POST /api/jobs/[id]/generate-invoice from billing the same visit twice. Only ever set
-	// on job visits; standalone appointments leave it NULL.
-	billed_invoice_id: uuid('billed_invoice_id').references(() => invoices.id),
-	// Per-visit completion (S5). When a visit/appointment is marked completed, the crew can
-	// leave a note about what was done on THIS visit and stamp who/when. Separate from `notes`
-	// (which holds the up-front scheduling / visit instructions). Photos for the visit live in
-	// `media` (parent job_id + line_key = this appointment's id, purpose_tag 'job_visit_photo').
-	completion_notes: text('completion_notes'),
-	completed_at: timestamp('completed_at', { withTimezone: true }),
-	completed_by: uuid('completed_by').references(() => orgMembers.id),
-	cancelled_at: timestamp('cancelled_at', { withTimezone: true }),
-	deleted_at: timestamp('deleted_at', { withTimezone: true }),
-	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+export const appointments = pgTable(
+	'appointments',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		contact_id: uuid('contact_id')
+			.notNull()
+			.references(() => contacts.id),
+		job_id: uuid('job_id').references(() => jobs.id),
+		// Jobber's Assessment: an on-site visit to scope work BEFORE quoting. An
+		// assessment is just an appointment (type 'estimate') linked to its parent
+		// request — scheduling/anytime/schedule-later/crew/reminders/completion all
+		// reused as-is. Mutually exclusive with job_id (a visit belongs to a job OR
+		// a request, never both). At most ONE live assessment per request — enforced
+		// by partial unique index uq_appointments_live_assessment below.
+		request_id: uuid('request_id').references(() => requests.id),
+		assigned_to: uuid('assigned_to').references(() => orgMembers.id),
+		type: appointmentTypeEnum('type').notNull(),
+		status: appointmentStatusEnum('status').notNull().default('scheduled'),
+		title: text('title').notNull(),
+		// NULL = an unscheduled visit (Jobber "Schedule later"): a placeholder with no date yet.
+		// Every dated query (calendar window, reminder worker, visit-based billing scan) compares
+		// against a range or `<= now()`, so a NULL start is naturally excluded — an unscheduled
+		// visit never lands on the calendar or fires a reminder. It only surfaces in the job's
+		// Visits list, where it can be completed or given a date.
+		scheduled_start: timestamp('scheduled_start', { withTimezone: true }),
+		scheduled_end: timestamp('scheduled_end', { withTimezone: true }),
+		// "Anytime" visit (Jobber/Housecall Pro pattern): a date with no specific clock time.
+		// When true, `scheduled_start` anchors the DATE (stored at noon org-time so day-bucketing
+		// is DST-safe) and `scheduled_end` is NULL. Calendar renders these in the top "Anytime"
+		// lane instead of a time row, and the reminder worker skips them (no time to remind before).
+		all_day: boolean('all_day').notNull().default(false),
+		location: text('location'),
+		notes: text('notes'),
+		reminder_24h_sent: boolean('reminder_24h_sent').notNull().default(false),
+		reminder_1h_sent: boolean('reminder_1h_sent').notNull().default(false),
+		// Recurring billing (manual, visit-based): set when this visit has been rolled into a
+		// generated invoice. NULL = not yet billed. This is the idempotency anchor that stops
+		// POST /api/jobs/[id]/generate-invoice from billing the same visit twice. Only ever set
+		// on job visits; standalone appointments leave it NULL.
+		billed_invoice_id: uuid('billed_invoice_id').references(() => invoices.id),
+		// Per-visit completion (S5). When a visit/appointment is marked completed, the crew can
+		// leave a note about what was done on THIS visit and stamp who/when. Separate from `notes`
+		// (which holds the up-front scheduling / visit instructions). Photos for the visit live in
+		// `media` (parent job_id + line_key = this appointment's id, purpose_tag 'job_visit_photo').
+		completion_notes: text('completion_notes'),
+		completed_at: timestamp('completed_at', { withTimezone: true }),
+		completed_by: uuid('completed_by').references(() => orgMembers.id),
+		cancelled_at: timestamp('cancelled_at', { withTimezone: true }),
+		deleted_at: timestamp('deleted_at', { withTimezone: true }),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 
-	booked_via_link_id: uuid('booked_via_link_id'),
-	customer_name: text('customer_name'),
-	customer_phone: text('customer_phone'),
-	customer_email: text('customer_email'),
-	customer_notes: text('customer_notes'),
-	booking_source: bookingSourceEnum('booking_source').notNull().default('internal'),
-	booking_referrer: text('booking_referrer')
-}, (t) => [
-	// Per-job visit lookups (recurring visit-based billing badge on the jobs list, and the
-	// generate-invoice endpoint's unbilled-visit scan) filter appointments by job_id.
-	index('idx_appointments_job_id').on(t.job_id)
-]);
+		booked_via_link_id: uuid('booked_via_link_id'),
+		customer_name: text('customer_name'),
+		customer_phone: text('customer_phone'),
+		customer_email: text('customer_email'),
+		customer_notes: text('customer_notes'),
+		booking_source: bookingSourceEnum('booking_source').notNull().default('internal'),
+		booking_referrer: text('booking_referrer')
+	},
+	(t) => [
+		// Per-job visit lookups (recurring visit-based billing badge on the jobs list, and the
+		// generate-invoice endpoint's unbilled-visit scan) filter appointments by job_id.
+		index('idx_appointments_job_id').on(t.job_id),
+		// One live assessment per request (Jobber: `assessment` is 0-or-1). Partial:
+		// soft-deleted rows don't count, so deleting an assessment frees the slot.
+		// Doubles as the request→assessment lookup index.
+		uniqueIndex('uq_appointments_live_assessment')
+			.on(t.request_id)
+			.where(sql`request_id IS NOT NULL AND deleted_at IS NULL`)
+	]
+);
 
 export type Appointment = InferSelectModel<typeof appointments>;
 export type NewAppointment = InferInsertModel<typeof appointments>;

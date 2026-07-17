@@ -94,7 +94,7 @@ export const DELETE: RequestHandler = async (event) => {
 		// Release the storage quota the file was consuming. Negative increment
 		// never throws on the limit; the counter is floored at 0 (GREATEST)
 		// underflow if a counter ever drifted below the on-disk total —
-			// which previously failed the DELETE outright.
+		// which previously failed the DELETE outright.
 		await assertAndIncrementUsage(tx, {
 			orgId: auth.orgId,
 			metric: 'storage_bytes',

@@ -156,7 +156,12 @@ async function purgeMediaEntity(cutoff: Date, limit: number): Promise<EntityPurg
 			await r2DeleteObjects(r2Keys);
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
-			log.warn({ entity: 'media', r2_keys: r2Keys.length, error: message, note: 'db_rows_already_deleted' });
+			log.warn({
+				entity: 'media',
+				r2_keys: r2Keys.length,
+				error: message,
+				note: 'db_rows_already_deleted'
+			});
 		}
 	}
 
@@ -226,7 +231,9 @@ export async function purgeSoftDeletedOlderThan(
 					db.transaction(async (tx) => {
 						await tx
 							.delete(quoteChangeRequests)
-							.where(and(eq(quoteChangeRequests.org_id, orgId), eq(quoteChangeRequests.quote_id, id)));
+							.where(
+								and(eq(quoteChangeRequests.org_id, orgId), eq(quoteChangeRequests.quote_id, id))
+							);
 						await tx
 							.delete(quoteVersions)
 							.where(and(eq(quoteVersions.org_id, orgId), eq(quoteVersions.quote_id, id)));
@@ -420,17 +427,13 @@ export async function purgeSoftDeletedOlderThan(
 					db
 						.select({ id: reviewRequests.id, org_id: reviewRequests.org_id })
 						.from(reviewRequests)
-						.where(
-							and(isNotNull(reviewRequests.deleted_at), lt(reviewRequests.deleted_at, cutoff))
-						)
+						.where(and(isNotNull(reviewRequests.deleted_at), lt(reviewRequests.deleted_at, cutoff)))
 						.limit(limitPerEntity),
 				(orgId, id) =>
 					db.transaction(async (tx) => {
 						await tx
 							.delete(reviewEvents)
-							.where(
-								and(eq(reviewEvents.org_id, orgId), eq(reviewEvents.review_request_id, id))
-							);
+							.where(and(eq(reviewEvents.org_id, orgId), eq(reviewEvents.review_request_id, id)));
 						await tx
 							.delete(reviewRequests)
 							.where(and(eq(reviewRequests.org_id, orgId), eq(reviewRequests.id, id)));
@@ -478,7 +481,9 @@ export async function purgeSoftDeletedOlderThan(
 					db.transaction(async (tx) => {
 						await tx
 							.delete(messengerIntegrations)
-							.where(and(eq(messengerIntegrations.org_id, orgId), eq(messengerIntegrations.id, id)));
+							.where(
+								and(eq(messengerIntegrations.org_id, orgId), eq(messengerIntegrations.id, id))
+							);
 					})
 			),
 
@@ -511,9 +516,7 @@ export async function purgeSoftDeletedOlderThan(
 					db
 						.select({ id: pipelineStages.id, org_id: pipelineStages.org_id })
 						.from(pipelineStages)
-						.where(
-							and(isNotNull(pipelineStages.deleted_at), lt(pipelineStages.deleted_at, cutoff))
-						)
+						.where(and(isNotNull(pipelineStages.deleted_at), lt(pipelineStages.deleted_at, cutoff)))
 						.limit(limitPerEntity),
 				(orgId, id) =>
 					db.transaction(async (tx) => {

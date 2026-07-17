@@ -64,7 +64,8 @@
 			<p class="widget-card__empty-sub">Waiting for your first review</p>
 			{#if reputation.requests_this_month > 0}
 				<p class="rep-requests-sent">
-					{reputation.requests_this_month} request{reputation.requests_this_month === 1 ? '' : 's'} sent this month
+					{reputation.requests_this_month} request{reputation.requests_this_month === 1 ? '' : 's'} sent
+					this month
 				</p>
 			{/if}
 		</div>
@@ -73,7 +74,9 @@
 			<div class="rep-rating">
 				<i class="ri-star-fill rep-rating__star"></i>
 				<span class="rep-rating__score">{reputation.avg_rating?.toFixed(1) ?? '—'}</span>
-				<span class="rep-rating__sub">/ 5 · {reputation.total_reviews} review{reputation.total_reviews === 1 ? '' : 's'}</span>
+				<span class="rep-rating__sub"
+					>/ 5 · {reputation.total_reviews} review{reputation.total_reviews === 1 ? '' : 's'}</span
+				>
 			</div>
 
 			<div class="rep-month">
@@ -149,7 +152,7 @@
 
 		&__star {
 			font-size: 2rem;
-			color: #F59E0B;
+			color: #f59e0b;
 			align-self: center;
 		}
 
@@ -201,7 +204,9 @@
 		font-size: $fs-caption;
 		font-weight: $weight-medium;
 
-		i { font-size: 1.2rem; }
+		i {
+			font-size: 1.2rem;
+		}
 
 		&--success {
 			background: var(--success-bg);

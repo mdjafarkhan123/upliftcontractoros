@@ -335,9 +335,7 @@
 			{/if}
 
 			<div class="job-tasks__form-actions">
-				<Button variant="ghost" size="sm" onclick={closeForm} disabled={saving}>
-					Cancel
-				</Button>
+				<Button variant="ghost" size="sm" onclick={closeForm} disabled={saving}>Cancel</Button>
 				<Button size="sm" loading={saving} onclick={save}>
 					{editingId ? 'Save task' : 'Add task'}
 				</Button>

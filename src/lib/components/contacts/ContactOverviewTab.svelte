@@ -147,7 +147,13 @@
 										{#if j.total > 0}
 											<span class="overview__amount">{formatCurrency(j.total)}</span>
 										{/if}
-										<JobStatusBadge status={j.status} scheduledStart={j.scheduled_start} />
+										<JobStatusBadge
+											status={j.status}
+											scheduledStart={j.scheduled_start}
+											hasSeriesAnchor={j.has_series_anchor}
+											nextOpenVisitStart={j.next_open_visit_start}
+											hasOpenVisits={j.has_open_visits}
+										/>
 									</span>
 								</a>
 							</li>

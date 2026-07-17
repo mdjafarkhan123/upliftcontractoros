@@ -181,10 +181,17 @@
 					{currentLogoUrl ? `Replace ${noun}` : `Upload ${noun}`}
 				</Button>
 				{#if currentLogoUrl && !uploading}
-				<Button variant="ghost" size="sm" disabled={busy} loading={removing} loadingLabel="Removing…" onclick={remove}>
-					<i class="ri-delete-bin-line" aria-hidden="true"></i>
-					Remove
-				</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={busy}
+						loading={removing}
+						loadingLabel="Removing…"
+						onclick={remove}
+					>
+						<i class="ri-delete-bin-line" aria-hidden="true"></i>
+						Remove
+					</Button>
 				{/if}
 			</div>
 			<p class="logo-uploader__help">{helpText}</p>

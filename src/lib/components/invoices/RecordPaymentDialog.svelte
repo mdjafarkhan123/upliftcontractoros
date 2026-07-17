@@ -149,7 +149,9 @@
 						placeholder="0.00"
 						bind:value={tip}
 					/>
-					<p class="record-payment__hint">Added on top of the payment — doesn't reduce the balance.</p>
+					<p class="record-payment__hint">
+						Added on top of the payment — doesn't reduce the balance.
+					</p>
 				</div>
 			{/if}
 			<div class="record-payment__field">
@@ -159,15 +161,8 @@
 		</div>
 
 		<div class="dialog-content__footer">
-			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>
-				Cancel
-			</Button>
-			<Button
-				loadingLabel="Recording…"
-				successLabel="Recorded"
-				loading={busy}
-				onclick={submit}
-			>
+			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>Cancel</Button>
+			<Button loadingLabel="Recording…" successLabel="Recorded" loading={busy} onclick={submit}>
 				Record payment
 			</Button>
 		</div>

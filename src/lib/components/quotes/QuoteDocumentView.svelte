@@ -37,7 +37,10 @@
 	const selectedPkg = $derived(packages.find((p) => p.id === selectedPackageId) ?? null);
 	// Pre-select the recommended tier (fallback: first) so the customer sees a price immediately.
 	$effect(() => {
-		if (isTiered && (selectedPackageId === null || !packages.some((p) => p.id === selectedPackageId))) {
+		if (
+			isTiered &&
+			(selectedPackageId === null || !packages.some((p) => p.id === selectedPackageId))
+		) {
 			selectedPackageId = (packages.find((p) => p.is_recommended) ?? packages[0])?.id ?? null;
 		}
 	});
@@ -222,11 +225,7 @@
 			<div class="quote-doc__header-top">
 				<div class="quote-doc__brand-wrap">
 					{#if quote.org_logo_url}
-						<img
-							class="quote-doc__brand-logo"
-							src={quote.org_logo_url}
-							alt={quote.org_name}
-						/>
+						<img class="quote-doc__brand-logo" src={quote.org_logo_url} alt={quote.org_name} />
 					{:else}
 						<div
 							class="quote-doc__brand-initials"
@@ -373,7 +372,8 @@
 									<li class="quote-doc__pkg-line">
 										<i class="ri-check-line" aria-hidden="true" style="color: var(--brand);"></i>
 										<span class="quote-doc__pkg-line-desc">
-											{li.description}{#if Number(li.quantity) !== 1}<span class="quote-doc__pkg-line-qty"
+											{li.description}{#if Number(li.quantity) !== 1}<span
+													class="quote-doc__pkg-line-qty"
 													>&nbsp;× {Number(li.quantity)}{#if li.unit}&nbsp;{li.unit}{/if}</span
 												>{/if}
 										</span>
@@ -414,7 +414,9 @@
 								{#if li.photos}{@render photoThumbs(li.photos)}{/if}
 							</div>
 							<div class="quote-doc__line-qty">
-								{Number(li.quantity)}{#if li.unit}<span class="quote-doc__line-unit">&nbsp;{li.unit}</span>{/if}
+								{Number(li.quantity)}{#if li.unit}<span class="quote-doc__line-unit"
+										>&nbsp;{li.unit}</span
+									>{/if}
 							</div>
 							<div class="quote-doc__line-amount">{formatCurrency(li.total)}</div>
 						</li>
@@ -422,7 +424,9 @@
 					{#if sec.label}
 						<li class="quote-doc__section-subtotal-row">
 							<span class="quote-doc__section-subtotal-label">{sec.label} subtotal</span>
-							<span class="quote-doc__section-subtotal-value">{formatCurrency(sectionSubtotal(sec.items))}</span>
+							<span class="quote-doc__section-subtotal-value"
+								>{formatCurrency(sectionSubtotal(sec.items))}</span
+							>
 						</li>
 					{/if}
 				{/each}
@@ -439,7 +443,9 @@
 							· {selectedPkg.name}</span
 						>{/if}
 				</p>
-				<p class="quote-doc__optional-sub">Check any extras you'd like — your total updates automatically.</p>
+				<p class="quote-doc__optional-sub">
+					Check any extras you'd like — your total updates automatically.
+				</p>
 			</div>
 			<ul class="quote-doc__optional-list">
 				{#each optionalLines as li (li.id)}
@@ -489,7 +495,9 @@
 		{#if liveTotals.discount > 0}
 			<div class="quote-doc__totals-row">
 				<span class="quote-doc__totals-term quote-doc__totals-term--discount">{discountText}</span>
-				<span class="quote-doc__totals-value quote-doc__totals-value--discount">−{formatCurrency(liveTotals.discount)}</span>
+				<span class="quote-doc__totals-value quote-doc__totals-value--discount"
+					>−{formatCurrency(liveTotals.discount)}</span
+				>
 			</div>
 		{/if}
 		<div class="quote-doc__totals-row">
@@ -501,11 +509,14 @@
 			style="background-color: color-mix(in srgb, var(--brand) 10%, transparent);"
 		>
 			<span style="color: var(--color-text-primary);">Total</span>
-			<span style="color: var(--brand); font-variant-numeric: tabular-nums;">{formatCurrency(liveTotals.total)}</span>
+			<span style="color: var(--brand); font-variant-numeric: tabular-nums;"
+				>{formatCurrency(liveTotals.total)}</span
+			>
 		</div>
 		{#if quote.deposit_required && liveDepositAmount}
 			<p class="quote-doc__totals-deposit-note">
-				{depositLabel} {formatCurrency(liveDepositAmount)} is required to start.
+				{depositLabel}
+				{formatCurrency(liveDepositAmount)} is required to start.
 			</p>
 		{/if}
 	</div>

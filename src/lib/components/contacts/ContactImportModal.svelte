@@ -616,7 +616,9 @@
 					>
 						{#if canContinueMapping}
 							<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
-							<span>A name and a way to reach each contact are mapped — you're good to continue.</span>
+							<span
+								>A name and a way to reach each contact are mapped — you're good to continue.</span
+							>
 						{:else}
 							<i class="ri-information-line" aria-hidden="true"></i>
 							<span>
@@ -631,7 +633,8 @@
 				<div class="contact-import__stack">
 					{#if uploadError}
 						<div class="contact-import__alert contact-import__alert--danger">
-							<i class="ri-error-warning-line contact-import__alert-icon-danger" aria-hidden="true"></i>
+							<i class="ri-error-warning-line contact-import__alert-icon-danger" aria-hidden="true"
+							></i>
 							<div class="contact-import__alert-body">
 								<p class="contact-import__alert-title contact-import__alert-icon-danger">
 									Couldn't import this file
@@ -741,7 +744,10 @@
 						</div>
 						<div class="contact-import__bar">
 							{#if indeterminate}
-								<div class="progress-indeterminate contact-import__bar-fill" style:width="100%"></div>
+								<div
+									class="progress-indeterminate contact-import__bar-fill"
+									style:width="100%"
+								></div>
 							{:else}
 								<div class="contact-import__bar-fill" style:width={`${percent}%`}></div>
 							{/if}
@@ -766,10 +772,15 @@
 					{#if finalStatus === 'failed'}
 						<div class="contact-import__alert contact-import__alert--danger">
 							<div class="contact-import__result-icon" style:background="var(--danger-bg)">
-								<i class="ri-error-warning-line contact-import__alert-icon-danger" aria-hidden="true"></i>
+								<i
+									class="ri-error-warning-line contact-import__alert-icon-danger"
+									aria-hidden="true"
+								></i>
 							</div>
 							<div class="contact-import__alert-body">
-								<p class="contact-import__alert-title contact-import__alert-icon-danger">Import failed</p>
+								<p class="contact-import__alert-title contact-import__alert-icon-danger">
+									Import failed
+								</p>
 								<p class="contact-import__alert-text">
 									{progress.last_error ?? 'Something went wrong while importing.'}
 									{#if progress.imported > 0}
@@ -786,7 +797,9 @@
 								<i class="ri-forbid-line contact-import__alert-icon-warn" aria-hidden="true"></i>
 							</div>
 							<div class="contact-import__alert-body">
-								<p class="contact-import__alert-title contact-import__alert-icon-warn">Import cancelled</p>
+								<p class="contact-import__alert-title contact-import__alert-icon-warn">
+									Import cancelled
+								</p>
 								<p class="contact-import__alert-text">
 									Stopped at your request. Everything imported so far has been kept.
 								</p>
@@ -795,7 +808,10 @@
 					{:else}
 						<div class="contact-import__alert contact-import__alert--success">
 							<div class="contact-import__result-icon" style:background="var(--success-bg)">
-								<i class="ri-checkbox-circle-line contact-import__alert-icon-success" aria-hidden="true"></i>
+								<i
+									class="ri-checkbox-circle-line contact-import__alert-icon-success"
+									aria-hidden="true"
+								></i>
 							</div>
 							<div class="contact-import__alert-body">
 								<p class="contact-import__alert-title contact-import__alert-icon-success">
@@ -804,13 +820,19 @@
 								<p class="contact-import__alert-text">
 									Your contacts are now in your list.{#if progress.updated > 0}&nbsp;{progress.updated.toLocaleString()}
 										existing contact{progress.updated !== 1 ? 's were' : ' was'} updated.{/if}{#if progress.skipped > 0}&nbsp;{progress.skipped.toLocaleString()}
-										duplicate{progress.skipped !== 1 ? 's were' : ' was'} skipped (matched by phone or email).{/if}
+										duplicate{progress.skipped !== 1 ? 's were' : ' was'} skipped (matched by phone or
+										email).{/if}
 								</p>
 							</div>
 						</div>
 					{/if}
 
-					{@render statTiles(progress.imported, progress.skipped, progress.failed, progress.updated)}
+					{@render statTiles(
+						progress.imported,
+						progress.skipped,
+						progress.failed,
+						progress.updated
+					)}
 
 					{#if flaggedCount > 0 && importId}
 						<div class="contact-import__flag">
@@ -844,9 +866,7 @@
 					Continue
 				</Button>
 			{:else if stage === 'parsed'}
-				<Button type="button" variant="secondary" onclick={() => (stage = 'mapping')}>
-					Back
-				</Button>
+				<Button type="button" variant="secondary" onclick={() => (stage = 'mapping')}>Back</Button>
 				<Button
 					type="button"
 					variant="default"

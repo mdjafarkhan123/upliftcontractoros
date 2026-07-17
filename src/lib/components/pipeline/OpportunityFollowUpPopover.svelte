@@ -81,10 +81,7 @@
 </script>
 
 <Popover.Root bind:open>
-	<Popover.Trigger
-		{disabled}
-		class="follow-up-popover__trigger"
-	>
+	<Popover.Trigger {disabled} class="follow-up-popover__trigger">
 		<i class="ri-calendar-schedule-line" aria-hidden="true"></i>
 		{currentValue ? formatDateTime(currentValue) : 'Set follow-up'}
 	</Popover.Trigger>

@@ -301,8 +301,8 @@
 				<div class="catalog-item__tax-text">
 					<label for="cat-taxable" class="field__label">Taxable by default</label>
 					<p class="field__hint">
-						Turn off for labor-only items so tax isn't added when they're used on a quote or invoice.
-						Materials are usually taxable; labor usually isn't.
+						Turn off for labor-only items so tax isn't added when they're used on a quote or
+						invoice. Materials are usually taxable; labor usually isn't.
 					</p>
 				</div>
 				<Switch id="cat-taxable" bind:checked={defaultTaxable} />

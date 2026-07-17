@@ -41,9 +41,7 @@ export const POST: RequestHandler = async (event) => {
 		return json(
 			{
 				error:
-					type === 'flat'
-						? 'Enter a flat fee greater than 0'
-						: 'Enter a percentage greater than 0'
+					type === 'flat' ? 'Enter a flat fee greater than 0' : 'Enter a percentage greater than 0'
 			},
 			{ status: 422 }
 		);

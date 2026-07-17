@@ -178,7 +178,10 @@
 	}
 
 	// ── Photo/signature media, mutated straight into the store so progress/gate stay live ──
-	function patchFieldMedia(fieldId: string, mutate: (m: JobFormFieldMedia[]) => JobFormFieldMedia[]) {
+	function patchFieldMedia(
+		fieldId: string,
+		mutate: (m: JobFormFieldMedia[]) => JobFormFieldMedia[]
+	) {
 		jobDetailStore.patch(jobId, (prev) => ({
 			...prev,
 			form_submissions: prev.form_submissions.map((s) => ({

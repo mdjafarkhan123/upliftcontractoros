@@ -94,10 +94,7 @@
 							disabled={readonly}
 							onchange={() => setRecommended(pkg.client_id)}
 						/>
-						<i
-							class={pkg.is_recommended ? 'ri-star-fill' : 'ri-star-line'}
-							aria-hidden="true"
-						></i>
+						<i class={pkg.is_recommended ? 'ri-star-fill' : 'ri-star-line'} aria-hidden="true"></i>
 						<span>Recommended</span>
 					</label>
 					{#if !readonly && packages.length > 2}

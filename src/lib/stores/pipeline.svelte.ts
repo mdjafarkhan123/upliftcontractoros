@@ -132,11 +132,7 @@ export const pipelineStore = {
 			stage_id: toStageId,
 			stage_entered_at: new Date().toISOString()
 		};
-		opportunities = [
-			...opportunities.slice(0, idx),
-			...opportunities.slice(idx + 1),
-			moved
-		];
+		opportunities = [...opportunities.slice(0, idx), ...opportunities.slice(idx + 1), moved];
 	},
 
 	setOpportunities(next: OpportunityRow[]): void {

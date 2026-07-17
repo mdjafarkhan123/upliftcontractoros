@@ -10,6 +10,7 @@ const STATUSES: readonly JobsFilterStatus[] = [
 	'upcoming',
 	'today',
 	'overdue',
+	'action_required',
 	'in_progress',
 	'on_hold',
 	'completed',

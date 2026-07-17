@@ -182,15 +182,17 @@ export const GET: RequestHandler = async (event) => {
 			? safe(
 					'revenue',
 					async () => {
-						const [paidRow] = await db.execute<{ this_period: string; last_period: string }>(sql`
+						// paid-revenue window and outstanding balance are independent — one wave.
+						const [paidResult, outResult] = await Promise.all([
+							db.execute<{ this_period: string; last_period: string }>(sql`
 								select
 									coalesce(sum(amount) filter (where paid_at >= ${periodStart}), 0)::text as this_period,
 									coalesce(sum(amount) filter (where paid_at >= ${lastPeriodStart} and paid_at < ${periodStart}), 0)::text as last_period
 								from payments
 								where org_id = ${orgId}
 									and paid_at >= ${lastPeriodStart}
-							`);
-						const [outRow] = await db.execute<{ outstanding: string }>(sql`
+							`),
+							db.execute<{ outstanding: string }>(sql`
 								select coalesce(sum(i.total) - coalesce(sum(p.paid), 0), 0)::text as outstanding
 								from invoices i
 								left join (
@@ -202,7 +204,10 @@ export const GET: RequestHandler = async (event) => {
 								where i.org_id = ${orgId}
 									and i.deleted_at is null
 									and i.status in ('sent', 'partially_paid')
-							`);
+							`)
+						]);
+						const paidRow = paidResult[0];
+						const outRow = outResult[0];
 						return {
 							this_period: paidRow?.this_period ?? '0',
 							last_period: paidRow?.last_period ?? '0',
@@ -409,12 +414,14 @@ export const GET: RequestHandler = async (event) => {
 					'reputation',
 					async () => {
 						const lastMonthStart = sql`(date_trunc('month', (now() AT TIME ZONE ${tz}) - interval '1 month')) AT TIME ZONE ${tz}`;
-						const [agg] = await db.execute<{
-							total_reviews: number;
-							avg_rating: string | null;
-							reviews_this_month: number;
-							reviews_last_month: number;
-						}>(sql`
+						// review aggregates, funnel setting, and request count are independent — one wave.
+						const [aggResult, settingsResult, reqResult] = await Promise.all([
+							db.execute<{
+								total_reviews: number;
+								avg_rating: string | null;
+								reviews_this_month: number;
+								reviews_last_month: number;
+							}>(sql`
 								select
 									count(*)::int as total_reviews,
 									round(avg(score)::numeric, 1)::text as avg_rating,
@@ -422,20 +429,24 @@ export const GET: RequestHandler = async (event) => {
 									count(*) filter (where created_at >= ${lastMonthStart} and created_at < ${monthStart})::int as reviews_last_month
 								from reviews
 								where org_id = ${orgId}
-							`);
-						const [settings] = await db.execute<{ review_funnel_enabled: boolean | null }>(sql`
+							`),
+							db.execute<{ review_funnel_enabled: boolean | null }>(sql`
 								select review_funnel_enabled
 								from automation_settings
 								where org_id = ${orgId}
 								limit 1
-							`);
-						const [reqRow] = await db.execute<{ requests_this_month: number }>(sql`
+							`),
+							db.execute<{ requests_this_month: number }>(sql`
 								select count(*)::int as requests_this_month
 								from review_requests
 								where org_id = ${orgId}
 									and deleted_at is null
 									and created_at >= ${monthStart}
-							`);
+							`)
+						]);
+						const agg = aggResult[0];
+						const settings = settingsResult[0];
+						const reqRow = reqResult[0];
 						const result: DashboardReputation = {
 							funnel_enabled: settings?.review_funnel_enabled === true,
 							total_reviews: agg?.total_reviews ?? 0,

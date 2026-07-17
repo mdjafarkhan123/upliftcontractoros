@@ -25,55 +25,55 @@
 // 1. BRAND — raw green identity, theme-agnostic. Themed brand aliases that
 //    components actually use are in the :root / dark mixin below.
 // -----------------------------------------------------------------------------
-$brand-deep:     #13452D;
-$brand-primary:  #227D53;
-$brand-light:    #17F700; // neon glow accent — shadows/gradient stops only, never fill or text
+$brand-deep: #13452d;
+$brand-primary: #227d53;
+$brand-light: #17f700; // neon glow accent — shadows/gradient stops only, never fill or text
 
 // -----------------------------------------------------------------------------
 // 2. GREEN RAMP — same hue/saturation as brand-primary; dark mode's brighter
 //    brand shades come from here (green-500/600 vs the deeper light-mode greens).
 // -----------------------------------------------------------------------------
-$green-50:  #EFFBF5;
-$green-100: #DBF5E8;
-$green-200: #B3EACF;
-$green-300: #83DDB0;
-$green-400: #4FCF8F;
-$green-500: #30B070;
+$green-50: #effbf5;
+$green-100: #dbf5e8;
+$green-200: #b3eacf;
+$green-300: #83ddb0;
+$green-400: #4fcf8f;
+$green-500: #30b070;
 $green-600: #238052; // ≈ brand-primary
-$green-700: #1A603D;
-$green-800: #14482E; // ≈ brand-deep
-$green-900: #0D301F;
+$green-700: #1a603d;
+$green-800: #14482e; // ≈ brand-deep
+$green-900: #0d301f;
 $green-950: #092014;
 
 // -----------------------------------------------------------------------------
 // 3. NEUTRAL / SLATE RAMP — a hair cooler than pure gray. One ramp serves both
 //    themes: light uses 0–300 for surfaces + 600–900 for text; dark flips it.
 // -----------------------------------------------------------------------------
-$slate-0:    #FFFFFF;
-$slate-50:   #F9FAFB;
-$slate-100:  #F7F7F7;
-$slate-200:  #E4E7EC;
-$slate-300:  #D0D4DD;
-$slate-400:  #A3ABBD;
-$slate-500:  #77829C;
-$slate-600:  #5A647C;
-$slate-700:  #454C5F;
-$slate-800:  #2F3541;
-$slate-900:  #2F333F;
-$slate-950:  #222530;
-$slate-1000: #232B2F;
+$slate-0: #ffffff;
+$slate-50: #f9fafb;
+$slate-100: #f7f7f7;
+$slate-200: #e4e7ec;
+$slate-300: #d0d4dd;
+$slate-400: #a3abbd;
+$slate-500: #77829c;
+$slate-600: #5a647c;
+$slate-700: #454c5f;
+$slate-800: #2f3541;
+$slate-900: #2f333f;
+$slate-950: #222530;
+$slate-1000: #232b2f;
 
 // -----------------------------------------------------------------------------
 // 4. SPACING — 4px base unit, identical in both themes.
 // -----------------------------------------------------------------------------
-$space-1:  4px;
-$space-2:  8px;
-$space-3:  12px;
-$space-4:  16px;
-$space-5:  20px;
-$space-6:  24px;
-$space-7:  28px;
-$space-8:  32px;
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-7: 28px;
+$space-8: 32px;
 $space-10: 40px;
 $space-12: 48px;
 $space-16: 64px;
@@ -84,18 +84,22 @@ $space-20: 80px;
 //
 // ⚠️ PILL / FULLY-ROUNDED = $radius-full (999px). There is NO `$radius-pill`.
 // -----------------------------------------------------------------------------
-$radius-sm:   8px;
-$radius-md:   12px;
-$radius-lg:   16px;
-$radius-xl:   20px;
-$radius-2xl:  28px;
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 20px;
+$radius-2xl: 28px;
 $radius-full: 999px; // pill / fully-rounded
 
 // -----------------------------------------------------------------------------
 // 6. TYPOGRAPHY — Inter is the ONE UI font (400/500/600/700/800/900), Jobber-style.
 //    No second display face. html is 62.5% so 1rem = 10px (14px = 1.4rem).
 // -----------------------------------------------------------------------------
-$font-body:    "Inter", system-ui, -apple-system, sans-serif;
+$font-body:
+	'Inter',
+	system-ui,
+	-apple-system,
+	sans-serif;
 $font-display: $font-body; // alias — no separate display font
 
 // --- SEMANTIC TYPE SCALE — locked 1:1 to Jobber's Atlantis scale. THE source of
@@ -105,21 +109,28 @@ $font-display: $font-body; // alias — no separate display font
 //     Floor = 14px ($fs-body). 12px ($fs-caption, Jobber "small") is ONLY for
 //     UPPERCASE tracked micro-labels / badges, never sentence-case body text.
 //     10px ("smaller") is not a text token (below floor); raw px for glyphs only.
-$fs-caption: 1.2rem; $lh-caption: 1.143; // 12px — Jobber "small"       — UPPERCASE labels & badges ONLY
-$fs-body:    1.4rem; $lh-body:    1.25;  // 14px — Jobber "base"        — DEFAULT readable floor
-$fs-lg:      1.6rem; $lh-lg:      1.34;  // 16px — Jobber "large"       — emphasis / lead-in / inputs
-$fs-h3:      2rem;   $lh-h3:      1.2;   // 20px — Jobber "larger"      — section / card headings
-$fs-h2:      2.4rem; $lh-h2:      1.12;  // 24px — Jobber "largest"     — page headings
-$fs-h1:      3.6rem; $lh-h1:      1.08;  // 36px — Jobber "jumbo"       — page title
-$fs-display: 4.8rem; $lh-display: 1.08;  // 48px — Jobber "extravagant" — hero stats / display
+$fs-caption: 1.2rem;
+$lh-caption: 1.143; // 12px — Jobber "small"       — UPPERCASE labels & badges ONLY
+$fs-body: 1.4rem;
+$lh-body: 1.25; // 14px — Jobber "base"        — DEFAULT readable floor
+$fs-lg: 1.6rem;
+$lh-lg: 1.34; // 16px — Jobber "large"       — emphasis / lead-in / inputs
+$fs-h3: 2rem;
+$lh-h3: 1.2; // 20px — Jobber "larger"      — section / card headings
+$fs-h2: 2.4rem;
+$lh-h2: 1.12; // 24px — Jobber "largest"     — page headings
+$fs-h1: 3.6rem;
+$lh-h1: 1.08; // 36px — Jobber "jumbo"       — page title
+$fs-display: 4.8rem;
+$lh-display: 1.08; // 48px — Jobber "extravagant" — hero stats / display
 // (Jobber has no 13/15/18px step, and no bare-number "smaller/base" aliases —
 //  this 7-token scale is the whole system. Migration complete; legacy $text-*
 //  and off-scale $fs-sm/$fs-md/$fs-h4 aliases have been fully removed.)
 
-$weight-regular:   400;
-$weight-medium:    500;
-$weight-semibold:  600;
-$weight-bold:      700;
+$weight-regular: 400;
+$weight-medium: 500;
+$weight-semibold: 600;
+$weight-bold: 700;
 $weight-extrabold: 800; // heaviest Inter weight loaded (Jobber's heaviest UI weight)
 
 $tracking-label: 0.06em;
@@ -132,19 +143,19 @@ $duration-base: 180ms;
 $duration-slow: 280ms;
 
 $ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-$ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+$ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
 // -----------------------------------------------------------------------------
 // 8. Z-INDEX & BREAKPOINTS — breakpoints stay Sass vars (@media can't read a
 //    custom property).
 // -----------------------------------------------------------------------------
 $z-dropdown: 100;
-$z-sticky:   200;
-$z-overlay:  900;
-$z-modal:    1000;
-$z-popover:  1050; // portaled floating menus (Select/dropdown) opened from inside a modal
-$z-toast:    1100;
-$z-tooltip:  1200;
+$z-sticky: 200;
+$z-overlay: 900;
+$z-modal: 1000;
+$z-popover: 1050; // portaled floating menus (Select/dropdown) opened from inside a modal
+$z-toast: 1100;
+$z-tooltip: 1200;
 
 $bp-tablet: 1024px;
 $bp-mobile: 640px;
@@ -156,83 +167,90 @@ $bp-mobile: 640px;
 // =============================================================================
 
 :root {
-  // Brand
-  --color-brand: #{$brand-primary};
-  --color-brand-strong: #{$brand-deep};
-  --color-brand-glow: #{$brand-light};
-  --color-focus-ring: rgba(34, 125, 83, 0.35);
+	// Brand
+	--color-brand: #{$brand-primary};
+	--color-brand-strong: #{$brand-deep};
+	--color-brand-glow: #{$brand-light};
+	--color-focus-ring: rgba(34, 125, 83, 0.35);
 
-  // Surfaces
-  --color-bg-app: #{$slate-50};
-  --color-bg-surface: #{$slate-0};
-  --color-bg-surface-sunk: #{$slate-100};
-  --color-border: #{$slate-200};
-  --color-border-strong: #{$slate-300};
+	// Surfaces
+	--color-bg-app: #{$slate-50};
+	--color-bg-surface: #{$slate-0};
+	--color-bg-surface-sunk: #{$slate-100};
+	--color-border: #{$slate-200};
+	--color-border-strong: #{$slate-300};
 
-  // Text
-  --color-text-primary: #{$slate-900};
-  --color-text-secondary: #{$slate-600};
-  --color-text-muted: #{$slate-400};
-  --color-text-on-brand: #{$slate-0};
+	// Text
+	--color-text-primary: #{$slate-900};
+	--color-text-secondary: #{$slate-600};
+	--color-text-muted: #{$slate-400};
+	--color-text-on-brand: #{$slate-0};
 
-  // Status
-  --success-bg: #{$green-100};
-  --success-text: #{$green-800};
-  --success-solid: #{$green-600};
-  --warning-bg: #FEF3E2;
-  --warning-text: #92400E;
-  --warning-solid: #F59E0B;
-  --danger-bg: #FDE8E8;
-  --danger-text: #B42318;
-  --danger-solid: #E11D48;
-  --info-bg: #E0EAFF;
-  --info-text: #3538CD;
-  --info-solid: #3B82F6;
+	// Status
+	--success-bg: #{$green-100};
+	--success-text: #{$green-800};
+	--success-solid: #{$green-600};
+	--warning-bg: #fef3e2;
+	--warning-text: #92400e;
+	--warning-solid: #f59e0b;
+	--danger-bg: #fde8e8;
+	--danger-text: #b42318;
+	--danger-solid: #e11d48;
+	--info-bg: #e0eaff;
+	--info-text: #3538cd;
+	--info-solid: #3b82f6;
 
-  // Component-specific tints (gradients, fallback avatars, "soft active" bg)
-  --surface-hero-from: #{$brand-deep};
-  --surface-hero-to: #{$green-900};
-  --state-active-tint: #{$green-50};
-  --avatar-fallback-bg: #{$green-100};
-  --avatar-fallback-text: #{$green-800};
+	// Component-specific tints (gradients, fallback avatars, "soft active" bg)
+	--surface-hero-from: #{$brand-deep};
+	--surface-hero-to: #{$green-900};
+	--state-active-tint: #{$green-50};
+	--avatar-fallback-bg: #{$green-100};
+	--avatar-fallback-text: #{$green-800};
 
-  // Shadows — tinted dark-green rather than pure black for warmth
-  --shadow-xs: 0 1px 2px rgba(13, 21, 15, 0.04);
-  --shadow-sm: 0 2px 6px rgba(13, 21, 15, 0.05);
-  --shadow-md: 0 8px 20px rgba(13, 21, 15, 0.06);
-  --shadow-lg: 0 16px 40px rgba(13, 21, 15, 0.07);
-  --shadow-xl: 0 24px 56px rgba(13, 21, 15, 0.09);
-  --shadow-glow: 0 20px 48px rgba(19, 69, 45, 0.35), 0 0 0 1px rgba(23, 247, 0, 0.06);
-  --shadow-focus: 0 0 0 3px rgba(34, 125, 83, 0.35);
+	// Shadows — tinted dark-green rather than pure black for warmth
+	--shadow-xs: 0 1px 2px rgba(13, 21, 15, 0.04);
+	--shadow-sm: 0 2px 6px rgba(13, 21, 15, 0.05);
+	--shadow-md: 0 8px 20px rgba(13, 21, 15, 0.06);
+	--shadow-lg: 0 16px 40px rgba(13, 21, 15, 0.07);
+	--shadow-xl: 0 24px 56px rgba(13, 21, 15, 0.09);
+	--shadow-glow: 0 20px 48px rgba(19, 69, 45, 0.35), 0 0 0 1px rgba(23, 247, 0, 0.06);
+	--shadow-focus: 0 0 0 3px rgba(34, 125, 83, 0.35);
 
-  // Radius / font as runtime vars for use outside compiled Sass
-  --radius-sm: #{$radius-sm};
-  --radius-md: #{$radius-md};
-  --radius-lg: #{$radius-lg};
-  --radius-xl: #{$radius-xl};
-  --radius-2xl: #{$radius-2xl};
-  --radius-full: #{$radius-full};
-  --font-display: #{$font-display};
-  --font-body: #{$font-body};
+	// Radius / font as runtime vars for use outside compiled Sass
+	--radius-sm: #{$radius-sm};
+	--radius-md: #{$radius-md};
+	--radius-lg: #{$radius-lg};
+	--radius-xl: #{$radius-xl};
+	--radius-2xl: #{$radius-2xl};
+	--radius-full: #{$radius-full};
+	--font-display: #{$font-display};
+	--font-body: #{$font-body};
 
-  // Semantic type scale — runtime mirror of $fs-*/$lh-*. Use var(--text-*).
-  --text-caption: #{$fs-caption};  --leading-caption: #{$lh-caption};
-  --text-body: #{$fs-body};        --leading-body: #{$lh-body};
-  --text-lg: #{$fs-lg};            --leading-lg: #{$lh-lg};
-  --text-h3: #{$fs-h3};            --leading-h3: #{$lh-h3};
-  --text-h2: #{$fs-h2};            --leading-h2: #{$lh-h2};
-  --text-h1: #{$fs-h1};            --leading-h1: #{$lh-h1};
-  --text-display: #{$fs-display};  --leading-display: #{$lh-display};
-  --weight-regular: #{$weight-regular};
-  --weight-medium: #{$weight-medium};
-  --weight-semibold: #{$weight-semibold};
-  --weight-bold: #{$weight-bold};
-  --weight-extrabold: #{$weight-extrabold};
+	// Semantic type scale — runtime mirror of $fs-*/$lh-*. Use var(--text-*).
+	--text-caption: #{$fs-caption};
+	--leading-caption: #{$lh-caption};
+	--text-body: #{$fs-body};
+	--leading-body: #{$lh-body};
+	--text-lg: #{$fs-lg};
+	--leading-lg: #{$lh-lg};
+	--text-h3: #{$fs-h3};
+	--leading-h3: #{$lh-h3};
+	--text-h2: #{$fs-h2};
+	--leading-h2: #{$lh-h2};
+	--text-h1: #{$fs-h1};
+	--leading-h1: #{$lh-h1};
+	--text-display: #{$fs-display};
+	--leading-display: #{$lh-display};
+	--weight-regular: #{$weight-regular};
+	--weight-medium: #{$weight-medium};
+	--weight-semibold: #{$weight-semibold};
+	--weight-bold: #{$weight-bold};
+	--weight-extrabold: #{$weight-extrabold};
 
-  // Layout
-  --sidebar-width: 280px;
-  --header-height: 56px;
-  --bottom-nav-height: 64px;
+	// Layout
+	--sidebar-width: 280px;
+	--header-height: 56px;
+	--bottom-nav-height: 64px;
 }
 
 // -----------------------------------------------------------------------------
@@ -244,60 +262,60 @@ $bp-mobile: 640px;
 //       • Status badges flip contrast: dark tint + bright text.
 // -----------------------------------------------------------------------------
 @mixin dark-theme-tokens {
-  --color-brand: #{$green-500};
-  --color-brand-strong: #{$green-600};
-  --color-brand-glow: #{$brand-light};
-  --color-focus-ring: rgba(48, 176, 112, 0.45);
+	--color-brand: #{$green-500};
+	--color-brand-strong: #{$green-600};
+	--color-brand-glow: #{$brand-light};
+	--color-focus-ring: rgba(48, 176, 112, 0.45);
 
-  --color-bg-app: #{$slate-950};
-  --color-bg-surface: #{$slate-900};
-  --color-bg-surface-sunk: #{$slate-1000};
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+	--color-bg-app: #{$slate-950};
+	--color-bg-surface: #{$slate-900};
+	--color-bg-surface-sunk: #{$slate-1000};
+	--color-border: rgba(255, 255, 255, 0.08);
+	--color-border-strong: rgba(255, 255, 255, 0.14);
 
-  --color-text-primary: #{$slate-50};
-  --color-text-secondary: #{$slate-300};
-  --color-text-muted: #{$slate-400};
-  --color-text-on-brand: #{$slate-0};
+	--color-text-primary: #{$slate-50};
+	--color-text-secondary: #{$slate-300};
+	--color-text-muted: #{$slate-400};
+	--color-text-on-brand: #{$slate-0};
 
-  --success-bg: rgba(79, 207, 143, 0.14);
-  --success-text: #{$green-400};
-  --success-solid: #{$green-500};
-  --warning-bg: rgba(245, 158, 11, 0.16);
-  --warning-text: #FCD34D;
-  --warning-solid: #F59E0B;
-  --danger-bg: rgba(225, 29, 72, 0.16);
-  --danger-text: #FCA5A5;
-  --danger-solid: #F43F5E;
-  --info-bg: rgba(59, 130, 246, 0.16);
-  --info-text: #93C5FD;
-  --info-solid: #3B82F6;
+	--success-bg: rgba(79, 207, 143, 0.14);
+	--success-text: #{$green-400};
+	--success-solid: #{$green-500};
+	--warning-bg: rgba(245, 158, 11, 0.16);
+	--warning-text: #fcd34d;
+	--warning-solid: #f59e0b;
+	--danger-bg: rgba(225, 29, 72, 0.16);
+	--danger-text: #fca5a5;
+	--danger-solid: #f43f5e;
+	--info-bg: rgba(59, 130, 246, 0.16);
+	--info-text: #93c5fd;
+	--info-solid: #3b82f6;
 
-  --surface-hero-from: #{$green-700};
-  --surface-hero-to: #{$green-950};
-  --state-active-tint: rgba(48, 176, 112, 0.14);
-  --avatar-fallback-bg: rgba(79, 207, 143, 0.18);
-  --avatar-fallback-text: #{$green-300};
+	--surface-hero-from: #{$green-700};
+	--surface-hero-to: #{$green-950};
+	--state-active-tint: rgba(48, 176, 112, 0.14);
+	--avatar-fallback-bg: rgba(79, 207, 143, 0.18);
+	--avatar-fallback-text: #{$green-300};
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
-  --shadow-xl: 0 24px 56px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 20px 56px rgba(23, 247, 0, 0.2),
-                 0 0 0 1px rgba(23, 247, 0, 0.14),
-                 0 10px 28px rgba(0, 0, 0, 0.55);
-  --shadow-focus: 0 0 0 3px rgba(48, 176, 112, 0.45);
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+	--shadow-md: 0 8px 20px rgba(0, 0, 0, 0.5);
+	--shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+	--shadow-xl: 0 24px 56px rgba(0, 0, 0, 0.6);
+	--shadow-glow:
+		0 20px 56px rgba(23, 247, 0, 0.2), 0 0 0 1px rgba(23, 247, 0, 0.14),
+		0 10px 28px rgba(0, 0, 0, 0.55);
+	--shadow-focus: 0 0 0 3px rgba(48, 176, 112, 0.45);
 }
 
 // OS dark mode (no explicit user choice yet)
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    @include dark-theme-tokens;
-  }
+	:root:not([data-theme]) {
+		@include dark-theme-tokens;
+	}
 }
 
 // Explicit user choice via in-app toggle
-:root[data-theme="dark"] {
-  @include dark-theme-tokens;
+:root[data-theme='dark'] {
+	@include dark-theme-tokens;
 }

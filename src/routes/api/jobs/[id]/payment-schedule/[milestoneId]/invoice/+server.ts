@@ -2,7 +2,12 @@ import { json, error } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { invoiceLineItems, invoices, jobPaymentMilestones, orgCounters } from '$lib/server/db/schema';
+import {
+	invoiceLineItems,
+	invoices,
+	jobPaymentMilestones,
+	orgCounters
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice } from '$lib/server/invoices/permissions';
 import { generateToken } from '$lib/server/quotes/token';

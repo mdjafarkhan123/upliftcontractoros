@@ -2,6 +2,9 @@ export type AppointmentType = 'estimate' | 'job_start' | 'follow_up' | 'inspecti
 export type AppointmentStatus = 'scheduled' | 'unscheduled' | 'completed' | 'cancelled' | 'no_show';
 export type AppointmentView = 'list' | 'calendar';
 export type CalendarRange = 'day' | 'week' | 'month';
+// Time-grid zoom: how tall each hour row renders. Compact fits more of the day
+// on screen; Spacious gives cards room for full meta.
+export type CalendarDensity = 'compact' | 'comfortable' | 'spacious';
 
 export type BookingSource = 'internal' | 'booking_link';
 
@@ -20,6 +23,12 @@ export type AppointmentListItem = {
 	type: AppointmentType;
 	status: AppointmentStatus;
 	title: string;
+	// True when this visit's parent job carries a repeat RULE — i.e. the visit is one
+	// of a generated series, so the card shows the recurring glyph. This is NOT
+	// `job_type`: a ONE-OFF job may repeat (the toggle decides how the job BILLS, the
+	// rule decides how visits are GENERATED — they are independent). "As needed" jobs
+	// generate no visits, so any visit on one was added by hand and is not a series.
+	is_recurring_visit: boolean;
 	// "Anytime" visit: has a date but no clock time. Rendered in the calendar's top
 	// Anytime lane; scheduled_end is null for these.
 	all_day: boolean;

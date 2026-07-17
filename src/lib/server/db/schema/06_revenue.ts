@@ -510,93 +510,97 @@ export const quoteTemplateLineItems = pgTable('quote_template_line_items', {
 export type QuoteTemplateLineItem = InferSelectModel<typeof quoteTemplateLineItems>;
 export type NewQuoteTemplateLineItem = InferInsertModel<typeof quoteTemplateLineItems>;
 
-export const invoices = pgTable('invoices', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	org_id: uuid('org_id')
-		.notNull()
-		.references(() => organizations.id),
-	contact_id: uuid('contact_id')
-		.notNull()
-		.references(() => contacts.id),
-	job_id: uuid('job_id').references(() => jobs.id),
-	opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
-	quote_id: uuid('quote_id').references(() => quotes.id),
-	issued_by: uuid('issued_by').references(() => orgMembers.id),
-	invoice_number: integer('invoice_number').notNull(),
-	title: text('title').notNull(),
-	status: invoiceStatusEnum('status').notNull().default('draft'),
-	subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
-	// Invoice-level discount applied to the subtotal BEFORE tax (mirrors quotes — Jobber /
-	// Housecall Pro / QuickBooks). discount_type 'none' = no discount. 'fixed' = discount_value
-	// is a dollar amount; 'percent' = a percentage (0-100). discount_amount is the
-	// server-computed dollars-off, clamped to the subtotal so the total can never go negative.
-	// discount_label is an optional shown reason (e.g. 'Repeat customer', 'Fall promo').
-	discount_type: text('discount_type').notNull().default('none'), // 'none' | 'fixed' | 'percent'
-	discount_value: numeric('discount_value', { precision: 12, scale: 2 }),
-	discount_amount: numeric('discount_amount', { precision: 12, scale: 2 }),
-	discount_label: varchar('discount_label', { length: 60 }),
-	tax_rate: numeric('tax_rate', { precision: 5, scale: 4 }).notNull().default('0'),
-	tax_amount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull().default('0'),
-	total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
-	amount_paid: numeric('amount_paid', { precision: 12, scale: 2 }).notNull().default('0'),
-	amount_due: numeric('amount_due', { precision: 12, scale: 2 }).notNull().default('0'),
-	// Denormalized running total of tips (gratuity) collected on this invoice's payments
-	// (M7). A tip is EXTRA money on top of the balance — it NEVER reduces amount_due or counts
-	// toward amount_paid. Recomputed by recalcInvoiceTotals as SUM(payments.tip_amount). Shown
-	// as its own row on the invoice/public/PDF when > 0. Default 0 = no tips collected.
-	tip_total: numeric('tip_total', { precision: 12, scale: 2 }).notNull().default('0'),
-	notes: text('notes'),
-	// Customer-facing Terms & Conditions for THIS invoice (payment terms, late fees, warranty).
-	// Snapshot-copied from organizations.default_quote_terms at create time, then independently
-	// editable per invoice — the agreed terms are preserved for disputes. Separate from `notes`
-	// (freeform message). Renders as its own titled block on the public invoice + PDF.
-	// Nullable/empty = no T&C block. Mirrors quotes.terms.
-	terms: text('terms'),
-	public_token: text('public_token').unique(),
-	viewed_at: timestamp('viewed_at', { withTimezone: true }),
-	due_date: date('due_date'),
-	// Per-invoice opt-in for automatic payment reminders (the invoice_dunning sequence).
-	// Default true = this invoice follows the org's reminder schedule. Uncheck on a specific
-	// invoice to skip reminders for it (e.g. a client who's already promised to pay). Read at
-	// invoice.sent enrollment time; toggling it off on an already-sent invoice stops any pending
-	// reminders (invoice.reminders_toggled → worker → stopEnrollmentsForResource). The org-level
-	// on/off (feature_invoice_reminders + sequence.enabled) still gates everything above this.
-	// Matches Jobber / QuickBooks / Housecall Pro per-invoice reminder control.
-	send_payment_reminders: boolean('send_payment_reminders').notNull().default(true),
-	// Per-invoice opt-in for accepting tips (gratuity) on this invoice. Default true = this
-	// invoice accepts tips when the org has tips turned on. Uncheck on a specific invoice to
-	// suppress the tip selector for it. The EFFECTIVE gate is org.tips_enabled AND this flag —
-	// the org-level toggle (organizations.tips_enabled) is the master switch above this. Mirrors
-	// send_payment_reminders. Matches Jobber / QuickBooks / Housecall Pro per-invoice tip control.
-	accept_tips: boolean('accept_tips').notNull().default(true),
-	// Running total of late fees charged on this invoice (M8). Maintained by recalcInvoiceTotals
-	// as the sum of is_late_fee line items. UNLIKE tips (which sit outside amount_due), late fees
-	// ARE real money — this amount is added to `total` after tax and flows into amount_due.
-	// Excluded from the discount + tax base. '0' when no fee has been applied.
-	late_fee_total: numeric('late_fee_total', { precision: 12, scale: 2 }).notNull().default('0'),
-	// Per-invoice late-fee terms (M8 Phase 2), SNAPSHOT-copied from the org's late-fee config at
-	// create time then independently editable per invoice — so a contractor can waive or change the
-	// fee for one client without touching the company default (Jobber / QuickBooks pattern). The
-	// EFFECTIVE gate is organizations.late_fee_enabled AND this flag. late_fee_type is 'flat' |
-	// 'percent' (snapshot of the org type); late_fee_value is the flat $ when type='flat' OR the
-	// percent when type='percent' — one column collapsing the org's two value columns. Both null
-	// when the org had no fee configured at create. Drives BOTH the manual "Add late fee" button and
-	// the auto-after-grace sweep; neither reads the org config anymore.
-	late_fee_enabled: boolean('late_fee_enabled').notNull().default(false),
-	late_fee_type: text('late_fee_type'),
-	late_fee_value: numeric('late_fee_value', { precision: 12, scale: 2 }),
-	stripe_payment_link_url: text('stripe_payment_link_url'),
-	stripe_payment_link_id: text('stripe_payment_link_id'),
-	sent_at: timestamp('sent_at', { withTimezone: true }),
-	paid_at: timestamp('paid_at', { withTimezone: true }),
-	deleted_at: timestamp('deleted_at', { withTimezone: true }),
-	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-}, (t) => [
-	// Per-job billing lookups (jobs-list billing badges, job-detail invoice rollups) filter
-	// invoices by job_id; without this the list page runs a seq-scan per row.
-	index('idx_invoices_job_id').on(t.job_id)
-]);
+export const invoices = pgTable(
+	'invoices',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		contact_id: uuid('contact_id')
+			.notNull()
+			.references(() => contacts.id),
+		job_id: uuid('job_id').references(() => jobs.id),
+		opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
+		quote_id: uuid('quote_id').references(() => quotes.id),
+		issued_by: uuid('issued_by').references(() => orgMembers.id),
+		invoice_number: integer('invoice_number').notNull(),
+		title: text('title').notNull(),
+		status: invoiceStatusEnum('status').notNull().default('draft'),
+		subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
+		// Invoice-level discount applied to the subtotal BEFORE tax (mirrors quotes — Jobber /
+		// Housecall Pro / QuickBooks). discount_type 'none' = no discount. 'fixed' = discount_value
+		// is a dollar amount; 'percent' = a percentage (0-100). discount_amount is the
+		// server-computed dollars-off, clamped to the subtotal so the total can never go negative.
+		// discount_label is an optional shown reason (e.g. 'Repeat customer', 'Fall promo').
+		discount_type: text('discount_type').notNull().default('none'), // 'none' | 'fixed' | 'percent'
+		discount_value: numeric('discount_value', { precision: 12, scale: 2 }),
+		discount_amount: numeric('discount_amount', { precision: 12, scale: 2 }),
+		discount_label: varchar('discount_label', { length: 60 }),
+		tax_rate: numeric('tax_rate', { precision: 5, scale: 4 }).notNull().default('0'),
+		tax_amount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+		total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
+		amount_paid: numeric('amount_paid', { precision: 12, scale: 2 }).notNull().default('0'),
+		amount_due: numeric('amount_due', { precision: 12, scale: 2 }).notNull().default('0'),
+		// Denormalized running total of tips (gratuity) collected on this invoice's payments
+		// (M7). A tip is EXTRA money on top of the balance — it NEVER reduces amount_due or counts
+		// toward amount_paid. Recomputed by recalcInvoiceTotals as SUM(payments.tip_amount). Shown
+		// as its own row on the invoice/public/PDF when > 0. Default 0 = no tips collected.
+		tip_total: numeric('tip_total', { precision: 12, scale: 2 }).notNull().default('0'),
+		notes: text('notes'),
+		// Customer-facing Terms & Conditions for THIS invoice (payment terms, late fees, warranty).
+		// Snapshot-copied from organizations.default_quote_terms at create time, then independently
+		// editable per invoice — the agreed terms are preserved for disputes. Separate from `notes`
+		// (freeform message). Renders as its own titled block on the public invoice + PDF.
+		// Nullable/empty = no T&C block. Mirrors quotes.terms.
+		terms: text('terms'),
+		public_token: text('public_token').unique(),
+		viewed_at: timestamp('viewed_at', { withTimezone: true }),
+		due_date: date('due_date'),
+		// Per-invoice opt-in for automatic payment reminders (the invoice_dunning sequence).
+		// Default true = this invoice follows the org's reminder schedule. Uncheck on a specific
+		// invoice to skip reminders for it (e.g. a client who's already promised to pay). Read at
+		// invoice.sent enrollment time; toggling it off on an already-sent invoice stops any pending
+		// reminders (invoice.reminders_toggled → worker → stopEnrollmentsForResource). The org-level
+		// on/off (feature_invoice_reminders + sequence.enabled) still gates everything above this.
+		// Matches Jobber / QuickBooks / Housecall Pro per-invoice reminder control.
+		send_payment_reminders: boolean('send_payment_reminders').notNull().default(true),
+		// Per-invoice opt-in for accepting tips (gratuity) on this invoice. Default true = this
+		// invoice accepts tips when the org has tips turned on. Uncheck on a specific invoice to
+		// suppress the tip selector for it. The EFFECTIVE gate is org.tips_enabled AND this flag —
+		// the org-level toggle (organizations.tips_enabled) is the master switch above this. Mirrors
+		// send_payment_reminders. Matches Jobber / QuickBooks / Housecall Pro per-invoice tip control.
+		accept_tips: boolean('accept_tips').notNull().default(true),
+		// Running total of late fees charged on this invoice (M8). Maintained by recalcInvoiceTotals
+		// as the sum of is_late_fee line items. UNLIKE tips (which sit outside amount_due), late fees
+		// ARE real money — this amount is added to `total` after tax and flows into amount_due.
+		// Excluded from the discount + tax base. '0' when no fee has been applied.
+		late_fee_total: numeric('late_fee_total', { precision: 12, scale: 2 }).notNull().default('0'),
+		// Per-invoice late-fee terms (M8 Phase 2), SNAPSHOT-copied from the org's late-fee config at
+		// create time then independently editable per invoice — so a contractor can waive or change the
+		// fee for one client without touching the company default (Jobber / QuickBooks pattern). The
+		// EFFECTIVE gate is organizations.late_fee_enabled AND this flag. late_fee_type is 'flat' |
+		// 'percent' (snapshot of the org type); late_fee_value is the flat $ when type='flat' OR the
+		// percent when type='percent' — one column collapsing the org's two value columns. Both null
+		// when the org had no fee configured at create. Drives BOTH the manual "Add late fee" button and
+		// the auto-after-grace sweep; neither reads the org config anymore.
+		late_fee_enabled: boolean('late_fee_enabled').notNull().default(false),
+		late_fee_type: text('late_fee_type'),
+		late_fee_value: numeric('late_fee_value', { precision: 12, scale: 2 }),
+		stripe_payment_link_url: text('stripe_payment_link_url'),
+		stripe_payment_link_id: text('stripe_payment_link_id'),
+		sent_at: timestamp('sent_at', { withTimezone: true }),
+		paid_at: timestamp('paid_at', { withTimezone: true }),
+		deleted_at: timestamp('deleted_at', { withTimezone: true }),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		// Per-job billing lookups (jobs-list billing badges, job-detail invoice rollups) filter
+		// invoices by job_id; without this the list page runs a seq-scan per row.
+		index('idx_invoices_job_id').on(t.job_id)
+	]
+);
 
 export type Invoice = InferSelectModel<typeof invoices>;
 export type NewInvoice = InferInsertModel<typeof invoices>;

@@ -841,14 +841,19 @@
 			<div class="quote-lines__margin-panel-grid">
 				<div class="quote-lines__margin-stat">
 					<span class="quote-lines__margin-stat-label">Total cost</span>
-					<span class="quote-lines__margin-stat-value">{formatCurrency(costSummary.totalCost)}</span>
+					<span class="quote-lines__margin-stat-value">{formatCurrency(costSummary.totalCost)}</span
+					>
 				</div>
 				<div class="quote-lines__margin-stat">
 					<span class="quote-lines__margin-stat-label">Profit</span>
-					<span class="quote-lines__margin-stat-value">{formatCurrency(costSummary.totalProfit)}</span>
+					<span class="quote-lines__margin-stat-value"
+						>{formatCurrency(costSummary.totalProfit)}</span
+					>
 				</div>
 				<div class="quote-lines__margin-stat">
-					<span class="quote-lines__margin-stat-label">{costView === 'markup' ? 'Markup' : 'Margin'}</span>
+					<span class="quote-lines__margin-stat-label"
+						>{costView === 'markup' ? 'Markup' : 'Margin'}</span
+					>
 					<span
 						class="quote-lines__margin-stat-value {panelTone
 							? `quote-lines__margin-stat-value--${panelTone}`

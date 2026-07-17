@@ -198,10 +198,7 @@
 				{formatCurrency(costing.profit)}
 			</span>
 			{#if costing.margin_pct !== null}
-				<span
-					class="job-costing__margin"
-					class:job-costing__margin--loss={isLoss}
-				>
+				<span class="job-costing__margin" class:job-costing__margin--loss={isLoss}>
 					{costing.margin_pct}% margin
 				</span>
 			{/if}
@@ -247,8 +244,7 @@
 
 		{#if !hasExpenses && !formOpen}
 			<p class="job-costing__expenses-empty">
-				No expenses logged yet. Add materials, subcontractor, or equipment costs to see true
-				profit.
+				No expenses logged yet. Add materials, subcontractor, or equipment costs to see true profit.
 			</p>
 		{/if}
 
@@ -307,14 +303,21 @@
 							</Select.Trigger>
 							<Select.Content>
 								{#each CATEGORIES as c (c.value)}
-									<Select.Item value={c.value}>{c.label}</Select.Item>
+									<Select.Item value={c.value} label={c.label}>{c.label}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>
 					</div>
 					<div class="field job-costing__form-field">
 						<label class="field__label" for="exp-amount">Amount</label>
-						<Input id="exp-amount" type="number" min="0" step="0.01" bind:value={fAmount} placeholder="0.00" />
+						<Input
+							id="exp-amount"
+							type="number"
+							min="0"
+							step="0.01"
+							bind:value={fAmount}
+							placeholder="0.00"
+						/>
 					</div>
 					<div class="field job-costing__form-field">
 						<label class="field__label" for="exp-date">Date</label>
@@ -323,7 +326,11 @@
 				</div>
 				<div class="field">
 					<label class="field__label" for="exp-desc">Description</label>
-					<Input id="exp-desc" bind:value={fDescription} placeholder="e.g. Lumber from Home Depot" />
+					<Input
+						id="exp-desc"
+						bind:value={fDescription}
+						placeholder="e.g. Lumber from Home Depot"
+					/>
 				</div>
 				<div class="field">
 					<label class="field__label" for="exp-notes">Notes (optional)</label>
@@ -341,9 +348,7 @@
 				{/if}
 
 				<div class="job-costing__form-actions">
-					<Button variant="ghost" size="sm" onclick={closeForm} disabled={saving}>
-						Cancel
-					</Button>
+					<Button variant="ghost" size="sm" onclick={closeForm} disabled={saving}>Cancel</Button>
 					<Button size="sm" loading={saving} onclick={save}>
 						{editingId ? 'Save expense' : 'Add expense'}
 					</Button>
@@ -399,7 +404,7 @@
 		}
 
 		&__stat-value {
-			font: $weight-bold #{$fs-h3}/1.1 $font-display;
+			font: $weight-bold #{$fs-h3}/ 1.1 $font-display;
 			color: var(--color-text-primary);
 
 			&--cost {
@@ -588,7 +593,8 @@
 			background: transparent;
 			color: var(--color-text-muted);
 			cursor: pointer;
-			transition: background-color $duration-fast $ease-standard,
+			transition:
+				background-color $duration-fast $ease-standard,
 				color $duration-fast $ease-standard;
 
 			&:hover {

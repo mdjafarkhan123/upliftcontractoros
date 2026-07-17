@@ -7,10 +7,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canEditJob } from '$lib/server/jobs/permissions';
 import { saveJobCustomFieldValuesSchema } from '$lib/server/jobs/schemas';
 import { loadJobCustomFields } from '$lib/server/jobs/customFieldsResponse';
-import {
-	resolveCustomFieldColumns,
-	isCustomFieldFilled
-} from '$lib/server/jobs/customFieldValues';
+import { resolveCustomFieldColumns, isCustomFieldFilled } from '$lib/server/jobs/customFieldValues';
 import type { JobCustomFieldType } from '$lib/types/jobs';
 
 // PATCH /api/jobs/[id]/custom-fields — save this job's custom-field values in one call. The UI
@@ -40,10 +37,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const parsed = saveJobCustomFieldValuesSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
-			{ error: parsed.error.issues[0]?.message ?? 'Invalid input' },
-			{ status: 422 }
-		);
+		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
 
 	// Live definitions are the source of truth for field types + which are required.
@@ -71,9 +65,7 @@ export const PATCH: RequestHandler = async (event) => {
 	const missingRequired: string[] = [];
 	if (defs.some((d) => d.required)) {
 		const storedByField = new Map<string, ReturnType<typeof resolveCustomFieldColumns>>();
-		const needStoredIds = defs
-			.filter((d) => d.required && !incoming.has(d.id))
-			.map((d) => d.id);
+		const needStoredIds = defs.filter((d) => d.required && !incoming.has(d.id)).map((d) => d.id);
 		if (needStoredIds.length > 0) {
 			const stored = await db
 				.select({
@@ -103,13 +95,15 @@ export const PATCH: RequestHandler = async (event) => {
 
 		for (const d of defs) {
 			if (!d.required) continue;
-			const cols = incoming.get(d.id) ?? storedByField.get(d.id) ?? {
-				value_text: null,
-				value_number: null,
-				value_bool: null,
-				value_date: null
-			};
-			if (!isCustomFieldFilled(d.field_type as JobCustomFieldType, cols)) missingRequired.push(d.id);
+			const cols = incoming.get(d.id) ??
+				storedByField.get(d.id) ?? {
+					value_text: null,
+					value_number: null,
+					value_bool: null,
+					value_date: null
+				};
+			if (!isCustomFieldFilled(d.field_type as JobCustomFieldType, cols))
+				missingRequired.push(d.id);
 		}
 	}
 

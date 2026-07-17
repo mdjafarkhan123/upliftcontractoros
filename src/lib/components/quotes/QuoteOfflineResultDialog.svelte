@@ -102,7 +102,9 @@
 		errorMsg = null;
 		try {
 			if (mode === 'accepted') {
-				const selected_optional_ids = visibleOptional.filter((l) => selected[l.id]).map((l) => l.id);
+				const selected_optional_ids = visibleOptional
+					.filter((l) => selected[l.id])
+					.map((l) => l.id);
 				const res = await fetch(`/api/quotes/${quote.id}/mark-accepted`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
@@ -199,29 +201,29 @@
 						</div>
 					{/if}
 					{#if visibleOptional.length > 0}
-					<div class="quote-offline__section">
-						<p class="quote-offline__prompt">Which add-ons did they approve?</p>
-						<ul class="quote-offline__list">
-							{#each visibleOptional as line (line.id)}
-								<li>
-									<label class="quote-offline__option quote-offline__option--between">
-										<span class="quote-offline__option-main">
-											<input
-												type="checkbox"
-												bind:checked={selected[line.id]}
-												class="quote-offline__check"
-											/>
-											<span class="quote-offline__option-desc">{line.description}</span>
-										</span>
-										<span class="quote-offline__option-amount">{formatCurrency(line.total)}</span>
-									</label>
-								</li>
-							{/each}
-						</ul>
-						<p class="quote-offline__hint">
-							Leave add-ons unchecked if the customer only approved the base quote.
-						</p>
-					</div>
+						<div class="quote-offline__section">
+							<p class="quote-offline__prompt">Which add-ons did they approve?</p>
+							<ul class="quote-offline__list">
+								{#each visibleOptional as line (line.id)}
+									<li>
+										<label class="quote-offline__option quote-offline__option--between">
+											<span class="quote-offline__option-main">
+												<input
+													type="checkbox"
+													bind:checked={selected[line.id]}
+													class="quote-offline__check"
+												/>
+												<span class="quote-offline__option-desc">{line.description}</span>
+											</span>
+											<span class="quote-offline__option-amount">{formatCurrency(line.total)}</span>
+										</label>
+									</li>
+								{/each}
+							</ul>
+							<p class="quote-offline__hint">
+								Leave add-ons unchecked if the customer only approved the base quote.
+							</p>
+						</div>
 					{/if}
 				{/if}
 			{:else}
@@ -259,9 +261,7 @@
 		</div>
 
 		<div class="dialog-content__footer">
-			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>
-				Cancel
-			</Button>
+			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>Cancel</Button>
 			<Button
 				variant={mode === 'declined' ? 'destructive' : 'default'}
 				loading={busy}

@@ -2202,7 +2202,7 @@
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr) auto;
 		width: calc(100% - #{$space-8});
-		max-width: 800px;
+		max-width: 1200px;
 		max-height: 88vh;
 		z-index: $z-modal;
 		border-radius: $radius-xl;

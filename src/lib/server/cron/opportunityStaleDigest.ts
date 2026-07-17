@@ -64,7 +64,13 @@ export async function runOpportunityStaleDigest(): Promise<CronJobResult> {
 
 		const rows = claimed as unknown as EligibleRow[];
 		if (rows.length === 0) {
-			return { scanned_count: 0, affected_count: 0, processed_count: 0, skipped_count: 0, error_count: 0 };
+			return {
+				scanned_count: 0,
+				affected_count: 0,
+				processed_count: 0,
+				skipped_count: 0,
+				error_count: 0
+			};
 		}
 
 		// Group by org to emit one event per org.

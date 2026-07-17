@@ -47,6 +47,13 @@ const NAV_DEFS: NavDef[] = [
 		permissions: ['can_view_full_pipeline', 'can_view_assigned_opportunities']
 	},
 	{
+		key: 'requests',
+		label: 'Requests',
+		href: '/requests',
+		icon: 'ri-inbox-archive-line',
+		permissions: ['can_view_full_pipeline']
+	},
+	{
 		key: 'jobs',
 		label: 'Jobs',
 		href: '/jobs',

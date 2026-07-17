@@ -6,10 +6,17 @@
 	// but it holds NO Save/Cancel buttons of its own. Edit coordination lives in the
 	// parent (which allows only one row open at a time and renders ONE shared
 	// Save/Cancel bar). Enter commits, Escape cancels, both delegated to the parent.
+	//
+	// Omitting `editor` (and the callbacks) makes a permanently READ-ONLY row — for facts
+	// that are displayed but can never be edited, like a job's immutable one-off/recurring
+	// type. Pair it with `hint` to say WHY it can't be changed. Read-only rows reuse this
+	// component rather than hand-rolling a div so they keep the exact row styling (which is
+	// scoped here, so a copy elsewhere would ship unstyled).
 	let {
 		label,
 		canEdit = false,
 		editing = false,
+		hint = '',
 		display,
 		editor,
 		onRequestEdit,
@@ -19,12 +26,16 @@
 		label: string;
 		canEdit?: boolean;
 		editing?: boolean;
+		hint?: string;
 		display: Snippet;
-		editor: Snippet;
-		onRequestEdit: () => void;
-		onCommit: () => void;
-		onCancel: () => void;
+		editor?: Snippet;
+		onRequestEdit?: () => void;
+		onCommit?: () => void;
+		onCancel?: () => void;
 	} = $props();
+
+	// A row is only editable if the parent both allows it AND supplied an editor.
+	const editable = $derived(canEdit && !!editor);
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') {
@@ -32,10 +43,10 @@
 			const target = e.target as HTMLElement;
 			if (target.tagName === 'TEXTAREA') return;
 			e.preventDefault();
-			onCommit();
+			onCommit?.();
 		} else if (e.key === 'Escape') {
 			e.preventDefault();
-			onCancel();
+			onCancel?.();
 		}
 	}
 </script>
@@ -43,10 +54,15 @@
 <div class="inline-row" class:inline-row--editing={editing}>
 	<span class="inline-row__label">{label}</span>
 
-	{#if !editing}
+	{#if !editing || !editor}
 		<div class="inline-row__value-row">
-			<div class="inline-row__value">{@render display()}</div>
-			{#if canEdit}
+			<div class="inline-row__value">
+				{@render display()}
+				{#if hint}
+					<span class="inline-row__hint">{hint}</span>
+				{/if}
+			</div>
+			{#if editable}
 				<button
 					type="button"
 					class="inline-row__pencil"
@@ -101,6 +117,12 @@
 			font-size: $fs-body;
 			color: var(--color-text-primary);
 			word-break: break-word;
+		}
+
+		// Trailing explanation on a read-only row (e.g. why a field can't be changed).
+		&__hint {
+			margin-left: $space-2;
+			color: var(--color-text-muted);
 		}
 
 		&__pencil {

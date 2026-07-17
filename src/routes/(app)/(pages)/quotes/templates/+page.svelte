@@ -121,9 +121,7 @@
 	back="/quotes"
 >
 	{#snippet actions()}
-		<Button type="button" variant="outline" onclick={() => goto('/quotes')}>
-			Back to quotes
-		</Button>
+		<Button type="button" variant="outline" onclick={() => goto('/quotes')}>Back to quotes</Button>
 		{#if canManage}
 			<Button type="button" onclick={openCreate}>
 				<i class="ri-add-line" aria-hidden="true"></i>New template

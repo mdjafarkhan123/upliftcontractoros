@@ -74,9 +74,23 @@
 						{#if f.help_text}<p class="job-cf-input__help">{f.help_text}</p>{/if}
 
 						{#if f.field_type === 'short_text'}
-							<input id="ncf-{f.id}" class="field__input" type="text" bind:value={draft[f.id]} maxlength="2000" />
+							<input
+								id="ncf-{f.id}"
+								class="field__input"
+								type="text"
+								bind:value={draft[f.id]}
+								maxlength="2000"
+							/>
 						{:else if f.field_type === 'link'}
-							<input id="ncf-{f.id}" class="field__input" type="url" inputmode="url" placeholder="https://…" bind:value={draft[f.id]} maxlength="2000" />
+							<input
+								id="ncf-{f.id}"
+								class="field__input"
+								type="url"
+								inputmode="url"
+								placeholder="https://…"
+								bind:value={draft[f.id]}
+								maxlength="2000"
+							/>
 						{:else if f.field_type === 'number'}
 							<input id="ncf-{f.id}" class="field__input" type="number" bind:value={draft[f.id]} />
 						{:else if f.field_type === 'date'}

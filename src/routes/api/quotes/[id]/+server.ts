@@ -86,83 +86,88 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!row) error(404, 'Quote not found');
 
-	const lineItems = await db
-		.select({
-			id: quoteLineItems.id,
-			line_key: quoteLineItems.line_key,
-			package_id: quoteLineItems.package_id,
-			description: quoteLineItems.description,
-			details: quoteLineItems.details,
-			quantity: quoteLineItems.quantity,
-			unit: quoteLineItems.unit,
-			section_label: quoteLineItems.section_label,
-			is_optional: quoteLineItems.is_optional,
-			taxable: quoteLineItems.taxable,
-			accepted_selected: quoteLineItems.accepted_selected,
-			unit_price: quoteLineItems.unit_price,
-			unit_cost: quoteLineItems.unit_cost,
-			source_catalog_item_id: quoteLineItems.source_catalog_item_id,
-			total: quoteLineItems.total,
-			position: quoteLineItems.position
-		})
-		.from(quoteLineItems)
-		.where(
-			and(
-				eq(quoteLineItems.quote_id, id),
-				eq(quoteLineItems.org_id, auth.orgId),
-				isNull(quoteLineItems.deleted_at)
+	// row gates (404); line items, tiers, view count and the active change request are all
+	// independent of each other — one wave instead of four sequential round-trips.
+	const [lineItems, packages, viewCountRows, changeRequestRows] = await Promise.all([
+		db
+			.select({
+				id: quoteLineItems.id,
+				line_key: quoteLineItems.line_key,
+				package_id: quoteLineItems.package_id,
+				description: quoteLineItems.description,
+				details: quoteLineItems.details,
+				quantity: quoteLineItems.quantity,
+				unit: quoteLineItems.unit,
+				section_label: quoteLineItems.section_label,
+				is_optional: quoteLineItems.is_optional,
+				taxable: quoteLineItems.taxable,
+				accepted_selected: quoteLineItems.accepted_selected,
+				unit_price: quoteLineItems.unit_price,
+				unit_cost: quoteLineItems.unit_cost,
+				source_catalog_item_id: quoteLineItems.source_catalog_item_id,
+				total: quoteLineItems.total,
+				position: quoteLineItems.position
+			})
+			.from(quoteLineItems)
+			.where(
+				and(
+					eq(quoteLineItems.quote_id, id),
+					eq(quoteLineItems.org_id, auth.orgId),
+					isNull(quoteLineItems.deleted_at)
+				)
 			)
-		)
-		.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at));
+			.orderBy(asc(quoteLineItems.position), asc(quoteLineItems.created_at)),
+
+		// Good-Better-Best tiers (empty on a simple quote). Ordered for stable side-by-side render.
+		db
+			.select({
+				id: quotePackages.id,
+				package_key: quotePackages.package_key,
+				name: quotePackages.name,
+				is_recommended: quotePackages.is_recommended,
+				position: quotePackages.position,
+				subtotal: quotePackages.subtotal,
+				total: quotePackages.total
+			})
+			.from(quotePackages)
+			.where(
+				and(
+					eq(quotePackages.quote_id, id),
+					eq(quotePackages.org_id, auth.orgId),
+					isNull(quotePackages.deleted_at)
+				)
+			)
+			.orderBy(asc(quotePackages.position), asc(quotePackages.created_at)),
+
+		db
+			.select({ count: sql<number>`count(*)::int` })
+			.from(quoteViews)
+			.where(and(eq(quoteViews.quote_id, id), eq(quoteViews.org_id, auth.orgId))),
+
+		db
+			.select({
+				id: quoteChangeRequests.id,
+				message: quoteChangeRequests.message,
+				requested_at: quoteChangeRequests.requested_at
+			})
+			.from(quoteChangeRequests)
+			.where(
+				and(
+					eq(quoteChangeRequests.quote_id, id),
+					eq(quoteChangeRequests.org_id, auth.orgId),
+					isNull(quoteChangeRequests.resolved_at)
+				)
+			)
+			.limit(1)
+	]);
 
 	// Cost is private: blank it out for members without revenue access so it never
 	// reaches their browser (the margin panel is hidden client-side too).
 	const canCost = canViewCostMargin(auth.member);
-	const safeLineItems = canCost
-		? lineItems
-		: lineItems.map((li) => ({ ...li, unit_cost: null }));
+	const safeLineItems = canCost ? lineItems : lineItems.map((li) => ({ ...li, unit_cost: null }));
 
-	// Good-Better-Best tiers (empty on a simple quote). Ordered for stable side-by-side render.
-	const packages = await db
-		.select({
-			id: quotePackages.id,
-			package_key: quotePackages.package_key,
-			name: quotePackages.name,
-			is_recommended: quotePackages.is_recommended,
-			position: quotePackages.position,
-			subtotal: quotePackages.subtotal,
-			total: quotePackages.total
-		})
-		.from(quotePackages)
-		.where(
-			and(
-				eq(quotePackages.quote_id, id),
-				eq(quotePackages.org_id, auth.orgId),
-				isNull(quotePackages.deleted_at)
-			)
-		)
-		.orderBy(asc(quotePackages.position), asc(quotePackages.created_at));
-
-	const [{ count: viewCount }] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(quoteViews)
-		.where(and(eq(quoteViews.quote_id, id), eq(quoteViews.org_id, auth.orgId)));
-
-	const [activeChangeRequest] = await db
-		.select({
-			id: quoteChangeRequests.id,
-			message: quoteChangeRequests.message,
-			requested_at: quoteChangeRequests.requested_at
-		})
-		.from(quoteChangeRequests)
-		.where(
-			and(
-				eq(quoteChangeRequests.quote_id, id),
-				eq(quoteChangeRequests.org_id, auth.orgId),
-				isNull(quoteChangeRequests.resolved_at)
-			)
-		)
-		.limit(1);
+	const { count: viewCount } = viewCountRows[0];
+	const activeChangeRequest = changeRequestRows[0];
 
 	const { addr_label, addr_line_1, addr_line_2, addr_city, addr_state, addr_zip, ...quoteRow } =
 		row;
@@ -421,7 +426,7 @@ export const PATCH: RequestHandler = async (event) => {
 							? li.unit_cost !== undefined && li.unit_cost !== null
 								? String(li.unit_cost)
 								: null
-							: (li.line_key ? priorCostByKey.get(li.line_key) : null) ?? null,
+							: ((li.line_key ? priorCostByKey.get(li.line_key) : null) ?? null),
 						source_catalog_item_id: li.source_catalog_item_id ?? null,
 						total: computeLineTotal(li.quantity, li.unit_price),
 						position: li.position ?? idx

@@ -5,8 +5,8 @@
 > `jobber-01-clients-properties.md` for Client/Property, and `jobber-02-requests-leads.md` for the Request
 > that a quote is usually converted from. Plain English; **(unverified)** marks anything not confirmed.
 
-A **Quote** is *"a cost estimate of work which Service Providers send to their clients before any work is
-done"* (schema). It carries line items (including **optional** upsell items and up to 3 **option sets** for
+A **Quote** is _"a cost estimate of work which Service Providers send to their clients before any work is
+done"_ (schema). It carries line items (including **optional** upsell items and up to 3 **option sets** for
 good/better/best), optional **deposits/payment schedules**, taxes, and a client-facing approval flow in
 Client Hub (view → sign → approve → optionally pay deposit). This file documents the object, its line
 items, statuses, deposits, and approvals.
@@ -17,50 +17,50 @@ items, statuses, deposits, and approvals.
 
 ### 1.1 Fields (from schema)
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `id` | `EncodedId!` | Opaque unique id. |
-| `quoteNumber` | `String!` | Human quote number (non-unique, SP-assigned). |
-| `title` | `String` | Description/title of the quote. |
-| `message` | `String` | Message to the client (cover note). |
-| `contractDisclaimer` | `String` | Contract / disclaimer text shown on the quote (T&C / warranty block). |
-| `client` | `Client` | The client the quote is for. |
-| `property` | `Property` | The property the quote is for. |
-| `request` | `Request` | The request this quote was converted from (if any). |
-| `salesperson` | `User` | Assigned salesperson. |
-| `quoteStatus` | `QuoteStatusTypeEnum!` | Current status (see §2). |
-| `lineItems` | `QuoteLineItemConnection!` | The quote's line items (see §3). |
-| `amounts` | `QuoteAmounts!` | Money breakdown (see §1.2). |
-| `taxDetails` | `TaxDetails` | Tax rate + amount details. |
-| `customFields` | list | Quote-level custom field values. |
-| `depositRecords` | `PaymentRecordConnection!` | Deposit payments applied to the quote. |
-| `depositAmountUnallocated` | `Float` | Paid deposit not yet tied to an invoice. |
-| `unallocatedDepositRecords` | `PaymentRecordConnection!` | Deposit records not yet applied to an invoice and not refunded. |
-| `hasRefundableSurchargePayments` | `Boolean!` | Whether any deposit has a refundable surcharge amount. |
-| `eligibleForFinancing` | `Boolean!` | Whether the quote qualifies for **Wisetack** consumer-financing offers. |
-| `jobs` | `JobConnection` | Job(s) converted from this quote. |
-| `notes` / `noteAttachments` | connections | Internal notes + files. |
-| `tasks` | `TaskConnection!` | Basic tasks attached to the quote. |
-| `linkedCommunications` | `MessageInterfaceConnection!` | All messages related to this quote. |
-| `clientHubUri` | `String` | Client-Hub URL of the quote (client-facing). |
-| `clientHubViewedAt` | `ISO8601DateTime` | When the client last viewed it in Client Hub. |
-| `sentAt` | `ISO8601DateTime` | When the quote was last sent to the client. |
-| `transitionedAt` | `ISO8601DateTime!` | When it entered its current status. |
-| `lastTransitioned` | `QuoteLastTransitioned!` | Dated history: `approvedAt`, `changesRequestedAt`, `convertedAt`. |
-| `createdAt` / `updatedAt` | `ISO8601DateTime!` | Timestamps. |
-| `jobberWebUri` | `String!` | Deep link in Jobber web. |
+| Field                            | Type                          | Meaning                                                                 |
+| -------------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `id`                             | `EncodedId!`                  | Opaque unique id.                                                       |
+| `quoteNumber`                    | `String!`                     | Human quote number (non-unique, SP-assigned).                           |
+| `title`                          | `String`                      | Description/title of the quote.                                         |
+| `message`                        | `String`                      | Message to the client (cover note).                                     |
+| `contractDisclaimer`             | `String`                      | Contract / disclaimer text shown on the quote (T&C / warranty block).   |
+| `client`                         | `Client`                      | The client the quote is for.                                            |
+| `property`                       | `Property`                    | The property the quote is for.                                          |
+| `request`                        | `Request`                     | The request this quote was converted from (if any).                     |
+| `salesperson`                    | `User`                        | Assigned salesperson.                                                   |
+| `quoteStatus`                    | `QuoteStatusTypeEnum!`        | Current status (see §2).                                                |
+| `lineItems`                      | `QuoteLineItemConnection!`    | The quote's line items (see §3).                                        |
+| `amounts`                        | `QuoteAmounts!`               | Money breakdown (see §1.2).                                             |
+| `taxDetails`                     | `TaxDetails`                  | Tax rate + amount details.                                              |
+| `customFields`                   | list                          | Quote-level custom field values.                                        |
+| `depositRecords`                 | `PaymentRecordConnection!`    | Deposit payments applied to the quote.                                  |
+| `depositAmountUnallocated`       | `Float`                       | Paid deposit not yet tied to an invoice.                                |
+| `unallocatedDepositRecords`      | `PaymentRecordConnection!`    | Deposit records not yet applied to an invoice and not refunded.         |
+| `hasRefundableSurchargePayments` | `Boolean!`                    | Whether any deposit has a refundable surcharge amount.                  |
+| `eligibleForFinancing`           | `Boolean!`                    | Whether the quote qualifies for **Wisetack** consumer-financing offers. |
+| `jobs`                           | `JobConnection`               | Job(s) converted from this quote.                                       |
+| `notes` / `noteAttachments`      | connections                   | Internal notes + files.                                                 |
+| `tasks`                          | `TaskConnection!`             | Basic tasks attached to the quote.                                      |
+| `linkedCommunications`           | `MessageInterfaceConnection!` | All messages related to this quote.                                     |
+| `clientHubUri`                   | `String`                      | Client-Hub URL of the quote (client-facing).                            |
+| `clientHubViewedAt`              | `ISO8601DateTime`             | When the client last viewed it in Client Hub.                           |
+| `sentAt`                         | `ISO8601DateTime`             | When the quote was last sent to the client.                             |
+| `transitionedAt`                 | `ISO8601DateTime!`            | When it entered its current status.                                     |
+| `lastTransitioned`               | `QuoteLastTransitioned!`      | Dated history: `approvedAt`, `changesRequestedAt`, `convertedAt`.       |
+| `createdAt` / `updatedAt`        | `ISO8601DateTime!`            | Timestamps.                                                             |
+| `jobberWebUri`                   | `String!`                     | Deep link in Jobber web.                                                |
 
 ### 1.2 `QuoteAmounts` (money breakdown — all `Float!`)
 
-| Field | Meaning |
-| --- | --- |
-| `subtotal` | Line-item costs, before tax. |
-| `discountAmount` | Discount applied. |
-| `nonTaxAmount` | Portion exempt from tax (tax-exempt line items). |
-| `taxAmount` | Tax charged. |
-| `total` | Grand total (line items + tax). |
-| `depositAmount` | Deposit required on the quote. |
-| `outstandingDepositAmount` | Deposit still to be collected. |
+| Field                      | Meaning                                          |
+| -------------------------- | ------------------------------------------------ |
+| `subtotal`                 | Line-item costs, before tax.                     |
+| `discountAmount`           | Discount applied.                                |
+| `nonTaxAmount`             | Portion exempt from tax (tax-exempt line items). |
+| `taxAmount`                | Tax charged.                                     |
+| `total`                    | Grand total (line items + tax).                  |
+| `depositAmount`            | Deposit required on the quote.                   |
+| `outstandingDepositAmount` | Deposit still to be collected.                   |
 
 > **Build note:** Jobber tracks the **deposit as part of the quote's amounts** (required amount +
 > outstanding), separate from the line-item total, and tracks **unallocated** deposit money so a deposit
@@ -71,18 +71,18 @@ items, statuses, deposits, and approvals.
 
 ## 2. Quote statuses (`QuoteStatusTypeEnum`) — from schema
 
-| Enum value | Schema description | Plain English |
-| --- | --- | --- |
-| `draft` | "The default state of a quote" | Not sent; contractor-only. |
-| `awaiting_response` | "The state when the quote is sent to a client" | Sent; waiting for the client. |
-| `changes_requested` | "The state when a client requests changes to the quote" | Client asked for changes. |
-| `approved` | "The state when a quote is approved by a client" | Client approved (signed) or staff marked approved. |
-| `converted` | "The state when a quote is converted to a job" | Turned into a job — **terminal** (stays Converted even if the job is deleted; see `jobber-00` §6). |
-| `archived` | "The state when a quote is archived" | Archived/closed. |
+| Enum value          | Schema description                                      | Plain English                                                                                      |
+| ------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `draft`             | "The default state of a quote"                          | Not sent; contractor-only.                                                                         |
+| `awaiting_response` | "The state when the quote is sent to a client"          | Sent; waiting for the client.                                                                      |
+| `changes_requested` | "The state when a client requests changes to the quote" | Client asked for changes.                                                                          |
+| `approved`          | "The state when a quote is approved by a client"        | Client approved (signed) or staff marked approved.                                                 |
+| `converted`         | "The state when a quote is converted to a job"          | Turned into a job — **terminal** (stays Converted even if the job is deleted; see `jobber-00` §6). |
+| `archived`          | "The state when a quote is archived"                    | Archived/closed.                                                                                   |
 
 > Note the **overview file's** table also lists an "Awaiting Payment" (deposit) state; the raw enum does
 > **not** have a separate `awaiting_payment` value — a required-deposit quote stays `awaiting_response`
-> until approved, and the deposit is collected *at approval* via "Approve and Pay Deposit" (see §5).
+> until approved, and the deposit is collected _at approval_ via "Approve and Pay Deposit" (see §5).
 > Treat "awaiting payment" as a UI/label nuance, not a distinct enum state. **(reconciled from schema)**
 
 **`QuoteTransitionOnCreate` enum:** when creating a quote you may transition it straight to
@@ -97,25 +97,25 @@ items, statuses, deposits, and approvals.
 
 ### 3.1 Fields (from schema)
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `id` | `EncodedId!` | Unique id. |
-| `name` | `String!` | Line item name. |
-| `description` | `String!` | Description. |
-| `category` | `ProductsAndServicesCategory!` | Product vs service category. |
-| `quantity` | `Float!` | Quantity. |
-| `unitCost` | `Float` | Your cost per unit. |
-| `unitPrice` | `Float!` | Price per unit to the client. |
-| `markup` | `Float` | Markup on the line item. |
-| `totalCost` | `Float` | Total cost (internal). |
-| `totalPrice` | `Float!` | Total price to client. |
-| `taxable` | `Boolean!` | **Per-line taxable flag** (tax can be set per line). |
-| `optional` | `Boolean!` | Whether the line is an **optional add-on** the client can choose. |
-| `recommended` | `Boolean` | For optional lines: whether it's recommended / has been selected by the client. |
-| `textOnly` | `Boolean!` | A text-only line (no qty/price — a note/heading). |
-| `sortOrder` | `Int` | Display order. |
-| `linkedProductOrService` | `ProductOrService` | The price-book item this line came from. |
-| `createdAt` / `updatedAt` | `ISO8601DateTime!` | Timestamps. |
+| Field                     | Type                           | Meaning                                                                         |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------------------- |
+| `id`                      | `EncodedId!`                   | Unique id.                                                                      |
+| `name`                    | `String!`                      | Line item name.                                                                 |
+| `description`             | `String!`                      | Description.                                                                    |
+| `category`                | `ProductsAndServicesCategory!` | Product vs service category.                                                    |
+| `quantity`                | `Float!`                       | Quantity.                                                                       |
+| `unitCost`                | `Float`                        | Your cost per unit.                                                             |
+| `unitPrice`               | `Float!`                       | Price per unit to the client.                                                   |
+| `markup`                  | `Float`                        | Markup on the line item.                                                        |
+| `totalCost`               | `Float`                        | Total cost (internal).                                                          |
+| `totalPrice`              | `Float!`                       | Total price to client.                                                          |
+| `taxable`                 | `Boolean!`                     | **Per-line taxable flag** (tax can be set per line).                            |
+| `optional`                | `Boolean!`                     | Whether the line is an **optional add-on** the client can choose.               |
+| `recommended`             | `Boolean`                      | For optional lines: whether it's recommended / has been selected by the client. |
+| `textOnly`                | `Boolean!`                     | A text-only line (no qty/price — a note/heading).                               |
+| `sortOrder`               | `Int`                          | Display order.                                                                  |
+| `linkedProductOrService`  | `ProductOrService`             | The price-book item this line came from.                                        |
+| `createdAt` / `updatedAt` | `ISO8601DateTime!`             | Timestamps.                                                                     |
 
 > **Cost + markup + margin are first-class** on the line (`unitCost`, `markup`, `totalCost` alongside
 > `unitPrice`/`totalPrice`) — this is how Jobber shows profitability while quoting. We shipped the
@@ -146,7 +146,7 @@ Two distinct upsell mechanisms — **don't conflate them**:
   clients pay it straight from Client Hub. [Optional Line Items…], [Deposits on Quotes]
 - **Deposit calculation:** choose **Percentage (%)** of the total (e.g. 25%) **or** a **Fixed Amount ($)**
   (e.g. $300). [Deposits on Quotes]
-- **Required deposit gates the job:** when a quote has a *required* deposit, the client must pay it before
+- **Required deposit gates the job:** when a quote has a _required_ deposit, the client must pay it before
   work starts — Client Hub shows **"Approve and Pay Deposit"** instead of plain "Approve." [Deposits on Quotes]
 - **Deposit money is tracked as unallocated** until applied to an invoice (`unallocatedDepositRecords`,
   `depositAmountUnallocated`); refundable surcharges are flagged (`hasRefundableSurchargePayments`).
@@ -161,18 +161,18 @@ Two distinct upsell mechanisms — **don't conflate them**:
 
 - **Client approves in Client Hub:** they view the quote, then **sign** (draw or type their name) and
   approve. If a required deposit exists, it's **"Approve and Pay Deposit."** [Quote Basics], [Deposits on Quotes]
-- **Signature invalidation on edit:** if an **Approved** quote's *total, deposit, line items, client
-  message, contract/disclaimer, or quote number* is edited, the client's **signature is removed** from the
-  signature line and Client Hub. [Deposits on Quotes] — *strong integrity rule worth copying.*
+- **Signature invalidation on edit:** if an **Approved** quote's _total, deposit, line items, client
+  message, contract/disclaimer, or quote number_ is edited, the client's **signature is removed** from the
+  signature line and Client Hub. [Deposits on Quotes] — _strong integrity rule worth copying._
 - **Manual approval:** if the client approves verbally, staff can **More → Approved** to mark it approved.
   [Quote Approvals]
 - **Changes requested:** clients can request changes online; **all admins are emailed** when a client
   approves or requests changes. You edit and **re-send**; they approve the updated version. [Quote Approvals]
 - **Follow-ups vs reminders (two different things):**
-  - **Quote follow-ups** (select plans) — auto-send a reminder to the *client* after N days if the quote
+  - **Quote follow-ups** (select plans) — auto-send a reminder to the _client_ after N days if the quote
     isn't approved, using the same channel the quote was sent (text or email). Gated per-client by
     `receivesQuoteFollowUps` (see `jobber-01` §1.2). [Quote Approvals]
-  - **Quote reminders** (all plans) — an internal to-do added to *your* schedule, auto-assigned to the
+  - **Quote reminders** (all plans) — an internal to-do added to _your_ schedule, auto-assigned to the
     quote's creator, to follow up manually. [Quote Approvals]
 - **In-person / on-the-spot signing** ("close in the field") is supported — client signs on the SP's
   device. (We shipped the equivalent — see [[quote-phase2-gaps]].)
@@ -184,18 +184,18 @@ Two distinct upsell mechanisms — **don't conflate them**:
 Jobber's public API exposes **create/edit** and line-item/note operations, but **not** explicit
 approve/convert mutations (those are web-app actions):
 
-| Action | Mutation | Returns |
-| --- | --- | --- |
-| Create quote | `QuoteCreate` (`QuoteCreateAttributes`; may transition to `AWAITING_RESPONSE`) | `quote`, `userErrors` |
-| Edit quote | `QuoteEdit` (`QuoteEditAttributes`) | `quote`, `userErrors` |
-| Create line items | `QuoteCreateLineItems` (`QuoteCreateLineItemAttributes`) | `quote`, `userErrors` |
-| Create text line items | `QuoteCreateTextLineItems` (`QuoteCreateTextLineItemAttributes`) | `quote`, `userErrors` |
-| Edit line items | `QuoteEditLineItems` (`QuoteEditLineItemAttributes`) | `quote`, `userErrors` |
-| Delete line items | `QuoteDeleteLineItems` | `quote`, `userErrors` |
-| Add / edit quote note | `QuoteCreateNote` / `QuoteEditNote` | `quote`, `quoteNote`, `userErrors` |
+| Action                 | Mutation                                                                       | Returns                            |
+| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| Create quote           | `QuoteCreate` (`QuoteCreateAttributes`; may transition to `AWAITING_RESPONSE`) | `quote`, `userErrors`              |
+| Edit quote             | `QuoteEdit` (`QuoteEditAttributes`)                                            | `quote`, `userErrors`              |
+| Create line items      | `QuoteCreateLineItems` (`QuoteCreateLineItemAttributes`)                       | `quote`, `userErrors`              |
+| Create text line items | `QuoteCreateTextLineItems` (`QuoteCreateTextLineItemAttributes`)               | `quote`, `userErrors`              |
+| Edit line items        | `QuoteEditLineItems` (`QuoteEditLineItemAttributes`)                           | `quote`, `userErrors`              |
+| Delete line items      | `QuoteDeleteLineItems`                                                         | `quote`, `userErrors`              |
+| Add / edit quote note  | `QuoteCreateNote` / `QuoteEditNote`                                            | `quote`, `quoteNote`, `userErrors` |
 
-*(Introspection did not expand `INPUT_OBJECT` fields, so the exact create/edit input arguments aren't
-enumerable from `JobberJson.md`.)* **No public `QuoteApprove` / `QuoteConvertToJob` mutation** appears in
+_(Introspection did not expand `INPUT_OBJECT` fields, so the exact create/edit input arguments aren't
+enumerable from `JobberJson.md`.)_ **No public `QuoteApprove` / `QuoteConvertToJob` mutation** appears in
 the sampled schema — approval, change-requests, and conversion are done in the web app / Client Hub, not via
 the public API **(unverified whether such mutations exist under different names)**.
 
@@ -206,12 +206,12 @@ Read queries: `quote(id)`, `quotes(filter, sort)` (`QuoteFilterAttributes`, `Quo
 
 ## 7. How WE compare (build notes)
 
-- **Two upsell mechanisms, not one.** To reach Jobber parity we need **both** *optional line items* (client
-  checks add-ons at approval, total updates) **and** *option sets / good-better-best* (up to 3 packages the
+- **Two upsell mechanisms, not one.** To reach Jobber parity we need **both** _optional line items_ (client
+  checks add-ons at approval, total updates) **and** _option sets / good-better-best_ (up to 3 packages the
   client chooses between). We already have good-better-best + per-line taxable + margin/markup (see
   [[quote-phase2-gaps]] — done & verified); confirm the **optional-item selection in the client portal**
   (client toggles, total recalculates) is fully wired, since that's the highest-converting piece.
-- **Deposit model to match exactly:** percentage **or** fixed; *required* deposits gate the job with an
+- **Deposit model to match exactly:** percentage **or** fixed; _required_ deposits gate the job with an
   **"Approve and Pay Deposit"** action; deposit money is held **unallocated** and applied to an invoice at
   billing. Our invoice↔quote deposit handling should carry the same unallocated→applied lifecycle.
 - **Signature-invalidation rule is a keeper.** Editing any material field of an approved quote (total,
@@ -227,6 +227,7 @@ Read queries: `quote(id)`, `quotes(filter, sort)` (`QuoteFilterAttributes`, `Quo
 ---
 
 ### Help-center sources
+
 - Quote Basics — https://help.getjobber.com/hc/en-us/articles/115009378727-Quote-Basics
 - Quote Approvals — https://help.getjobber.com/hc/en-us/articles/115012715008-Quote-Approvals
 - Optional Line Items on Quotes — https://help.getjobber.com/hc/en-us/articles/360046575473-Optional-Line-Items-on-Quotes

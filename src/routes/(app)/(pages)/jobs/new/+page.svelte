@@ -7,7 +7,7 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import SkeletonLoader from '$lib/components/shared/SkeletonLoader.svelte';
 	import JobTagsEditor from '$lib/components/jobs/JobTagsEditor.svelte';
-	import JobTypePicker from '$lib/components/jobs/JobTypePicker.svelte';
+	import JobCategoryPicker from '$lib/components/jobs/JobCategoryPicker.svelte';
 	import JobBillingEditor from '$lib/components/jobs/JobBillingEditor.svelte';
 	import JobRecurringBillingEditor from '$lib/components/jobs/JobRecurringBillingEditor.svelte';
 	import JobScheduleEditor from '$lib/components/jobs/JobScheduleEditor.svelte';
@@ -119,7 +119,11 @@
 	// a date — timed OR "Anytime" (date with no clock time, Jobber's model). An Anytime date is
 	// anchored at noon so the Today/Upcoming read matches what we send to the server.
 	const previewStart = $derived.by(() => {
-		if (form.jobMode === 'recurring') return form.scheduledStart || null;
+		// "As needed" stores a window but puts nothing on the calendar → no start to preview.
+		if (form.scheduleAsNeeded) return null;
+		// Any job with a repeat rule — one-off or recurring — previews its anchor, which is the
+		// first generated visit.
+		if (form.recurConfigured) return form.scheduledStart || null;
 		if (form.scheduleLater || !form.scheduledStart) return null;
 		if (form.scheduledStart.includes('T')) return form.scheduledStart;
 		return `${form.scheduledStart.split('T')[0]}T12:00:00`;
@@ -201,7 +205,7 @@
 		// One-off job: only a date is required (it defaults to today). A time is optional — a date
 		// with no time is a valid "Anytime" visit (Jobber's model) that lands in the calendar's
 		// Anytime lane. Only "Schedule later" opts out of a date entirely.
-		if (form.jobMode === 'one_off' && !form.scheduleLater && !form.scheduledStart) {
+		if (form.repeatMode === 'none' && !form.scheduleLater && !form.scheduledStart) {
 			errors = { ...errors, scheduledStart: 'Pick a date, or choose Schedule later.' };
 			return;
 		}
@@ -214,13 +218,18 @@
 			errors = { ...errors, scheduledEnd: 'End must be after start.' };
 			return;
 		}
-		if (form.jobMode === 'recurring') {
-			if (!form.recurConfigured) {
-				errors = { ...errors, recurrence: 'Set up the repeat rule first.' };
-				return;
-			}
+		// A RECURRING job must repeat somehow — a rule, or "As needed". (A one-off has no such
+		// requirement: "Does not repeat" is a valid resting state for it.)
+		if (form.jobMode === 'recurring' && !form.scheduleAsNeeded && !form.recurConfigured) {
+			errors = { ...errors, recurrence: 'Set up the repeat rule first.' };
+			return;
+		}
+		// Anything that carries a rule needs an anchor + end condition — including a repeating
+		// ONE-OFF, whose start date is the series anchor. "As needed" has no rule but still
+		// requires the job window: a start date plus an end boundary — Jobber's model.
+		if (form.recurConfigured || form.scheduleAsNeeded) {
 			if (!form.scheduledStart) {
-				errors = { ...errors, scheduledStart: 'Pick a start date for the recurring schedule.' };
+				errors = { ...errors, scheduledStart: 'Pick a start date for the schedule.' };
 				return;
 			}
 			if (form.endType === 'on' && !form.endOn) {
@@ -234,11 +243,15 @@
 				errors = { ...errors, end_after_count: 'Set how long the schedule runs.' };
 				return;
 			}
-			if (form.preview && form.preview.count === 0) {
+			if (!form.scheduleAsNeeded && form.preview && form.preview.count === 0) {
 				errors = { ...errors, recurrence: 'This schedule produces no visits. Adjust the rule.' };
 				return;
 			}
+			// Recurring billing is a recurring-TYPE concern — a repeating one-off still bills once
+			// through its payment schedule, so its editor is never shown and this can't apply.
 			if (
+				form.jobMode === 'recurring' &&
+				!form.scheduleAsNeeded &&
 				form.recurBillingEnabled &&
 				form.recurBillingType === 'fixed' &&
 				!(Number(form.fixedInvoiceAmount) > 0)
@@ -259,24 +272,40 @@
 		try {
 			const payload: Record<string, unknown> = {
 				contact_id: contactId,
-				title: form.title.trim()
+				title: form.title.trim(),
+				// The user's One-off/Recurring choice — always sent, never inferred server-side.
+				// This is the one field on the job that can never be changed afterwards.
+				job_type: form.jobMode
 			};
 			if (prefill?.opportunity_id) payload.opportunity_id = prefill.opportunity_id;
 			if (form.assignedToId) payload.assigned_to = form.assignedToId;
-			if (form.jobType.trim()) payload.job_type = form.jobType.trim();
+			if (form.jobCategory.trim()) payload.job_category = form.jobCategory.trim();
 			if (form.tags.length > 0) payload.tags = form.tags;
 
-			if (form.jobMode === 'recurring') {
-				// A recurring job is always scheduled — the anchor (start/end) drives every
-				// generated visit. anytime is carried inside the recurrence rule.
+			if (form.scheduleAsNeeded) {
+				// Jobber "As needed": recurring-by-intent with no rule and no visits, but the job
+				// still stores its window — start date + end boundary (Ends after / Ends on). The
+				// job lands in Action Required until a visit is added.
+				payload.schedule_as_needed = true;
+				// Date-only start anchors at noon (DST-safe day bucket, same as the Anytime path).
+				payload.scheduled_start = form.scheduledStart.includes('T')
+					? new Date(form.scheduledStart).toISOString()
+					: new Date(`${form.scheduledStart.split('T')[0]}T12:00:00`).toISOString();
+				const asNeededEnd = form.asNeededEndBoundary();
+				if (asNeededEnd) payload.scheduled_end = asNeededEnd.toISOString();
+			} else if (form.recurConfigured) {
+				// Any job carrying a repeat rule — one-off OR recurring — is scheduled from an
+				// anchor (start/end) that drives every generated visit. anytime is carried inside
+				// the rule. The type rides along in job_type and changes only how the job BILLS.
 				payload.scheduled_start = new Date(form.scheduledStart).toISOString();
 				if (form.scheduledEnd) payload.scheduled_end = new Date(form.scheduledEnd).toISOString();
 				payload.recurrence = form.buildRecurrence();
 				if (form.visitInstructions.trim())
 					payload.visit_instructions = form.visitInstructions.trim();
 				if (form.notifyChannel !== 'none') payload.notify_channel = form.notifyChannel;
-				// Recurring billing config (manual v1). Only sent when the contractor opts in.
-				if (form.recurBillingEnabled) {
+				// Recurring billing config (manual v1) — recurring-type only; a repeating one-off
+				// bills once via its payment schedule. Only sent when the contractor opts in.
+				if (form.jobMode === 'recurring' && form.recurBillingEnabled) {
 					payload.billing_type = form.recurBillingType;
 					payload.invoice_frequency = form.invoiceFrequency;
 					payload.fixed_invoice_amount =
@@ -507,21 +536,32 @@
 				 progress / Completed later via the job's Start / Complete actions. -->
 			<div class="job-new-status">
 				<span class="job-new-status__label">Status</span>
-				<JobStatusBadge status="scheduled" scheduledStart={previewStart} />
+				<JobStatusBadge
+					status="scheduled"
+					scheduledStart={previewStart}
+					hasSeriesAnchor={form.recurConfigured || form.scheduleAsNeeded}
+					nextOpenVisitStart={previewStart}
+					hasOpenVisits={!form.scheduleAsNeeded}
+				/>
 				<span class="job-new-status__hint">
-					{previewStart
-						? 'Scheduled — on the calendar. Start it from the job when work begins.'
-						: form.scheduleLater
-							? 'No date yet — saved to the job’s Visits list as “To be scheduled”.'
-							: 'Pending until you add a date. Set a schedule above to put it on the calendar.'}
+					{#if form.scheduleAsNeeded}
+						Action Required — created with no visits. Add a visit anytime from the job.
+					{:else if previewStart}
+						Scheduled — on the calendar. Start it from the job when work begins.
+					{:else if form.scheduleLater}
+						No date yet — saved to the job’s Visits list as “To be scheduled”.
+					{:else}
+						Pending until you add a date. Set a schedule above to put it on the calendar.
+					{/if}
 				</span>
 			</div>
 
 			<!-- Products & Services -->
 			<JobProductsPricing {form} {errors} loading={!!(prefillLoading && data.fromQuoteId)} />
 
-			<!-- Billing — recurring jobs bill on a schedule; one-off jobs use the payment schedule -->
-			{#if form.jobMode === 'recurring'}
+			<!-- Billing — recurring jobs bill on a schedule; one-off + "As needed" jobs use the
+				 payment schedule (recurring billing needs a real rule, which As needed has none of). -->
+			{#if form.jobMode === 'recurring' && !form.scheduleAsNeeded}
 				<JobRecurringBillingEditor
 					bind:enabled={form.recurBillingEnabled}
 					bind:billingType={form.recurBillingType}
@@ -690,11 +730,11 @@
 				{/if}
 			</div>
 
-			<!-- Job type & tags -->
+			<!-- Job category & tags -->
 			<div class="job-section">
 				<div class="field">
-					<p class="field__label">Job type</p>
-					<JobTypePicker bind:value={form.jobType} />
+					<p class="field__label">Job category</p>
+					<JobCategoryPicker bind:value={form.jobCategory} />
 				</div>
 
 				<div class="job-section-divider"></div>
@@ -746,7 +786,7 @@
 								</Select.Trigger>
 								<Select.Content>
 									{#each form.assignees as a (a.id)}
-										<Select.Item value={a.id}>{a.full_name}</Select.Item>
+										<Select.Item value={a.id} label={a.full_name}>{a.full_name}</Select.Item>
 									{/each}
 								</Select.Content>
 							</Select.Root>

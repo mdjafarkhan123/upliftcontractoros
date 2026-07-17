@@ -50,7 +50,13 @@
 			</h3>
 		</div>
 		<div class="job-card__top-right">
-			<JobStatusBadge status={job.status} scheduledStart={job.scheduled_start} />
+			<JobStatusBadge
+				status={job.status}
+				scheduledStart={job.scheduled_start}
+				hasSeriesAnchor={job.has_series_anchor}
+				nextOpenVisitStart={job.next_open_visit_start}
+				hasOpenVisits={job.has_open_visits}
+			/>
 			<div onclick={(e) => e.stopPropagation()} role="none">
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger class="contact-menu-trigger" aria-label="Actions for {job.title}">

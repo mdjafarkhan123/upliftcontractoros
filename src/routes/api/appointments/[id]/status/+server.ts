@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { appointments, outboxEvents, type Appointment } from '$lib/server/db/schema';
@@ -13,6 +13,59 @@ const EVENT_TYPE: Record<'completed' | 'cancelled' | 'no_show', string> = {
 	cancelled: 'appointment.cancelled',
 	no_show: 'appointment.no_show'
 };
+
+// Minimal job-schedule echo returned to the client after a visit transition so it can
+// refresh the job's badge + list row locally — avoiding a full /api/jobs/:id reload
+// (~13 queries). Only `repinned` jobs (one-off, not "as needed") get a rewritten
+// scheduled_start/end; the visit-truth signals are always recomputed for the badge.
+type JobEcho = {
+	repinned: boolean;
+	scheduled_start: string | null;
+	scheduled_end: string | null;
+	next_open_visit_start: string | null;
+	has_open_visits: boolean;
+};
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function computeJobEcho(
+	tx: Tx,
+	jobId: string | null,
+	orgId: string
+): Promise<JobEcho | null> {
+	if (!jobId) return null;
+	const repinned = await repinOneOffJobSchedule(tx, { orgId, jobId });
+	const [sig] = await tx
+		.select({
+			next_open_visit_start: sql<Date | null>`MIN(${appointments.scheduled_start}) FILTER (WHERE ${appointments.status} = 'scheduled')`,
+			has_open_visits: sql<
+				boolean | null
+			>`bool_or(${appointments.status} IN ('scheduled','unscheduled'))`
+		})
+		.from(appointments)
+		.where(
+			and(
+				eq(appointments.job_id, jobId),
+				eq(appointments.org_id, orgId),
+				isNull(appointments.deleted_at)
+			)
+		);
+	return {
+		repinned: repinned != null,
+		scheduled_start: toISO(repinned?.scheduled_start ?? null),
+		scheduled_end: toISO(repinned?.scheduled_end ?? null),
+		next_open_visit_start: toISO(sig?.next_open_visit_start ?? null),
+		has_open_visits: sig?.has_open_visits ?? false
+	};
+}
+
+// The raw `sql<Date>` aggregate returns a string from the driver (not a Date), while the
+// `repinOneOffJobSchedule` column reads return Date objects. Normalize either to an ISO
+// string (or null) so the response shape is stable.
+function toISO(v: Date | string | null): string | null {
+	if (v == null) return null;
+	return v instanceof Date ? v.toISOString() : String(v);
+}
 
 export const PATCH: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -71,7 +124,8 @@ export const PATCH: RequestHandler = async (event) => {
 			if (reverted.job_id) {
 				await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: reverted.job_id });
 			}
-			return { kind: 'ok' as const, row: reverted };
+			const job = await computeJobEcho(tx, reverted.job_id, auth.orgId);
+			return { kind: 'ok' as const, row: reverted, job };
 		}
 
 		// Forward transitions can't move an already-terminal visit. 'scheduled' and
@@ -112,7 +166,10 @@ export const PATCH: RequestHandler = async (event) => {
 				assigned_to: updated.assigned_to,
 				transitioned_at: now.toISOString()
 			},
-			idempotency_key: `${EVENT_TYPE[next]}:${updated.id}`
+			// A visit can be completed → marked incomplete → completed again, so the key must
+			// carry the transition stamp; a fixed `type:id` key collides on the re-completion.
+			// Rapid double-clicks are already blocked by the FOR UPDATE lock + terminal guard.
+			idempotency_key: `${EVENT_TYPE[next]}:${updated.id}:${now.getTime()}`
 		});
 
 		// Completing/cancelling/no-showing a visit removes it from the job's open set, so
@@ -120,7 +177,8 @@ export const PATCH: RequestHandler = async (event) => {
 		if (updated.job_id) {
 			await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: updated.job_id });
 		}
-		return { kind: 'ok' as const, row: updated };
+		const job = await computeJobEcho(tx, updated.job_id, auth.orgId);
+		return { kind: 'ok' as const, row: updated, job };
 	});
 
 	if (result.kind === 'notFound') error(404, 'Appointment not found');
@@ -138,7 +196,8 @@ export const PATCH: RequestHandler = async (event) => {
 			cancelled_at: result.row.cancelled_at?.toISOString() ?? null,
 			completed_at: result.row.completed_at?.toISOString() ?? null,
 			completed_by: result.row.completed_by ?? null,
-			completion_notes: result.row.completion_notes ?? null
+			completion_notes: result.row.completion_notes ?? null,
+			job: result.kind === 'ok' ? (result.job ?? null) : null
 		}
 	});
 };

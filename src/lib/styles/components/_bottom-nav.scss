@@ -43,8 +43,9 @@
 		background: none;
 		border: none;
 		cursor: pointer;
-		transition: color $duration-fast $ease-standard,
-		            background-color $duration-fast $ease-standard;
+		transition:
+			color $duration-fast $ease-standard,
+			background-color $duration-fast $ease-standard;
 
 		&:hover {
 			color: var(--color-text-primary);
@@ -62,7 +63,9 @@
 		color: var(--color-brand);
 		background: var(--state-active-tint);
 
-		.bottom-nav__icon { color: var(--color-brand); }
+		.bottom-nav__icon {
+			color: var(--color-brand);
+		}
 	}
 
 	// ── Icon wrapper (holds the badge) ───────────────────────────────────────

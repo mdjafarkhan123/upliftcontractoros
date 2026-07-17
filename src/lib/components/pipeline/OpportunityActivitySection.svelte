@@ -77,10 +77,7 @@
 					<div class="opp-section__item-body">
 						<p class="opp-section__item-text">{a.summary}</p>
 					</div>
-					<span
-						class="opp-section__item-time"
-						title={new Date(a.occurred_at).toLocaleString()}
-					>
+					<span class="opp-section__item-time" title={new Date(a.occurred_at).toLocaleString()}>
 						{relative(a.occurred_at)}
 					</span>
 				</li>

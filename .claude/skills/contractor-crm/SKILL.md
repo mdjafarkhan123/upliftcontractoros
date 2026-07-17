@@ -80,16 +80,16 @@ These files are a plain-English reference built from Jobber's live GraphQL schem
 the Jobber Help Center / Developer Center (every behavior cited; unconfirmed items marked
 `(unverified)`). They describe **Jobber**, not our schema — read alongside our own `references/*.md`.
 
-| You want Jobber's model of...                                                              | Read this reference                                    |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Vocabulary, full lead→cash lifecycle, object map, **master status table**, API basics      | `references/jobber/jobber-00-overview-lifecycle.md`    |
-| Clients & Properties — customer/location model, tags, custom fields, client hub basics      | `references/jobber/jobber-01-clients-properties.md`    |
-| Requests & Leads — work requests, assessments, lead intake / online booking                 | `references/jobber/jobber-02-requests-leads.md`        |
-| Quotes — line items, good-better-best (option sets), deposits, approvals, financing          | `references/jobber/jobber-03-quotes.md`                |
-| Jobs, Visits & Scheduling — one-off vs recurring, recurrence, billing strategy, calendar     | `references/jobber/jobber-04-jobs-visits-scheduling.md`|
-| Invoices & Payments — statuses, batch invoicing, progress invoicing, Jobber Payments/tips    | `references/jobber/jobber-05-invoices-payments.md`     |
-| Automations & Client Hub — trigger/condition/action builder, self-serve client portal        | `references/jobber/jobber-06-automations-clienthub.md` |
-| **API model** — query/mutation catalog, pagination, `userErrors`, webhooks, rate limits      | `references/jobber/jobber-07-api-mutations.md`         |
+| You want Jobber's model of...                                                             | Read this reference                                     |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Vocabulary, full lead→cash lifecycle, object map, **master status table**, API basics     | `references/jobber/jobber-00-overview-lifecycle.md`     |
+| Clients & Properties — customer/location model, tags, custom fields, client hub basics    | `references/jobber/jobber-01-clients-properties.md`     |
+| Requests & Leads — work requests, assessments, lead intake / online booking               | `references/jobber/jobber-02-requests-leads.md`         |
+| Quotes — line items, good-better-best (option sets), deposits, approvals, financing       | `references/jobber/jobber-03-quotes.md`                 |
+| Jobs, Visits & Scheduling — one-off vs recurring, recurrence, billing strategy, calendar  | `references/jobber/jobber-04-jobs-visits-scheduling.md` |
+| Invoices & Payments — statuses, batch invoicing, progress invoicing, Jobber Payments/tips | `references/jobber/jobber-05-invoices-payments.md`      |
+| Automations & Client Hub — trigger/condition/action builder, self-serve client portal     | `references/jobber/jobber-06-automations-clienthub.md`  |
+| **API model** — query/mutation catalog, pagination, `userErrors`, webhooks, rate limits   | `references/jobber/jobber-07-api-mutations.md`          |
 
 Start at `jobber-00` (index + lifecycle + master status table) when unsure which file you need.
 

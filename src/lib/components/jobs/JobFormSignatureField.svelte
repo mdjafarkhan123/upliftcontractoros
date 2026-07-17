@@ -171,9 +171,7 @@
 			<Button variant="ghost" size="sm" onclick={clearPad} disabled={!hasDrawn || saving}>
 				Clear
 			</Button>
-			<Button size="sm" loading={saving} disabled={!hasDrawn} onclick={save}>
-				Save signature
-			</Button>
+			<Button size="sm" loading={saving} disabled={!hasDrawn} onclick={save}>Save signature</Button>
 		</div>
 	</div>
 {:else}

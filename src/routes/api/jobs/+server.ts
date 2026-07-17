@@ -37,10 +37,7 @@ import { canViewAnyJob } from '$lib/server/jobs/permissions';
 import { createJobSchema } from '$lib/server/jobs/schemas';
 import { computeLineTotal, recalcJobTotals } from '$lib/server/jobs/recalc';
 import { expandRecurrence } from '$lib/server/jobs/recurrence';
-import {
-	resolveCustomFieldColumns,
-	isCustomFieldFilled
-} from '$lib/server/jobs/customFieldValues';
+import { resolveCustomFieldColumns, isCustomFieldFilled } from '$lib/server/jobs/customFieldValues';
 import { textMatch, textRank } from '$lib/server/search/textSearch';
 import type { JobCustomFieldType } from '$lib/types/jobs';
 
@@ -81,38 +78,81 @@ export const GET: RequestHandler = async (event) => {
 	// tabs don't apply in the bin (it shows every deleted job the member can see).
 	const deletedFilter = url.searchParams.get('deleted') === '1';
 
+	// ── Visit-truth signals (mirrors deriveJobScheduleState) ───────────────────
+	// The status faces are driven by the job's OPEN visits, not its single denormalized date —
+	// so recurring/multi-visit jobs (whose scheduled_start is a frozen series anchor) badge and
+	// filter correctly. idx_appointments_job_id keeps these correlated scans cheap.
+	const nextOpenVisitStartSql = sql<Date | null>`(
+		SELECT MIN(a.scheduled_start) FROM ${appointments} a
+		WHERE a.job_id = ${jobs.id} AND a.deleted_at IS NULL AND a.status = 'scheduled'
+	)`;
+	const hasOpenVisitsSql = sql<boolean>`EXISTS (
+		SELECT 1 FROM ${appointments} a
+		WHERE a.job_id = ${jobs.id} AND a.deleted_at IS NULL AND a.status IN ('scheduled','unscheduled')
+	)`;
+	// Effective "next open date" for the dated faces: the next open visit, or — as a legacy safety
+	// net for a job with no visit rows at all — the job's own date.
+	//
+	// The fallback is only valid when `scheduled_start` MIRRORS a single visit. It must never fire
+	// when that column is a SERIES ANCHOR, which it is whenever the job has a repeat rule (the
+	// expansion start, deliberately frozen) or is "as needed" (a stored job WINDOW — the job must
+	// read Action Required until visits exist). Note this is NOT the same test as job_type: a
+	// one-off may carry a repeat rule, and its anchor is just as frozen. Testing job_type here
+	// would make a repeating one-off whose visits are all complete read "Overdue" off its start
+	// date instead of "Action Required".
+	const mirrorsSingleVisitSql = sql`(${jobs.recurrence} IS NULL AND NOT ${jobs.schedule_as_needed})`;
+	const effOpenStartSql = sql`COALESCE(
+		${nextOpenVisitStartSql},
+		CASE WHEN ${mirrorsSingleVisitSql} AND NOT ${hasOpenVisitsSql} THEN ${jobs.scheduled_start} END
+	)`;
+	const todayStartTz = sql`${startOfTodayUtc().toISOString()}::timestamptz`;
+	const todayEndTz = sql`${endOfTodayUtc().toISOString()}::timestamptz`;
+
 	const conditions: SQL[] = [
 		eq(jobs.org_id, auth.orgId),
 		deletedFilter ? isNotNull(jobs.deleted_at) : isNull(jobs.deleted_at)
 	];
 
 	if (!deletedFilter && statusFilter === 'pending') {
-		// Derived: created but not yet on the calendar.
-		conditions.push(eq(jobs.status, 'scheduled'), isNull(jobs.scheduled_start));
-	} else if (statusFilter === 'upcoming') {
-		// Derived: 'scheduled' enum with a date in the future.
-		conditions.push(eq(jobs.status, 'scheduled'), gt(jobs.scheduled_start, endOfTodayUtc()));
-	} else if (statusFilter === 'today') {
-		// Derived: 'scheduled' enum with today's date (not yet started).
+		// Unscheduled: open placeholder visit(s) waiting for a date.
 		conditions.push(
 			eq(jobs.status, 'scheduled'),
-			gte(jobs.scheduled_start, startOfTodayUtc()),
-			lte(jobs.scheduled_start, endOfTodayUtc())
+			sql`${effOpenStartSql} IS NULL`,
+			sql`${hasOpenVisitsSql}`
+		);
+	} else if (statusFilter === 'upcoming') {
+		// Next open visit is in the future.
+		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} > ${todayEndTz}`);
+	} else if (statusFilter === 'today') {
+		// Next open visit is today (not yet started).
+		conditions.push(
+			eq(jobs.status, 'scheduled'),
+			sql`${effOpenStartSql} >= ${todayStartTz}`,
+			sql`${effOpenStartSql} <= ${todayEndTz}`
 		);
 	} else if (statusFilter === 'overdue') {
-		// Derived: 'scheduled' enum whose date has passed and was never started/completed.
-		conditions.push(eq(jobs.status, 'scheduled'), lt(jobs.scheduled_start, startOfTodayUtc()));
+		// Next open visit's date has passed and it was never completed/started.
+		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} < ${todayStartTz}`);
+	} else if (statusFilter === 'action_required') {
+		// Active but no open visits remain — schedule more or close.
+		conditions.push(
+			eq(jobs.status, 'scheduled'),
+			sql`${effOpenStartSql} IS NULL`,
+			sql`NOT ${hasOpenVisitsSql}`
+		);
 	} else if (statusFilter === 'scheduled') {
-		// Legacy alias (kept tolerant): 'scheduled' enum WITH any date set.
-		conditions.push(eq(jobs.status, 'scheduled'), isNotNull(jobs.scheduled_start));
+		// Legacy alias (kept tolerant): 'scheduled' enum WITH any open dated visit.
+		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} IS NOT NULL`);
 	} else if (statusFilter && ENUM_STATUSES.has(statusFilter)) {
 		conditions.push(eq(jobs.status, statusFilter as 'in_progress'));
 	}
 
 	if (scopeFilter && VALID_SCOPES.has(scopeFilter)) {
 		if (scopeFilter === 'today') {
+			// Exclude "As needed": its scheduled_start is a window anchor, not work due today.
 			conditions.push(
 				inArray(jobs.status, ['scheduled', 'in_progress']),
+				sql`NOT ${jobs.schedule_as_needed}`,
 				gte(jobs.scheduled_start, startOfTodayUtc()),
 				lte(jobs.scheduled_start, endOfTodayUtc())
 			);
@@ -225,11 +265,11 @@ export const GET: RequestHandler = async (event) => {
 			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status = 'draft')
 		OR EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 			WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL AND m.invoice_id IS NULL)
-		OR (${jobs.recurrence} IS NOT NULL AND ${jobs.billing_type} = 'visit_based'
+		OR (${jobs.job_type} = 'recurring' AND ${jobs.billing_type} = 'visit_based'
 			AND EXISTS (SELECT 1 FROM ${appointments} a
 				WHERE a.job_id = ${jobs.id} AND a.deleted_at IS NULL AND a.status <> 'cancelled'
 				  AND a.billed_invoice_id IS NULL AND a.scheduled_start <= now()))
-		OR (${jobs.recurrence} IS NULL AND ${jobs.status} = 'completed'
+		OR (${jobs.job_type} = 'one_off' AND ${jobs.status} = 'completed'
 			AND NOT EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 				WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL)
 			AND NOT EXISTS (SELECT 1 FROM ${invoices} i
@@ -264,8 +304,15 @@ export const GET: RequestHandler = async (event) => {
 			scheduled_end: jobs.scheduled_end,
 			created_at: jobs.created_at,
 			deleted_at: jobs.deleted_at,
+			next_open_visit_start: nextOpenVisitStartSql,
+			has_open_visits: hasOpenVisitsSql,
+			has_series_anchor: sql<boolean>`(NOT ${mirrorsSingleVisitSql})`,
 			total: jobs.total,
-			is_recurring: sql<boolean>`(${jobs.recurrence} IS NOT NULL)`,
+			// The TYPE badge ("Recurring"/"One-off"), read from the stored type and never re-derived
+			// from the rule — they are different questions now: an "as needed" job is recurring with
+			// no rule, and a one-off may carry a rule. For "does this job repeat?" use the rule
+			// (has_series_anchor), not this.
+			is_recurring: sql<boolean>`(${jobs.job_type} = 'recurring')`,
 			service_address_line_1: jobs.service_address_line_1,
 			service_address_city: jobs.service_address_city,
 			service_address_state: jobs.service_address_state,
@@ -448,7 +495,8 @@ export const POST: RequestHandler = async (event) => {
 				value_bool: null,
 				value_date: null
 			};
-			if (!isCustomFieldFilled(d.field_type as JobCustomFieldType, cols)) missingRequired.push(d.id);
+			if (!isCustomFieldFilled(d.field_type as JobCustomFieldType, cols))
+				missingRequired.push(d.id);
 		}
 		if (missingRequired.length > 0) {
 			const field_errors: Record<string, string> = {};
@@ -478,7 +526,15 @@ export const POST: RequestHandler = async (event) => {
 	// an empty result is a clean 422 rather than a rolled-back write. The job's own
 	// scheduled_start/end is then pinned to the first visit (keeps list scopes /
 	// "today" working). Validated above: recurrence implies scheduled_start exists.
-	const recurrence = input.recurrence ?? null;
+	// "As needed" (Jobber): a recurring job with no rule and NO visits, but it still stores its
+	// job-level WINDOW — scheduled_start = start day, scheduled_end = end boundary (Ends on /
+	// Ends after converted client-side). Any recurrence rule sent alongside is ignored.
+	// A repeat rule is NOT a recurring-only concept (Jobber): job_type decides how the job bills,
+	// the rule decides how its visits are generated, and a ONE-OFF may carry one — "one visit, or
+	// a few visits, until the work is done". So the rule is honored whatever the type is; only
+	// "As needed" (which means "no rule, no visits") suppresses it.
+	const asNeeded = input.schedule_as_needed === true;
+	const recurrence = asNeeded ? null : (input.recurrence ?? null);
 	const visits = recurrence
 		? expandRecurrence(input.scheduled_start as Date, input.scheduled_end ?? null, recurrence)
 		: [];
@@ -490,7 +546,13 @@ export const POST: RequestHandler = async (event) => {
 	}
 	const jobStart = recurrence ? visits[0].start : (input.scheduled_start ?? null);
 	// An "Anytime" (all-day) one-off carries a date but no clock time, so it has no end.
-	const jobEnd = recurrence ? visits[0].end : input.all_day ? null : (input.scheduled_end ?? null);
+	const jobEnd = recurrence
+		? visits[0].end
+		: asNeeded
+			? (input.scheduled_end ?? null)
+			: input.all_day
+				? null
+				: (input.scheduled_end ?? null);
 
 	const created = await db.transaction(async (tx) => {
 		const [row] = await tx
@@ -503,11 +565,14 @@ export const POST: RequestHandler = async (event) => {
 				title: input.title,
 				status,
 				assigned_to: input.assigned_to ?? null,
-				job_type: input.job_type ?? null,
+				// The user's One-off/Recurring decision, stored verbatim and never inferred.
+				job_type: input.job_type,
+				job_category: input.job_category ?? null,
 				tags: input.tags ?? [],
 				scheduled_start: jobStart,
 				scheduled_end: jobEnd,
 				recurrence,
+				schedule_as_needed: asNeeded,
 				scope_of_work: input.scope_of_work,
 				notes: input.notes,
 				service_address_line_1: svcLine1,
@@ -668,8 +733,9 @@ export const POST: RequestHandler = async (event) => {
 		// Housecall Pro). Materialize that visit so the job lands on the calendar
 		// instantly and is reschedulable / completable like any other visit. Recurring
 		// jobs are handled above; unscheduled ("Anytime") jobs get no visit and stay in
-		// the Unscheduled list. Mirrors the recurring per-visit insert (single visit).
-		if (!recurrence && jobStart) {
+		// the Unscheduled list. "As needed" jobs store a window but NEVER get a visit here
+		// (that's the whole point — the contractor adds visits manually later).
+		if (!recurrence && !asNeeded && jobStart) {
 			const [visit] = await tx
 				.insert(appointments)
 				.values({
@@ -733,7 +799,8 @@ export const POST: RequestHandler = async (event) => {
 		// outbox event is enqueued here; it only surfaces in the job's Visits list, where the
 		// contractor can complete it or give it a date later. Skipped for recurring jobs
 		// (they always expand to dated visits) and for one-off jobs that DID get a date above.
-		if (!recurrence && !jobStart && input.schedule_later) {
+		// "As needed" is deliberately EXCLUDED: it wants zero visits (not even a placeholder).
+		if (!recurrence && !jobStart && input.schedule_later && !asNeeded) {
 			const [visit] = await tx
 				.insert(appointments)
 				.values({

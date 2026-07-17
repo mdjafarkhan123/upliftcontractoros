@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { Dialog as DialogPrimitive } from 'bits-ui';
 
-	let { class: className = '', ref = $bindable(null), ...rest }: DialogPrimitive.OverlayProps =
-		$props();
+	let {
+		class: className = '',
+		ref = $bindable(null),
+		...rest
+	}: DialogPrimitive.OverlayProps = $props();
 </script>
 
 <DialogPrimitive.Overlay

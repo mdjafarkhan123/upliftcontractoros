@@ -141,7 +141,11 @@ export const POST: RequestHandler = async (event) => {
 
 		// Optional add-ons — scoped to the accepted tier when tiered.
 		const optionalLines = await tx
-			.select({ id: quoteLineItems.id, total: quoteLineItems.total, taxable: quoteLineItems.taxable })
+			.select({
+				id: quoteLineItems.id,
+				total: quoteLineItems.total,
+				taxable: quoteLineItems.taxable
+			})
 			.from(quoteLineItems)
 			.where(
 				and(

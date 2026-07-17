@@ -311,8 +311,7 @@ export const POST: RequestHandler = async (event) => {
 							: null,
 				notes: input.notes ?? null,
 				internal_notes: input.internal_notes ?? null,
-				terms:
-					input.terms !== undefined ? input.terms : (orgRow?.default_quote_terms ?? null),
+				terms: input.terms !== undefined ? input.terms : (orgRow?.default_quote_terms ?? null),
 				expires_at: input.expires_at ?? null,
 				public_token_hash: randomPlaceholderHash()
 			})

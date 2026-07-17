@@ -48,10 +48,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const parsed = logFollowUpSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
-			{ error: parsed.error.issues[0]?.message ?? 'Invalid input' },
-			{ status: 422 }
-		);
+		return json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 422 });
 	}
 
 	const [opp] = await db

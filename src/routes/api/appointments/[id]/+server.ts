@@ -50,6 +50,7 @@ function serialize(
 		scheduled_end: row.scheduled_end?.toISOString() ?? null,
 		location: row.location,
 		notes: row.notes,
+		completion_notes: row.completion_notes,
 		reminder_24h_sent: row.reminder_24h_sent,
 		reminder_1h_sent: row.reminder_1h_sent,
 		cancelled_at: row.cancelled_at?.toISOString() ?? null,
@@ -139,6 +140,22 @@ export const PATCH: RequestHandler = async (event) => {
 		input.lead_member_id !== undefined ||
 		input.assigned_to !== undefined;
 
+	// The Visit Details modal's Notes tab only ever sends `completion_notes`. When that's the
+	// SOLE change, take a light path that skips all reschedule/overlap/re-pin logic and — unlike a
+	// schedule edit — is allowed on a completed/cancelled visit (a per-visit note is free text, not
+	// a schedule change, and notes are shown on completed visits).
+	const notesOnly =
+		input.completion_notes !== undefined &&
+		input.type === undefined &&
+		input.title === undefined &&
+		input.all_day === undefined &&
+		input.scheduled_start === undefined &&
+		input.scheduled_end === undefined &&
+		input.location === undefined &&
+		input.notes === undefined &&
+		!assigneesProvided &&
+		(!input.notify_channel || input.notify_channel === 'none');
+
 	let crew: { assigneeIds: string[]; leadMemberId: string | null } | null = null;
 	if (assigneesProvided) {
 		const resolution = resolveAssigneeInput({
@@ -182,6 +199,17 @@ export const PATCH: RequestHandler = async (event) => {
 			.limit(1);
 		if (!existing) return { kind: 'notFound' as const };
 
+		// Notes-only edit: update the free note in place, on any status, and return. No slot moved,
+		// so no reminders reset, no re-pin, no outbox event.
+		if (notesOnly) {
+			const [row] = await tx
+				.update(appointments)
+				.set({ completion_notes: input.completion_notes, updated_at: new Date() })
+				.where(eq(appointments.id, id))
+				.returning();
+			return { kind: 'ok' as const, row, repinnedJob: null };
+		}
+
 		if (
 			existing.status === 'completed' ||
 			existing.status === 'cancelled' ||
@@ -222,6 +250,20 @@ export const PATCH: RequestHandler = async (event) => {
 		// start moved, end moved, or the timed⇄anytime nature flipped.
 		const isReschedule = startChanged || endChanged || allDayChanged;
 
+		// Explicit un-schedule: the visit editor sends scheduled_start:null to send a dated,
+		// still-open visit back to an "unscheduled" placeholder (Jobber: startAt/endAt null +
+		// status UNSCHEDULED — the row survives, still completable/editable). Distinct from an
+		// omitted start (undefined = "leave the date alone"). Only a currently-scheduled visit
+		// can be un-scheduled; a placeholder sent null again is a no-op.
+		const unscheduling =
+			input.scheduled_start === null &&
+			existing.scheduled_start !== null &&
+			existing.status === 'scheduled';
+
+		// Anything that changed the slot — a move OR an un-schedule — must reset reminders and
+		// re-pin the parent job's denormalized schedule.
+		const scheduleChanged = isReschedule || unscheduling;
+
 		// Only timed visits with a crew can time-conflict — Anytime visits never do.
 		if (
 			(startChanged || endChanged || crewChanged) &&
@@ -244,19 +286,27 @@ export const PATCH: RequestHandler = async (event) => {
 		if (input.type !== undefined) updates.type = input.type;
 		if (input.title !== undefined) updates.title = input.title;
 		if (input.all_day !== undefined) updates.all_day = input.all_day;
-		if (input.scheduled_start != null) updates.scheduled_start = input.scheduled_start;
-		// Becoming Anytime clears the end; otherwise honour an explicit end change.
-		if (nextAllDay) updates.scheduled_end = null;
-		else if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
+		if (unscheduling) {
+			// Send the visit back to a placeholder: clear both dates. Status flips below.
+			updates.scheduled_start = null;
+			updates.scheduled_end = null;
+		} else {
+			if (input.scheduled_start != null) updates.scheduled_start = input.scheduled_start;
+			// Becoming Anytime clears the end; otherwise honour an explicit end change.
+			if (nextAllDay) updates.scheduled_end = null;
+			else if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
+		}
 		if (input.location !== undefined) updates.location = input.location;
 		if (input.notes !== undefined) updates.notes = input.notes;
+		if (input.completion_notes !== undefined) updates.completion_notes = input.completion_notes;
 		// Promote a "Schedule later" placeholder the moment it gains a date: an unscheduled
 		// visit given a start becomes a real scheduled visit, so it lands on the calendar AND
 		// the reminder worker (which gates on status === 'scheduled') enrolls it. startChanged
 		// above already flagged this null→date move, so isReschedule fires the outbox event.
-		if (existing.status === 'unscheduled' && nextStart != null) updates.status = 'scheduled';
+		if (unscheduling) updates.status = 'unscheduled';
+		else if (existing.status === 'unscheduled' && nextStart != null) updates.status = 'scheduled';
 
-		if (isReschedule) {
+		if (scheduleChanged) {
 			updates.reminder_24h_sent = false;
 			updates.reminder_1h_sent = false;
 		}
@@ -288,7 +338,7 @@ export const PATCH: RequestHandler = async (event) => {
 			scheduled_start: string | null;
 			scheduled_end: string | null;
 		} | null = null;
-		if (isReschedule && row.job_id) {
+		if (scheduleChanged && row.job_id) {
 			const repinned = await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId: row.job_id });
 			// `repinned` is null for a recurring/deleted job (no row updated) — nothing to echo.
 			if (repinned) {

@@ -52,7 +52,14 @@
 
 	function openNew() {
 		editorError = '';
-		editor = { id: null, field_type: 'short_text', label: '', help_text: '', required: false, options: [''] };
+		editor = {
+			id: null,
+			field_type: 'short_text',
+			label: '',
+			help_text: '',
+			required: false,
+			options: ['']
+		};
 	}
 
 	function openEdit(f: JobCustomFieldDef) {
@@ -288,7 +295,9 @@
 					<div class="field">
 						<span class="field__label">Type</span>
 						{#if editor.id}
-							<p class="jcf__type-static">{typeLabel(editor.field_type)} <span>· can't be changed</span></p>
+							<p class="jcf__type-static">
+								{typeLabel(editor.field_type)} <span>· can't be changed</span>
+							</p>
 						{:else}
 							<div class="jcf__type-grid">
 								{#each TYPE_OPTIONS as opt (opt.value)}
@@ -321,7 +330,9 @@
 					</div>
 
 					<div class="field">
-						<label class="field__label" for="jcf-help">Help text <span class="jcf__optional">(optional)</span></label>
+						<label class="field__label" for="jcf-help"
+							>Help text <span class="jcf__optional">(optional)</span></label
+						>
 						<input
 							id="jcf-help"
 							class="field__input"
@@ -374,9 +385,7 @@
 					{/if}
 
 					<div class="jcf__editor-actions">
-						<Button variant="ghost" disabled={saving} onclick={closeEditor}>
-							Cancel
-						</Button>
+						<Button variant="ghost" disabled={saving} onclick={closeEditor}>Cancel</Button>
 						<Button loading={saving} loadingLabel="Saving…" onclick={saveEditor}>
 							{editor.id ? 'Save changes' : 'Add field'}
 						</Button>
@@ -654,6 +663,4 @@
 			gap: $space-2;
 		}
 	}
-
-
 </style>

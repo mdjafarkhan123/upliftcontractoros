@@ -218,11 +218,15 @@
 <Sheet.Root bind:open onOpenChange={(o) => !o && onClose()}>
 	<Sheet.Content
 		side={isDesktop ? 'right' : 'bottom'}
-		class={isDesktop ? 'overflow-y-auto w-[520px] sm:max-w-[520px]' : 'overflow-y-auto max-h-[92vh]'}
+		class={isDesktop
+			? 'overflow-y-auto w-[520px] sm:max-w-[520px]'
+			: 'overflow-y-auto max-h-[92vh]'}
 	>
 		<Sheet.Header>
 			<Sheet.Title>{opportunity.contact_name}</Sheet.Title>
-			<p style="font-size: var(--text-body); color: var(--color-text-muted);">{opportunity.title}</p>
+			<p style="font-size: var(--text-body); color: var(--color-text-muted);">
+				{opportunity.title}
+			</p>
 		</Sheet.Header>
 
 		<div class="opp-sheet">
@@ -284,9 +288,9 @@
 								{assignees.find((m) => m.id === assignedTo)?.full_name ?? 'Unassigned'}
 							</Select.Trigger>
 							<Select.Content>
-								<Select.Item value="">Unassigned</Select.Item>
+								<Select.Item value="" label="Unassigned">Unassigned</Select.Item>
 								{#each assignees as m (m.id)}
-									<Select.Item value={m.id}>{m.full_name}</Select.Item>
+									<Select.Item value={m.id} label={m.full_name}>{m.full_name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>
@@ -327,7 +331,7 @@
 						</Select.Trigger>
 						<Select.Content>
 							{#each stages as s (s.id)}
-								<Select.Item value={s.id}>{s.name}</Select.Item>
+								<Select.Item value={s.id} label={s.name}>{s.name}</Select.Item>
 							{/each}
 						</Select.Content>
 					</Select.Root>

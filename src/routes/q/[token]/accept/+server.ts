@@ -94,7 +94,11 @@ export const POST: RequestHandler = async (event) => {
 			// Tiered: the customer MUST pick exactly one of this quote's real packages. Anything
 			// missing or foreign is rejected — the browser can never smuggle another tier's price.
 			if (!requestedPackageId || !pkgs.some((p) => p.id === requestedPackageId)) {
-				return { kind: 'error' as const, status: 400, message: 'Please choose a package to continue.' };
+				return {
+					kind: 'error' as const,
+					status: 400,
+					message: 'Please choose a package to continue.'
+				};
 			}
 			selectedPackageId = requestedPackageId;
 		}
@@ -122,7 +126,11 @@ export const POST: RequestHandler = async (event) => {
 
 		// Optional add-ons the customer could tick — scoped to the selected tier when tiered.
 		const optionalLines = await tx
-			.select({ id: quoteLineItems.id, total: quoteLineItems.total, taxable: quoteLineItems.taxable })
+			.select({
+				id: quoteLineItems.id,
+				total: quoteLineItems.total,
+				taxable: quoteLineItems.taxable
+			})
 			.from(quoteLineItems)
 			.where(
 				and(

@@ -386,10 +386,19 @@
 				</div>
 
 				<footer class="email-section__footer">
-					<Button variant="secondary" disabled={saving || !dirty} onclick={() => (localInput = originalLocal)}>
+					<Button
+						variant="secondary"
+						disabled={saving || !dirty}
+						onclick={() => (localInput = originalLocal)}
+					>
 						Reset
 					</Button>
-					<Button disabled={!dirty || !valid} loading={saving} loadingLabel="Saving…" onclick={() => void save()}>
+					<Button
+						disabled={!dirty || !valid}
+						loading={saving}
+						loadingLabel="Saving…"
+						onclick={() => void save()}
+					>
 						Save changes
 					</Button>
 				</footer>
@@ -435,11 +444,22 @@
 												<p class="field__error">{editError}</p>
 											{/if}
 											<div class="email-addr-row__edit-actions">
-												<Button variant="secondary" size="sm" disabled={savingEdit} onclick={cancelEdit}>
+												<Button
+													variant="secondary"
+													size="sm"
+													disabled={savingEdit}
+													onclick={cancelEdit}
+												>
 													<i class="ri-close-line" aria-hidden="true"></i>
 													Cancel
 												</Button>
-												<Button size="sm" disabled={!editLocalValid} loading={savingEdit} loadingLabel="Saving…" onclick={() => void saveEdit(addr.id)}>
+												<Button
+													size="sm"
+													disabled={!editLocalValid}
+													loading={savingEdit}
+													loadingLabel="Saving…"
+													onclick={() => void saveEdit(addr.id)}
+												>
 													<i class="ri-check-line" aria-hidden="true"></i>
 													Save
 												</Button>
@@ -515,7 +535,12 @@
 							</p>
 						{/if}
 						<div class="email-addnew__actions">
-							<Button disabled={!canAdd} loading={adding} loadingLabel="Adding…" onclick={() => void addAddress()}>
+							<Button
+								disabled={!canAdd}
+								loading={adding}
+								loadingLabel="Adding…"
+								onclick={() => void addAddress()}
+							>
 								<i class="ri-add-line" aria-hidden="true"></i>
 								Add address
 							</Button>
@@ -609,7 +634,12 @@
 					</div>
 
 					<footer class="email-section__footer">
-						<Button disabled={!canSubmitRequest} loading={submitting} loadingLabel="Sending…" onclick={() => void submitRequest()}>
+						<Button
+							disabled={!canSubmitRequest}
+							loading={submitting}
+							loadingLabel="Sending…"
+							onclick={() => void submitRequest()}
+						>
 							<i class="ri-send-plane-line" aria-hidden="true"></i>
 							Send request
 						</Button>

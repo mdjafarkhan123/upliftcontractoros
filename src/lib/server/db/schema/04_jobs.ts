@@ -28,6 +28,13 @@ export const jobStatusEnum = pgEnum('job_status', [
 
 export const jobSourceEnum = pgEnum('job_source', ['opportunity', 'manual']);
 
+// Jobber's `JobTypeTypeEnum` — one-off vs recurring. This is the USER'S decision, made with
+// the toggle at creation, NOT something derived from the recurrence rule or the visits: a
+// one-off job may legitimately have several visits ("one visit, or a few, until the work is
+// done"), so visit count distinguishes nothing. IMMUTABLE after create, like Jobber — the
+// escape hatch is duplicating the job (POST /api/jobs/[id]/duplicate).
+export const jobTypeEnum = pgEnum('job_type', ['one_off', 'recurring']);
+
 export const jobs = pgTable('jobs', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	org_id: uuid('org_id')
@@ -41,9 +48,14 @@ export const jobs = pgTable('jobs', {
 	title: text('title').notNull(),
 	status: jobStatusEnum('status').notNull().default('scheduled'),
 	assigned_to: uuid('assigned_to').references(() => orgMembers.id),
-	// Free-text category for the work (e.g. Repair, Installation, Maintenance). UI offers a
-	// preset combobox but any value is allowed — no separate job-type settings table yet.
-	job_type: text('job_type'),
+	// One-off vs recurring — the authority. Every read (badge, list scopes, stats, detail)
+	// must consult THIS, never `recurrence IS NOT NULL`. See jobTypeEnum above.
+	job_type: jobTypeEnum('job_type').notNull(),
+	// Free-text category for the WORK (e.g. Repair, Installation, Maintenance). UI offers a
+	// preset combobox but any value is allowed — no separate category settings table yet.
+	// Named job_type until 0159; renamed to free that name for Jobber's one-off/recurring
+	// enum above, which is a completely different concept.
+	job_category: text('job_category'),
 	// Operational descriptors, mirrors contacts.tags exactly (text[] default '{}').
 	tags: text('tags')
 		.array()
@@ -90,10 +102,21 @@ export const jobs = pgTable('jobs', {
 	fixed_invoice_amount: numeric('fixed_invoice_amount', { precision: 12, scale: 2 }),
 	scheduled_start: timestamp('scheduled_start', { withTimezone: true }),
 	scheduled_end: timestamp('scheduled_end', { withTimezone: true }),
-	// Recurring jobs only: the repeat rule. NULL = one-off. Visits are materialized
-	// up-front as `appointments` rows (job_id link) — this column is the source rule
-	// kept for display + future "edit recurring schedule". See $lib/server/jobs/recurrence.
+	// Recurring jobs only: the repeat rule. Visits are materialized up-front as
+	// `appointments` rows (job_id link) — this column is the source rule kept for display +
+	// "edit recurring schedule". See $lib/server/jobs/recurrence.
+	// NOT a type signal: NULL does NOT mean one-off (an as-needed recurring job has no rule).
+	// Read job_type for that.
 	recurrence: jsonb('recurrence').$type<JobRecurrence>(),
+	// Jobber "As Needed — We Won't Prompt You": a recurring job (job_type = 'recurring')
+	// created with NO rule and NO visits. recurrence stays NULL, but scheduled_start/
+	// scheduled_end store the job-level WINDOW (start day + end boundary from Ends after/on)
+	// — Jobber keeps job start/end even with no visits. Every "no open visits → fall back to
+	// scheduled_start" derive (status badge, list scopes, stats, repin) must exclude this
+	// flag so the job reads "Action Required", not Upcoming. FALSE for every other job.
+	// Scope note: since 0159 this means ONLY "recurring, no rule yet". It is no longer part
+	// of deciding whether a job is recurring — that's job_type's job alone.
+	schedule_as_needed: boolean('schedule_as_needed').notNull().default(false),
 	completed_at: timestamp('completed_at', { withTimezone: true }),
 	cancelled_at: timestamp('cancelled_at', { withTimezone: true }),
 	// ── Client sign-off (Session 6) ─────────────────────────────────────────────

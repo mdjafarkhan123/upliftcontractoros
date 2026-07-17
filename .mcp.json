@@ -1,17 +1,14 @@
 {
-  "mcpServers": {
-    "svelte": {
-      "type": "stdio",
-      "command": "npx",
-      "env": {},
-      "args": [
-        "-y",
-        "@sveltejs/mcp"
-      ]
-    },
-    "supabase": {
-      "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=wqodecwlynshdujaphaz"
-    }
-  }
+	"mcpServers": {
+		"svelte": {
+			"type": "stdio",
+			"command": "npx",
+			"env": {},
+			"args": ["-y", "@sveltejs/mcp"]
+		},
+		"supabase": {
+			"type": "http",
+			"url": "https://mcp.supabase.com/mcp?project_ref=wqodecwlynshdujaphaz"
+		}
+	}
 }

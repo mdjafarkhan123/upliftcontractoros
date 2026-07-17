@@ -62,14 +62,26 @@ export async function loadTimeEntriesAndCosting(
 			? db
 					.select({ quantity: jobLineItems.quantity, unit_cost: jobLineItems.unit_cost })
 					.from(jobLineItems)
-					.where(and(eq(jobLineItems.job_id, jobId), isNull(jobLineItems.deleted_at)))
+					.where(
+						and(
+							eq(jobLineItems.job_id, jobId),
+							eq(jobLineItems.org_id, orgId),
+							isNull(jobLineItems.deleted_at)
+						)
+					)
 			: Promise.resolve([] as { quantity: string; unit_cost: string | null }[]),
 
 		canCost
 			? db
 					.select({ amount: jobExpenses.amount })
 					.from(jobExpenses)
-					.where(and(eq(jobExpenses.job_id, jobId), isNull(jobExpenses.deleted_at)))
+					.where(
+						and(
+							eq(jobExpenses.job_id, jobId),
+							eq(jobExpenses.org_id, orgId),
+							isNull(jobExpenses.deleted_at)
+						)
+					)
 			: Promise.resolve([] as { amount: string }[])
 	]);
 

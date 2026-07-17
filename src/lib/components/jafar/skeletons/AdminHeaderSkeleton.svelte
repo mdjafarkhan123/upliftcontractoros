@@ -8,7 +8,10 @@
 		<div class="skel-title-row">
 			<div class="j-skel j-skel--h6" style="width: 14rem;"></div>
 			{#if withPill}
-				<div class="j-skel j-skel--h5 j-skel--dim" style="width: 5rem; border-radius: 9999px;"></div>
+				<div
+					class="j-skel j-skel--h5 j-skel--dim"
+					style="width: 5rem; border-radius: 9999px;"
+				></div>
 			{/if}
 		</div>
 		<div class="j-skel j-skel--h3 j-skel--dim" style="width: 18rem;"></div>

@@ -146,7 +146,11 @@
 	<!-- Mobile long-press delete indicator -->
 	{#if showDeleteBtn && canDelete}
 		<div class="media-tile__overlay media-tile__overlay--delete">
-			<button class="media-tile__delete-mobile" onclick={handleDeleteClick} aria-label="Delete photo">
+			<button
+				class="media-tile__delete-mobile"
+				onclick={handleDeleteClick}
+				aria-label="Delete photo"
+			>
 				<i class="ri-delete-bin-line" aria-hidden="true"></i>
 			</button>
 		</div>
@@ -154,7 +158,11 @@
 
 	<!-- Desktop delete button (hover only) -->
 	{#if !isCoarsePointer && canDelete && item.status === 'done'}
-		<button class="media-tile__delete-desktop" onclick={handleDeleteClick} aria-label="Delete photo">
+		<button
+			class="media-tile__delete-desktop"
+			onclick={handleDeleteClick}
+			aria-label="Delete photo"
+		>
 			<i class="ri-delete-bin-line" aria-hidden="true"></i>
 		</button>
 	{/if}

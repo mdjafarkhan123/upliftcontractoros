@@ -186,12 +186,7 @@
 	</div>
 
 	<div class="book-actions book-actions--end">
-		<Button
-			loadingLabel="Saving…"
-			successLabel="Saved"
-			loading={saving}
-			onclick={save}
-		>
+		<Button loadingLabel="Saving…" successLabel="Saved" loading={saving} onclick={save}>
 			Save availability
 		</Button>
 	</div>

@@ -57,15 +57,22 @@
 					{#each options as option (option)}
 						<button
 							type="button"
-							onclick={() => { selected = option; errorMsg = null; }}
-							class="lost-reason__option-btn{selected === option ? ' lost-reason__option-btn--selected' : ''}"
+							onclick={() => {
+								selected = option;
+								errorMsg = null;
+							}}
+							class="lost-reason__option-btn{selected === option
+								? ' lost-reason__option-btn--selected'
+								: ''}"
 						>
 							{LOST_REASON_LABELS[option]}
 						</button>
 					{/each}
 				</div>
 				{#if errorMsg}
-					<p style="font-size:var(--text-body); color:var(--danger-solid); margin-top:6px;">{errorMsg}</p>
+					<p style="font-size:var(--text-body); color:var(--danger-solid); margin-top:6px;">
+						{errorMsg}
+					</p>
 				{/if}
 			</div>
 
@@ -94,7 +101,7 @@
 				variant="destructive"
 				loadingLabel="Saving…"
 				successLabel="Saved"
-				loading={loading}
+				{loading}
 				onclick={handleConfirm}
 			>
 				Mark as lost

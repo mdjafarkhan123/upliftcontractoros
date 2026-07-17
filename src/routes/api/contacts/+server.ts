@@ -1,5 +1,18 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq, ne, isNull, isNotNull, or, ilike, sql, desc, lt, gt, type SQL } from 'drizzle-orm';
+import {
+	and,
+	eq,
+	ne,
+	isNull,
+	isNotNull,
+	or,
+	ilike,
+	sql,
+	desc,
+	lt,
+	gt,
+	type SQL
+} from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contacts, contactAddresses, outboxEvents, orgMembers } from '$lib/server/db/schema';
@@ -72,7 +85,9 @@ export const GET: RequestHandler = async (event) => {
 	// Overdue follow-up quick filter — past-due `next_follow_up_at`. Archived/deleted
 	// are already excluded above, matching the "Needs follow-up" KPI count.
 	if (followUpOverdue) {
-		conditions.push(sql`${contacts.next_follow_up_at} IS NOT NULL AND ${contacts.next_follow_up_at} <= now()`);
+		conditions.push(
+			sql`${contacts.next_follow_up_at} IS NOT NULL AND ${contacts.next_follow_up_at} <= now()`
+		);
 	}
 
 	// Scope filter is only honored for full-access users. Restricted members
@@ -173,11 +188,7 @@ export const GET: RequestHandler = async (event) => {
 		.from(contacts)
 		.leftJoin(orgMembers, eq(orgMembers.id, contacts.assigned_to))
 		.where(and(...conditions))
-		.orderBy(
-			...(relevance ? [relevance] : []),
-			desc(contacts.created_at),
-			desc(contacts.id)
-		)
+		.orderBy(...(relevance ? [relevance] : []), desc(contacts.created_at), desc(contacts.id))
 		.limit(PAGE_SIZE + 1);
 
 	const hasMore = rows.length > PAGE_SIZE;
@@ -191,11 +202,12 @@ export const GET: RequestHandler = async (event) => {
 		}))
 	);
 	const last = sliced[sliced.length - 1];
-	const nextCursor = hasMore && last
-		? isSearching
-			? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
-			: `${last.created_at.toISOString()}|${last.id}`
-		: null;
+	const nextCursor =
+		hasMore && last
+			? isSearching
+				? `${last.rank}|${last.created_at.toISOString()}|${last.id}`
+				: `${last.created_at.toISOString()}|${last.id}`
+			: null;
 
 	return json({ items, next_cursor: nextCursor });
 };

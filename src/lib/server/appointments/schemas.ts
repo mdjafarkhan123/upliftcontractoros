@@ -21,6 +21,11 @@ export const createAppointmentSchema = z
 	.object({
 		contact_id: z.string().uuid(),
 		job_id: z.string().uuid().nullable().optional(),
+		// Parent request when this appointment is an on-site ASSESSMENT (Jobber).
+		// Forces type 'estimate' at the API layer; at most one live assessment per
+		// request (partial unique index). Immutable after create — a request's
+		// assessment is rescheduled/completed, never re-pointed.
+		request_id: z.string().uuid().nullable().optional(),
 		// Legacy single-assignee field — still accepted, treated as a crew of one.
 		assigned_to: z.string().uuid().nullable().optional(),
 		// New multi-assignee shape. If omitted, falls back to `assigned_to`.
@@ -38,6 +43,11 @@ export const createAppointmentSchema = z
 		scheduled_end: datetimeOptional,
 		location: z.string().trim().max(500).nullable().optional(),
 		notes: z.string().trim().max(5000).nullable().optional()
+	})
+	// A visit belongs to a job OR a request, never both.
+	.refine((d) => !(d.job_id && d.request_id), {
+		message: 'An appointment cannot belong to both a job and a request.',
+		path: ['request_id']
 	})
 	// Timed visits require an end time… (an unscheduled or Anytime visit needs neither).
 	.refine((d) => d.all_day || d.scheduled_start == null || d.scheduled_end != null, {
@@ -68,6 +78,16 @@ export const updateAppointmentSchema = z
 		scheduled_end: datetimeOptional,
 		location: z.string().trim().max(500).nullable().optional(),
 		notes: z.string().trim().max(5000).nullable().optional(),
+		// Per-visit free note (Visit Details modal → Notes tab). Same column the completion flow
+		// writes; editable independently here, on any status. Empty/whitespace collapses to null.
+		// Omitted stays `undefined` (leave column alone) — only an explicit value/empty writes.
+		completion_notes: z
+			.string()
+			.trim()
+			.max(5000)
+			.nullable()
+			.optional()
+			.transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null)),
 		// Optional client reschedule notification. Only honoured on a real
 		// reschedule (start/end actually moved) and when != 'none'. Mirrors the
 		// job reschedule channel picker.

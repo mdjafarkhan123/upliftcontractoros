@@ -8,9 +8,6 @@
 	}: TabsPrimitive.ContentProps & { children?: import('svelte').Snippet } = $props();
 </script>
 
-<TabsPrimitive.Content
-	class={['tabs__content', className].filter(Boolean).join(' ')}
-	{...rest}
->
+<TabsPrimitive.Content class={['tabs__content', className].filter(Boolean).join(' ')} {...rest}>
 	{@render children?.()}
 </TabsPrimitive.Content>

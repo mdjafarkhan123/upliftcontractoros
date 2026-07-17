@@ -425,7 +425,8 @@ async function loadResourceContext(
 			.from(quotes)
 			.where(and(eq(quotes.id, resourceId), eq(quotes.org_id, orgId)));
 		// Mirrors handleQuoteFollowup's guard: only an open (sent/viewed) quote nudges.
-		if (!quote || quote.deleted_at) return { closed: true, closedReason: 'quote_missing', vars: {} };
+		if (!quote || quote.deleted_at)
+			return { closed: true, closedReason: 'quote_missing', vars: {} };
 		if (quote.status !== 'sent' && quote.status !== 'viewed') {
 			return { closed: true, closedReason: 'quote_closed', vars: {} };
 		}
@@ -615,7 +616,11 @@ export async function enroll(opts: {
 		.returning();
 	if (!inserted) return; // already enrolled
 
-	const bullJobId = await scheduleAdvance(inserted.id, due.index, due.fireAt.getTime() - now.getTime());
+	const bullJobId = await scheduleAdvance(
+		inserted.id,
+		due.index,
+		due.fireAt.getTime() - now.getTime()
+	);
 	await finalize(inserted.id, { bull_job_id: bullJobId });
 }
 

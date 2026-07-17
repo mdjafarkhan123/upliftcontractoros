@@ -47,6 +47,7 @@ export const GET: RequestHandler = async (event) => {
 			assigned_to: jobs.assigned_to,
 			assignee_name: orgMembers.full_name,
 			job_type: jobs.job_type,
+			job_category: jobs.job_category,
 			tags: jobs.tags,
 			notes: jobs.notes,
 			scope_of_work: jobs.scope_of_work,
@@ -66,6 +67,7 @@ export const GET: RequestHandler = async (event) => {
 			scheduled_start: jobs.scheduled_start,
 			scheduled_end: jobs.scheduled_end,
 			recurrence: jobs.recurrence,
+			schedule_as_needed: jobs.schedule_as_needed,
 			invoice_on_close: jobs.invoice_on_close,
 			billing_type: jobs.billing_type,
 			invoice_frequency: jobs.invoice_frequency,
@@ -100,6 +102,7 @@ export const GET: RequestHandler = async (event) => {
 		lineItems,
 		paymentMilestones,
 		appointmentCountRows,
+		visitSignalRows,
 		reviewRows,
 		expenses,
 		timeAndCosting,
@@ -194,6 +197,25 @@ export const GET: RequestHandler = async (event) => {
 				)
 			),
 
+		// Visit-truth signals for the status badge (see deriveJobScheduleState): the next still-open
+		// dated visit + whether any open visit exists. Drive Upcoming/Today/Overdue/Action Required
+		// exactly like the list, so the detail badge matches the list badge for recurring jobs.
+		db
+			.select({
+				next_open_visit_start: sql<Date | null>`MIN(${appointments.scheduled_start}) FILTER (WHERE ${appointments.status} = 'scheduled')`,
+				has_open_visits: sql<
+					boolean | null
+				>`bool_or(${appointments.status} IN ('scheduled','unscheduled'))`
+			})
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.job_id, id),
+					eq(appointments.org_id, auth.orgId),
+					isNull(appointments.deleted_at)
+				)
+			),
+
 		db
 			.select({ status: reviewRequests.status })
 			.from(reviewRequests)
@@ -270,6 +292,8 @@ export const GET: RequestHandler = async (event) => {
 			invoice_count: invoiceCountRows[0]?.c ?? 0,
 			has_active_invoice: (activeInvoiceRows[0]?.c ?? 0) > 0,
 			appointment_count: appointmentCountRows[0]?.c ?? 0,
+			next_open_visit_start: visitSignalRows[0]?.next_open_visit_start ?? null,
+			has_open_visits: visitSignalRows[0]?.has_open_visits ?? false,
 			review_request_status: reviewRows[0]?.status ?? null,
 			expenses,
 			costing,
@@ -293,6 +317,22 @@ export const PATCH: RequestHandler = async (event) => {
 		body = await event.request.json();
 	} catch {
 		error(400, 'Invalid JSON body');
+	}
+
+	// A job's one-off/recurring type is immutable (Jobber: "once a job is created, the job type
+	// cannot be switched… it would need to be recreated instead"). Reject loudly rather than let
+	// Zod strip the key — a silently-ignored type change is worse than a clear error, because the
+	// caller would believe it worked. To switch, duplicate the job and pick the type on the copy.
+	if (body && typeof body === 'object' && 'job_type' in body) {
+		return json(
+			{
+				error: 'A job cannot switch between one-off and recurring.',
+				field_errors: {
+					job_type: 'Duplicate this job to create it as the other type.'
+				}
+			},
+			{ status: 422 }
+		);
 	}
 
 	const parsed = updateJobLineItemsSchema.safeParse(body);
@@ -319,7 +359,9 @@ export const PATCH: RequestHandler = async (event) => {
 			title: jobs.title,
 			scheduled_start: jobs.scheduled_start,
 			scheduled_end: jobs.scheduled_end,
+			job_type: jobs.job_type,
 			recurrence: jobs.recurrence,
+			schedule_as_needed: jobs.schedule_as_needed,
 			service_address_line_1: jobs.service_address_line_1,
 			service_address_line_2: jobs.service_address_line_2,
 			service_address_city: jobs.service_address_city,
@@ -362,13 +404,15 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const updates: Record<string, unknown> = { updated_at: new Date() };
 	if (input.assigned_to !== undefined) updates.assigned_to = input.assigned_to;
-	if (input.job_type !== undefined) updates.job_type = input.job_type ?? null;
+	if (input.job_category !== undefined) updates.job_category = input.job_category ?? null;
 	if (input.tags !== undefined) updates.tags = input.tags;
 	if (input.scheduled_start !== undefined) updates.scheduled_start = input.scheduled_start;
 	if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
-	// Persist the new repeat rule (a rule object, or null to revert to one-off). The visit
-	// rebuild that mirrors this onto the calendar happens inside the transaction below.
+	// Persist the new repeat rule (a rule object, or null to clear it). Clearing does NOT make
+	// the job one-off — job_type never changes here. The visit rebuild that mirrors this onto
+	// the calendar happens inside the transaction below.
 	if (input.recurrence !== undefined) updates.recurrence = input.recurrence;
+	if (input.schedule_as_needed !== undefined) updates.schedule_as_needed = input.schedule_as_needed;
 	if (input.notes !== undefined) updates.notes = input.notes;
 	if (input.scope_of_work !== undefined) updates.scope_of_work = input.scope_of_work;
 	if (input.invoice_on_close !== undefined) updates.invoice_on_close = input.invoice_on_close;
@@ -688,15 +732,25 @@ export const PATCH: RequestHandler = async (event) => {
 			}
 		}
 
-		// One-off visit sync: a one-off job's single calendar visit must track the job's
-		// schedule (Jobber / Housecall Pro — the job IS the visit). Recurring jobs are
-		// handled by the rebuild block above. We act when the schedule was touched and
-		// the job is (now) one-off — covering reschedule, add-a-date, clear-to-Anytime,
-		// and a recurring→one-off flip (the rule block above already cleared its visits).
-		const finalIsRecurring =
-			input.recurrence !== undefined ? input.recurrence !== null : existing.recurrence != null;
+		// Single-visit sync: a job with no repeat rule has ONE calendar visit that must track the
+		// job's schedule (Jobber / Housecall Pro — the job IS the visit). We act when the schedule
+		// was touched — covering reschedule, add-a-date, and clear-to-Anytime.
+		//
+		// The gate is the RULE, not job_type. A one-off may carry a repeat rule, and when it does
+		// its visits are a series owned by the rebuild block above; falling in here would collapse
+		// that whole series onto a single "managed visit" and destroy it. Conversely a recurring
+		// job with no rule stays out unless it is "as needed" (handled below), preserving the
+		// existing behavior that clearing a rule never re-pins a series like a one-off.
+		const finalRecurrence = input.recurrence !== undefined ? input.recurrence : existing.recurrence;
+		// "As needed" after this PATCH? Its scheduled_start is a stored job WINDOW (Jobber), never
+		// a visit date — so it must always take the zero-visits branch below.
+		const finalAsNeeded =
+			input.schedule_as_needed !== undefined
+				? input.schedule_as_needed
+				: existing.schedule_as_needed;
+		const managesSingleVisit = existing.job_type === 'one_off' ? !finalRecurrence : finalAsNeeded;
 		if (
-			!finalIsRecurring &&
+			managesSingleVisit &&
 			(input.scheduled_start !== undefined || input.recurrence !== undefined)
 		) {
 			const now = new Date();
@@ -751,8 +805,10 @@ export const PATCH: RequestHandler = async (event) => {
 
 			const assignee = input.assigned_to !== undefined ? input.assigned_to : existing.assigned_to;
 
-			if (!finalStart) {
-				// Job cleared to "Anytime" → remove its calendar visit.
+			if (finalAsNeeded) {
+				// "As needed": the job wants ZERO visits (not even a placeholder), so
+				// soft-delete its live managed visit and its assignees. Frozen visits (past /
+				// completed / invoiced) are excluded by the `visit` query above, so history stays.
 				if (visit) {
 					await tx
 						.delete(appointmentAssignees)
@@ -765,6 +821,26 @@ export const PATCH: RequestHandler = async (event) => {
 					await tx
 						.update(appointments)
 						.set({ deleted_at: now, updated_at: now })
+						.where(eq(appointments.id, visit.id));
+				}
+			} else if (!finalStart) {
+				// Job cleared to "Schedule later" → demote its calendar visit to an unscheduled
+				// placeholder (Jobber: startAt/endAt null + status UNSCHEDULED), NOT a delete. The
+				// row survives under "To be scheduled", still completable/editable; the job's own
+				// scheduled_start was already nulled by `updates` above, so the calendar card clears.
+				// Crew is preserved. Reset reminder flags so a previously-armed reminder can't fire
+				// for a date that no longer exists. Skip if the visit is already a placeholder.
+				if (visit && visit.scheduled_start !== null) {
+					await tx
+						.update(appointments)
+						.set({
+							status: 'unscheduled' as const,
+							scheduled_start: null,
+							scheduled_end: null,
+							reminder_24h_sent: false,
+							reminder_1h_sent: false,
+							updated_at: now
+						})
 						.where(eq(appointments.id, visit.id));
 				}
 			} else if (visit) {
@@ -945,7 +1021,32 @@ export const PATCH: RequestHandler = async (event) => {
 		const safeLines = canViewCostMargin(auth.member)
 			? lineItems
 			: lineItems.map((li) => ({ ...li, unit_cost: null }));
-		return { ...fresh, line_items: safeLines };
+
+		// Visit-truth signals for the status badge — recomputed AFTER any visit rebuild/repin above
+		// so the echoed job carries a fresh next-open-visit + has-open state (keeps the badge exact
+		// on the detail page and the list store without a follow-up refetch). See deriveJobScheduleState.
+		const [visitSig] = await tx
+			.select({
+				next_open_visit_start: sql<Date | null>`MIN(${appointments.scheduled_start}) FILTER (WHERE ${appointments.status} = 'scheduled')`,
+				has_open_visits: sql<
+					boolean | null
+				>`bool_or(${appointments.status} IN ('scheduled','unscheduled'))`
+			})
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.job_id, id),
+					eq(appointments.org_id, auth.orgId),
+					isNull(appointments.deleted_at)
+				)
+			);
+
+		return {
+			...fresh,
+			line_items: safeLines,
+			next_open_visit_start: visitSig?.next_open_visit_start ?? null,
+			has_open_visits: visitSig?.has_open_visits ?? false
+		};
 	});
 
 	return json({ job: result });

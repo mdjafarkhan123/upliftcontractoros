@@ -50,12 +50,7 @@
 		</Popover.Content>
 	</Popover.Root>
 {:else}
-	<button
-		type="button"
-		onclick={openBell}
-		class="topbar__icon-btn"
-		aria-label="Notifications"
-	>
+	<button type="button" onclick={openBell} class="topbar__icon-btn" aria-label="Notifications">
 		<i class="ri-notification-3-line" aria-hidden="true"></i>
 		{#if unreadCount > 0}
 			<span class="topbar__icon-btn-badge" aria-label="{unreadCount} unread">

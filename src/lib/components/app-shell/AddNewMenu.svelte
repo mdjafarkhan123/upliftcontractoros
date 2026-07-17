@@ -104,10 +104,7 @@
 				<DropdownMenu.Label>{group.label}</DropdownMenu.Label>
 				{#each group.items as item (item.label)}
 					<DropdownMenu.Item onSelect={() => goto(item.href)}>
-						<i
-							class="{item.icon} add-new__ico add-new__ico--{item.tone}"
-							aria-hidden="true"
-						></i>
+						<i class="{item.icon} add-new__ico add-new__ico--{item.tone}" aria-hidden="true"></i>
 						{item.label}
 					</DropdownMenu.Item>
 				{/each}

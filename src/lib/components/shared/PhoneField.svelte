@@ -33,9 +33,7 @@
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return PHONE_COUNTRIES;
-		return PHONE_COUNTRIES.filter(
-			(c) => c.name.toLowerCase().includes(q) || c.dial.includes(q)
-		);
+		return PHONE_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q) || c.dial.includes(q));
 	});
 
 	const parsed = $derived.by(() => {
@@ -103,7 +101,11 @@
 	}
 </script>
 
-<div class="phone-field" class:phone-field--invalid={showInvalid} class:phone-field--disabled={disabled}>
+<div
+	class="phone-field"
+	class:phone-field--invalid={showInvalid}
+	class:phone-field--disabled={disabled}
+>
 	<Popover.Root bind:open>
 		<Popover.Trigger {disabled} type="button" class="phone-field__country">
 			<span class="phone-field__flag">{selectedCountry.flag}</span>

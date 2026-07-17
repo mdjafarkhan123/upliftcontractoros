@@ -2,11 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import {
-	automationSequences,
-	automationSequenceSteps,
-	organizations
-} from '$lib/server/db/schema';
+import { automationSequences, automationSequenceSteps, organizations } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canViewAnyInvoice } from '$lib/server/invoices/permissions';
 

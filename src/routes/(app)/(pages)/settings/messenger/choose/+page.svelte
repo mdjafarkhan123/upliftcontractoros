@@ -95,9 +95,9 @@
 					This connection step expired. Start the Facebook connection again to choose a Page.
 				</p>
 				<footer class="fb-choose__footer">
-				<Button onclick={() => goto('/api/settings/messenger/connect')}>
-					Reconnect Facebook
-				</Button>
+					<Button onclick={() => goto('/api/settings/messenger/connect')}>
+						Reconnect Facebook
+					</Button>
 				</footer>
 			</div>
 		</div>
@@ -120,9 +120,14 @@
 				</fieldset>
 
 				<footer class="fb-choose__footer">
-				<Button onclick={connect} disabled={!selectedId} loading={connecting} loadingLabel="Connecting…">
-					Connect Page
-				</Button>
+					<Button
+						onclick={connect}
+						disabled={!selectedId}
+						loading={connecting}
+						loadingLabel="Connecting…"
+					>
+						Connect Page
+					</Button>
 				</footer>
 			</div>
 		</div>

@@ -14,6 +14,7 @@ import {
 } from '$lib/server/db/schema';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
+import { parallel } from '$lib/server/db/parallel';
 import type { Contact } from '$lib/server/db/schema';
 
 /**
@@ -163,87 +164,108 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 		.limit(1);
 
 	if (!row) return null;
-	// Resolve the stored R2 key to a short-lived signed URL for the client.
-	const contact = { ...row.contact, avatar_url: await resolveLogoUrl(row.contact.avatar_url) };
 	const assignee =
 		row.assignee_id && row.assignee_name ? { id: row.assignee_id, name: row.assignee_name } : null;
 
+	// row gates (returns null above). Everything below is independent of one another and only
+	// needs the ids we already have — fire it all in one wave instead of 7 sequential trips.
+	// The referrer lookup is conditional; it joins the batch as a resolved [] when absent so the
+	// gating stays a single wave (Rule 24). resolveLogoUrl is an R2 presign, not a DB read, but is
+	// still independent so it rides along.
+	const referredById = row.contact.referred_by_contact_id;
+	const { avatarUrl, referrerRows, addresses, notes, counts, referralCountRows, kpiRows } =
+		await parallel({
+			// Resolve the stored R2 key to a short-lived signed URL for the client.
+			avatarUrl: resolveLogoUrl(row.contact.avatar_url),
+
+			referrerRows: referredById
+				? db
+						.select({
+							id: contacts.id,
+							full_name: contacts.full_name,
+							deleted_at: contacts.deleted_at
+						})
+						.from(contacts)
+						.where(and(eq(contacts.org_id, orgId), eq(contacts.id, referredById)))
+						.limit(1)
+				: Promise.resolve([] as { id: string; full_name: string; deleted_at: Date | null }[]),
+
+			addresses: db
+				.select()
+				.from(contactAddresses)
+				.where(
+					and(
+						eq(contactAddresses.contact_id, contactId),
+						eq(contactAddresses.org_id, orgId),
+						isNull(contactAddresses.deleted_at)
+					)
+				)
+				.orderBy(sql`${contactAddresses.is_primary} DESC, ${contactAddresses.created_at} ASC`),
+
+			notes: db
+				.select({
+					id: contactNotes.id,
+					content: contactNotes.content,
+					author_id: contactNotes.author_id,
+					created_at: contactNotes.created_at,
+					author_name: orgMembers.full_name
+				})
+				.from(contactNotes)
+				.leftJoin(orgMembers, eq(orgMembers.id, contactNotes.author_id))
+				.where(
+					and(
+						eq(contactNotes.contact_id, contactId),
+						eq(contactNotes.org_id, orgId),
+						isNull(contactNotes.deleted_at)
+					)
+				)
+				.orderBy(sql`${contactNotes.created_at} DESC`)
+				.limit(10),
+
+			counts: countLinkedRecords(orgId, contactId),
+
+			referralCountRows: db.execute<{ count: number }>(sql`
+			SELECT COUNT(*)::int AS count FROM ${contacts}
+			WHERE ${contacts.org_id} = ${orgId}
+				AND ${contacts.referred_by_contact_id} = ${contactId}
+				AND ${contacts.deleted_at} IS NULL
+		`),
+
+			kpiRows: db.execute<{
+				lifetime_revenue: string;
+				open_quotes_count: number;
+				open_quotes_value: string;
+				active_jobs_count: number;
+			}>(sql`
+			SELECT
+				COALESCE((SELECT SUM(amount_paid::numeric) FROM invoices
+					WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL AND status IN ('paid', 'partially_paid')), 0)::text AS lifetime_revenue,
+				(SELECT COUNT(*)::int FROM quotes
+					WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
+				COALESCE((SELECT SUM(total::numeric) FROM quotes
+					WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')), 0)::text AS open_quotes_value,
+				(SELECT COUNT(*)::int FROM jobs
+					WHERE contact_id = ${contactId} AND org_id = ${orgId}
+					AND deleted_at IS NULL AND status IN ('scheduled', 'in_progress')) AS active_jobs_count
+		`)
+		});
+
+	const contact = { ...row.contact, avatar_url: avatarUrl };
+
 	let referrer: { id: string; name: string } | null = null;
-	if (contact.referred_by_contact_id) {
-		const [ref] = await db
-			.select({ id: contacts.id, full_name: contacts.full_name, deleted_at: contacts.deleted_at })
-			.from(contacts)
-			.where(and(eq(contacts.org_id, orgId), eq(contacts.id, contact.referred_by_contact_id)))
-			.limit(1);
-		if (ref) {
-			referrer = {
-				id: ref.id,
-				name: ref.deleted_at ? `${ref.full_name} (Deleted)` : ref.full_name
-			};
-		}
+	const ref = referrerRows[0];
+	if (ref) {
+		referrer = {
+			id: ref.id,
+			name: ref.deleted_at ? `${ref.full_name} (Deleted)` : ref.full_name
+		};
 	}
 
-	const addresses = await db
-		.select()
-		.from(contactAddresses)
-		.where(
-			and(
-				eq(contactAddresses.contact_id, contactId),
-				eq(contactAddresses.org_id, orgId),
-				isNull(contactAddresses.deleted_at)
-			)
-		)
-		.orderBy(sql`${contactAddresses.is_primary} DESC, ${contactAddresses.created_at} ASC`);
-
-	const notes = await db
-		.select({
-			id: contactNotes.id,
-			content: contactNotes.content,
-			author_id: contactNotes.author_id,
-			created_at: contactNotes.created_at,
-			author_name: orgMembers.full_name
-		})
-		.from(contactNotes)
-		.leftJoin(orgMembers, eq(orgMembers.id, contactNotes.author_id))
-		.where(
-			and(
-				eq(contactNotes.contact_id, contactId),
-				eq(contactNotes.org_id, orgId),
-				isNull(contactNotes.deleted_at)
-			)
-		)
-		.orderBy(sql`${contactNotes.created_at} DESC`)
-		.limit(10);
-
-	const counts = await countLinkedRecords(orgId, contactId);
-
-	const [referralCount] = await db.execute<{ count: number }>(sql`
-		SELECT COUNT(*)::int AS count FROM ${contacts}
-		WHERE ${contacts.org_id} = ${orgId}
-			AND ${contacts.referred_by_contact_id} = ${contactId}
-			AND ${contacts.deleted_at} IS NULL
-	`);
-
-	const [kpiRow] = await db.execute<{
-		lifetime_revenue: string;
-		open_quotes_count: number;
-		open_quotes_value: string;
-		active_jobs_count: number;
-	}>(sql`
-		SELECT
-			COALESCE((SELECT SUM(amount_paid::numeric) FROM invoices
-				WHERE contact_id = ${contactId} AND org_id = ${orgId}
-				AND deleted_at IS NULL AND status IN ('paid', 'partially_paid')), 0)::text AS lifetime_revenue,
-			(SELECT COUNT(*)::int FROM quotes
-				WHERE contact_id = ${contactId} AND org_id = ${orgId}
-				AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
-			COALESCE((SELECT SUM(total::numeric) FROM quotes
-				WHERE contact_id = ${contactId} AND org_id = ${orgId}
-				AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')), 0)::text AS open_quotes_value,
-			(SELECT COUNT(*)::int FROM jobs
-				WHERE contact_id = ${contactId} AND org_id = ${orgId}
-				AND deleted_at IS NULL AND status IN ('scheduled', 'in_progress')) AS active_jobs_count
-	`);
+	const referralCount = referralCountRows[0];
+	const kpiRow = kpiRows[0];
 
 	const kpi = {
 		lifetime_revenue: parseFloat(kpiRow?.lifetime_revenue ?? '0'),
@@ -282,6 +304,12 @@ export type OverviewJob = {
 	title: string;
 	status: string;
 	scheduled_start: string | null;
+	// Visit-truth signals for the status badge (see deriveJobScheduleState) — keep the contact
+	// page's job badges in step with the jobs list for recurring/multi-visit jobs.
+	is_recurring: boolean;
+	has_series_anchor: boolean;
+	next_open_visit_start: string | null;
+	has_open_visits: boolean;
 	total: number;
 };
 
@@ -357,7 +385,18 @@ export async function loadContactOverview(
 					AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
 
 			COALESCE((SELECT json_agg(j) FROM (
-				SELECT id, title, status, scheduled_start, total::float8 AS total
+				SELECT id, title, status, scheduled_start, total::float8 AS total,
+					(job_type = 'recurring') AS is_recurring,
+					-- scheduled_start is a frozen series anchor / job window rather than a visit
+					-- date; the badge must not fall back to it. Not the same as is_recurring —
+					-- a one-off may carry a repeat rule.
+					(recurrence IS NOT NULL OR schedule_as_needed) AS has_series_anchor,
+					(SELECT MIN(a.scheduled_start) FROM appointments a
+						WHERE a.job_id = jobs.id AND a.deleted_at IS NULL AND a.status = 'scheduled')
+						AS next_open_visit_start,
+					EXISTS (SELECT 1 FROM appointments a
+						WHERE a.job_id = jobs.id AND a.deleted_at IS NULL
+						  AND a.status IN ('scheduled','unscheduled')) AS has_open_visits
 				FROM jobs
 				WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL
@@ -659,7 +698,6 @@ export async function mergeContacts(
 // ---------------------------------------------------------------------------
 // Bulk list actions
 // ---------------------------------------------------------------------------
-
 
 export async function cascadeDeleteContact(orgId: string, contactId: string): Promise<void> {
 	const now = new Date();

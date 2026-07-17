@@ -204,9 +204,7 @@
 		</div>
 
 		<div class="omw__footer">
-			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>
-				Cancel
-			</Button>
+			<Button variant="ghost" onclick={() => (open = false)} disabled={busy}>Cancel</Button>
 			<Button
 				loadingLabel="Sending…"
 				successLabel="Sent"

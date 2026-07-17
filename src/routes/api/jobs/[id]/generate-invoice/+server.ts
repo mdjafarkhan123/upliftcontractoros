@@ -59,10 +59,7 @@ export const POST: RequestHandler = async (event) => {
 		if (job.billing_type === 'visit_based') {
 			const perVisit = Number(job.total);
 			if (!(perVisit > 0)) {
-				throw error(
-					422,
-					'Add line items to the job to set the per-visit price before invoicing.'
-				);
+				throw error(422, 'Add line items to the job to set the per-visit price before invoicing.');
 			}
 			// Past, non-cancelled visits not yet rolled into an invoice.
 			const visits = await tx

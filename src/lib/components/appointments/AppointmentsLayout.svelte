@@ -1,5 +1,6 @@
 <script lang="ts">
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
+	import CollapsibleSidebar from '$lib/components/shared/CollapsibleSidebar.svelte';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -8,18 +9,19 @@
 		filterSheetOpen = $bindable(false),
 		children
 	}: {
-		sidebar: Snippet;
+		sidebar: Snippet<[boolean]>;
 		filterSheet: Snippet;
 		filterSheetOpen?: boolean;
 		children: Snippet;
 	} = $props();
+
+	let collapsed = $state(true);
 </script>
 
 <div class="appt-shell">
-	<!-- Desktop sidebar -->
-	<aside class="appt-shell__sidebar">
-		{@render sidebar()}
-	</aside>
+	<CollapsibleSidebar bind:collapsed expandLabel="Expand filters" collapseLabel="Collapse filters">
+		{@render sidebar(collapsed)}
+	</CollapsibleSidebar>
 
 	<!-- Main calendar/list area -->
 	<div class="appt-shell__main">

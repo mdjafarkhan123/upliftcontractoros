@@ -22,22 +22,22 @@ defense is this registry + the Styling Law below, applied by hand every time.
 component. Do not hand-roll or use the native element.** When in doubt about
 whether a primitive exists, `grep` `src/lib/components/ui/` FIRST.
 
-| You need…            | Use this built component                                   | Import path                              | BANNED (never do this)                          |
-| -------------------- | ---------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
-| **Date only**        | `Calendar`                                                 | `$lib/components/ui/calendar`            | `<input type="date">`                           |
-| **Date + time**      | `DateTimePicker`                                            | `$lib/components/ui/date-time-picker`   | `<input type="datetime-local">`, separate native date+time inputs |
-| **Time only**        | `DateTimePicker` (or grep `ui/` first for a time-only one) | `$lib/components/ui/date-time-picker`   | `<input type="time">`                           |
-| **Select / dropdown**| `Select.Root/Trigger/Value/Content/Item`                   | `$lib/components/ui/select`              | native `<select>`, the legacy `Select` wrapper for new UI |
-| **Text input**       | `Input`                                                    | `$lib/components/ui/input`              | bare styled `<input>` (unless it's a one-off already-BEM'd field row) |
-| **Textarea**         | `Textarea`                                                 | `$lib/components/ui/textarea`           | bare `<textarea>`                               |
-| **Menu (row/kebab)** | `DropdownMenu.*`                                            | `$lib/components/ui/dropdown-menu`      | hand-rolled popover menu                        |
-| **Dialog / modal**   | `Dialog.*`                                                  | `$lib/components/ui/dialog`             | hand-rolled overlay                             |
-| **Popover**          | `Popover.*`                                                 | `$lib/components/ui/popover`            | hand-rolled absolute-positioned div             |
-| **Sheet / drawer**   | `Sheet.*`                                                   | `$lib/components/ui/sheet`              | —                                               |
-| **Tabs**             | `Tabs.*`                                                    | `$lib/components/ui/tabs`               | —                                               |
-| **Switch / toggle**  | `Switch`                                                    | `$lib/components/ui/switch`             | `<input type="checkbox">` styled as a toggle    |
-| **Phone number**     | `PhoneField`                                                | `$lib/components/PhoneField.svelte` (verify path) | bare `<input>` for phone — see [[phone-field-industry-upgrade]] |
-| **Icons**            | `<i class="ri-*">` (Remix Icon)                            | global (remixicon CSS)                   | Lucide, any raw inline `<svg>` — see [[feedback-remix-icons]] |
+| You need…             | Use this built component                                   | Import path                                       | BANNED (never do this)                                                |
+| --------------------- | ---------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| **Date only**         | `Calendar`                                                 | `$lib/components/ui/calendar`                     | `<input type="date">`                                                 |
+| **Date + time**       | `DateTimePicker`                                           | `$lib/components/ui/date-time-picker`             | `<input type="datetime-local">`, separate native date+time inputs     |
+| **Time only**         | `DateTimePicker` (or grep `ui/` first for a time-only one) | `$lib/components/ui/date-time-picker`             | `<input type="time">`                                                 |
+| **Select / dropdown** | `Select.Root/Trigger/Value/Content/Item`                   | `$lib/components/ui/select`                       | native `<select>`, the legacy `Select` wrapper for new UI             |
+| **Text input**        | `Input`                                                    | `$lib/components/ui/input`                        | bare styled `<input>` (unless it's a one-off already-BEM'd field row) |
+| **Textarea**          | `Textarea`                                                 | `$lib/components/ui/textarea`                     | bare `<textarea>`                                                     |
+| **Menu (row/kebab)**  | `DropdownMenu.*`                                           | `$lib/components/ui/dropdown-menu`                | hand-rolled popover menu                                              |
+| **Dialog / modal**    | `Dialog.*`                                                 | `$lib/components/ui/dialog`                       | hand-rolled overlay                                                   |
+| **Popover**           | `Popover.*`                                                | `$lib/components/ui/popover`                      | hand-rolled absolute-positioned div                                   |
+| **Sheet / drawer**    | `Sheet.*`                                                  | `$lib/components/ui/sheet`                        | —                                                                     |
+| **Tabs**              | `Tabs.*`                                                   | `$lib/components/ui/tabs`                         | —                                                                     |
+| **Switch / toggle**   | `Switch`                                                   | `$lib/components/ui/switch`                       | `<input type="checkbox">` styled as a toggle                          |
+| **Phone number**      | `PhoneField`                                               | `$lib/components/PhoneField.svelte` (verify path) | bare `<input>` for phone — see [[phone-field-industry-upgrade]]       |
+| **Icons**             | `<i class="ri-*">` (Remix Icon)                            | global (remixicon CSS)                            | Lucide, any raw inline `<svg>` — see [[feedback-remix-icons]]         |
 
 ### Value types (important — this project's pickers use plain strings)
 
@@ -81,8 +81,8 @@ second component ships unstyled.
 — it will not match the identical `class="job-section__edit"` rendered by
 `ComponentB.svelte`. Both compile with zero warnings.
 
-**The test:** *"If I changed this rule, would I expect it to change on every
-page/component that uses the class, or just this one?"*
+**The test:** _"If I changed this rule, would I expect it to change on every
+page/component that uses the class, or just this one?"_
 Every → global partial. Just this one → scoped (and confirm the class name
 appears in no other file).
 

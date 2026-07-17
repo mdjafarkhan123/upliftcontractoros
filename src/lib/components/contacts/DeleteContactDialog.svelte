@@ -25,20 +25,37 @@
 
 	const hasLinks = $derived(
 		counts.opportunities > 0 ||
-		counts.jobs > 0 ||
-		counts.quotes > 0 ||
-		counts.invoices > 0 ||
-		counts.conversations > 0
+			counts.jobs > 0 ||
+			counts.quotes > 0 ||
+			counts.invoices > 0 ||
+			counts.conversations > 0
 	);
 
 	type LinkedItem = { icon: string; label: string };
-	const linkedItems = $derived([
-		counts.opportunities > 0 && { icon: 'ri-git-branch-line', label: `${counts.opportunities} opportunit${counts.opportunities === 1 ? 'y' : 'ies'}` },
-		counts.jobs > 0 && { icon: 'ri-briefcase-line', label: `${counts.jobs} job${counts.jobs === 1 ? '' : 's'}` },
-		counts.quotes > 0 && { icon: 'ri-file-text-line', label: `${counts.quotes} quote${counts.quotes === 1 ? '' : 's'}` },
-		counts.invoices > 0 && { icon: 'ri-receipt-line', label: `${counts.invoices} invoice${counts.invoices === 1 ? '' : 's'}` },
-		counts.conversations > 0 && { icon: 'ri-message-2-line', label: `${counts.conversations} conversation${counts.conversations === 1 ? '' : 's'}` }
-	].filter(Boolean) as LinkedItem[]);
+	const linkedItems = $derived(
+		[
+			counts.opportunities > 0 && {
+				icon: 'ri-git-branch-line',
+				label: `${counts.opportunities} opportunit${counts.opportunities === 1 ? 'y' : 'ies'}`
+			},
+			counts.jobs > 0 && {
+				icon: 'ri-briefcase-line',
+				label: `${counts.jobs} job${counts.jobs === 1 ? '' : 's'}`
+			},
+			counts.quotes > 0 && {
+				icon: 'ri-file-text-line',
+				label: `${counts.quotes} quote${counts.quotes === 1 ? '' : 's'}`
+			},
+			counts.invoices > 0 && {
+				icon: 'ri-receipt-line',
+				label: `${counts.invoices} invoice${counts.invoices === 1 ? '' : 's'}`
+			},
+			counts.conversations > 0 && {
+				icon: 'ri-message-2-line',
+				label: `${counts.conversations} conversation${counts.conversations === 1 ? '' : 's'}`
+			}
+		].filter(Boolean) as LinkedItem[]
+	);
 
 	const canDelete = $derived(nameInput.trim() === full_name.trim());
 
@@ -69,7 +86,9 @@
 				</div>
 				<div class="contact-delete__head-body">
 					<h2 class="contact-delete__title">Delete {full_name}?</h2>
-					<p class="contact-delete__desc">This permanently deletes the contact. This cannot be undone.</p>
+					<p class="contact-delete__desc">
+						This permanently deletes the contact. This cannot be undone.
+					</p>
 				</div>
 			</div>
 
@@ -106,12 +125,7 @@
 			</div>
 
 			<div class="dialog-content__footer">
-				<Button
-					variant="secondary"
-					style="flex:1;"
-					disabled={busy}
-					onclick={() => (open = false)}
-				>
+				<Button variant="secondary" style="flex:1;" disabled={busy} onclick={() => (open = false)}>
 					Cancel
 				</Button>
 				<Button

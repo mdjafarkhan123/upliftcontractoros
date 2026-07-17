@@ -82,8 +82,10 @@ export const POST: RequestHandler = async (event) => {
 		if (e <= s) {
 			field_errors.calendar_day_end_hour = 'End hour must be after start hour.';
 		} else {
-			if (calendar_day_start_hour !== undefined) updates.calendar_day_start_hour = calendar_day_start_hour;
-			if (calendar_day_end_hour !== undefined) updates.calendar_day_end_hour = calendar_day_end_hour;
+			if (calendar_day_start_hour !== undefined)
+				updates.calendar_day_start_hour = calendar_day_start_hour;
+			if (calendar_day_end_hour !== undefined)
+				updates.calendar_day_end_hour = calendar_day_end_hour;
 		}
 	}
 

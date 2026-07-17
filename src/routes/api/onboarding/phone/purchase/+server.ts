@@ -87,7 +87,10 @@ export const POST: RequestHandler = async (event) => {
 			org_id: org.id,
 			error: err instanceof Error ? err.message : String(err)
 		});
-		return json({ error: 'Could not set up your phone account. Please try again.' }, { status: 502 });
+		return json(
+			{ error: 'Could not set up your phone account. Please try again.' },
+			{ status: 502 }
+		);
 	}
 
 	// 2. Buy the number under the subaccount and configure its webhooks.

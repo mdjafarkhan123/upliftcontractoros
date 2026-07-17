@@ -45,11 +45,7 @@ export function msUntilQuietHoursEnd(now: Date, timezone: string, endHour: numbe
 	// before endHour (we're in the tail of an overnight window, or a same-day
 	// window), otherwise tomorrow (start of an overnight window).
 	const dayOffsetMs = h >= endHour ? 24 * 60 * 60 * 1000 : 0;
-	const targetDay = formatInTimeZone(
-		new Date(now.getTime() + dayOffsetMs),
-		timezone,
-		'yyyy-MM-dd'
-	);
+	const targetDay = formatInTimeZone(new Date(now.getTime() + dayOffsetMs), timezone, 'yyyy-MM-dd');
 	const hh = String(endHour).padStart(2, '0');
 	// Interpret `targetDay HH:00` as wall-clock in the org timezone → UTC instant.
 	const windowOpensAt = fromZonedTime(`${targetDay} ${hh}:00:00`, timezone);

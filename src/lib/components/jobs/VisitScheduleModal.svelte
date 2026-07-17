@@ -231,9 +231,12 @@
 					assignee_ids: selectedIds,
 					lead_member_id: selectedIds.length > 0 ? leadId : null
 				};
-				// Only send a date when the visit is (or becomes) scheduled — PATCH can't un-date a
-				// visit back to a placeholder, so a still-"Schedule later" edit just omits it.
-				if (start) body.scheduled_start = start;
+				// "Schedule later" ⇒ explicitly un-date the visit back to an unscheduled placeholder
+				// (send null, not omit — the route reads null as "clear the date", undefined as
+				// "leave it alone"). Otherwise send the new date/time. `end` is only present for a
+				// timed (non-Anytime) visit; the route clears it for Anytime / unscheduled anyway.
+				if (scheduleLater) body.scheduled_start = null;
+				else if (start) body.scheduled_start = start;
 				if (end) body.scheduled_end = end;
 				res = await fetch(`/api/appointments/${visit.id}`, {
 					method: 'PATCH',

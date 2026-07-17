@@ -71,7 +71,9 @@
 				type="button"
 				aria-pressed={active}
 				onclick={() => dashboardStore.setPeriod(opt.value as 'month' | 'year')}
-				class={['period-toggle__btn', active && 'period-toggle__btn--active'].filter(Boolean).join(' ')}
+				class={['period-toggle__btn', active && 'period-toggle__btn--active']
+					.filter(Boolean)
+					.join(' ')}
 			>
 				{opt.label}
 			</button>
@@ -147,7 +149,11 @@
 					label={`Revenue this ${periodWord}`}
 					value={kpis.revenue ? formatCurrency(kpis.revenue.this_period) : '$0.00'}
 					trend={kpis.revenue
-						? moneyTrend(Number(kpis.revenue.this_period), Number(kpis.revenue.last_period), periodWord)
+						? moneyTrend(
+								Number(kpis.revenue.this_period),
+								Number(kpis.revenue.last_period),
+								periodWord
+							)
 						: undefined}
 					hint={kpis.revenue ? 'Payments received' : 'Revenue requires permission'}
 					iconClass="ri-money-dollar-circle-line"
@@ -180,7 +186,9 @@
 			<div
 				class={[
 					'dashboard__action-row',
-					summary.missed_call_recovery ? 'dashboard__action-row--three' : 'dashboard__action-row--two'
+					summary.missed_call_recovery
+						? 'dashboard__action-row--three'
+						: 'dashboard__action-row--two'
 				].join(' ')}
 			>
 				<TodaySchedule jobs={summary.today_schedule} timezone={summary.timezone} />
@@ -315,17 +323,28 @@
 			}
 		}
 
-		&__tile { height: 160px; border-radius: $radius-2xl; }
-		&__bar  { height: 56px;  border-radius: $radius-2xl; }
+		&__tile {
+			height: 160px;
+			border-radius: $radius-2xl;
+		}
+		&__bar {
+			height: 56px;
+			border-radius: $radius-2xl;
+		}
 
 		&__row {
 			display: grid;
 			gap: $space-4;
 
-			@media (min-width: $bp-tablet) { grid-template-columns: 1fr 1fr; }
+			@media (min-width: $bp-tablet) {
+				grid-template-columns: 1fr 1fr;
+			}
 		}
 
-		&__block { height: 280px; border-radius: $radius-2xl; }
+		&__block {
+			height: 280px;
+			border-radius: $radius-2xl;
+		}
 	}
 
 	// ── Error state ──────────────────────────────────────────

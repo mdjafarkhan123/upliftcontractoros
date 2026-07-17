@@ -110,7 +110,9 @@
 					<i class={kpi.icon} aria-hidden="true"></i>
 				</div>
 			</div>
-			<p class="contact-kpis__value contact-kpis__value--{kpi.valueTone || 'default'}">{kpi.value}</p>
+			<p class="contact-kpis__value contact-kpis__value--{kpi.valueTone || 'default'}">
+				{kpi.value}
+			</p>
 		</svelte:element>
 	{/each}
 </div>

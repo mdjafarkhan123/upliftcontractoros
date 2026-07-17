@@ -76,8 +76,12 @@
 		&__icon {
 			font-size: 1.4rem;
 
-			&--danger  { color: var(--danger-solid); }
-			&--success { color: var(--success-solid); }
+			&--danger {
+				color: var(--danger-solid);
+			}
+			&--success {
+				color: var(--success-solid);
+			}
 		}
 
 		&__value {

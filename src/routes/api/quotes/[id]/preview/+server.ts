@@ -89,70 +89,79 @@ export const GET: RequestHandler = async (event) => {
 
 	if (!row || row.deleted_at) error(404, 'Not found');
 
-	const lineRows = await db
-		.select({
-			id: quoteLineItems.id,
-			line_key: quoteLineItems.line_key,
-			description: quoteLineItems.description,
-			details: quoteLineItems.details,
-			quantity: quoteLineItems.quantity,
-			unit: quoteLineItems.unit,
-			section_label: quoteLineItems.section_label,
-			is_optional: quoteLineItems.is_optional,
-			taxable: quoteLineItems.taxable,
-			package_id: quoteLineItems.package_id,
-			unit_price: quoteLineItems.unit_price,
-			total: quoteLineItems.total,
-			position: quoteLineItems.position
-		})
-		.from(quoteLineItems)
-		.where(and(eq(quoteLineItems.quote_id, row.id), sql`${quoteLineItems.deleted_at} IS NULL`))
-		.orderBy(quoteLineItems.position);
-
-	// Good-Better-Best tiers (empty on a simple quote) — so the contractor preview matches
-	// the customer's side-by-side view exactly.
-	const packages = await db
-		.select({
-			id: quotePackages.id,
-			package_key: quotePackages.package_key,
-			name: quotePackages.name,
-			is_recommended: quotePackages.is_recommended,
-			position: quotePackages.position,
-			subtotal: quotePackages.subtotal,
-			total: quotePackages.total
-		})
-		.from(quotePackages)
-		.where(and(eq(quotePackages.quote_id, row.id), sql`${quotePackages.deleted_at} IS NULL`))
-		.orderBy(quotePackages.position);
-
-	// Per-line photos, grouped by line_key, each with a signed thumbnail + full-res URL.
-	const photoRows = await db
-		.select({
-			id: media.id,
-			line_key: media.line_key,
-			r2_key: media.r2_key,
-			thumbnail_key: media.thumbnail_key,
-			web_key: media.web_key
-		})
-		.from(media)
-		.where(
-			and(
-				eq(media.quote_id, row.id),
-				eq(media.purpose_tag, 'quote_line_item_photo'),
-				sql`${media.deleted_at} IS NULL`
+	// Lines, GBB packages, per-line photo rows, and the two branding image presigns are all
+	// independent (the reads only need row.id; the presigns only need row fields) — fire them
+	// in one wave. The photo presign fan-out below genuinely depends on photoRows, so it stays
+	// sequential after this wave.
+	const [lineRows, packages, photoRows, orgLogoUrl, signatureImageUrl] = await Promise.all([
+		db
+			.select({
+				id: quoteLineItems.id,
+				line_key: quoteLineItems.line_key,
+				description: quoteLineItems.description,
+				details: quoteLineItems.details,
+				quantity: quoteLineItems.quantity,
+				unit: quoteLineItems.unit,
+				section_label: quoteLineItems.section_label,
+				is_optional: quoteLineItems.is_optional,
+				taxable: quoteLineItems.taxable,
+				package_id: quoteLineItems.package_id,
+				unit_price: quoteLineItems.unit_price,
+				total: quoteLineItems.total,
+				position: quoteLineItems.position
+			})
+			.from(quoteLineItems)
+			.where(and(eq(quoteLineItems.quote_id, row.id), sql`${quoteLineItems.deleted_at} IS NULL`))
+			.orderBy(quoteLineItems.position),
+		// Good-Better-Best tiers (empty on a simple quote) — so the contractor preview matches
+		// the customer's side-by-side view exactly.
+		db
+			.select({
+				id: quotePackages.id,
+				package_key: quotePackages.package_key,
+				name: quotePackages.name,
+				is_recommended: quotePackages.is_recommended,
+				position: quotePackages.position,
+				subtotal: quotePackages.subtotal,
+				total: quotePackages.total
+			})
+			.from(quotePackages)
+			.where(and(eq(quotePackages.quote_id, row.id), sql`${quotePackages.deleted_at} IS NULL`))
+			.orderBy(quotePackages.position),
+		// Per-line photos, grouped by line_key, each with a signed thumbnail + full-res URL.
+		db
+			.select({
+				id: media.id,
+				line_key: media.line_key,
+				r2_key: media.r2_key,
+				thumbnail_key: media.thumbnail_key,
+				web_key: media.web_key
+			})
+			.from(media)
+			.where(
+				and(
+					eq(media.quote_id, row.id),
+					eq(media.purpose_tag, 'quote_line_item_photo'),
+					sql`${media.deleted_at} IS NULL`
+				)
 			)
-		)
-		.orderBy(media.created_at);
+			.orderBy(media.created_at),
+		resolveLogoUrl(row.org_logo_url),
+		row.org_signature_block_enabled
+			? resolveLogoUrl(row.org_signature_image_url)
+			: Promise.resolve(null)
+	]);
 
 	const photosByLineKey = new Map<string, { id: string; thumb_url: string; full_url: string }[]>();
 	await Promise.all(
 		photoRows.map(async (p) => {
 			if (!p.line_key) return;
-			const entry = {
-				id: p.id,
-				thumb_url: await r2Presign(p.thumbnail_key ?? p.r2_key, 3600),
-				full_url: await r2Presign(p.web_key ?? p.r2_key, 3600)
-			};
+			// The thumb + full presigns are independent signing calls — run concurrently.
+			const [thumb_url, full_url] = await Promise.all([
+				r2Presign(p.thumbnail_key ?? p.r2_key, 3600),
+				r2Presign(p.web_key ?? p.r2_key, 3600)
+			]);
+			const entry = { id: p.id, thumb_url, full_url };
 			const list = photosByLineKey.get(p.line_key);
 			if (list) list.push(entry);
 			else photosByLineKey.set(p.line_key, [entry]);
@@ -163,11 +172,6 @@ export const GET: RequestHandler = async (event) => {
 		...li,
 		photos: li.line_key ? (photosByLineKey.get(li.line_key) ?? []) : []
 	}));
-
-	const orgLogoUrl = await resolveLogoUrl(row.org_logo_url);
-	const signatureImageUrl = row.org_signature_block_enabled
-		? await resolveLogoUrl(row.org_signature_image_url)
-		: null;
 
 	return json({
 		data: {

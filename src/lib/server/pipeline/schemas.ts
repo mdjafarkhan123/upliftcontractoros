@@ -109,7 +109,12 @@ export const createStageSchema = z.object({
 });
 
 export const updateStageSchema = z.object({
-	name: z.string().trim().min(1, 'Stage name is required').max(60, 'Stage name is too long').optional(),
+	name: z
+		.string()
+		.trim()
+		.min(1, 'Stage name is required')
+		.max(60, 'Stage name is too long')
+		.optional(),
 	color: hexColor.optional(),
 	description: optionalDescription.optional(),
 	probability: probability.nullable().optional(),
