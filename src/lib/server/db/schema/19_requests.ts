@@ -23,6 +23,7 @@ import {
 	integer,
 	boolean,
 	timestamp,
+	jsonb,
 	index
 } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -154,3 +155,41 @@ export const requestLineItems = pgTable(
 
 export type RequestLineItem = InferSelectModel<typeof requestLineItems>;
 export type NewRequestLineItem = InferInsertModel<typeof requestLineItems>;
+
+// Answers a public client gave to the form's CUSTOM questions (R5.2b — created
+// now so the form-builder schema is complete up front). Standardized fields
+// (name/email/address/…) already have dedicated columns on contacts/requests;
+// this table only stores answers to contractor-added custom questions.
+//
+// Everything is SNAPSHOTTED (label + type + value) at submit time so an answer
+// still reads correctly even if the contractor later edits or deletes the
+// question. `booking_field_id` is a plain uuid (no FK) — a real FK to
+// booking_form_fields (domain 12) would close the 19→12→07→19 import cycle,
+// same convention as requests.booking_link_id.
+export const requestFieldAnswers = pgTable(
+	'request_field_answers',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		request_id: uuid('request_id')
+			.notNull()
+			.references(() => requests.id),
+		// Provenance back to the booking_form_fields row (plain uuid, see above).
+		booking_field_id: uuid('booking_field_id'),
+		// Snapshots — the question as it was when answered.
+		question_label: text('question_label').notNull(),
+		question_type: text('question_type').notNull(),
+		// Single-value answers (short/long/number/date/yes-no) live here as text.
+		value_text: text('value_text'),
+		// Multi-value answers (checkbox groups, multi-select) live here as string[].
+		value_json: jsonb('value_json'),
+		position: integer('position').notNull().default(0),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('idx_request_field_answers_request').on(t.request_id)]
+);
+
+export type RequestFieldAnswer = InferSelectModel<typeof requestFieldAnswers>;
+export type NewRequestFieldAnswer = InferInsertModel<typeof requestFieldAnswers>;

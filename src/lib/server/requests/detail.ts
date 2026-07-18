@@ -1,6 +1,13 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { appointments, contacts, media, requestLineItems, requests } from '$lib/server/db/schema';
+import {
+	appointments,
+	contacts,
+	media,
+	requestFieldAnswers,
+	requestLineItems,
+	requests
+} from '$lib/server/db/schema';
 import { r2Presign } from '$lib/server/media/r2';
 import { deriveRequestStatus, type RequestDerivedStatus } from './status';
 
@@ -30,6 +37,15 @@ export type RequestPhotoPayload = {
 	// render, so the client renders photos in one round-trip (no per-photo fetch).
 	thumbnail_url: string;
 	web_url: string;
+};
+
+export type RequestCustomAnswerPayload = {
+	id: string;
+	question_label: string;
+	question_type: string;
+	// One is set: value_text for single-value types, value_json (string[]) for multi.
+	value_text: string | null;
+	value_json: string[] | null;
 };
 
 export type RequestLineItemPayload = {
@@ -79,6 +95,8 @@ export type RequestDetailPayload = {
 	assessment: RequestAssessmentPayload | null;
 	// Client-attached photos ("Share images of the work to be done").
 	photos: RequestPhotoPayload[];
+	// Answers to the form's custom questions (R5.2b) — snapshot label/type/value.
+	custom_answers: RequestCustomAnswerPayload[];
 };
 
 export async function loadRequestDetail(
@@ -86,7 +104,7 @@ export async function loadRequestDetail(
 	requestId: string,
 	timezone: string
 ): Promise<RequestDetailPayload | null> {
-	const [requestRows, lineRows, assessmentRows, photoRows] = await Promise.all([
+	const [requestRows, lineRows, assessmentRows, photoRows, answerRows] = await Promise.all([
 		db
 			.select({
 				request: requests,
@@ -157,7 +175,24 @@ export async function loadRequestDetail(
 					isNull(media.deleted_at)
 				)
 			)
-			.orderBy(asc(media.created_at))
+			.orderBy(asc(media.created_at)),
+		db
+			.select({
+				id: requestFieldAnswers.id,
+				question_label: requestFieldAnswers.question_label,
+				question_type: requestFieldAnswers.question_type,
+				value_text: requestFieldAnswers.value_text,
+				value_json: requestFieldAnswers.value_json,
+				position: requestFieldAnswers.position
+			})
+			.from(requestFieldAnswers)
+			.where(
+				and(
+					eq(requestFieldAnswers.request_id, requestId),
+					eq(requestFieldAnswers.org_id, orgId)
+				)
+			)
+			.orderBy(asc(requestFieldAnswers.position), asc(requestFieldAnswers.created_at))
 	]);
 
 	const row = requestRows[0];
@@ -248,6 +283,15 @@ export async function loadRequestDetail(
 					completion_notes: a.completion_notes
 				}
 			: null,
-		photos
+		photos,
+		custom_answers: answerRows.map((ans) => ({
+			id: ans.id,
+			question_label: ans.question_label,
+			question_type: ans.question_type,
+			value_text: ans.value_text,
+			value_json: Array.isArray(ans.value_json)
+				? (ans.value_json as unknown[]).filter((v): v is string => typeof v === 'string')
+				: null
+		}))
 	};
 }

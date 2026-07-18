@@ -152,7 +152,7 @@
 					</div>
 					<Switch
 						checked={d.enabled}
-						onCheckedChange={(v: boolean) => {
+						onchange={(v: boolean) => {
 							d.enabled = v;
 							toggleDay(d);
 						}}

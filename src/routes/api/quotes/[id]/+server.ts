@@ -70,6 +70,7 @@ export const GET: RequestHandler = async (event) => {
 			contact_email: contacts.email,
 			contact_sms_opt_out: contacts.sms_opt_out,
 			opportunity_id: quotes.opportunity_id,
+			request_id: quotes.request_id,
 			service_address_id: quotes.service_address_id,
 			addr_label: contactAddresses.label,
 			addr_line_1: contactAddresses.address_line_1,

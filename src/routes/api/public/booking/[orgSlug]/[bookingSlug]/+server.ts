@@ -12,6 +12,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
 	appointments,
+	bookingFormFields,
 	bookingLinks,
 	contacts,
 	opportunities,
@@ -20,6 +21,7 @@ import {
 	pipelineStages
 } from '$lib/server/db/schema';
 import { generateSlotsForDate, BookingValidationError } from '$lib/server/booking';
+import { toStandardFieldConfigs, toPublicCustomFields } from '$lib/server/booking/formFields';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
 import {
 	assertIsoDate,
@@ -83,6 +85,9 @@ async function findActiveBookingLink(
 				sql`${organizations.deleted_at} IS NULL`,
 				eq(organizations.feature_online_booking, true),
 				eq(bookingLinks.slug, bookingSlug),
+				// Booking submissions only — a request-form slug must go through
+				// /submit-request (which creates a Request, not a direct appointment).
+				eq(bookingLinks.form_type, 'booking'),
 				eq(bookingLinks.is_active, true),
 				sql`${bookingLinks.deleted_at} IS NULL`
 			)
@@ -98,12 +103,15 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	const [row] = await db
 		.select({
+			link_id: bookingLinks.id,
 			org_name: organizations.name,
 			org_logo_url: organizations.logo_url,
 			org_timezone: organizations.timezone,
 			org_country: organizations.country,
 			title: bookingLinks.title,
 			description: bookingLinks.description,
+			form_type: bookingLinks.form_type,
+			requires_approval: bookingLinks.requires_approval,
 			appointment_type: bookingLinks.appointment_type,
 			slot_duration_minutes: bookingLinks.slot_duration_minutes
 		})
@@ -124,7 +132,19 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	if (!row) return notFound();
 
-	const resolvedLogoUrl = await resolveLogoUrl(row.org_logo_url);
+	// Request forms carry a per-field config (R5.2) that drives which sections the
+	// wizard shows/requires. Only fetched for request forms (a dependent read: it
+	// needs the resolved link id). Presigned logo resolves in parallel with it.
+	const [resolvedLogoUrl, fieldRows] = await Promise.all([
+		resolveLogoUrl(row.org_logo_url),
+		row.form_type === 'request'
+			? db
+					.select()
+					.from(bookingFormFields)
+					.where(eq(bookingFormFields.booking_link_id, row.link_id))
+					.orderBy(asc(bookingFormFields.position))
+			: Promise.resolve([])
+	]);
 
 	return json(
 		{
@@ -135,8 +155,12 @@ export const GET: RequestHandler = async ({ params }) => {
 				org_country: row.org_country,
 				title: row.title,
 				description: row.description,
+				form_type: row.form_type,
+				requires_approval: row.requires_approval,
 				appointment_type: row.appointment_type,
-				slot_duration_minutes: row.slot_duration_minutes
+				slot_duration_minutes: row.slot_duration_minutes,
+				fields: toStandardFieldConfigs(fieldRows),
+				custom_fields: toPublicCustomFields(fieldRows)
 			}
 		},
 		{ headers: NO_STORE }

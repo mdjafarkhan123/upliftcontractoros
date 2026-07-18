@@ -1,0 +1,2 @@
+ALTER TABLE "booking_links" ADD COLUMN "is_default" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_booking_links_default_per_type" ON "booking_links" USING btree ("org_id","form_type") WHERE "booking_links"."is_default" AND "booking_links"."deleted_at" IS NULL;

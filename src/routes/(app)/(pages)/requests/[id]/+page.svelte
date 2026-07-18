@@ -475,8 +475,32 @@
 		}
 	}
 
-	function convertStub(kind: 'quote' | 'job') {
-		toast.info(`Converting to a ${kind} arrives in the next update (R3.2).`);
+	// ── Convert to quote / job ───────────────────────────────────────────────────
+	// Snapshot-copies the request's line items into a new draft quote/job, freezes the
+	// request as Converted (terminal), then lands the contractor on the new record to
+	// finish pricing/scheduling (Jobber's flow).
+	let converting = $state<'quote' | 'job' | null>(null);
+
+	async function convert(kind: 'quote' | 'job') {
+		if (converting) return;
+		converting = kind;
+		try {
+			const res = await fetch(`/api/requests/${id}/convert-to-${kind}`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? `Could not convert to ${kind}.`);
+				return;
+			}
+			// Write-through so the request's frozen "Converted" state is reflected everywhere
+			// before we leave the page.
+			if (body.data?.request) applyDetail(body.data.request as RequestDetail);
+			toast.success(kind === 'quote' ? 'Quote created' : 'Job created');
+			await goto(kind === 'quote' ? `/quotes/${body.data.id}` : `/jobs/${body.data.id}`);
+		} catch {
+			toast.error('Network error. Try again.');
+		} finally {
+			converting = null;
+		}
 	}
 
 	const rowActions = $derived.by<RowAction[]>(() => {
@@ -542,6 +566,11 @@
 			(req.assessment.status === 'scheduled' || req.assessment.status === 'unscheduled')
 	);
 
+	// Money action (Model-1: pinned top-right). Available on any active request that
+	// hasn't converted/archived yet — Jobber lets you create a quote/job from a request
+	// at any point, not only right after the assessment completes.
+	const canConvert = $derived(canManage && !isConverted && !isArchived && !needsApproval);
+
 	beforeNavigate(({ cancel }) => {
 		if (blockEditing && !overviewSaving && !pricingSaving && !assessmentSaving) {
 			if (!confirm('You have unsaved changes. Leave anyway?')) cancel();
@@ -580,6 +609,18 @@
 						<Button loading={actionLoading} loadingLabel="Working…" onclick={acceptAndSchedule}>
 							Accept and Schedule
 						</Button>
+					{:else if isConverted && (r.converted_to_quote_id || r.converted_to_job_id)}
+						<a
+							class="req-detail__converted-link"
+							href={r.converted_to_quote_id
+								? `/quotes/${r.converted_to_quote_id}`
+								: `/jobs/${r.converted_to_job_id}`}
+						>
+							<i class={r.converted_to_quote_id ? 'ri-price-tag-3-line' : 'ri-hammer-line'}></i>
+							View {r.converted_to_quote_id ? 'quote' : 'job'}
+						</a>
+					{:else if canConvert}
+						<Button variant="secondary" onclick={() => (convertOpen = true)}>Convert</Button>
 					{/if}
 				</div>
 			</div>
@@ -702,6 +743,19 @@
 								<span class="req-detail__muted">—</span>
 							{/if}
 						</div>
+
+						{#each r.custom_answers as ans (ans.id)}
+							<div class="req-card__field">
+								<span class="req-card__label">{ans.question_label}</span>
+								{#if ans.value_json && ans.value_json.length > 0}
+									<p class="req-detail__text">{ans.value_json.join(', ')}</p>
+								{:else if ans.value_text}
+									<p class="req-detail__text">{ans.value_text}</p>
+								{:else}
+									<span class="req-detail__muted">—</span>
+								{/if}
+							</div>
+						{/each}
 					{/if}
 				</section>
 
@@ -953,8 +1007,10 @@
 
 		<RequestConvertDialog
 			bind:open={convertOpen}
-			onConvertQuote={() => convertStub('quote')}
-			onConvertJob={() => convertStub('job')}
+			convertSoon={false}
+			converting={converting}
+			onConvertQuote={() => convert('quote')}
+			onConvertJob={() => convert('job')}
 			onArchive={() => void runAction('archive').then((ok) => ok && toast.success('Archived'))}
 			onLeave={() => {}}
 		/>
@@ -1028,6 +1084,23 @@
 		display: flex;
 		align-items: center;
 		gap: $space-2;
+	}
+
+	.req-detail__converted-link {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		padding: $space-2 $space-3;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		text-decoration: none;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
 	}
 
 	.req-detail__title-row {

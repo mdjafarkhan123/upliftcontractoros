@@ -42,6 +42,8 @@
 	let title = $state('Book an Appointment');
 	let slug = $state('');
 	let description = $state('');
+	let form_type = $state<'booking' | 'request'>('booking');
+	let requires_approval = $state(true);
 	let appointment_type = $state<'estimate' | 'job_start' | 'follow_up' | 'inspection' | 'other'>(
 		'estimate'
 	);
@@ -364,6 +366,8 @@
 					title: title.trim(),
 					slug: normalizedSlug,
 					description: description.trim() || null,
+					form_type,
+					requires_approval,
 					appointment_type,
 					slot_duration_minutes,
 					buffer_minutes,
@@ -494,6 +498,44 @@
 					</div>
 					<div class="settings-card__body">
 						<div class="field">
+							<Label for="form_type" class="field__label field__label--required">Form type</Label>
+							<Select.Root bind:value={form_type}>
+								<Select.Trigger>
+									<Select.Value />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="booking" label="Booking form"
+										>Booking form — instant confirmed appointment</Select.Item
+									>
+									<Select.Item value="request" label="Request form"
+										>Request form — client describes work, you approve first</Select.Item
+									>
+								</Select.Content>
+							</Select.Root>
+							<p class="field__hint">
+								{#if form_type === 'request'}
+									Clients fill in the work details and pick a preferred time. It arrives as a
+									Request for you to review.
+								{:else}
+									Clients pick an open slot and it's booked on your calendar right away.
+								{/if}
+							</p>
+						</div>
+
+						{#if form_type === 'request'}
+							<div class="settings-toggle">
+								<div class="settings-toggle__text">
+									<span class="settings-toggle__label">Require my approval</span>
+									<p class="settings-toggle__desc">
+										New requests wait as “Needs approval” until you accept them. Turn off to
+										auto-approve.
+									</p>
+								</div>
+								<Switch bind:checked={requires_approval} />
+							</div>
+						{/if}
+
+						<div class="field">
 							<Label for="title" class="field__label field__label--required">Title</Label>
 							<Input id="title" bind:value={title} required maxlength={120} />
 							<p class="field__hint">Shown to customers on the booking page.</p>
@@ -552,23 +594,25 @@
 							<Textarea id="description" bind:value={description} maxlength={2000} rows={3} />
 						</div>
 
-						<div class="field">
-							<Label for="appointment_type" class="field__label field__label--required">
-								Appointment type
-							</Label>
-							<Select.Root bind:value={appointment_type}>
-								<Select.Trigger>
-									<Select.Value />
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="estimate" label="Estimate">Estimate</Select.Item>
-									<Select.Item value="job_start" label="Job start">Job start</Select.Item>
-									<Select.Item value="follow_up" label="Follow up">Follow up</Select.Item>
-									<Select.Item value="inspection" label="Inspection">Inspection</Select.Item>
-									<Select.Item value="other" label="Other">Other</Select.Item>
-								</Select.Content>
-							</Select.Root>
-						</div>
+						{#if form_type === 'booking'}
+							<div class="field">
+								<Label for="appointment_type" class="field__label field__label--required">
+									Appointment type
+								</Label>
+								<Select.Root bind:value={appointment_type}>
+									<Select.Trigger>
+										<Select.Value />
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="estimate" label="Estimate">Estimate</Select.Item>
+										<Select.Item value="job_start" label="Job start">Job start</Select.Item>
+										<Select.Item value="follow_up" label="Follow up">Follow up</Select.Item>
+										<Select.Item value="inspection" label="Inspection">Inspection</Select.Item>
+										<Select.Item value="other" label="Other">Other</Select.Item>
+									</Select.Content>
+								</Select.Root>
+							</div>
+						{/if}
 					</div>
 				</div>
 
@@ -683,7 +727,7 @@
 									<p class="book-day__name">{DAY_NAMES[d.day_of_week]}</p>
 									<p class="book-day__status">{d.enabled ? 'Available' : 'Unavailable'}</p>
 								</div>
-								<Switch checked={d.enabled} onCheckedChange={(v: boolean) => toggleDay(d, v)} />
+								<Switch checked={d.enabled} onchange={(v: boolean) => toggleDay(d, v)} />
 							</div>
 
 							{#if d.enabled}

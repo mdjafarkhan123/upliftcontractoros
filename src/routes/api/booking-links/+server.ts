@@ -3,10 +3,16 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { availabilityOverrides, availabilityWindows, bookingLinks } from '$lib/server/db/schema';
+import {
+	availabilityOverrides,
+	availabilityWindows,
+	bookingFormFields,
+	bookingLinks
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { requireFeature } from '$lib/server/auth/featureGuard';
 import { todayInOrgTz } from '$lib/server/booking/timezone/utils';
+import { defaultRequestFormFieldRows } from '$lib/server/booking/formFields';
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
@@ -41,6 +47,8 @@ const createSchema = z.object({
 		.regex(slugRegex, 'Use lowercase letters, numbers, and hyphens only.'),
 	title: z.string().trim().min(1, 'Title is required.').max(120),
 	description: z.string().trim().max(2000).optional().nullable(),
+	form_type: z.enum(['booking', 'request']).default('booking'),
+	requires_approval: z.boolean().default(true),
 	appointment_type: z.enum(['estimate', 'job_start', 'follow_up', 'inspection', 'other']),
 	slot_duration_minutes: z.union([
 		z.literal(30),
@@ -83,11 +91,14 @@ export const GET: RequestHandler = async (event) => {
 			slug: bookingLinks.slug,
 			title: bookingLinks.title,
 			description: bookingLinks.description,
+			form_type: bookingLinks.form_type,
+			requires_approval: bookingLinks.requires_approval,
 			appointment_type: bookingLinks.appointment_type,
 			slot_duration_minutes: bookingLinks.slot_duration_minutes,
 			buffer_minutes: bookingLinks.buffer_minutes,
 			min_advance_hours: bookingLinks.min_advance_hours,
 			max_future_days: bookingLinks.max_future_days,
+			is_default: bookingLinks.is_default,
 			is_active: bookingLinks.is_active,
 			created_at: bookingLinks.created_at,
 			window_count: sql<number>`(
@@ -221,6 +232,8 @@ export const POST: RequestHandler = async (event) => {
 				slug: input.slug,
 				title: input.title,
 				description: input.description ?? null,
+				form_type: input.form_type,
+				requires_approval: input.requires_approval,
 				appointment_type: input.appointment_type,
 				slot_duration_minutes: input.slot_duration_minutes,
 				buffer_minutes: input.buffer_minutes,
@@ -252,6 +265,12 @@ export const POST: RequestHandler = async (event) => {
 					reason: o.reason ?? null
 				}))
 			);
+		}
+
+		// Request forms get the default standardized field set so the builder has
+		// rows to manage (R5.2). Booking forms have no builder yet.
+		if (link.form_type === 'request') {
+			await tx.insert(bookingFormFields).values(defaultRequestFormFieldRows(auth.orgId, link.id));
 		}
 
 		return link;

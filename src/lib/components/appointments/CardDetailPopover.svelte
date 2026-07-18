@@ -67,10 +67,18 @@
 		item != null &&
 			(item.status === 'completed' || item.status === 'cancelled' || item.status === 'no_show')
 	);
-	// Details = the job page when this visit came from a job (Jobber's "Details" opens
-	// the job); a standalone visit has no job, so it opens the visit itself.
+	// A request-linked estimate is an on-site Assessment (Jobber identity).
+	const isAssessment = $derived(!!item?.request_id);
+	// Details = the request page for an assessment (Jobber opens the request), the job
+	// page when this visit came from a job, else the standalone visit itself.
 	const detailsHref = $derived(
-		item ? (item.job_id ? `/jobs/${item.job_id}` : `/appointments/${item.id}`) : '#'
+		!item
+			? '#'
+			: item.request_id
+				? `/requests/${item.request_id}`
+				: item.job_id
+					? `/jobs/${item.job_id}`
+					: `/appointments/${item.id}`
 	);
 
 	// ---- Line items (lazy, only for job-linked visits) --------------------------
@@ -158,7 +166,7 @@
 					isTerminal && `card-detail-pop__type--${item.status}`
 				]}
 			>
-				{TYPE_LABELS[item.type]}
+				{isAssessment ? 'Assessment' : TYPE_LABELS[item.type]}
 			</span>
 		{/if}
 	{/snippet}
@@ -204,7 +212,16 @@
 						</a>
 					</dd>
 				</div>
-				{#if item.job_id}
+				{#if item.request_id}
+					<div class="card-detail-pop__fact">
+						<dt>Request</dt>
+						<dd>
+							<a class="card-detail-pop__link" href={`/requests/${item.request_id}`}
+								>View request</a
+							>
+						</dd>
+					</div>
+				{:else if item.job_id}
 					<div class="card-detail-pop__fact">
 						<dt>Job</dt>
 						<dd>

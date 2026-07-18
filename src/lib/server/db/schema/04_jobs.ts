@@ -41,6 +41,12 @@ export const jobs = pgTable('jobs', {
 		.notNull()
 		.references(() => organizations.id),
 	opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
+	// Provenance back-link (Jobber): the Request this job was converted from, so the job
+	// detail page can show the original request in a side drawer. Set once at conversion,
+	// never live-read (the job owns its own snapshot lines). Plain uuid, no FK — a
+	// constraint here would close an import cycle (19_requests already imports jobs). Same
+	// convention as booking_link_id.
+	request_id: uuid('request_id'),
 	source: jobSourceEnum('source').notNull().default('opportunity'),
 	contact_id: uuid('contact_id')
 		.notNull()

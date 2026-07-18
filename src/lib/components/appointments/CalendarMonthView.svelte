@@ -137,8 +137,9 @@
 						{#if pill.kind === 'appt'}
 							{@const ev = pill.item}
 							<a
-								href={`/appointments/${ev.id}`}
-								use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.id)}
+								href={ev.request_id ? `/requests/${ev.request_id}` : `/appointments/${ev.id}`}
+								use:prefetchOnIntent={() =>
+									ev.request_id ? undefined : appointmentsStore.prefetchDetail(ev.id)}
 								class={[
 									'cal-month__pill',
 									pillClasses(ev.status),

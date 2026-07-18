@@ -199,6 +199,11 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 				{ queue: 'automation', jobName: 'appointment_confirmation' },
 				{ queue: 'automation', jobName: 'pipeline_auto_advance' }
 			];
+		case 'request.created':
+			// A new work request. The notification handler fans out a staff alert but
+			// only for genuine inbound (source='public_form') requests — a manually
+			// entered internal request never pings anyone (mirrors contact.created).
+			return [{ queue: 'notification', jobName: 'request.created' }];
 		case 'job.scheduled':
 			// Client-facing "your job is booked" confirmation over the chosen channel(s).
 			return [{ queue: 'automation', jobName: 'job_scheduled_confirmation' }];

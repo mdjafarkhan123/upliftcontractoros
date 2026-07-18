@@ -1540,6 +1540,57 @@ async function handleNewLead(data: EventJobData) {
 	}
 }
 
+// A work request arrived. Only genuine inbound (public online form) requests alert the
+// team — a manually entered internal request is silent (mirrors contact.created, which
+// never notifies while a real inbound lead.created does). Inbound requests are unassigned
+// at creation, so notify admins/managers. type='new_request' is escalation-eligible, so
+// dispatchToMember schedules the unread-escalation check automatically.
+async function handleRequestCreated(data: EventJobData) {
+	if (!data.org_id) return;
+	if (data.payload.source !== 'public_form') return;
+
+	const recipients = await adminManagerMembers(data.org_id);
+	if (recipients.length === 0) return;
+
+	// The public form sets the request title to the client's full name; fall back to a
+	// fresh read of the linked contact if the payload somehow lacks it.
+	let clientName = (data.payload.title as string | undefined)?.trim() ?? '';
+	if (!clientName) {
+		const contactId = data.payload.contact_id;
+		if (typeof contactId === 'string' && contactId.length > 0) {
+			const [contact] = await db
+				.select({ full_name: contacts.full_name })
+				.from(contacts)
+				.where(eq(contacts.id, contactId))
+				.limit(1);
+			clientName = contact?.full_name?.trim() ?? '';
+		}
+	}
+
+	const requiresApproval = data.payload.requires_approval === true;
+	const title = clientName ? `New request from ${clientName}` : 'New request received';
+	const body = requiresApproval
+		? 'Awaiting your approval — review and schedule'
+		: 'Someone submitted a request through your online form';
+
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId: data.org_id,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'new_request',
+			title,
+			body,
+			resourceType: 'request',
+			resourceId: data.resource_id,
+			route: NOTIFICATION_SPEC.new_request.route(data.resource_id),
+			metadata: { client_name: clientName, requires_approval: requiresApproval },
+			// One notification per (request, member) — survives outbox redelivery.
+			idempotencyKey: `request.created:${data.resource_id}:${r.id}`
+		});
+	}
+}
+
 // Escalation check (1.d), fired as a delayed job scheduled by dispatchToMember. Re-reads
 // the in-app notification at fire time: if it's been read (acknowledged) or is gone, no-op.
 // Otherwise re-deliver on the louder channels. Escalation OVERRIDES the member's per-type
@@ -1653,6 +1704,8 @@ export const notificationWorker = new Worker<EventJobData>(
 			case 'lead.created':
 			case 'new_lead':
 				return handleNewLead(data);
+			case 'request.created':
+				return handleRequestCreated(data);
 			case 'notification.escalate':
 				return handleEscalationCheck(data);
 			case 'opportunity.created':

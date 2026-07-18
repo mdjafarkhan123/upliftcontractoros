@@ -286,6 +286,9 @@ export type QuoteDetail = {
 	contact_email: string | null;
 	contact_sms_opt_out: boolean;
 	opportunity_id: string | null;
+	// Provenance back-link: the Request this quote was converted from (Jobber). Null
+	// unless it came through the Requests funnel.
+	request_id: string | null;
 	service_address_id: string | null;
 	service_address: QuoteServiceAddress | null;
 	view_count: number;

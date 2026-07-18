@@ -153,7 +153,9 @@
       "Bash(awk 'NR>=1240 && NR<=1300' \"C:/Users/JAFARK~1/AppData/Local/Temp/claude/D--Projects-ContractorOs/aac67cc3-080f-4f94-801b-fa6894528b5a/scratchpad/OrigGrid.svelte\")",
       "Bash(echo \"SASS_EXIT=$?\")",
       "Bash(git diff *)",
-      "Bash(echo \"EXIT=$?\\(1=none good\\)\")"
+      "Bash(echo \"EXIT=$?\\(1=none good\\)\")",
+      "PowerShell(npx prettier --write \"src/lib/components/booking/request/RequestWizard.svelte\" \"src/routes/api/public/booking/[orgSlug]/[bookingSlug]/submit-request/+server.ts\" \"src/lib/server/requests/publicSubmitSchema.ts\" \"src/routes/book/[orgSlug]/[bookingSlug]/+page.svelte\" \"src/routes/\\(app\\)/\\(pages\\)/settings/booking/new/+page.svelte\" \"src/routes/\\(app\\)/\\(pages\\)/settings/booking/[id]/+page.svelte\" \"src/routes/\\(app\\)/\\(pages\\)/settings/booking/+page.svelte\" \"src/lib/styles/components/_public.scss\" \"src/lib/styles/components/_booking.scss\" \"src/lib/server/db/schema/12_booking.ts\" 2>&1 | Select-Object -Last 15)",
+      "Bash(perl -0777 -i -pe 's/\\\\t{4}<\\\\/div>\\\\n\\\\t{3}<\\\\/div>\\\\n\\\\t{2}\\\\{:else if step === 2\\\\}/\\\\t\\\\t\\\\t\\\\t<\\\\/div>\\\\n\\\\t\\\\t\\\\t\\\\t\\\\{\\\\/if\\\\}\\\\n\\\\t\\\\t\\\\t<\\\\/div>\\\\n\\\\t\\\\t\\\\{:else if step === 2\\\\}/' \"src/lib/components/booking/request/RequestWizard.svelte\")"
     ]
   },
   "enabledMcpjsonServers": [

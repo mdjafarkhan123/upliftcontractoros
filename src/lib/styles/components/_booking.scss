@@ -64,6 +64,141 @@
 	}
 }
 
+// ── Requests-and-bookings hub (settings/booking index) ──────────────────────
+.book-hub {
+	display: flex;
+	flex-direction: column;
+	gap: $space-4;
+
+	&__section {
+		padding: $space-5;
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		margin-bottom: $space-4;
+	}
+
+	&__title {
+		font-size: 1.4rem;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-4;
+		padding: $space-3 0;
+
+		& + & {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__row-main {
+		min-width: 0;
+	}
+
+	&__row-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__row-text {
+		margin-top: 2px;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__soon {
+		flex-shrink: 0;
+		padding: 2px $space-2;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+	}
+}
+
+// Form rows inside the hub's Forms section.
+.book-forms {
+	display: flex;
+	flex-direction: column;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.book-form-row {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-3 0;
+
+	& + & {
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	&__title-line {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__meta {
+		margin-top: 2px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__default {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		flex-shrink: 0;
+	}
+
+	&__default-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+
+		@media (max-width: $bp-mobile) {
+			display: none;
+		}
+	}
+}
+
 // ── Booking-link list ───────────────────────────────────────────────────────
 .book-list {
 	display: grid;
@@ -112,6 +247,14 @@
 		&--inactive {
 			background: var(--color-bg-surface-sunk);
 			color: var(--color-text-muted);
+		}
+
+		// Form-type chip (Request form / Booking form). Pushed to the right so the
+		// active/inactive badge trails it.
+		&--type {
+			margin-left: auto;
+			background: var(--state-active-tint);
+			color: var(--color-brand);
 		}
 	}
 
@@ -655,5 +798,546 @@
 		text-align: right;
 		font-weight: $weight-medium;
 		color: var(--color-text-primary);
+	}
+}
+
+// ── Form builder (R5.2 — Jobber "Edit" tab: two-pane preview + manage panel) ──
+.form-builder {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 400px;
+	gap: $space-6;
+	align-items: start;
+	// Desktop is the target: fill the width but cap the sprawl on ultra-wide
+	// monitors so the preview never floats in an ocean of empty stage.
+	width: 100%;
+	max-width: 1600px;
+
+	@media (max-width: 1024px) {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	// --- Left: live preview ---
+	&__preview {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		min-width: 0;
+	}
+
+	&__preview-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	&__preview-label {
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		text-transform: uppercase;
+		letter-spacing: $tracking-label;
+		color: var(--color-text-muted);
+	}
+
+	&__device-toggle {
+		display: inline-flex;
+		gap: $space-1;
+		padding: $space-1;
+		border-radius: $radius-full;
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__device {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 28px;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&--active {
+			background: var(--color-bg-surface);
+			color: var(--color-text-primary);
+			box-shadow: var(--shadow-sm);
+		}
+	}
+
+	&__stage {
+		display: flex;
+		justify-content: center;
+		padding: $space-6 $space-6 $space-8;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface-sunk);
+		// The preview scrolls inside its own pane (Jobber behaviour) so a long
+		// form never pushes the page; the manage panel stays put beside it.
+		max-height: calc(100vh - 220px);
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+
+	// The preview reuses the public .book-portal card classes; tighten the page
+	// chrome so it sits nicely inside the stage and can't be interacted with.
+	&__frame {
+		width: 100%;
+		padding: 0;
+		pointer-events: none;
+		transition: max-width 0.2s ease;
+
+		// Desktop is the default and the priority: a comfortable wide preview
+		// that uses the space, not a tiny frame floating in the stage.
+		&--desktop {
+			max-width: 620px;
+		}
+		&--mobile {
+			max-width: 380px;
+		}
+
+		// The public wizard is built to BE a full page (big vertical rhythm);
+		// trim the top/bottom padding so it reads as an inset preview card.
+		.book-portal {
+			padding-top: $space-6;
+			padding-bottom: $space-8;
+		}
+
+		// In the phone preview, two-up rows would overflow and clip — collapse
+		// them to a single column so nothing gets sliced off.
+		&--mobile .req-grid--2 {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	&__brand {
+		margin-bottom: $space-5;
+		text-align: center;
+		font-size: $fs-lg;
+		font-weight: $weight-bold;
+		color: var(--color-text-primary);
+	}
+
+	// --- Right: manage panel ---
+	&__panel {
+		position: sticky;
+		top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+		padding: $space-5;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-xl;
+		background: var(--color-bg-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	&__panel-title {
+		margin: 0;
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		color: var(--color-text-primary);
+	}
+
+	&__tabs {
+		display: flex;
+		gap: $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__tab {
+		padding: $space-2 0;
+		border: none;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&--active {
+			color: var(--color-brand);
+			border-bottom-color: var(--color-brand);
+		}
+	}
+
+	&__hint {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// --- "Form fields" section on the single-column request editor ---
+.book-fields {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-5;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-xl;
+	background: var(--color-bg-surface);
+
+	&__title {
+		margin: 0;
+		font-size: $fs-h3;
+		font-weight: $weight-bold;
+		color: var(--color-text-primary);
+	}
+
+	&__hint {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+// --- Field rows in the builder panel ---
+.fb-list {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.fb-field {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: $space-3;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+
+	&--locked {
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__main {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__desc {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__always {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		flex-shrink: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__controls {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-5;
+		flex-shrink: 0;
+	}
+
+	// Each switch carries its own label right beside it, so "Required" and
+	// "Shown/Hidden" can never be mistaken for one another.
+	&__toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		cursor: pointer;
+
+		&--show {
+			// The "show the field" switch is the primary action — give its label
+			// a touch more weight so it reads as the main control.
+			padding-left: $space-4;
+			border-left: 1px solid var(--color-border);
+		}
+	}
+
+	&__toggle-label {
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		min-width: 3.5em;
+		text-align: right;
+	}
+
+	// In-flight save indicator for a single row's toggle. Always occupies its slot
+	// (no layout shift); only visible + spinning while that row is saving.
+	&__spinner {
+		font-size: $fs-body;
+		line-height: 1;
+		color: var(--color-brand);
+		opacity: 0;
+		transition: opacity 0.12s ease;
+
+		&--on {
+			opacity: 1;
+			animation: spin 0.7s linear infinite;
+		}
+	}
+}
+
+// ── Custom questions (R5.2b form builder) ────────────────────────────────────
+.cq {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	margin-top: $space-5;
+	padding-top: $space-4;
+	border-top: 1px solid var(--color-border);
+
+	&__title {
+		margin: 0;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__sub {
+		margin: 2px 0 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__pick {
+		margin: 0;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+}
+
+.cq-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $space-3;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+
+	&__main {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		min-width: 0;
+	}
+
+	&__icon {
+		font-size: 1.2rem;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+
+	&__text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	&__type {
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+
+	&__req {
+		color: var(--color-brand);
+	}
+
+	&__actions {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		flex-shrink: 0;
+	}
+
+	&__btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		border: none;
+		border-radius: $radius-sm;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-primary);
+		}
+
+		&--danger:hover {
+			color: var(--color-danger);
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+	}
+}
+
+.cq-types {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: $space-2;
+}
+
+.cq-type {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-3;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface);
+	text-align: left;
+	cursor: pointer;
+
+	&:hover {
+		border-color: var(--color-brand);
+		background: var(--color-bg-surface-sunk);
+	}
+
+	&__icon {
+		font-size: 1.2rem;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+
+	&__label {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
+
+	&--soon {
+		cursor: default;
+		opacity: 0.6;
+
+		&:hover {
+			border-color: var(--color-border);
+			background: var(--color-bg-surface);
+		}
+	}
+
+	&__soon {
+		margin-left: auto;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		padding: 0 $space-2;
+	}
+}
+
+.cq-editor {
+	display: flex;
+	flex-direction: column;
+	gap: $space-3;
+	padding: $space-4;
+	border: 1px solid var(--color-border);
+	border-radius: $radius-md;
+	background: var(--color-bg-surface-sunk);
+
+	&__head {
+		display: inline-flex;
+		align-items: center;
+		gap: $space-2;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-2;
+	}
+}
+
+.cq-options {
+	display: flex;
+	flex-direction: column;
+	gap: $space-2;
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-sm;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&:hover:not(:disabled) {
+			color: var(--color-danger);
+		}
+
+		&:disabled {
+			opacity: 0.4;
+			cursor: default;
+		}
+	}
+
+	&__add {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: $space-1;
+		border: none;
+		background: transparent;
+		color: var(--color-brand);
+		font-size: $fs-caption;
+		font-weight: $weight-medium;
+		cursor: pointer;
+		padding: 0;
 	}
 }

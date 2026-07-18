@@ -240,14 +240,31 @@ export type {
 } from './11_webchat';
 
 // Domain 12 — Booking
-export { bookingLinks, availabilityWindows, availabilityOverrides } from './12_booking';
+// NOTE: bookingFormTypeEnum MUST be re-exported here. drizzle-kit only registers
+// enums that are exported members of this barrel; without it, every `generate`
+// mistakes the (still in-use) enum for a dropped one and emits a destructive
+// `DROP TYPE booking_form_type`. See migration 0163/0164 history.
+export {
+	bookingLinks,
+	availabilityWindows,
+	availabilityOverrides,
+	bookingFormFields,
+	// These pgEnums MUST stay exported (same rule as bookingFormTypeEnum above):
+	// drizzle-kit only sees exported enums, so dropping them here makes `generate`
+	// emit a destructive DROP TYPE. See [[drizzle-enum-barrel-export-fix]].
+	bookingFormTypeEnum,
+	bookingFormFieldKindEnum,
+	bookingFormFieldKeyEnum
+} from './12_booking';
 export type {
 	BookingLink,
 	NewBookingLink,
 	AvailabilityWindow,
 	NewAvailabilityWindow,
 	AvailabilityOverride,
-	NewAvailabilityOverride
+	NewAvailabilityOverride,
+	BookingFormField,
+	NewBookingFormField
 } from './12_booking';
 
 // Domain 13 — Quick Replies (Inbox)
@@ -288,13 +305,16 @@ export {
 	requestSourceEnum,
 	requestApprovalStateEnum,
 	requests,
-	requestLineItems
+	requestLineItems,
+	requestFieldAnswers
 } from './19_requests';
 export type {
 	Request,
 	NewRequest,
 	RequestLineItem,
-	NewRequestLineItem
+	NewRequestLineItem,
+	RequestFieldAnswer,
+	NewRequestFieldAnswer
 } from './19_requests';
 
 // Domain 18 — Automation Engine (card/template multi-step sequences)

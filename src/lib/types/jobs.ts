@@ -347,6 +347,9 @@ export type JobDetail = {
 	contact_phone: string;
 	contact_email: string | null;
 	opportunity_id: string | null;
+	// Provenance back-link: the Request this job was converted from (Jobber). Null
+	// unless it came through the Requests funnel.
+	request_id: string | null;
 	source: JobSource;
 	assigned_to: string | null;
 	assignee_name: string | null;

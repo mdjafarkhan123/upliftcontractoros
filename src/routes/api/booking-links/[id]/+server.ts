@@ -3,14 +3,26 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { availabilityOverrides, availabilityWindows, bookingLinks } from '$lib/server/db/schema';
+import {
+	availabilityOverrides,
+	availabilityWindows,
+	bookingFormFields,
+	bookingLinks
+} from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { requireFeature } from '$lib/server/auth/featureGuard';
 import { loadBookingLinkForOrg } from '$lib/server/booking/loadBookingLink';
+import {
+	defaultRequestFormFieldRows,
+	toBuilderFields,
+	toBuilderCustomFields
+} from '$lib/server/booking/formFields';
 
 const updateSchema = z.object({
 	title: z.string().trim().min(1).max(120).optional(),
 	description: z.string().trim().max(2000).nullable().optional(),
+	form_type: z.enum(['booking', 'request']).optional(),
+	requires_approval: z.boolean().optional(),
 	appointment_type: z
 		.enum(['estimate', 'job_start', 'follow_up', 'inspection', 'other'])
 		.optional(),
@@ -35,9 +47,10 @@ export const GET: RequestHandler = async (event) => {
 
 	const link = await loadBookingLinkForOrg(auth.orgId, event.params.id!);
 
-	// Windows and overrides both hang off the (already-gated) link and are independent of
-	// each other — fire them in one wave instead of two sequential round trips.
-	const [windows, overrides] = await Promise.all([
+	// Windows, overrides, and form-builder fields all hang off the (already-gated)
+	// link and are independent of each other — fire them in one wave instead of
+	// three sequential round trips (Rule 24).
+	const [windows, overrides, fieldRows] = await Promise.all([
 		db
 			.select()
 			.from(availabilityWindows)
@@ -47,10 +60,23 @@ export const GET: RequestHandler = async (event) => {
 			.select()
 			.from(availabilityOverrides)
 			.where(eq(availabilityOverrides.booking_link_id, link.id))
-			.orderBy(asc(availabilityOverrides.override_date))
+			.orderBy(asc(availabilityOverrides.override_date)),
+		db
+			.select()
+			.from(bookingFormFields)
+			.where(eq(bookingFormFields.booking_link_id, link.id))
+			.orderBy(asc(bookingFormFields.position))
 	]);
 
-	return json({ data: { ...link, windows, overrides } });
+	return json({
+		data: {
+			...link,
+			windows,
+			overrides,
+			fields: toBuilderFields(fieldRows),
+			custom_fields: toBuilderCustomFields(fieldRows)
+		}
+	});
 };
 
 export const PATCH: RequestHandler = async (event) => {
@@ -87,11 +113,35 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ error: 'No fields to update.' }, { status: 400 });
 	}
 
+	// Changing a form's type must not carry its default flag across: the default
+	// is scoped to (org, form_type), and a stale default on the new type could
+	// collide with that type's existing default (partial unique index). Drop it —
+	// the admin re-picks a default on the Requests-and-bookings hub.
+	if (parsed.data.form_type !== undefined && parsed.data.form_type !== link.form_type) {
+		updates.is_default = false;
+	}
+
 	const [updated] = await db
 		.update(bookingLinks)
 		.set(updates)
 		.where(and(eq(bookingLinks.id, link.id), eq(bookingLinks.org_id, auth.orgId)))
 		.returning();
+
+	// If this switched the form into a request form, make sure it has the default
+	// builder fields (a form created as 'booking' has none). Idempotent — only
+	// seeds when the form has no field rows yet.
+	if (updated.form_type === 'request') {
+		const [existingField] = await db
+			.select({ id: bookingFormFields.id })
+			.from(bookingFormFields)
+			.where(eq(bookingFormFields.booking_link_id, link.id))
+			.limit(1);
+		if (!existingField) {
+			await db
+				.insert(bookingFormFields)
+				.values(defaultRequestFormFieldRows(auth.orgId, link.id));
+		}
+	}
 
 	return json({ data: updated });
 };

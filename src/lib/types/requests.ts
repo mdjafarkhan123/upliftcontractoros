@@ -110,6 +110,14 @@ export type RequestDetailPhoto = {
 	web_url: string;
 };
 
+export type RequestDetailCustomAnswer = {
+	id: string;
+	question_label: string;
+	question_type: string;
+	value_text: string | null;
+	value_json: string[] | null;
+};
+
 export type RequestDetail = {
 	id: string;
 	title: string;
@@ -140,6 +148,7 @@ export type RequestDetail = {
 	line_items: RequestDetailLineItem[];
 	assessment: RequestDetailAssessment | null;
 	photos: RequestDetailPhoto[];
+	custom_answers: RequestDetailCustomAnswer[];
 };
 
 export type RequestLineItemDraft = {

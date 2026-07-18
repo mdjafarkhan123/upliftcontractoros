@@ -21,7 +21,16 @@
 		other: 'Appointment'
 	};
 
-	const typeLabel = $derived(TYPE_LABELS[appointment.type] ?? 'Appointment');
+	// A request-linked estimate is an on-site Assessment (Jobber identity) — it reads
+	// "Assessment" and its card links back to the originating request, not the generic
+	// appointment detail page.
+	const isAssessment = $derived(!!appointment.request_id);
+	const typeLabel = $derived(
+		isAssessment ? 'Assessment' : (TYPE_LABELS[appointment.type] ?? 'Appointment')
+	);
+	const cardHref = $derived(
+		isAssessment ? `/requests/${appointment.request_id}` : `/appointments/${appointment.id}`
+	);
 
 	const startTime = $derived(formatTimeInOrgTz(appointment.scheduled_start, orgTz));
 	const endTime = $derived(
@@ -52,13 +61,19 @@
 </script>
 
 <article
-	class={['appt-card', `appt-card--type-${appointment.type}`, highlight && 'appt-card--highlight']
+	class={[
+		'appt-card',
+		`appt-card--type-${appointment.type}`,
+		isAssessment && 'appt-card--assessment',
+		highlight && 'appt-card--highlight'
+	]
 		.filter(Boolean)
 		.join(' ')}
 >
 	<a
-		href={`/appointments/${appointment.id}`}
-		use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(appointment.id)}
+		href={cardHref}
+		use:prefetchOnIntent={() =>
+			isAssessment ? undefined : appointmentsStore.prefetchDetail(appointment.id)}
 		class="appt-card__link"
 		aria-label={`${appointment.title} — ${appointment.contact_name}, ${appointment.all_day ? 'Anytime' : startTime}`}
 	></a>

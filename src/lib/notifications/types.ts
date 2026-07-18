@@ -12,6 +12,7 @@ export const NOTIFICATION_TYPES = [
 	'invoice_viewed',
 	'job_invoice_reminder',
 	// Operations
+	'new_request',
 	'message_received',
 	'appointment_booked',
 	'appointment_rescheduled',

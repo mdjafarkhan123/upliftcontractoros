@@ -43,6 +43,7 @@ export const GET: RequestHandler = async (event) => {
 			contact_phone: contacts.phone,
 			contact_email: contacts.email,
 			opportunity_id: jobs.opportunity_id,
+			request_id: jobs.request_id,
 			source: jobs.source,
 			assigned_to: jobs.assigned_to,
 			assignee_name: orgMembers.full_name,

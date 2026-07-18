@@ -10,6 +10,7 @@
 	import LineItemEditor from '$lib/components/quotes/LineItemEditor.svelte';
 	import QuotePackageBuilder from '$lib/components/quotes/QuotePackageBuilder.svelte';
 	import QuoteProgressStrip from '$lib/components/quotes/QuoteProgressStrip.svelte';
+	import RequestBacklink from '$lib/components/requests/RequestBacklink.svelte';
 	import ServiceAddressPicker from '$lib/components/quotes/ServiceAddressPicker.svelte';
 	import DocumentDetailShell from '$lib/components/documents/DocumentDetailShell.svelte';
 	import DocumentHeaderCard from '$lib/components/documents/DocumentHeaderCard.svelte';
@@ -1194,6 +1195,11 @@
 
 		<DocumentDetailShell>
 			{#snippet main()}
+				<!-- Provenance: this quote was converted from a Request (Jobber back-link). -->
+				{#if q.request_id}
+					<RequestBacklink requestId={q.request_id} />
+				{/if}
+
 				<!-- Progress strip -->
 				{#if isEditable}
 					<div class="card quote-detail__progress-wrap">

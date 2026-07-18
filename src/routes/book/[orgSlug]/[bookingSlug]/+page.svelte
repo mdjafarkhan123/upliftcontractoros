@@ -5,6 +5,8 @@
 	import Calendar from '$lib/components/booking/Calendar.svelte';
 	import TimeSlots from '$lib/components/booking/TimeSlots.svelte';
 	import CustomerForm from '$lib/components/booking/CustomerForm.svelte';
+	import RequestWizard from '$lib/components/booking/request/RequestWizard.svelte';
+	import type { StandardFieldConfig } from '$lib/types/bookingForms';
 
 	type Config = {
 		org_name: string;
@@ -13,8 +15,12 @@
 		org_country: string | null;
 		title: string;
 		description: string | null;
+		form_type: 'booking' | 'request';
+		requires_approval: boolean;
 		appointment_type: string;
 		slot_duration_minutes: number;
+		// Per-form field config for request forms (R5.2). Absent on booking forms.
+		fields?: StandardFieldConfig[];
 	};
 
 	const orgSlug = $derived(page.params.orgSlug!);
@@ -92,7 +98,9 @@
 			const body = await res.json();
 			config = body.data as Config;
 			month = currentMonthInTz(config.org_timezone);
-			await loadDates(month);
+			// Request forms drive their own wizard (RequestWizard) and load their own
+			// availability — skip the booking-flow date preload for them.
+			if (config.form_type !== 'request') await loadDates(month);
 		} catch {
 			goto(`/book/${orgSlug}/${bookingSlug}/unavailable`, { replaceState: true });
 		} finally {
@@ -270,8 +278,13 @@
 		{/if}
 	</header>
 
-	<!-- Step progress bars -->
-	{#if config}
+	<!-- Request form drives its own multi-step wizard (contact → details → schedule → review). -->
+	{#if config && config.form_type === 'request'}
+		<RequestWizard {config} {orgSlug} {bookingSlug} {apiBase} />
+	{/if}
+
+	<!-- Step progress bars (booking flow) -->
+	{#if config && config.form_type !== 'request'}
 		<div class="book-portal__steps">
 			{#each [1, 2, 3] as n (n)}
 				<div class="book-portal__step {n <= step ? 'book-portal__step--active' : ''}"></div>
@@ -279,8 +292,8 @@
 		</div>
 	{/if}
 
-	<!-- Content card -->
-	{#if config}
+	<!-- Content card (booking flow) -->
+	{#if config && config.form_type !== 'request'}
 		<section class="book-portal__card">
 			{#if step === 1}
 				<Calendar

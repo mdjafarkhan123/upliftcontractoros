@@ -1975,6 +1975,341 @@
 	}
 }
 
+// =============================================================================
+// REQUEST FORM WIZARD (R4) — public request intake inside the booking portal.
+// Reuses .book-portal shell + .bk-form field styles; these are the extras.
+// =============================================================================
+.req-step {
+	&__title {
+		font-size: $fs-lg;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+		margin-bottom: $space-4;
+	}
+
+	&__sub {
+		margin: -$space-2 0 $space-4;
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
+	}
+}
+
+.req-grid {
+	display: grid;
+	gap: $space-4;
+
+	&--2 {
+		grid-template-columns: 1fr;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	&--3 {
+		grid-template-columns: 1fr;
+
+		@media (min-width: $bp-mobile) {
+			grid-template-columns: 1fr 1fr 1fr;
+		}
+	}
+}
+
+// Consent + marketing opt-in checkbox rows
+.req-check {
+	display: flex;
+	align-items: flex-start;
+	gap: $space-3;
+	cursor: pointer;
+	font-size: $fs-caption;
+	line-height: $lh-body;
+	color: var(--color-text-muted);
+
+	input[type='checkbox'] {
+		flex-shrink: 0;
+		margin-top: 2px;
+		width: 18px;
+		height: 18px;
+		accent-color: var(--color-brand);
+		cursor: pointer;
+	}
+}
+
+// Transactional SMS consent disclosure copy
+.req-consent {
+	font-size: 1.1rem;
+	line-height: $lh-body;
+	color: var(--color-text-muted);
+	opacity: 0.85;
+}
+
+.req-address-head {
+	margin-top: $space-2;
+	font-size: $fs-caption;
+	font-weight: $weight-semibold;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+}
+
+// Custom questions (R5.2b) on the public request wizard.
+.req-cq {
+	&__help {
+		margin: 0 0 $space-2;
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+
+	&__choices {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	&__choice {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+		cursor: pointer;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+
+		input[type='radio'],
+		input[type='checkbox'] {
+			flex-shrink: 0;
+			width: 18px;
+			height: 18px;
+			cursor: pointer;
+		}
+	}
+}
+
+// "Share images of the work to be done" picker (staged locally, cap 10)
+.req-photos {
+	&__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: $space-2;
+		margin-bottom: $space-2;
+	}
+
+	&__count {
+		flex-shrink: 0;
+		font-size: 1.1rem;
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
+		background: var(--color-bg-muted, var(--state-active-tint));
+		border-radius: $radius-full;
+		padding: 2px $space-2;
+	}
+
+	&__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+		gap: $space-3;
+	}
+
+	&__thumb {
+		position: relative;
+		aspect-ratio: 1;
+		border-radius: $radius-lg;
+		overflow: hidden;
+		border: 1px solid var(--color-border);
+
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+	}
+
+	&__remove {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		width: 22px;
+		height: 22px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: $radius-full;
+		background: rgba(0, 0, 0, 0.55);
+		color: #fff;
+		cursor: pointer;
+
+		i {
+			font-size: 1.3rem;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__add {
+		aspect-ratio: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px dashed var(--color-border);
+		border-radius: $radius-lg;
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			border-color 0.15s ease,
+			color 0.15s ease;
+
+		i {
+			font-size: 1.8rem;
+		}
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-brand);
+			color: var(--color-brand);
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+
+	&__input {
+		display: none;
+	}
+}
+
+.req-slots {
+	margin-top: $space-6;
+	padding-top: $space-6;
+	border-top: 1px solid var(--color-border);
+}
+
+.req-error {
+	margin-top: $space-4;
+}
+
+// --- Review step ---
+.req-review {
+	display: flex;
+	flex-direction: column;
+	gap: $space-5;
+
+	&__group-title {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		margin-bottom: $space-2;
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+	}
+
+	&__row {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+
+		dt {
+			font-size: 1.1rem;
+			font-weight: $weight-medium;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--color-text-muted);
+		}
+
+		dd {
+			font-size: $fs-body;
+			color: var(--color-text-primary);
+			white-space: pre-wrap;
+		}
+	}
+}
+
+// --- Confirmation (awaiting confirmation) ---
+.req-done {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	padding: $space-6 $space-2 $space-10;
+
+	&__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 64px;
+		height: 64px;
+		border-radius: $radius-2xl;
+		border: 1px solid rgba(34, 125, 83, 0.22);
+		background: var(--state-active-tint);
+		box-shadow: 0 20px 50px -20px rgba(34, 125, 83, 0.5);
+		margin-bottom: $space-6;
+
+		i {
+			font-size: 2rem;
+			color: var(--color-brand);
+		}
+	}
+
+	&__title {
+		font-size: $fs-h3;
+		font-weight: $weight-semibold;
+		letter-spacing: -0.01em;
+		color: var(--color-text-primary);
+	}
+
+	&__lead {
+		margin-top: $space-2;
+		max-width: 400px;
+		font-size: $fs-body;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+
+	&__card {
+		width: 100%;
+		max-width: 360px;
+		margin-top: $space-8;
+		border-radius: $radius-2xl;
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		padding: $space-5;
+		text-align: left;
+		box-shadow: 0 20px 60px -30px rgba(0, 0, 0, 0.28);
+	}
+
+	&__card-name {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	&__card-line {
+		margin-top: $space-2;
+		font-size: $fs-body;
+		color: var(--color-text-muted);
+	}
+
+	&__note {
+		margin-top: $space-5;
+		max-width: 360px;
+		font-size: $fs-caption;
+		line-height: $lh-body;
+		color: var(--color-text-muted);
+	}
+}
+
 // --- Booking Unavailable page (unavailable/+page.svelte) ---------------------
 .book-unavail {
 	display: flex;

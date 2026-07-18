@@ -17,6 +17,9 @@ export type AppointmentListItem = {
 	contact_phone: string | null;
 	contact_email: string | null;
 	job_id: string | null;
+	// Non-null = this visit is a Request's on-site assessment. Drives the "Assessment"
+	// identity on the calendar card and its click-through to /requests/[id].
+	request_id: string | null;
 	assigned_to: string | null;
 	assignee_name: string | null;
 	assignee_count: number;

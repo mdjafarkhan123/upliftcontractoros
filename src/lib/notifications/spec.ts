@@ -28,6 +28,18 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		label: 'New lead arrived',
 		description: 'Someone wants to hire you'
 	},
+	new_request: {
+		priority: 'high',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: true,
+		// An inbound work request is a strong buying signal — ignoring it loses a job,
+		// so an unread in-app alert escalates to the louder email/SMS channels.
+		escalate: true,
+		route: (id) => `/requests/${id}`,
+		label: 'New request',
+		description: 'Someone submitted a request through your online form'
+	},
 	message_received: {
 		priority: 'critical',
 		defaultVisible: true,

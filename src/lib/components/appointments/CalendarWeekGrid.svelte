@@ -1300,7 +1300,9 @@
 			{#if appt.type !== 'job_start'}
 				<!-- Placeholder until estimate/inspection cards get their own design: the rail
 				     now carries STATUS, so type falls back to a plain word. -->
-				<span class="cal-week__event-kind">{TYPE_LABELS[appt.type]}</span>
+				<span class="cal-week__event-kind"
+					>{appt.request_id ? 'Assessment' : TYPE_LABELS[appt.type]}</span
+				>
 			{/if}
 			{#if appt.assignee_name}
 				<span class="cal-week__event-assignee" title={appt.assignee_name}>
@@ -1391,9 +1393,10 @@
 						     past Anytime visit goes Late for free. See _appointments.scss
 						     `&__event--anytime` for the container-collapse override. -->
 						<a
-							href={`/appointments/${ev.id}`}
+							href={ev.request_id ? `/requests/${ev.request_id}` : `/appointments/${ev.id}`}
 							draggable="false"
-							use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(ev.id)}
+							use:prefetchOnIntent={() =>
+								ev.request_id ? undefined : appointmentsStore.prefetchDetail(ev.id)}
 							onpointerdown={(e) => onAnytimeChipPointerDown(e, ev, i)}
 							ondragstart={(e) => e.preventDefault()}
 							onclick={(e) => openDetail(e, ev)}
@@ -1495,9 +1498,12 @@
 						{@const state = deriveVisitCardState(appt, now)}
 						{@const mark = visitCardStateIcon(state)}
 						<a
-							href={`/appointments/${appt.id}`}
+							href={appt.request_id
+								? `/requests/${appt.request_id}`
+								: `/appointments/${appt.id}`}
 							draggable="false"
-							use:prefetchOnIntent={() => appointmentsStore.prefetchDetail(appt.id)}
+							use:prefetchOnIntent={() =>
+								appt.request_id ? undefined : appointmentsStore.prefetchDetail(appt.id)}
 							onpointerdown={(e) => onEventPointerDown(e, ev, appt, i)}
 							ondragstart={(e) => e.preventDefault()}
 							onclick={(e) => openDetail(e, appt)}

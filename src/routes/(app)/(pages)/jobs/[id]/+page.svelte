@@ -9,6 +9,7 @@
 	import { InlineEditController } from '$lib/components/shared/inlineEditController.svelte';
 	import { monthCellsOf } from '$lib/jobs/recurrence';
 	import JobStatusBadge from '$lib/components/jobs/JobStatusBadge.svelte';
+	import RequestBacklink from '$lib/components/requests/RequestBacklink.svelte';
 	import JobLineItemsSection from '$lib/components/jobs/JobLineItemsSection.svelte';
 	import JobTasksSection from '$lib/components/jobs/JobTasksSection.svelte';
 	import JobFormsSection from '$lib/components/jobs/JobFormsSection.svelte';
@@ -950,6 +951,13 @@
 			/>
 		{/snippet}
 
+		<!-- Provenance: this job was converted from a Request (Jobber back-link). -->
+		{#if job?.request_id}
+			<div class="job-detail__backlink">
+				<RequestBacklink requestId={job.request_id} />
+			</div>
+		{/if}
+
 		<!-- Two-column layout -->
 		<div class="job-layout">
 			<!-- ── LEFT COLUMN ─────────────────────────────────────────────────── -->
@@ -1487,6 +1495,11 @@
 
 <style lang="scss">
 	@use '$lib/styles/tokens' as *;
+
+	/* Provenance back-link banner sits between the header and the two-column layout. */
+	.job-detail__backlink {
+		margin-bottom: $space-4;
+	}
 
 	/* Block + inline Save/Cancel render via the shared EditActionBar
 	   (components/_edit-action-bar.scss) in both the header and card footers. */

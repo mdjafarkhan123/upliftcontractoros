@@ -63,6 +63,12 @@ export const quotes = pgTable('quotes', {
 		onDelete: 'set null'
 	}),
 	opportunity_id: uuid('opportunity_id').references(() => opportunities.id),
+	// Provenance back-link (Jobber): the Request this quote was converted from, so the
+	// quote detail page can show the original request in a side drawer. Set once at
+	// conversion, never live-read for pricing (the quote owns its own snapshot lines).
+	// Plain uuid, no FK — a constraint here would close an import cycle (19_requests
+	// already imports quotes). Same convention as accepted_package_id / booking_link_id.
+	request_id: uuid('request_id'),
 	issued_by: uuid('issued_by').references(() => orgMembers.id),
 	quote_number: integer('quote_number').notNull(),
 	title: text('title').notNull(),

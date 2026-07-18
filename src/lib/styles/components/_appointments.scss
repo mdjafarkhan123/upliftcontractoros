@@ -534,6 +534,13 @@ $cal-rail-w: 88px;
 		--appt-accent: var(--color-text-muted);
 	}
 
+	// A request's on-site Assessment (Jobber identity) — a violet accent that reads
+	// distinctly from a plain estimate so the board separates lead-intake visits from
+	// booked job work at a glance. Wins over the type accent (higher specificity).
+	&--assessment {
+		--appt-accent: #7c3aed;
+	}
+
 	&--highlight {
 		border-color: var(--color-brand);
 		background: var(--state-active-tint);
