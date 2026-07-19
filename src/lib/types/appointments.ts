@@ -38,6 +38,8 @@ export type AppointmentListItem = {
 	scheduled_start: string;
 	scheduled_end: string | null;
 	location: string | null;
+	// Crew-facing instructions (the assessment/visit notes), shown in the detail popover.
+	notes: string | null;
 	booking_source: BookingSource;
 };
 

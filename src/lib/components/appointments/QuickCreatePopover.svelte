@@ -9,6 +9,7 @@
 	import type { ContactHit } from '$lib/components/shared/contactPicker';
 	import DraggablePanel from '$lib/components/shared/DraggablePanel.svelte';
 	import CrewPicker from './CrewPicker.svelte';
+	import EventFormDialog from './EventFormDialog.svelte';
 
 	type Assignee = { id: string; full_name: string };
 
@@ -36,13 +37,14 @@
 	} = $props();
 
 	// Three entity tabs (Jobber / Housecall Pro pattern):
-	//  • Job   → a real Job (money/contract) that auto-lands as a green visit on the grid.
-	//  • Visit → a standalone appointment (estimate / callback / inspection), no Job needed.
-	//  • Event → non-billable team/personal time-block (meeting, holiday, PTO). Customer is
-	//            OPTIONAL — it's a separate object (Jobber `Event`), never touches money.
-	let tab = $state<'job' | 'visit' | 'event'>('job');
+	//  • Job     → a real Job (money/contract) that auto-lands as a green visit on the grid.
+	//  • Request → a lead + an on-site assessment: creates a Request row, then books the
+	//              assessment (an `appointments` row carrying its `request_id`) on the grid.
+	//  • Event   → non-billable team/personal time-block (meeting, holiday, PTO). Customer is
+	//              OPTIONAL — it's a separate object (Jobber `Event`), never touches money.
+	let tab = $state<'job' | 'request' | 'event'>('job');
 
-	// Customer is required for Job/Visit but OPTIONAL for an Event.
+	// Customer is required for Job/Request but OPTIONAL for an Event.
 	const contactRequired = $derived(tab !== 'event');
 
 	// --- Shared form state ----------------------------------------------------
@@ -63,6 +65,15 @@
 	let showAssign = $state(false);
 	let selectedIds = $state<string[]>([]);
 	let leadId = $state<string | null>(null);
+
+	// Instructions — collapsed behind "+ Add Instructions" (Request tab only, ref/visit/1-2).
+	// Maps to the assessment appointment's `notes`.
+	let showInstructions = $state(false);
+	let instructions = $state('');
+
+	// Details — always-visible on the Event tab (Jobber ref/event/1). Maps to the event's
+	// `description`.
+	let eventDescription = $state('');
 
 	// --- Schedule helper ------------------------------------------------------
 	// Resolves the bubble's schedule inputs into ISO start/end, or throws a
@@ -107,7 +118,7 @@
 		} else if (tab === 'event') {
 			await saveEvent(trimmed, startIso, endIso);
 		} else {
-			await saveVisit(trimmed, startIso, endIso);
+			await saveRequest(trimmed, startIso, endIso);
 		}
 	}
 
@@ -150,38 +161,76 @@
 		throw new Error(msg);
 	}
 
-	// Visit tab → create a standalone appointment (estimate / callback / inspection).
-	async function saveVisit(trimmed: string, startIso: string, endIso: string | null) {
-		const payload: Record<string, unknown> = {
+	// Request tab → create a lead + book its on-site assessment (Jobber Request flow).
+	// Two sequential calls (matches the New Request page, NOT atomic): first the Request,
+	// then the assessment appointment carrying its request_id. The assessment is what
+	// renders on the grid (green/blue "Assessment" card).
+	async function saveRequest(trimmed: string, startIso: string, endIso: string | null) {
+		// 1) Create the Request lead.
+		const reqRes = await fetch('/api/requests', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ contact_id: contactId, title: trimmed })
+		});
+
+		if (!reqRes.ok) {
+			let msg = 'Could not create request.';
+			try {
+				const body = (await reqRes.json()) as { error?: string };
+				if (body?.error) msg = body.error;
+			} catch {
+				// keep default
+			}
+			errorMsg = msg;
+			throw new Error(msg);
+		}
+
+		let requestId: string;
+		try {
+			const body = (await reqRes.json()) as { data?: { id?: string } };
+			requestId = body.data?.id ?? '';
+		} catch {
+			requestId = '';
+		}
+		if (!requestId) {
+			errorMsg = 'Could not create request.';
+			throw new Error(errorMsg);
+		}
+
+		// 2) Book the on-site assessment. type is forced to 'estimate' server-side.
+		const apptPayload: Record<string, unknown> = {
 			contact_id: contactId,
-			// Neutral default; matches the full form. Change it on the detail page.
+			request_id: requestId,
 			type: 'estimate',
 			title: trimmed,
 			all_day: isAnytime,
 			scheduled_start: startIso,
-			scheduled_end: endIso
+			scheduled_end: endIso,
+			notes: instructions.trim() || null
 		};
 		if (canEditAssignee && selectedIds.length > 0) {
-			payload.assignee_ids = selectedIds;
-			payload.lead_member_id = leadId;
+			apptPayload.assignee_ids = selectedIds;
+			apptPayload.lead_member_id = leadId;
 		}
 
-		const res = await fetch('/api/appointments', {
+		const apptRes = await fetch('/api/appointments', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload)
+			body: JSON.stringify(apptPayload)
 		});
 
-		if (res.status === 201) {
+		if (apptRes.status === 201) {
 			onCreated?.();
 			onClose();
 			return;
 		}
 
-		let msg = 'Could not create visit.';
+		// The Request was created but the assessment failed — surface it, don't roll back
+		// (matches the New Request page's partial-failure stance).
+		let msg = 'Request created, but the assessment could not be scheduled — open it from Requests.';
 		try {
-			const body = (await res.json()) as { error?: string };
-			if (res.status === 409) msg = 'That time conflicts with another visit for the assignee.';
+			const body = (await apptRes.json()) as { error?: string };
+			if (apptRes.status === 409) msg = 'That time conflicts with another visit for the assignee.';
 			else if (body?.error) msg = body.error;
 		} catch {
 			// keep default
@@ -195,18 +244,15 @@
 	// with no money and an OPTIONAL customer. Posts to /api/events (note: start_at/end_at,
 	// no `type`, no conflict block).
 	async function saveEvent(trimmed: string, startIso: string, endIso: string | null) {
+		// Jobber's event quick-create collects only title, details, schedule — no customer,
+		// no crew (both live in the fuller editor / More Options).
 		const payload: Record<string, unknown> = {
 			title: trimmed,
+			description: eventDescription.trim() || null,
 			all_day: isAnytime,
 			start_at: startIso,
 			end_at: endIso
 		};
-		// Customer is optional on an Event — only send it if one was picked.
-		if (contactId) payload.contact_id = contactId;
-		if (canEditAssignee && selectedIds.length > 0) {
-			payload.assignee_ids = selectedIds;
-			payload.lead_member_id = leadId;
-		}
 
 		const res = await fetch('/api/events', {
 			method: 'POST',
@@ -232,8 +278,33 @@
 		throw new Error(msg);
 	}
 
+	// Event "More options" → the full New Event modal (Jobber ref/event/2), seeded from
+	// what's filled in. Unlike Job/Request (which navigate to a full page), an Event opens
+	// a centered modal (portalled to body, survives inside this draggable popover).
+	let eventModalOpen = $state(false);
+	let eventSeedStart = $state<Date | null>(null);
+	let eventSeedEnd = $state<Date | null>(null);
+	let eventSeedAllDay = $state(false);
+
+	function openEventModal() {
+		if (isAnytime) {
+			eventSeedStart = anytimeDate ? new Date(`${anytimeDate}T12:00:00`) : null;
+			eventSeedEnd = null;
+			eventSeedAllDay = true;
+		} else {
+			eventSeedStart = scheduledStart ? new Date(scheduledStart) : null;
+			eventSeedEnd = scheduledEnd ? new Date(scheduledEnd) : null;
+			eventSeedAllDay = false;
+		}
+		eventModalOpen = true;
+	}
+
 	// "More options" → the full create page for the active tab, carrying what's filled in.
 	function moreOptions() {
+		if (tab === 'event') {
+			openEventModal();
+			return;
+		}
 		if (tab === 'job') {
 			// The job form re-collects contact + schedule; carry the title as a light hint.
 			const params = new URLSearchParams();
@@ -247,6 +318,7 @@
 			return;
 		}
 
+		// Request tab → the full New Request page, carrying title + client + schedule.
 		const params = new URLSearchParams();
 		if (isAnytime) {
 			params.set('all_day', '1');
@@ -256,12 +328,13 @@
 			if (scheduledEnd) params.set('end', new Date(scheduledEnd).toISOString());
 		}
 		if (title.trim()) params.set('title', title.trim());
+		if (instructions.trim()) params.set('instructions', instructions.trim());
 		if (contactId) {
 			params.set('contact_id', contactId);
 			params.set('contact_name', contactName);
 		}
 		onClose();
-		void goto(`/appointments/new?${params.toString()}`);
+		void goto(`/requests/new?${params.toString()}`);
 	}
 
 	// Autofocus the title on open.
@@ -277,7 +350,7 @@
 				: 'Title (e.g. Estimate at 12 Oak St)'
 	);
 	const saveLabel = $derived(
-		tab === 'job' ? 'Save job' : tab === 'event' ? 'Save event' : 'Save visit'
+		tab === 'job' ? 'Save job' : tab === 'event' ? 'Save event' : 'Save request'
 	);
 </script>
 
@@ -303,14 +376,14 @@
 			type="button"
 			role="tab"
 			class="quick-create__tab"
-			class:quick-create__tab--active={tab === 'visit'}
-			aria-selected={tab === 'visit'}
+			class:quick-create__tab--active={tab === 'request'}
+			aria-selected={tab === 'request'}
 			onclick={() => {
-				tab = 'visit';
+				tab = 'request';
 				errorMsg = null;
 			}}
 		>
-			Visit
+			Request
 		</button>
 		<button
 			type="button"
@@ -329,12 +402,14 @@
 
 	<div class="quick-create__form">
 		<!-- Customer — shared robust picker (search icon, spinner, recent-on-focus). Required
-		     for Job/Visit, OPTIONAL for an Event. -->
-		<ContactPicker
-			bind:selected={selectedContact}
-			placeholder={contactRequired ? 'Search customer…' : 'Search customer (optional)…'}
-			onSelect={() => (errorMsg = null)}
-		/>
+		     for Job/Request. An Event has NO customer field (Jobber ref/event/1). -->
+		{#if tab !== 'event'}
+			<ContactPicker
+				bind:selected={selectedContact}
+				placeholder="Search customer…"
+				onSelect={() => (errorMsg = null)}
+			/>
+		{/if}
 
 		<!-- Title -->
 		<input
@@ -345,6 +420,37 @@
 			{@attach autofocus}
 			oninput={() => (errorMsg = null)}
 		/>
+
+		<!-- Details (Event tab) — always-visible textarea, maps to the event's description
+		     (Jobber ref/event/1 shows "Details" open by default on the Event tab). -->
+		{#if tab === 'event'}
+			<textarea
+				class="quick-create__instructions"
+				placeholder="Details"
+				rows="3"
+				bind:value={eventDescription}
+			></textarea>
+		{/if}
+
+		<!-- Instructions (Request tab only) — collapsed behind "+ Add Instructions" like Jobber. -->
+		{#if tab === 'request'}
+			{#if showInstructions}
+				<textarea
+					class="quick-create__instructions"
+					placeholder="Instructions"
+					rows="3"
+					bind:value={instructions}
+				></textarea>
+			{:else}
+				<button
+					type="button"
+					class="quick-create__add"
+					onclick={() => (showInstructions = true)}
+				>
+					<i class="ri-add-line" aria-hidden="true"></i> Add Instructions
+				</button>
+			{/if}
+		{/if}
 
 		<!-- Anytime toggle -->
 		<div class="quick-create__anytime">
@@ -362,8 +468,9 @@
 			</div>
 		{/if}
 
-		<!-- Assign (collapsed like Jobber) -->
-		{#if canEditAssignee}
+		<!-- Assign (collapsed like Jobber) — not shown for Events (Jobber's event quick-create
+		     has no crew picker; assignment lives in the fuller editor). -->
+		{#if canEditAssignee && tab !== 'event'}
 			{#if showAssign}
 				<CrewPicker {assignees} bind:selectedIds bind:leadId />
 			{:else}
@@ -378,15 +485,26 @@
 		{/if}
 
 		<div class="quick-create__footer">
-			<!-- Events have no full-page create form yet (later phase) — hide "More options". -->
-			{#if tab !== 'event'}
-				<button type="button" class="quick-create__more" onclick={moreOptions}>More options</button>
-			{:else}
-				<span></span>
-			{/if}
+			<button type="button" class="quick-create__more" onclick={moreOptions}>More options</button>
 			<Button loadingLabel="Saving…" successLabel="Saved" size="sm" onAction={save}>
 				{saveLabel}
 			</Button>
 		</div>
 	</div>
+
+	<!-- Event "More options" → full New Event modal. On save it revalidates and closes the
+	     quick popover; cancelling just returns to the popover. -->
+	<EventFormDialog
+		bind:open={eventModalOpen}
+		mode="new"
+		seedStart={eventSeedStart}
+		seedEnd={eventSeedEnd}
+		seedAllDay={eventSeedAllDay}
+		seedTitle={title.trim()}
+		seedDescription={eventDescription.trim()}
+		onSaved={() => {
+			onCreated?.();
+			onClose();
+		}}
+	/>
 </DraggablePanel>

@@ -6,6 +6,7 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 	import type { EventListItem } from '$lib/types/events';
+	import { isEventPast } from '$lib/appointments/eventState';
 	import { SvelteMap } from 'svelte/reactivity';
 
 	let {
@@ -91,14 +92,17 @@
 								<AppointmentCard appointment={row.item} />
 							{:else}
 								{@const evt = row.event}
-								<div class="cal-daylist__event">
+								{@const evtDone = isEventPast(evt)}
+								<div class={['cal-daylist__event', evtDone && 'cal-daylist__event--completed']}>
 									<span class="cal-daylist__event-time">
 										{evt.all_day || !evt.start_at
 											? 'All day'
 											: formatTimeInOrgTz(evt.start_at, orgTz)}
 									</span>
 									<div class="cal-daylist__event-body">
-										<span class="cal-daylist__event-title">{evt.title}</span>
+										<span class="cal-daylist__event-title">
+											{#if evtDone}<i class="ri-check-line" aria-hidden="true"></i> {/if}{evt.title}
+										</span>
 										<!-- Team block: show the assignee, never the (optional) customer. -->
 										{#if evt.assignee_name}
 											<span class="cal-daylist__event-sub">

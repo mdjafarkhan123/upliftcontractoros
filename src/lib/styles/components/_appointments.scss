@@ -1034,12 +1034,24 @@ $cal-rail-w: 88px;
 		}
 
 		// Non-billable Event chip — neutral grey, read-only (no grab cursor / hover lift).
+		// Stays grey even when completed (unlike a visit's green): an Event is never work,
+		// so its auto-complete is signalled only by the tick, not a colour.
 		&--event {
 			border-color: var(--color-border);
 			border-left-color: var(--color-text-muted);
 			background: var(--color-bg-surface-sunk);
 			cursor: default;
+
+			&.cal-week__anytime-chip--completed .cal-week__anytime-chip-title {
+				color: var(--color-text-secondary);
+			}
 		}
+	}
+
+	// Auto-complete tick prefixed to a past all-day Event's title (Jobber).
+	&__anytime-chip-tick {
+		margin-right: 4px;
+		color: var(--color-text-muted);
 	}
 
 	// Chip text is sentence-case (job title, client name), so it sits at the
@@ -1381,6 +1393,18 @@ $cal-rail-w: 88px;
 		}
 		&--dragging {
 			opacity: 0.4;
+		}
+
+		// Auto-completed once the event's window passed (Jobber). The corner glyph is
+		// already swapped to a tick in markup; here the time reads struck-through, the
+		// same signal a completed visit uses.
+		&--completed {
+			.cal-week__event-timepill-text {
+				text-decoration: line-through;
+			}
+			.cal-week__event-mark {
+				color: var(--color-text-muted);
+			}
 		}
 	}
 
@@ -2066,6 +2090,12 @@ $cal-rail-w: 88px;
 		border-left: 3px solid var(--color-text-muted);
 		border-radius: $radius-lg;
 		background: var(--color-bg-surface-sunk);
+
+		// Auto-completed past event (Jobber): a tick prefixes the title in markup; the
+		// title reads secondary so it recedes like a done item.
+		&--completed &-title {
+			color: var(--color-text-secondary);
+		}
 	}
 
 	&__event-time {
@@ -2669,6 +2699,25 @@ $cal-rail-w: 88px;
 		gap: $space-2;
 	}
 
+	// Instructions textarea revealed by "+ Add Instructions" (Request tab).
+	&__instructions {
+		width: 100%;
+		min-height: 64px;
+		padding: $space-2 10px;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
+		background: var(--color-bg-surface);
+		color: var(--color-text-primary);
+		font: inherit;
+		font-size: $fs-body;
+		resize: vertical;
+
+		&:focus {
+			outline: none;
+			border-color: var(--color-brand);
+		}
+	}
+
 	// "+ Assign" reveal button (Jobber pattern — crew hidden until needed).
 	&__add {
 		display: inline-flex;
@@ -3009,69 +3058,6 @@ $cal-rail-w: 88px;
 		z-index: auto;
 	}
 
-	// --- Header: type accent pill + close -------------------------------------
-	&__head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: $space-2;
-	}
-
-	&__type {
-		--pill-accent: var(--color-text-muted);
-		display: inline-flex;
-		align-items: center;
-		padding: 2px $space-2;
-		border-radius: $radius-full;
-		font-size: $fs-caption;
-		font-weight: $weight-semibold;
-		letter-spacing: 0.02em;
-		color: #fff;
-		background: var(--pill-accent);
-
-		&--estimate {
-			--pill-accent: var(--info-solid);
-		}
-		&--job_start {
-			--pill-accent: var(--color-brand);
-		}
-		&--follow_up {
-			--pill-accent: var(--warning-solid);
-		}
-		&--inspection {
-			--pill-accent: #7c3aed;
-		}
-		&--other {
-			--pill-accent: var(--color-text-muted);
-		}
-		// Terminal states desaturate the pill regardless of type.
-		&--completed {
-			--pill-accent: var(--success-solid);
-		}
-		&--cancelled,
-		&--no_show {
-			--pill-accent: var(--color-text-muted);
-		}
-	}
-
-	&__close {
-		display: inline-grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		border: none;
-		border-radius: $radius-full;
-		background: transparent;
-		color: var(--color-text-muted);
-		font-size: $fs-lg;
-		cursor: pointer;
-
-		&:hover {
-			background: var(--color-bg-surface-sunk);
-			color: var(--color-text-primary);
-		}
-	}
-
 	&__title {
 		margin: $space-2 0 0;
 		font-size: $fs-h3;
@@ -3080,7 +3066,55 @@ $cal-rail-w: 88px;
 		color: var(--color-text-primary);
 	}
 
-	// --- Quick complete / terminal status badge -------------------------------
+	// Type subtitle directly under the title (Jobber ref/visit/3).
+	&__subtype {
+		margin: 2px 0 0;
+		font-size: $fs-body;
+		color: var(--color-text-secondary);
+	}
+
+	// Shared section label — bold, sentence-case, like Jobber's "Details" / "Team".
+	&__section-label {
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// --- Completed checkbox (toggleable: check to complete, uncheck to reopen) -
+	&__check {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+		align-self: flex-start;
+		margin-top: $space-3;
+		padding: $space-1 0;
+		border: none;
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		cursor: pointer;
+
+		i {
+			font-size: 2rem;
+			color: var(--color-text-muted);
+			line-height: 1;
+		}
+
+		&:hover:not(:disabled) i {
+			color: var(--color-brand);
+		}
+		&:disabled {
+			cursor: default;
+			opacity: 0.7;
+		}
+
+		&--on i {
+			color: var(--color-brand);
+		}
+	}
+
+	// --- Terminal status badge (cancelled / no-show / read-only completed) -----
 	&__done {
 		display: flex;
 		align-items: center;
@@ -3096,22 +3130,6 @@ $cal-rail-w: 88px;
 			font-size: $fs-lg;
 		}
 
-		&--action {
-			border: 1px solid var(--color-border);
-			background: var(--color-bg-surface);
-			color: var(--color-text-secondary);
-			cursor: pointer;
-
-			&:hover:not(:disabled) {
-				border-color: var(--success-solid);
-				color: var(--success-text);
-			}
-			&:disabled {
-				cursor: default;
-				opacity: 0.7;
-			}
-		}
-
 		&--on {
 			background: var(--success-bg);
 			color: var(--success-text);
@@ -3123,32 +3141,35 @@ $cal-rail-w: 88px;
 		}
 	}
 
-	// --- Customer / job facts --------------------------------------------------
-	&__facts {
-		margin: $space-4 0 0;
-		display: grid;
-		gap: $space-3;
+	// --- Details (client · request/job, then instructions) ---------------------
+	&__details {
+		margin-top: $space-4;
+		display: flex;
+		flex-direction: column;
+		gap: $space-1;
 	}
 
-	&__fact {
+	&__detail-line {
+		margin: 0;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: baseline;
-		justify-content: space-between;
-		gap: $space-3;
+		gap: $space-1;
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+	}
 
-		dt {
-			font-size: $fs-caption;
-			font-weight: $weight-semibold;
-			text-transform: uppercase;
-			letter-spacing: 0.03em;
-			color: var(--color-text-muted);
-		}
-		dd {
-			margin: 0;
-			font-size: $fs-body;
-			text-align: right;
-			color: var(--color-text-primary);
-		}
+	&__dot {
+		color: var(--color-text-muted);
+	}
+
+	&__instructions {
+		margin: $space-1 0 0;
+		font-size: $fs-body;
+		line-height: 1.4;
+		color: var(--color-text-secondary);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	&__link {
@@ -3165,16 +3186,15 @@ $cal-rail-w: 88px;
 	&__team {
 		margin-top: $space-4;
 		display: flex;
-		align-items: center;
-		gap: $space-3;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: $space-2;
 	}
 
 	&__team-label {
-		font-size: $fs-caption;
+		font-size: $fs-body;
 		font-weight: $weight-semibold;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		color: var(--color-text-muted);
+		color: var(--color-text-primary);
 	}
 
 	&__crew {
@@ -3212,18 +3232,18 @@ $cal-rail-w: 88px;
 	}
 
 	// --- Location --------------------------------------------------------------
-	&__loc {
-		margin: $space-3 0 0;
+	&__loc-block {
+		margin-top: $space-4;
 		display: flex;
-		align-items: flex-start;
-		gap: $space-2;
-		font-size: $fs-body;
-		color: var(--color-text-secondary);
+		flex-direction: column;
+		gap: $space-1;
+	}
 
-		i {
-			margin-top: 2px;
-			color: var(--color-text-muted);
-		}
+	&__loc {
+		margin: 0;
+		font-size: $fs-body;
+		line-height: 1.4;
+		color: var(--color-text-secondary);
 	}
 
 	// --- When (start / end) ----------------------------------------------------
@@ -3246,11 +3266,9 @@ $cal-rail-w: 88px;
 	}
 
 	&__when-label {
-		font-size: $fs-caption;
+		font-size: $fs-body;
 		font-weight: $weight-semibold;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		color: var(--color-text-muted);
+		color: var(--color-text-primary);
 	}
 
 	&__when-date {
@@ -3412,6 +3430,7 @@ $cal-rail-w: 88px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: $space-1;
 		height: 36px;
 		padding: 0 $space-4;
 		border: 1px solid var(--color-border);
@@ -3436,9 +3455,148 @@ $cal-rail-w: 88px;
 				background: var(--color-brand-strong);
 			}
 		}
+
+		&--danger {
+			border-color: var(--danger-border, var(--color-border));
+			color: var(--danger-text);
+
+			&:hover {
+				background: var(--danger-bg-subtle, var(--color-bg-surface-sunk));
+			}
+		}
+
+		&:disabled {
+			opacity: 0.6;
+			cursor: default;
+		}
 	}
 
 	&__spin {
 		animation: spin 0.7s linear infinite;
+	}
+}
+
+// New / Edit Event modal (Jobber ref/event/2,3,5). Rendered via the shared ui/dialog
+// shell; the content is portalled to body, so these live global (not scoped) to survive
+// the portal. Reuses `.field` / `.field__label` for the date-time controls.
+.dialog-content.event-form {
+	max-width: 620px;
+}
+
+.event-form {
+	&__body {
+		display: flex;
+		flex-direction: column;
+		gap: $space-5;
+	}
+
+	// Bordered group wrapping Title + Description, one control per row with a divider
+	// (Jobber's stacked field group).
+	&__group {
+		border: 1px solid var(--color-border);
+		border-radius: $radius-lg;
+		overflow: hidden;
+	}
+
+	&__group-field {
+		padding: $space-2 $space-3;
+
+		&--divided {
+			border-top: 1px solid var(--color-border);
+		}
+	}
+
+	&__mini-label {
+		display: block;
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		margin-bottom: 2px;
+	}
+
+	&__input,
+	&__textarea {
+		width: 100%;
+		border: none;
+		background: transparent;
+		color: var(--color-text-primary);
+		font-size: $fs-body;
+		font-family: inherit;
+		padding: 0;
+
+		&:focus {
+			outline: none;
+		}
+
+		&::placeholder {
+			color: var(--color-text-muted);
+		}
+	}
+
+	&__textarea {
+		resize: vertical;
+		min-height: 60px;
+	}
+
+	&__section {
+		font: $weight-semibold #{$fs-body}/1.2 $font-display;
+		color: var(--color-text-primary);
+		margin: 0;
+	}
+
+	&__schedule {
+		display: flex;
+		flex-direction: column;
+		gap: $space-4;
+	}
+
+	&__dates,
+	&__times {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+	}
+
+	&__anytime {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__anytime-label {
+		font-size: $fs-body;
+		color: var(--color-text-primary);
+		cursor: pointer;
+	}
+
+	&__error {
+		font-size: $fs-body;
+		color: var(--danger-text);
+		margin: 0;
+	}
+
+	&__foot {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: $space-3;
+		margin-top: $space-6;
+		padding-top: $space-5;
+		border-top: 1px solid var(--color-border);
+	}
+
+	&__cancel {
+		height: 40px;
+		padding: 0 $space-4;
+		border: 1px solid var(--color-border);
+		border-radius: $radius-full;
+		background: var(--color-bg-surface);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
 	}
 }

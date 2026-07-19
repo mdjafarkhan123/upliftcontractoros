@@ -21,22 +21,30 @@ function buildClient(): ReturnType<typeof postgres> {
 		throw new Error('DATABASE_URL is required.');
 	}
 
-	// Worker may use a direct Postgres connection (port 5432) for prepared-statement
-	// support + better long-lived perf. Falls back to DATABASE_URL otherwise.
+	// The worker keeps its own connection (WORKER_DATABASE_URL) — a small
+	// session/direct pool is ideal for a single long-lived background process
+	// that benefits from prepared statements. Falls back to DATABASE_URL.
 	const activeUrl = isWorker ? env.WORKER_DATABASE_URL || databaseUrl : databaseUrl;
 
-	// Detect Supabase transaction pooler (PgBouncer) — it does NOT support
-	// prepared statements. Using `prepare: true` against it causes intermittent
-	// silent failures and rolled-back transactions.
-	const isPooler = activeUrl.includes(':6543');
+	// Supabase TRANSACTION pooler (Supavisor/PgBouncer) listens on :6543. It
+	// multiplexes thousands of client connections onto a small shared pool of
+	// real Postgres backends — the only mode that scales past `pool_size`
+	// clients. It does NOT support session-level prepared statements, so we must
+	// run `prepare:false` against it. The SESSION pooler (:5432) pins one real
+	// backend per client for its whole life, so it hard-caps at `pool_size`
+	// clients (the source of the EMAXCONNSESSION errors) — never point the web
+	// app at it.
+	const isTxnPooler = activeUrl.includes(':6543');
 
-	// Both the app (long-lived Node process on the VPS) and the worker are
-	// long-running — pool properly. Prefer a direct/session connection (5432)
-	// for prepared statements; on the transaction pooler (6543) force
-	// prepare:false to avoid the PgBouncer prepared-statement bug.
 	return postgres(activeUrl, {
-		prepare: !isPooler,
-		max: isPooler ? 5 : 10,
+		// Session-level prepared statements are illegal on the transaction pooler.
+		prepare: !isTxnPooler,
+		// Client-side pool size. On the transaction pooler these are cheap,
+		// multiplexed connections, so we size above a single request's parallel
+		// wave (~12, Rule 24) plus headroom. The worker holds a small, long-lived
+		// pool bounded by its BullMQ concurrency — keep it lean so it never
+		// starves the shared backend pool.
+		max: isWorker ? 4 : isTxnPooler ? 20 : 10,
 		idle_timeout: 60,
 		connect_timeout: 10
 	});

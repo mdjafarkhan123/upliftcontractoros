@@ -11,7 +11,8 @@ import {
 	quoteLineItems,
 	quotePackages,
 	quoteViews,
-	quotes
+	quotes,
+	requests
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canDeleteQuote, canEditQuote, canViewAnyQuote } from '$lib/server/quotes/permissions';
@@ -530,21 +531,42 @@ export const DELETE: RequestHandler = async (event) => {
 
 	const id = event.params.id!;
 
+	const now = new Date();
 	// Accepted quotes are signed agreements (often with a collected deposit or a converted
 	// invoice) — they are financial records and must not be deletable, even via direct API
 	// calls. The status check and soft-delete run in one statement so the guard is atomic.
-	const result = await db
-		.update(quotes)
-		.set({ deleted_at: new Date(), updated_at: new Date() })
-		.where(
-			and(
-				eq(quotes.id, id),
-				eq(quotes.org_id, auth.orgId),
-				isNull(quotes.deleted_at),
-				sql`${quotes.status} <> 'accepted'`
+	// Wrapped in a transaction so un-converting the source request lands with the delete.
+	const result = await db.transaction(async (tx) => {
+		const rows = await tx
+			.update(quotes)
+			.set({ deleted_at: now, updated_at: now })
+			.where(
+				and(
+					eq(quotes.id, id),
+					eq(quotes.org_id, auth.orgId),
+					isNull(quotes.deleted_at),
+					sql`${quotes.status} <> 'accepted'`
+				)
 			)
-		)
-		.returning({ id: quotes.id });
+			.returning({ id: quotes.id, request_id: quotes.request_id });
+
+		// Deleting the quote a request was converted into un-converts that request, so it
+		// returns to a normal completed request you can convert again (Jobber behavior).
+		// Guarded on converted_to_quote_id = this quote so it only clears its own link.
+		if (rows.length > 0 && rows[0].request_id) {
+			await tx
+				.update(requests)
+				.set({ converted_to_quote_id: null, converted_at: null, updated_at: now })
+				.where(
+					and(
+						eq(requests.id, rows[0].request_id),
+						eq(requests.org_id, auth.orgId),
+						eq(requests.converted_to_quote_id, id)
+					)
+				);
+		}
+		return rows;
+	});
 
 	if (result.length === 0) {
 		// Distinguish "blocked because accepted" from "genuinely not found" for a clear message.

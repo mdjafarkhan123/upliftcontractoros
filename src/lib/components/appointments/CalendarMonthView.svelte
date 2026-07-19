@@ -6,6 +6,7 @@
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 	import type { EventListItem } from '$lib/types/events';
+	import { isEventPast } from '$lib/appointments/eventState';
 
 	let {
 		anchor,
@@ -153,13 +154,23 @@
 							</a>
 						{:else}
 							{@const evt = pill.event}
-							<div class="cal-month__pill cal-month__pill--event" title={evt.title}>
+							{@const evtDone = isEventPast(evt)}
+							<div
+								class={[
+									'cal-month__pill',
+									'cal-month__pill--event',
+									evtDone && 'cal-month__pill--completed'
+								]}
+								title={evt.title}
+							>
 								<span class="cal-month__pill-time">
 									{evt.all_day || !evt.start_at
 										? 'All day'
 										: formatTimeInOrgTz(evt.start_at, orgTz)}
 								</span>
-								<span class="cal-month__pill-title">{evt.title}</span>
+								<span class="cal-month__pill-title">
+									{#if evtDone}<i class="ri-check-line" aria-hidden="true"></i> {/if}{evt.title}
+								</span>
 							</div>
 						{/if}
 					{/each}

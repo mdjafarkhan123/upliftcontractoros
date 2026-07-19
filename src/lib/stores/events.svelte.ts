@@ -119,6 +119,20 @@ export const eventsStore = {
 		return prev;
 	},
 
+	/**
+	 * Drop a deleted event from every cached window slot so the card disappears
+	 * instantly (the server soft-delete already succeeded; a revalidation reconciles).
+	 */
+	removeItem(id: string): void {
+		for (const [key, entry] of cache) {
+			if (!entry.items.some((it) => it.id === id)) continue;
+			cache.set(key, {
+				items: entry.items.filter((it) => it.id !== id),
+				fetchedAt: entry.fetchedAt
+			});
+		}
+	},
+
 	invalidateList(): void {
 		cache.clear();
 		currentKey = '';

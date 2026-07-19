@@ -13,6 +13,7 @@ import {
 	jobPaymentMilestones,
 	orgMembers,
 	outboxEvents,
+	requests,
 	reviewRequests
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
@@ -1065,7 +1066,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const id = event.params.id!;
 
 	const [existing] = await db
-		.select({ id: jobs.id })
+		.select({ id: jobs.id, request_id: jobs.request_id })
 		.from(jobs)
 		.where(and(eq(jobs.id, id), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 		.limit(1);
@@ -1089,6 +1090,21 @@ export const DELETE: RequestHandler = async (event) => {
 					isNull(appointments.deleted_at)
 				)
 			);
+		// Deleting the job a request was converted into un-converts that request, so it
+		// returns to a normal completed request you can convert again (Jobber behavior).
+		// Guarded on converted_to_job_id = this job so it only clears its own link.
+		if (existing.request_id) {
+			await tx
+				.update(requests)
+				.set({ converted_to_job_id: null, converted_at: null, updated_at: now })
+				.where(
+					and(
+						eq(requests.id, existing.request_id),
+						eq(requests.org_id, auth.orgId),
+						eq(requests.converted_to_job_id, id)
+					)
+				);
+		}
 	});
 
 	return new Response(null, { status: 204 });

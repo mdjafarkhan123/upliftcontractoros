@@ -134,6 +134,8 @@ export const GET: RequestHandler = async (event) => {
 			scheduled_end: appointments.scheduled_end,
 			all_day: appointments.all_day,
 			location: appointments.location,
+			// Crew-facing instructions — shown in the calendar card's detail popover.
+			notes: appointments.notes,
 			booking_source: appointments.booking_source
 		})
 		.from(appointments)

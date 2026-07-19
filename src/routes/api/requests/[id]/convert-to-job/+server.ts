@@ -120,7 +120,10 @@ export const POST: RequestHandler = async (event) => {
 				converted_to: 'job',
 				job_id: inserted.id
 			},
-			idempotency_key: `request.converted:${req.id}`
+			// Unique per conversion (not per request): a request can be re-converted after its
+			// job is deleted (un-convert-on-delete), so keying on req.id alone collided with the
+			// first conversion's outbox row. The fresh job id makes each conversion distinct.
+			idempotency_key: `request.converted:${req.id}:job:${inserted.id}`
 		});
 
 		return { existing: false, id: inserted.id };

@@ -106,9 +106,21 @@
 		if (!closeOnOutsideClick || dragging || !panelEl) return;
 		const target = e.target as HTMLElement | null;
 		if (!target) return;
-		// Inside the panel, or inside any bits-ui floating dropdown it opened
-		// (ContactPicker / date & time pickers portal to <body>) → not an outside click.
-		if (panelEl.contains(target) || target.closest('[data-bits-floating-content-wrapper]')) return;
+		// Not an outside click when the pointer lands inside:
+		//  - the panel itself,
+		//  - a bits-ui floating dropdown it opened (ContactPicker / date & time pickers
+		//    portal to <body> → [data-bits-floating-content-wrapper]),
+		//  - a bits-ui modal Dialog / AlertDialog opened from within the panel (e.g. the
+		//    RequestConvertDialog). These portal to <body> WITHOUT the floating wrapper, so
+		//    without this a click on the dialog would read as "outside" and tear the panel
+		//    (and the dialog) down before the button's click fires — a silent no-op.
+		if (
+			panelEl.contains(target) ||
+			target.closest(
+				'[data-bits-floating-content-wrapper],[data-dialog-content],[data-dialog-overlay],[data-alert-dialog-content],[data-alert-dialog-overlay]'
+			)
+		)
+			return;
 		onClose();
 	}
 

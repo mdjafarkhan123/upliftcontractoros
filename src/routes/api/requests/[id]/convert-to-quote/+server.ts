@@ -141,7 +141,10 @@ export const POST: RequestHandler = async (event) => {
 				converted_to: 'quote',
 				quote_id: inserted.id
 			},
-			idempotency_key: `request.converted:${req.id}`
+			// Unique per conversion (not per request): a request can be re-converted after its
+			// quote is deleted (un-convert-on-delete), so keying on req.id alone collided with
+			// the first conversion's outbox row. The fresh quote id makes each conversion distinct.
+			idempotency_key: `request.converted:${req.id}:quote:${inserted.id}`
 		});
 
 		return { existing: false, id: inserted.id, quote_number: quoteNumber };

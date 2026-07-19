@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import ContactPicker from '$lib/components/shared/ContactPicker.svelte';
@@ -14,9 +15,35 @@
 
 	const MAX_PHOTOS = 10;
 
+	// ── Seed from query params (e.g. the calendar "New › Request › More options"
+	//    hand-off carries title + client + schedule so nothing typed is lost). ──
+	const params = page.url.searchParams;
+	function seedDate(d: Date): string {
+		const y = d.getFullYear();
+		const m = String(d.getMonth() + 1).padStart(2, '0');
+		const day = String(d.getDate()).padStart(2, '0');
+		return `${y}-${m}-${day}`;
+	}
+	function seedTime(d: Date): string {
+		return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+	}
+	const seedTitle = params.get('title') ?? '';
+	const seedInstructions = params.get('instructions') ?? '';
+	const seedContactId = params.get('contact_id');
+	const seedContactName = params.get('contact_name');
+	const seedContact: ContactHit | null =
+		seedContactId && seedContactName
+			? { id: seedContactId, full_name: seedContactName, phone: null, email: null }
+			: null;
+	const seedStart = params.get('start');
+	const seedEnd = params.get('end');
+	const seedAllDay = params.get('all_day') === '1';
+	const seedStartDate = seedStart ? new Date(seedStart) : null;
+	const seedEndDate = seedEnd ? new Date(seedEnd) : null;
+
 	// ── Header ───────────────────────────────────────────────────────────────
-	let title = $state('');
-	let contact = $state<ContactHit | null>(null);
+	let title = $state(seedTitle);
+	let contact = $state<ContactHit | null>(seedContact);
 	const requestedOn = new Date().toLocaleDateString('en-US', {
 		month: 'short',
 		day: 'numeric',
@@ -64,14 +91,15 @@
 	}
 
 	// ── On-site assessment ───────────────────────────────────────────────────
-	let assessmentOpen = $state(false);
-	let instructions = $state('');
-	let startDate = $state('');
-	let endDate = $state('');
-	let startTime = $state('');
-	let endTime = $state('');
+	// Open the assessment pre-filled if a schedule was carried over from the calendar.
+	let assessmentOpen = $state(!!seedStartDate);
+	let instructions = $state(seedInstructions);
+	let startDate = $state(seedStartDate ? seedDate(seedStartDate) : '');
+	let endDate = $state(seedEndDate ? seedDate(seedEndDate) : '');
+	let startTime = $state(seedStartDate && !seedAllDay ? seedTime(seedStartDate) : '');
+	let endTime = $state(seedEndDate && !seedAllDay ? seedTime(seedEndDate) : '');
 	let scheduleLater = $state(false);
-	let anytime = $state(false);
+	let anytime = $state(seedAllDay);
 	let crewIds = $state<string[]>([]);
 	let leadId = $state<string | null>(null);
 

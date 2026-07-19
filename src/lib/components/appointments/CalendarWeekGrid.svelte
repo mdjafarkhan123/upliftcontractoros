@@ -16,6 +16,7 @@
 		type VisitCardState
 	} from '$lib/appointments/cardState';
 	import type { EventListItem } from '$lib/types/events';
+	import { isEventPast } from '$lib/appointments/eventState';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { eventsStore } from '$lib/stores/events.svelte';
@@ -24,6 +25,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import QuickCreatePopover from './QuickCreatePopover.svelte';
 	import CardDetailPopover from './CardDetailPopover.svelte';
+	import EventDetailPopover from './EventDetailPopover.svelte';
 	import NotifyDialog from '$lib/components/shared/NotifyDialog.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 
@@ -510,7 +512,22 @@
 	// Click-a-card detail popover (Jobber's visit preview): opens beside the clicked
 	// block with the essentials + quick actions, instead of navigating straight to the
 	// full detail page. `anchorEl` is the clicked card element (Popover customAnchor).
-	let detailPopover = $state<{ item: AppointmentListItem; anchorEl: HTMLElement } | null>(null);
+	// We keep only the id + anchor (plus a snapshot fallback) and read the LIVE row from
+	// the store — so a status/schedule change patched into the store re-renders the open
+	// popover instantly, instead of the popover showing a frozen copy from open-time.
+	let detailPopover = $state<{
+		id: string;
+		snapshot: AppointmentListItem;
+		anchorEl: HTMLElement;
+	} | null>(null);
+
+	// The live row for the open popover: the store's current copy (reactive) if the row
+	// is still in the loaded list, else the open-time snapshot (e.g. it was filtered out).
+	const detailItem = $derived(
+		detailPopover
+			? (appointmentsStore.items.find((i) => i.id === detailPopover!.id) ?? detailPopover.snapshot)
+			: null
+	);
 
 	function openDetail(e: MouseEvent, item: AppointmentListItem) {
 		e.stopPropagation();
@@ -518,7 +535,33 @@
 		if (justDragged) return; // a drag just ended — that's not a card-open click
 		popover = null; // Jobber-style: only one popup at a time — close the create popup
 		pendingCreate = null;
-		detailPopover = { item, anchorEl: e.currentTarget as HTMLElement };
+		eventDetailPopover = null;
+		detailPopover = { id: item.id, snapshot: item, anchorEl: e.currentTarget as HTMLElement };
+	}
+
+	// Click-an-Event popover (Jobber ref/event/4) — mirrors the visit `detailPopover`
+	// but for a non-billable Event: keeps only the id + anchor and reads the LIVE row
+	// from the events store, so an inline edit re-renders it without a reopen.
+	let eventDetailPopover = $state<{
+		id: string;
+		snapshot: EventListItem;
+		anchorEl: HTMLElement;
+	} | null>(null);
+
+	const eventDetailItem = $derived(
+		eventDetailPopover
+			? (eventsStore.items.find((e) => e.id === eventDetailPopover!.id) ?? eventDetailPopover.snapshot)
+			: null
+	);
+
+	function openEventDetail(e: MouseEvent, evt: EventListItem) {
+		e.stopPropagation();
+		e.preventDefault();
+		if (justDragged) return; // a drag just ended — that's not a card-open click
+		popover = null; // only one popup at a time
+		pendingCreate = null;
+		detailPopover = null;
+		eventDetailPopover = { id: evt.id, snapshot: evt, anchorEl: e.currentTarget as HTMLElement };
 	}
 
 	type NotifyChannel = 'sms' | 'email' | 'both' | 'none';
@@ -1414,11 +1457,28 @@
 						{@const evt = blk.event}
 						<!-- All-day Event: neutral grey chip, read-only. The lane's create-on-click
 						     already ignores clicks that land on a `.cal-week__anytime-chip`. -->
+						{@const evtDone = isEventPast(evt, now)}
 						<div
-							class="cal-week__anytime-chip cal-week__anytime-chip--event"
+							role="button"
+							tabindex="0"
+							class={[
+								'cal-week__anytime-chip',
+								'cal-week__anytime-chip--event',
+								evtDone && 'cal-week__anytime-chip--completed'
+							]}
 							title={evt.description ?? evt.title}
+							onclick={(e) => openEventDetail(e, evt)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ')
+									openEventDetail(e as unknown as MouseEvent, evt);
+							}}
 						>
-							<span class="cal-week__anytime-chip-title">{evt.title}</span>
+							<span class="cal-week__anytime-chip-title">
+								{#if evtDone}<i
+										class="cal-week__anytime-chip-tick ri-check-line"
+										aria-hidden="true"
+									></i>{/if}{evt.title}</span
+							>
 							<!-- An Event is a team block — its "who" is the assignee, never a customer
 							     (Jobber never headlines an event with a client). -->
 							<span class="cal-week__anytime-chip-sub">{evt.assignee_name ?? 'Event'}</span>
@@ -1541,22 +1601,35 @@
 						{@const dragging = drag?.mode === 'move' && drag.eventItem?.id === evt.id}
 						{@const startTime = evt.start_at ? formatTimeInOrgTz(evt.start_at, orgTz) : ''}
 						{@const endTime = evt.end_at ? formatTimeInOrgTz(evt.end_at, orgTz) : null}
+						{@const eventDone = isEventPast(evt, now)}
 						<div
+							role="button"
+							tabindex="0"
 							class={[
 								'cal-week__timeblock',
+								eventDone && 'cal-week__timeblock--completed',
 								canReschedule && 'cal-week__timeblock--draggable',
 								dragging && 'cal-week__timeblock--dragging'
 							]}
 							style={blockStyle}
 							title={evt.description ?? evt.title}
 							onpointerdown={(e) => onTimeblockPointerDown(e, ev, evt, i)}
+							onclick={(e) => openEventDetail(e, evt)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') openEventDetail(e as unknown as MouseEvent, evt);
+							}}
 						>
 							<!-- Same layout skeleton and container rules as a visit card, but no status
 							     rail and no status pill: an Event is time that's BLOCKED, not work to be
-							     done, so it stays the quietest thing on the grid. Placeholder design. -->
+							     done, so it stays the quietest thing on the grid. Once its window passes
+							     Jobber auto-completes it — the corner glyph becomes a tick (ri-check-line),
+							     exactly like a completed visit. -->
 							<i
-								class="cal-week__event-mark ri-calendar-event-line"
-								title="Event"
+								class={[
+									'cal-week__event-mark',
+									eventDone ? 'ri-check-line' : 'ri-calendar-event-line'
+								]}
+								title={eventDone ? 'Completed' : 'Event'}
 								aria-hidden="true"
 							></i>
 							<span class="cal-week__event-top">
@@ -1646,13 +1719,33 @@
      anchored beside the clicked card. `detailPopover` supplies the card + anchor. -->
 {#if detailPopover}
 	<CardDetailPopover
-		item={detailPopover.item}
+		item={detailItem}
 		anchorEl={detailPopover.anchorEl}
 		{orgTz}
 		canEdit={canReschedule}
 		onStatusChange={(id, status) => appointmentsStore.patchStatus(id, status)}
 		onClose={() => {
 			detailPopover = null;
+		}}
+	/>
+{/if}
+
+<!-- Click-an-Event preview (Jobber ref/event/4): Edit opens the shared modal, Delete
+     soft-deletes. Reads the live event row from the store. -->
+{#if eventDetailPopover}
+	<EventDetailPopover
+		event={eventDetailItem}
+		anchorEl={eventDetailPopover.anchorEl}
+		{orgTz}
+		canEdit={canReschedule}
+		onRefresh={() => onCreated?.()}
+		onDeleted={(id) => {
+			eventsStore.removeItem(id);
+			eventDetailPopover = null;
+			onCreated?.();
+		}}
+		onClose={() => {
+			eventDetailPopover = null;
 		}}
 	/>
 {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { PageData } from './$types';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import EditPencil from '$lib/components/shared/EditPencil.svelte';
@@ -570,6 +571,17 @@
 	// hasn't converted/archived yet — Jobber lets you create a quote/job from a request
 	// at any point, not only right after the assessment completes.
 	const canConvert = $derived(canManage && !isConverted && !isArchived && !needsApproval);
+
+	// Deep-link from the calendar's "Find a time" (?schedule=1): auto-open the
+	// assessment editor once the request is loaded and editable.
+	let scheduleParamHandled = false;
+	$effect(() => {
+		if (scheduleParamHandled) return;
+		if (!req || !canInlineEdit || blockEditing) return;
+		if (page.url.searchParams.get('schedule') !== '1') return;
+		scheduleParamHandled = true;
+		startAssessmentEdit();
+	});
 
 	beforeNavigate(({ cancel }) => {
 		if (blockEditing && !overviewSaving && !pricingSaving && !assessmentSaving) {

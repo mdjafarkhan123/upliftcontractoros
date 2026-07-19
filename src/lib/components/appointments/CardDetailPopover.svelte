@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import DraggablePanel from '$lib/components/shared/DraggablePanel.svelte';
+	import RequestConvertDialog from '$lib/components/requests/RequestConvertDialog.svelte';
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { formatCurrencyExact } from '$lib/utils/format';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -81,6 +83,18 @@
 					: `/appointments/${item.id}`
 	);
 
+	// "Find a time" (Jobber ref/visit/3) — shown only when the visit has no date yet.
+	// Routes to the scheduling surface: an assessment schedules on its request page
+	// (?schedule=1 auto-opens the editor), any other visit on its own edit page.
+	const isUnscheduled = $derived(item?.status === 'unscheduled');
+	const scheduleHref = $derived(
+		!item
+			? '#'
+			: item.request_id
+				? `/requests/${item.request_id}?schedule=1`
+				: `/appointments/${item.id}`
+	);
+
 	// ---- Line items (lazy, only for job-linked visits) --------------------------
 	type LineItem = { line_key: string; description: string; quantity: string; unit: string | null };
 	type LineData = { has_job: boolean; total: string | null; line_items: LineItemRow[] };
@@ -122,10 +136,57 @@
 	});
 
 	// ---- Status actions ---------------------------------------------------------
-	let statusSaving = $state<AppointmentStatus | null>(null);
+	let statusSaving = $state<AppointmentStatus | 'incomplete' | null>(null);
 	let showMore = $state(false);
 
-	async function setStatus(next: 'completed' | 'cancelled' | 'no_show') {
+	// "Assessment completed" prompt (Jobber ref/visit/4) — opens the moment an
+	// assessment is marked complete. Reuses the shared RequestConvertDialog wired to
+	// the same live endpoints as the request detail page.
+	let convertOpen = $state(false);
+	let converting = $state<'quote' | 'job' | null>(null);
+
+	async function convert(kind: 'quote' | 'job') {
+		if (!item?.request_id || converting) return;
+		converting = kind;
+		try {
+			const res = await fetch(`/api/requests/${item.request_id}/convert-to-${kind}`, {
+				method: 'POST'
+			});
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? `Could not convert to ${kind}.`);
+				return;
+			}
+			toast.success(kind === 'quote' ? 'Quote created' : 'Job created');
+			// Navigate straight to the new record. Don't tear down the popover first —
+			// unmounting mid-flight cancels the navigation (the route change tears it
+			// down for us). Matches the request detail page's convert().
+			await goto(kind === 'quote' ? `/quotes/${body.data.id}` : `/jobs/${body.data.id}`);
+		} catch {
+			toast.error('Network error. Try again.');
+		} finally {
+			converting = null;
+		}
+	}
+
+	async function archiveRequest() {
+		if (!item?.request_id) return;
+		try {
+			const res = await fetch(`/api/requests/${item.request_id}/archive`, { method: 'POST' });
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				toast.error(body.error ?? 'Could not archive.');
+				return;
+			}
+			toast.success('Archived');
+			convertOpen = false;
+			onClose();
+		} catch {
+			toast.error('Network error. Try again.');
+		}
+	}
+
+	async function setStatus(next: 'completed' | 'cancelled' | 'no_show' | 'incomplete') {
 		if (!item || statusSaving) return;
 		statusSaving = next;
 		try {
@@ -139,15 +200,23 @@
 				toast.error(body.error ?? 'Could not update status.');
 				return;
 			}
-			onStatusChange?.(item.id, next);
+			// 'incomplete' reopens the visit — the server sends it back to scheduled (has a
+			// date) or unscheduled (no date). Echo the resolved live status to the parent.
+			const resolved: AppointmentStatus =
+				next === 'incomplete' ? (item.scheduled_start ? 'scheduled' : 'unscheduled') : next;
+			onStatusChange?.(item.id, resolved);
 			toast.success(
 				next === 'completed'
 					? 'Marked completed.'
-					: next === 'cancelled'
-						? 'Visit cancelled.'
-						: 'Marked no-show.'
+					: next === 'incomplete'
+						? 'Reopened.'
+						: next === 'cancelled'
+							? 'Visit cancelled.'
+							: 'Marked no-show.'
 			);
 			showMore = false;
+			// Completing an assessment opens the convert prompt (Jobber ref/visit/4).
+			if (next === 'completed' && isAssessment) convertOpen = true;
 		} catch {
 			toast.error('Could not update status.');
 		} finally {
@@ -157,79 +226,65 @@
 </script>
 
 <DraggablePanel {anchorEl} ariaLabel="Appointment details" {onClose}>
-	{#snippet heading()}
-		{#if item}
-			<span
-				class={[
-					'card-detail-pop__type',
-					`card-detail-pop__type--${item.type}`,
-					isTerminal && `card-detail-pop__type--${item.status}`
-				]}
-			>
-				{isAssessment ? 'Assessment' : TYPE_LABELS[item.type]}
-			</span>
-		{/if}
-	{/snippet}
-
 	<div class="card-detail-pop card-detail-pop--panel">
 		{#if item}
 			<h3 class="card-detail-pop__title">{item.title}</h3>
+			<!-- Type as a subtitle under the title (Jobber ref/visit/3). -->
+			<p class="card-detail-pop__subtype">
+				{isAssessment ? 'Assessment' : TYPE_LABELS[item.type]}
+			</p>
 
-			<!-- Quick complete (Jobber's "Completed" checkbox) / terminal status badge -->
-			{#if item.status === 'completed'}
-				<div class="card-detail-pop__done card-detail-pop__done--on">
-					<i class="ri-checkbox-circle-fill" aria-hidden="true"></i>
-					<span>Completed</span>
-				</div>
-			{:else if item.status === 'cancelled' || item.status === 'no_show'}
+			<!-- Completed checkbox (Jobber ref/visit/3): a real toggle — check to complete,
+			     uncheck to reopen. Cancelled / no-show stay as a muted status badge. -->
+			{#if item.status === 'cancelled' || item.status === 'no_show'}
 				<div class="card-detail-pop__done card-detail-pop__done--muted">
 					<i class="ri-close-circle-line" aria-hidden="true"></i>
 					<span>{STATUS_LABELS[item.status]}</span>
 				</div>
 			{:else if canEdit}
+				{@const done = item.status === 'completed'}
 				<button
 					type="button"
-					class="card-detail-pop__done card-detail-pop__done--action"
+					class={['card-detail-pop__check', done && 'card-detail-pop__check--on']}
 					disabled={statusSaving != null}
-					onclick={() => setStatus('completed')}
+					aria-pressed={done}
+					onclick={() => setStatus(done ? 'incomplete' : 'completed')}
 				>
-					{#if statusSaving === 'completed'}
+					{#if statusSaving === 'completed' || statusSaving === 'incomplete'}
 						<i class="ri-loader-4-line card-detail-pop__spin" aria-hidden="true"></i>
+					{:else if done}
+						<i class="ri-checkbox-line" aria-hidden="true"></i>
 					{:else}
-						<i class="ri-checkbox-blank-circle-line" aria-hidden="true"></i>
+						<i class="ri-checkbox-blank-line" aria-hidden="true"></i>
 					{/if}
-					<span>Mark completed</span>
+					<span>Completed</span>
 				</button>
+			{:else if item.status === 'completed'}
+				<div class="card-detail-pop__done card-detail-pop__done--on">
+					<i class="ri-checkbox-line" aria-hidden="true"></i>
+					<span>Completed</span>
+				</div>
 			{/if}
 
-			<!-- Customer + job -->
-			<dl class="card-detail-pop__facts">
-				<div class="card-detail-pop__fact">
-					<dt>Customer</dt>
-					<dd>
-						<a class="card-detail-pop__link" href={`/contacts/${item.contact_id}`}>
-							{item.contact_name}
-						</a>
-					</dd>
-				</div>
-				{#if item.request_id}
-					<div class="card-detail-pop__fact">
-						<dt>Request</dt>
-						<dd>
-							<a class="card-detail-pop__link" href={`/requests/${item.request_id}`}
-								>View request</a
-							>
-						</dd>
-					</div>
-				{:else if item.job_id}
-					<div class="card-detail-pop__fact">
-						<dt>Job</dt>
-						<dd>
-							<a class="card-detail-pop__link" href={`/jobs/${item.job_id}`}>View job</a>
-						</dd>
-					</div>
+			<!-- Details: client · request/job link, then the instructions (Jobber ref/visit/3). -->
+			<div class="card-detail-pop__details">
+				<span class="card-detail-pop__section-label">Details</span>
+				<p class="card-detail-pop__detail-line">
+					<a class="card-detail-pop__link" href={`/contacts/${item.contact_id}`}>
+						{item.contact_name}
+					</a>
+					{#if item.request_id}
+						<span class="card-detail-pop__dot" aria-hidden="true">·</span>
+						<a class="card-detail-pop__link" href={`/requests/${item.request_id}`}>View request</a>
+					{:else if item.job_id}
+						<span class="card-detail-pop__dot" aria-hidden="true">·</span>
+						<a class="card-detail-pop__link" href={`/jobs/${item.job_id}`}>View job</a>
+					{/if}
+				</p>
+				{#if item.notes}
+					<p class="card-detail-pop__instructions">{item.notes}</p>
 				{/if}
-			</dl>
+			</div>
 
 			<!-- Team -->
 			<div class="card-detail-pop__team">
@@ -248,10 +303,10 @@
 			</div>
 
 			{#if item.location}
-				<p class="card-detail-pop__loc">
-					<i class="ri-map-pin-2-line" aria-hidden="true"></i>
-					<span>{item.location}</span>
-				</p>
+				<div class="card-detail-pop__loc-block">
+					<span class="card-detail-pop__section-label">Location</span>
+					<p class="card-detail-pop__loc">{item.location}</p>
+				</div>
 			{/if}
 
 			<!-- When -->
@@ -358,6 +413,12 @@
 					</button>
 				{/if}
 				<span class="card-detail-pop__foot-spacer"></span>
+				{#if isUnscheduled && canEdit}
+					<a class="card-detail-pop__btn" href={scheduleHref}>
+						<i class="ri-time-line" aria-hidden="true"></i>
+						<span>Find a time</span>
+					</a>
+				{/if}
 				{#if item.job_id}
 					<a class="card-detail-pop__btn" href={`/appointments/${item.id}`}>Edit</a>
 				{/if}
@@ -365,6 +426,17 @@
 					Details
 				</a>
 			</footer>
+
+			<!-- Assessment completed prompt (Jobber ref/visit/4) — reused shared dialog. -->
+			<RequestConvertDialog
+				bind:open={convertOpen}
+				convertSoon={false}
+				{converting}
+				onConvertQuote={() => convert('quote')}
+				onConvertJob={() => convert('job')}
+				onArchive={archiveRequest}
+				onLeave={() => {}}
+			/>
 		{/if}
 	</div>
 </DraggablePanel>
