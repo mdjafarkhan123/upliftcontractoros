@@ -56,6 +56,8 @@
 				hasSeriesAnchor={job.has_series_anchor}
 				nextOpenVisitStart={job.next_open_visit_start}
 				hasOpenVisits={job.has_open_visits}
+				completedAt={job.completed_at}
+				cancelledAt={job.cancelled_at}
 			/>
 			<div onclick={(e) => e.stopPropagation()} role="none">
 				<DropdownMenu.Root>
@@ -118,7 +120,7 @@
 	</div>
 
 	<JobBillingBadge
-		status={job.status}
+		cancelledAt={job.cancelled_at}
 		billing={job.billing}
 		total={job.total}
 		class="job-card__billing"

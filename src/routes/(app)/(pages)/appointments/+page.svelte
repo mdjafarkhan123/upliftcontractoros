@@ -18,6 +18,7 @@
 	import {
 		addDays,
 		addMonths,
+		dayKey,
 		startOfDay,
 		startOfMonth,
 		startOfWeekMonday
@@ -186,6 +187,51 @@
 				}
 			})();
 		}
+	});
+
+	// Org-tz calendar-day key (YYYY-MM-DD), matching the grid's own bucketing so a job
+	// scheduled at 9am org-time counts on the org's day regardless of the viewer's tz.
+	function orgDayKey(d: Date): string {
+		try {
+			return new Intl.DateTimeFormat('en-CA', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				timeZone: sessionStore.data?.org.timezone || undefined
+			}).format(d);
+		} catch {
+			return dayKey(d);
+		}
+	}
+
+	// Day-view (dispatch grid) team-member columns, in order. A member who can't see all
+	// appointments only ever sees their own single column; a manager who has picked a
+	// specific assignee sees just that one column. Otherwise (manager viewing everyone) we
+	// only draw a column for a member who ACTUALLY has a visit/event assigned on this day —
+	// so 12 members with work spread across 3 of them yields 3 columns, not 12 empty ones.
+	// (The grid adds its own "Unassigned" column when unassigned work exists that day.)
+	const dayColumnMembers = $derived.by<{ id: string; name: string }[]>(() => {
+		if (!canViewAll) {
+			const m = member();
+			return [{ id: m.id, name: m.full_name }];
+		}
+		const base = assignees.map((a) => ({ id: a.id, name: a.full_name }));
+		if (assignedToFilter) return base.filter((m) => m.id === assignedToFilter);
+
+		// Members with at least one assigned visit or event on the viewed day.
+		const key = orgDayKey(anchor);
+		const scheduled = new Set<string>();
+		for (const it of items) {
+			if (it.assigned_to && orgDayKey(new Date(it.scheduled_start)) === key) {
+				scheduled.add(it.assigned_to);
+			}
+		}
+		for (const ev of events) {
+			if (ev.assigned_to && ev.start_at && orgDayKey(new Date(ev.start_at)) === key) {
+				scheduled.add(ev.assigned_to);
+			}
+		}
+		return base.filter((m) => scheduled.has(m.id));
 	});
 
 	const items = $derived(appointmentsStore.items);
@@ -378,8 +424,28 @@
 						</ul>
 					{/if}
 				{:else if range === 'day'}
-					<!-- Day view -->
-					<CalendarDayList {anchor} days={1} {items} {events} />
+					<!-- Day view — Jobber dispatch grid (one column per team member) on desktop;
+					     stacked day list on narrow screens. -->
+					<div class="appt-body__day-list">
+						<CalendarDayList {anchor} days={1} {items} {events} />
+					</div>
+					<div class="appt-body__day-grid">
+						<CalendarWeekGrid
+							{anchor}
+							{items}
+							{events}
+							{dayStartHour}
+							{dayEndHour}
+							{canCreate}
+							{canReschedule}
+							density={calendarDensity.value}
+							{assignees}
+							canEditAssignee={canViewAll}
+							columnMode="day"
+							columnMembers={dayColumnMembers}
+							onCreated={reloadAfterCreate}
+						/>
+					</div>
 				{:else if range === 'month'}
 					<!-- Month view -->
 					<CalendarMonthView {anchor} {items} {events} onDayClick={openDay} />
@@ -447,6 +513,22 @@
 		}
 
 		&__week-grid {
+			display: none;
+
+			@media (min-width: $bp-tablet) {
+				display: block;
+				height: 100%;
+			}
+		}
+
+		// Day view: stacked day list on small screens, member-column dispatch grid on desktop.
+		&__day-list {
+			@media (min-width: $bp-tablet) {
+				display: none;
+			}
+		}
+
+		&__day-grid {
 			display: none;
 
 			@media (min-width: $bp-tablet) {

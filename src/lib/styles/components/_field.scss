@@ -1,5 +1,8 @@
 @use '../tokens' as *;
 
+// ---------------------------------------------------------------------------
+// FIELD — form field layout (label + input + hint/error)
+// ---------------------------------------------------------------------------
 .field {
 	display: flex;
 	flex-direction: column;
@@ -8,7 +11,7 @@
 	&__label {
 		font-size: $fs-body;
 		font-weight: $weight-medium;
-		color: var(--color-text-secondary);
+		color: var(--color-text-primary);
 
 		// Required mark — always show on mandatory fields
 		&--required::after {
@@ -25,7 +28,8 @@
 		padding: 0 $space-4;
 		border-radius: $radius-md;
 		border: 1px solid var(--color-border-strong);
-		background: var(--color-bg-surface);
+		background: var(--color-bg-surface-sunk);
+		box-shadow: var(--shadow-xs);
 		font-size: $fs-body;
 		font-family: $font-body;
 		color: var(--color-text-primary);
@@ -34,13 +38,17 @@
 			box-shadow $duration-fast $ease-standard;
 
 		&::placeholder {
-			color: var(--color-text-muted);
+			color: var(--color-text-secondary);
+		}
+
+		&:hover {
+			border-color: var(--color-border-strong); // skill: border-default-strong equivalent
 		}
 
 		&:focus {
 			outline: none;
 			border-color: var(--color-brand);
-			box-shadow: var(--shadow-focus);
+			box-shadow: 0 0 0 1px var(--color-brand);
 		}
 
 		&[data-disabled],
@@ -53,8 +61,18 @@
 		&[data-invalid],
 		&--error {
 			border-color: var(--danger-solid);
+
 			&:focus {
-				box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.2);
+				box-shadow: 0 0 0 1px var(--danger-solid);
+			}
+		}
+
+		&[data-success],
+		&--success {
+			border-color: var(--success-solid);
+
+			&:focus {
+				box-shadow: 0 0 0 1px var(--success-solid);
 			}
 		}
 	}
@@ -76,7 +94,9 @@
 		background-position: right $space-4 center;
 	}
 
-	// Input with a leading icon
+	// -----------------------------------------------------------------------
+	// Icon wrap — input with a leading icon
+	// -----------------------------------------------------------------------
 	&__input-wrap {
 		position: relative;
 
@@ -96,12 +116,110 @@
 		}
 	}
 
-	&__hint {
-		font-size: $fs-body;
-		color: var(--color-text-muted);
+	// -----------------------------------------------------------------------
+	// Prefix / Suffix — currency and unit labels (CRM)
+	// -----------------------------------------------------------------------
+	&__adjoined {
+		display: flex;
+		align-items: stretch;
+
+		.field__input {
+			border-radius: 0;
+			position: relative;
+			z-index: 1;
+
+			&:focus {
+				z-index: 2;
+			}
+		}
 	}
-	&__error {
+
+	&__prefix,
+	&__suffix {
+		display: flex;
+		align-items: center;
+		padding: 0 $space-3;
+		background: var(--color-bg-surface);
+		border: 1px solid var(--color-border-strong);
 		font-size: $fs-body;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		user-select: none;
+	}
+
+	&__prefix {
+		border-radius: $radius-md 0 0 $radius-md;
+		border-right: none;
+	}
+
+	&__suffix {
+		border-radius: 0 $radius-md $radius-md 0;
+		border-left: none;
+	}
+
+	// -----------------------------------------------------------------------
+	// Search input — global search, 280px expandable
+	// -----------------------------------------------------------------------
+	&__search {
+		position: relative;
+		width: 280px;
+		transition: width $duration-base $ease-standard;
+
+		&:focus-within {
+			width: 360px;
+		}
+
+		.field__input {
+			padding-left: $space-10;
+			padding-right: $space-10;
+		}
+
+		.field__icon {
+			position: absolute;
+			left: $space-4;
+			top: 50%;
+			transform: translateY(-50%);
+			width: 18px;
+			height: 18px;
+			color: var(--color-text-muted);
+			pointer-events: none;
+		}
+
+		// Keyboard shortcut badge
+		.field__shortcut {
+			position: absolute;
+			right: $space-3;
+			top: 50%;
+			transform: translateY(-50%);
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			height: 20px;
+			min-width: 20px;
+			padding: 0 6px;
+			border-radius: $radius-sm;
+			background: var(--color-bg-surface);
+			border: 1px solid var(--color-border);
+			font-size: $fs-caption;
+			font-weight: $weight-medium;
+			color: var(--color-text-muted);
+			pointer-events: none;
+			user-select: none;
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Hint & Error text
+	// -----------------------------------------------------------------------
+	&__hint {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		margin-top: $space-2;
+	}
+
+	&__error {
+		font-size: $fs-caption;
 		color: var(--danger-text);
+		margin-top: $space-2;
 	}
 }

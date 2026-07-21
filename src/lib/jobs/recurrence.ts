@@ -30,6 +30,14 @@ export type JobRecurrence = {
 	anytime?: boolean;
 };
 
+// The invoice-schedule recurrence (Jobber "Invoice frequency" → periodic). Same shape as a visit
+// JobRecurrence MINUS the end condition — a periodic invoice schedule inherits the job's start/end
+// window, so it never carries its own end_type/end_on. Mirrors the server InvoiceRecurrence.
+export type InvoiceRecurrence = Omit<
+	JobRecurrence,
+	'end_type' | 'end_after_count' | 'end_after_unit' | 'end_on' | 'anytime'
+>;
+
 // Single-letter pill labels (Sun-first), matching the reference S M T W T F S row.
 export const WEEKDAY_PILLS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;

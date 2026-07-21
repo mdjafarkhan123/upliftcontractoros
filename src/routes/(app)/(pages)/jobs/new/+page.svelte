@@ -9,7 +9,6 @@
 	import JobTagsEditor from '$lib/components/jobs/JobTagsEditor.svelte';
 	import JobCategoryPicker from '$lib/components/jobs/JobCategoryPicker.svelte';
 	import JobBillingEditor from '$lib/components/jobs/JobBillingEditor.svelte';
-	import JobRecurringBillingEditor from '$lib/components/jobs/JobRecurringBillingEditor.svelte';
 	import JobScheduleEditor from '$lib/components/jobs/JobScheduleEditor.svelte';
 	import JobProductsPricing from '$lib/components/jobs/JobProductsPricing.svelte';
 	import JobScopeNotes from '$lib/components/jobs/JobScopeNotes.svelte';
@@ -247,21 +246,9 @@
 				errors = { ...errors, recurrence: 'This schedule produces no visits. Adjust the rule.' };
 				return;
 			}
-			// Recurring billing is a recurring-TYPE concern — a repeating one-off still bills once
-			// through its payment schedule, so its editor is never shown and this can't apply.
-			if (
-				form.jobMode === 'recurring' &&
-				!form.scheduleAsNeeded &&
-				form.recurBillingEnabled &&
-				form.recurBillingType === 'fixed' &&
-				!(Number(form.fixedInvoiceAmount) > 0)
-			) {
-				errors = { ...errors, fixed_invoice_amount: 'Enter the fixed invoice amount.' };
-				return;
-			}
 		}
 
-		// One-off billing: the payment schedule can never bill more than the job total.
+		// Fixed-price payment schedule can never bill more than the job total.
 		if (form.paymentOverAllocated) {
 			globalError =
 				'The payment schedule bills more than the job total. Lower an amount to continue.';
@@ -303,14 +290,6 @@
 				if (form.visitInstructions.trim())
 					payload.visit_instructions = form.visitInstructions.trim();
 				if (form.notifyChannel !== 'none') payload.notify_channel = form.notifyChannel;
-				// Recurring billing config (manual v1) — recurring-type only; a repeating one-off
-				// bills once via its payment schedule. Only sent when the contractor opts in.
-				if (form.jobMode === 'recurring' && form.recurBillingEnabled) {
-					payload.billing_type = form.recurBillingType;
-					payload.invoice_frequency = form.invoiceFrequency;
-					payload.fixed_invoice_amount =
-						form.recurBillingType === 'fixed' ? Number(form.fixedInvoiceAmount) || 0 : null;
-				}
 			} else if (form.scheduleLater) {
 				// Jobber "Schedule later": no date is sent; the server creates a single
 				// unscheduled placeholder visit the contractor dates later.
@@ -371,11 +350,14 @@
 				}));
 			if (lines.length > 0) payload.line_items = lines;
 
-			// One-off billing: close reminder + optional payment schedule. Only applies to one-off
-			// jobs (recurring jobs use recurring billing, handled above). Only rows with a positive
+			// Billing model (Jobber billingType × billingFrequency) — sent for every job.
+			payload.billing_type = form.billingType;
+			payload.billing_frequency = form.billingFrequency;
+			// Periodic billing (recurring): the Jobber "Invoice frequency" repeat rule. Null otherwise.
+			payload.invoice_recurrence = form.buildInvoiceRecurrence();
+			// Fixed-price payment schedule (optional progress invoicing). Only rows with a positive
 			// amount are sent; incomplete rows are dropped.
-			if (form.jobMode === 'one_off' && form.invoiceOnClose) payload.invoice_on_close = true;
-			if (form.jobMode === 'one_off' && form.splitEnabled) {
+			if (form.billingType === 'fixed' && form.splitEnabled) {
 				const ms = form.billingMilestones
 					.filter((m) => m.description.trim() && Number(m.amount_value) > 0)
 					.map((m) => ({
@@ -532,12 +514,12 @@
 				contactHasEmail={data.fromQuoteId ? !!prefill?.contact_email : !!selectedContact?.email}
 			/>
 
-			<!-- Status — auto-derived: no date = Pending, date set = Scheduled. Advances to In
-				 progress / Completed later via the job's Start / Complete actions. -->
+			<!-- Status — a new job is always Active; the badge derives its face (Unscheduled /
+				 Upcoming / Today) from the date. It only closes later via Mark complete / Cancel. -->
 			<div class="job-new-status">
 				<span class="job-new-status__label">Status</span>
 				<JobStatusBadge
-					status="scheduled"
+					status="active"
 					scheduledStart={previewStart}
 					hasSeriesAnchor={form.recurConfigured || form.scheduleAsNeeded}
 					nextOpenVisitStart={previewStart}
@@ -559,26 +541,8 @@
 			<!-- Products & Services -->
 			<JobProductsPricing {form} {errors} loading={!!(prefillLoading && data.fromQuoteId)} />
 
-			<!-- Billing — recurring jobs bill on a schedule; one-off + "As needed" jobs use the
-				 payment schedule (recurring billing needs a real rule, which As needed has none of). -->
-			{#if form.jobMode === 'recurring' && !form.scheduleAsNeeded}
-				<JobRecurringBillingEditor
-					bind:enabled={form.recurBillingEnabled}
-					bind:billingType={form.recurBillingType}
-					bind:invoiceFrequency={form.invoiceFrequency}
-					bind:fixedAmount={form.fixedInvoiceAmount}
-					preview={form.preview}
-					previewLoading={form.previewLoading}
-				/>
-			{:else}
-				<JobBillingEditor
-					bind:invoiceOnClose={form.invoiceOnClose}
-					bind:splitEnabled={form.splitEnabled}
-					bind:splitBy={form.splitBy}
-					bind:milestones={form.billingMilestones}
-					total={form.total}
-				/>
-			{/if}
+			<!-- Billing — one unified model for every job (Jobber billingType × billingFrequency). -->
+			<JobBillingEditor {form} />
 
 			<!-- Scope of work + Internal notes -->
 			<JobScopeNotes {form} />

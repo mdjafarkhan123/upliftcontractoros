@@ -4,8 +4,7 @@
 import type {
 	JobBillingBadge,
 	JobBillingSignals,
-	JobPaymentMilestoneRow,
-	JobStatus
+	JobPaymentMilestoneRow
 } from '$lib/types/jobs';
 
 export type MilestoneStatus = 'upcoming' | 'draft' | 'awaiting' | 'paid' | 'cancelled';
@@ -87,17 +86,20 @@ export function pctOf(amount: number, jobTotal: number): number {
 
 // ── Jobs-list billing badge (BILLING.md) ─────────────────────────────────────
 // At most ONE badge per job row, showing the single most important next money action.
-// Priority (highest first): Overdue → Needs Invoice → Awaiting Payment → Paid. Cancelled jobs
-// and jobs with no billing action yet return null (no badge). Purely derives from the flat
-// signals the list query computes per row — no fetching, no date math (overdue is decided
-// server-side against CURRENT_DATE).
+// Priority (highest first): Overdue → Needs Invoice → Draft (Send Invoice) → Awaiting Payment →
+// Paid. `needs_invoice` means NO invoice exists yet (create one); `has_draft` means one exists but
+// hasn't been sent (send it) — two genuinely different actions Jobber keeps distinct. Cancelled
+// jobs and jobs with no billing action yet return null. Purely derives from the flat signals the
+// list query computes per row — no fetching, no date math (overdue is decided server-side).
 export function deriveJobBillingBadge(
-	status: JobStatus,
-	s: JobBillingSignals | undefined
+	s: JobBillingSignals | undefined,
+	// A cancelled job (archived + cancelled_at) shows no billing badge. Pass the job's cancelled_at.
+	cancelledAt: string | null = null
 ): JobBillingBadge | null {
-	if (status === 'cancelled' || !s) return null;
+	if (cancelledAt || !s) return null;
 	if (s.has_overdue) return 'overdue';
 	if (s.needs_invoice) return 'needs_invoice';
+	if (s.has_draft) return 'draft';
 	if (s.has_unpaid_sent) return 'awaiting_payment';
 	if (s.all_settled) return 'paid';
 	return null;
@@ -106,6 +108,7 @@ export function deriveJobBillingBadge(
 export const JOB_BILLING_BADGE_LABEL: Record<JobBillingBadge, string> = {
 	overdue: 'Overdue',
 	needs_invoice: 'Needs Invoice',
+	draft: 'Send Invoice',
 	awaiting_payment: 'Awaiting Payment',
 	paid: 'Paid'
 };
@@ -117,25 +120,111 @@ export const JOB_BILLING_BADGE_VARIANT: Record<
 > = {
 	overdue: 'danger',
 	needs_invoice: 'warning',
+	draft: 'info',
 	awaiting_payment: 'info',
 	paid: 'success'
 };
 
-// ── Recurring billing (S4) ──────────────────────────────────────────────────
-// Manual v1: the contractor chooses how a recurring job is billed, then presses
-// "Generate invoice" each period. Nothing auto-fires (that layer is deferred).
-export type BillingType = 'visit_based' | 'fixed';
-export type InvoiceFrequency = 'per_visit' | 'weekly' | 'biweekly' | 'monthly';
+// ── Billing model (Jobber billingType × billingFrequency) ─────────────────────
+// One model for EVERY job. billing_type = WHAT each invoice contains; billing_frequency = WHEN to
+// invoice; invoice_frequency = the cadence when billing_frequency='periodic'. Manual v1: the
+// contractor presses "Generate invoice" / "Create invoice" — nothing auto-fires (deferred).
+export type BillingType = 'fixed' | 'visit_based';
+export type BillingFrequency = 'on_completion' | 'per_visit' | 'periodic' | 'never';
+export type InvoiceFrequency = 'weekly' | 'biweekly' | 'monthly';
 
 export const BILLING_TYPE_LABEL: Record<BillingType, string> = {
-	visit_based: 'Visit based',
-	fixed: 'Fixed price'
+	fixed: 'Fixed price',
+	visit_based: 'Visit based'
 };
 
-// Short, human cadence labels for the "Invoice frequency" dropdown + detail view.
+// One-line descriptions of each billing type — Jobber's exact wording under the recurring
+// "Billing type" radios (ref/billing/10-11).
+export const BILLING_TYPE_DESC: Record<BillingType, string> = {
+	fixed: 'Each invoice is for a set amount.',
+	visit_based: 'Visits will be listed as a billable item and grouped on one invoice.'
+};
+
+// The recurring-job "Invoice frequency" dropdown (Jobber). A synthetic key that resolves to our
+// stored billing_frequency (+ invoice_recurrence for the periodic ones). 'custom' is the ACTION row
+// ("Custom schedule…" — opens the recurrence modal) and is never a resting value; 'custom_saved' is
+// the injected option holding a saved custom rule, and its label is the rule's friendly summary.
+export type BillingRepeatMode =
+	| 'on_completion'
+	| 'per_visit'
+	| 'never'
+	| 'monthly_last'
+	| 'custom_saved'
+	| 'custom';
+
+// Jobber's exact "Invoice frequency" option wording (ref/billing/11,14,15). 'custom_saved' is
+// absent — its label is the friendly summary of the saved rule (summarizeRecurrence).
+export const BILLING_REPEAT_LABEL: Record<Exclude<BillingRepeatMode, 'custom_saved'>, string> = {
+	monthly_last: 'Monthly on the last day of the month',
+	per_visit: 'After each visit is completed',
+	never: 'As needed – no reminders',
+	on_completion: 'Once when job is closed',
+	custom: 'Custom schedule…'
+};
+
+// WHEN to invoice (Jobber BillingFrequencyEnum). 'never' = billing not set up.
+export const BILLING_FREQUENCY_LABEL: Record<BillingFrequency, string> = {
+	on_completion: 'When the job is complete',
+	per_visit: 'On each visit',
+	periodic: 'On a repeating schedule',
+	never: "Don't invoice automatically"
+};
+
+// Short, human cadence labels for the periodic "how often" dropdown + detail view.
 export const INVOICE_FREQUENCY_LABEL: Record<InvoiceFrequency, string> = {
-	per_visit: 'Per visit',
 	weekly: 'Weekly',
 	biweekly: 'Every 2 weeks',
 	monthly: 'Monthly'
+};
+
+// ── Invoice-reminder display status (Jobber B3.2) ─────────────────────────────
+// A reminder stores only 'active' | 'completed' in the DB; the face the contractor sees is
+// DERIVED from its scheduled date vs now — the SAME vocabulary Jobber gives a visit/scheduled
+// item. Shared here (not inline in the Reminders tab) so the future schedule-calendar render
+// reuses the exact same derivation. Pure date math, no fetching.
+export type ReminderDisplayStatus = 'upcoming' | 'today' | 'late' | 'completed' | 'unscheduled';
+
+// The row shape this needs — a subset of JobInvoiceReminderRow, so any reminder-like row works.
+type ReminderTiming = {
+	status: 'active' | 'completed';
+	scheduled_start: string | null;
+	scheduled_end: string | null;
+	all_day: boolean;
+};
+
+export function reminderDisplayStatus(r: ReminderTiming): ReminderDisplayStatus {
+	if (r.status === 'completed') return 'completed';
+	// "Schedule later" — no date yet, so it can never be today/late.
+	if (!r.scheduled_start) return 'unscheduled';
+	const start = new Date(r.scheduled_start);
+	const now = new Date();
+	// Late once the reminder's END moment has passed (Jobber: "end time has passed"). End moment =
+	// the end time if set, else the end of that day for an all-day reminder, else the start instant.
+	const endMoment = r.scheduled_end
+		? new Date(r.scheduled_end)
+		: r.all_day
+			? new Date(new Date(start).setHours(23, 59, 59, 999))
+			: start;
+	if (endMoment.getTime() < now.getTime()) return 'late';
+	// Not past yet — Today if it falls on today's calendar day, else Upcoming.
+	const isToday =
+		start.getFullYear() === now.getFullYear() &&
+		start.getMonth() === now.getMonth() &&
+		start.getDate() === now.getDate();
+	return isToday ? 'today' : 'upcoming';
+}
+
+export const REMINDER_DISPLAY_LABEL: Record<ReminderDisplayStatus, string> = {
+	upcoming: 'Upcoming',
+	today: 'Today',
+	// Jobber labels a past-due invoice reminder "Overdue" (ref/billing/17) — distinct from a visit,
+	// which Jobber calls "Late". The status VALUE stays 'late' (CSS + derivation), only the face reads Overdue.
+	late: 'Overdue',
+	completed: 'Completed',
+	unscheduled: 'Unscheduled'
 };

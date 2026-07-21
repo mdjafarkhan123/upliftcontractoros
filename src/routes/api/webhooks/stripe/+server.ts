@@ -110,9 +110,10 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 			id: string;
 			status: string;
 			total: string;
+			amount_due: string;
 			invoice_number: number;
 		}>(sql`
-			SELECT id, status, total, invoice_number FROM invoices
+			SELECT id, status, total, amount_due, invoice_number FROM invoices
 			WHERE id = ${invoiceId} AND org_id = ${orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
@@ -127,6 +128,20 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 			.where(eq(payments.stripe_payment_intent_id, paymentIntentId!))
 			.limit(1);
 		if (dup) return false;
+
+		// Overpayment guard (defense-in-depth behind single-use Payment Links): never apply a
+		// NEW, distinct payment to an invoice that is already fully settled. A reused/leaked link
+		// or a manual + online payment race could otherwise stack a second real charge and drive
+		// the balance negative. The captured funds are real, so this is surfaced loudly for a
+		// Stripe-side refund rather than silently corrupting the ledger.
+		if (existing.status === 'paid' || Number(existing.amount_due) <= 0) {
+			console.error(
+				`[stripe-webhook] Payment ${paymentIntentId} received for already-settled invoice ` +
+					`${invoiceId} (status=${existing.status}, amount_due=${existing.amount_due}). ` +
+					`NOT applied — refund this charge in Stripe.`
+			);
+			return false;
+		}
 
 		const [payment] = await tx
 			.insert(payments)

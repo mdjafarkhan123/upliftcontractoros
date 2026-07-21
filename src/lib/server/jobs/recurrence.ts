@@ -50,6 +50,15 @@ export type JobRecurrence = {
 	anytime?: boolean;
 };
 
+// The invoice-schedule recurrence (Jobber "Invoice frequency" → PERIODIC). Structurally the same
+// as a visit JobRecurrence MINUS the end condition: a periodic invoice schedule inherits the job's
+// own start/end window (Jobber shows no end picker in the billing section), so it never carries its
+// own end_type/end_on. Stored in jobs.invoice_recurrence; advisory in v1.
+export type InvoiceRecurrence = Omit<
+	JobRecurrence,
+	'end_type' | 'end_after_count' | 'end_after_unit' | 'end_on' | 'anytime'
+>;
+
 export type Visit = { start: Date; end: Date | null };
 
 const MS_DAY = 86_400_000;

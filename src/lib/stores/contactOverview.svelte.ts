@@ -16,7 +16,8 @@ export type ContactOverviewResponse = {
 		items: Array<{
 			id: string;
 			title: string;
-			status: 'scheduled' | 'in_progress';
+			// active_jobs lists only open jobs (Jobber model: active vs archived).
+			status: 'active';
 			scheduled_start: string | null;
 			is_recurring: boolean;
 			has_series_anchor: boolean;

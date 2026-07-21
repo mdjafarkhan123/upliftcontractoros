@@ -565,16 +565,17 @@ async function handleJobCreated(data: EventJobData) {
 	);
 }
 
-// One-off billing reminder. When a job marked invoice_on_close is completed, nudge the
-// contractor to bill it — unless an active invoice already exists for that job. Goes to the
-// assignee (admin/manager fallback). Idempotent per (job, member) across outbox retries.
+// Invoice-on-completion reminder. When a job billed 'on_completion' (Jobber's ON_COMPLETION
+// frequency) is completed, nudge the contractor to bill it — unless an active invoice already
+// exists for that job. Goes to the assignee (admin/manager fallback). Idempotent per (job, member)
+// across outbox retries.
 async function handleJobCompleted(data: EventJobData) {
 	if (!data.org_id) return;
 	const jobId = data.resource_id;
 
 	const [job] = await db
 		.select({
-			invoice_on_close: jobs.invoice_on_close,
+			billing_frequency: jobs.billing_frequency,
 			assigned_to: jobs.assigned_to,
 			title: jobs.title,
 			contact_id: jobs.contact_id,
@@ -584,7 +585,7 @@ async function handleJobCompleted(data: EventJobData) {
 		.innerJoin(contacts, eq(contacts.id, jobs.contact_id))
 		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, data.org_id)))
 		.limit(1);
-	if (!job || !job.invoice_on_close) return;
+	if (!job || job.billing_frequency !== 'on_completion') return;
 
 	// Already billed → no reminder. Only a *sent* invoice (sent/partially_paid/paid/
 	// overdue) counts as billed. An unsent DRAFT does NOT suppress the nudge — the

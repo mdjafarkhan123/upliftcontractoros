@@ -90,13 +90,11 @@
 
 	// ── Stat counts (KPI strip + tab badges) ─────────────────────────────────────
 	let counts = $state<JobsStatusCounts>({
-		pending: 0,
+		unscheduled: 0,
 		upcoming: 0,
 		today: 0,
-		overdue: 0,
+		late: 0,
 		action_required: 0,
-		in_progress: 0,
-		on_hold: 0,
 		completed: 0,
 		cancelled: 0
 	});

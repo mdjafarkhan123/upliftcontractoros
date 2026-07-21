@@ -30,7 +30,10 @@ export const POST: RequestHandler = async (event) => {
 		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, auth.orgId), isNull(jobs.deleted_at)))
 		.limit(1);
 	if (!job) return json({ error: 'Job not found' }, { status: 404 });
-	if (job.status !== 'completed') {
+	// Manual send: the job must be closed as complete (archived + completed_at), never cancelled.
+	// (Jobber's automatic review request fires post-payment — that automation is re-anchored to the
+	// invoice.paid event separately; this remains the deliberate, on-demand path.)
+	if (job.status !== 'archived' || !job.completed_at) {
 		return json(
 			{ error: 'Job must be completed before sending a review request.' },
 			{ status: 422 }

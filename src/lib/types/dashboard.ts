@@ -41,7 +41,8 @@ export type DashboardTodayJob = {
 	id: string;
 	title: string;
 	contact_name: string | null;
-	status: 'scheduled' | 'in_progress';
+	// Only open jobs appear here (Jobber model: active vs archived).
+	status: 'active';
 	scheduled_start: string;
 	scheduled_end: string | null;
 };

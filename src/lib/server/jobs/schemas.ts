@@ -83,33 +83,22 @@ const paymentMilestoneBase = z
 
 const paymentMilestonesSchema = z.array(paymentMilestoneBase).max(50).optional();
 
-// Cross-field validation for recurring billing. A 'fixed' billing type needs a positive
-// fixed_invoice_amount. On create, billing config only makes sense on a recurring job — which
-// is now checked against the STORED job_type, not the presence of a recurrence rule. Those are
-// not the same test: an "as needed" job is recurring with NO rule, and the old rule-based check
-// wrongly rejected billing on it. On PATCH the job is already recurring, so the check is skipped.
+// Cross-field validation for the unified billing model (Jobber billingType × billingFrequency,
+// applied to EVERY job). The only cross-field rule: a 'periodic' frequency needs an invoice
+// schedule (invoice_recurrence — Jobber's "Invoice frequency" repeat rule). billing_type/frequency
+// are otherwise free choices, exactly like Jobber — a one-off may bill per-visit, etc.
 function validateBilling(
 	val: {
-		billing_type?: 'visit_based' | 'fixed' | null;
-		fixed_invoice_amount?: number | null;
-		job_type?: 'one_off' | 'recurring';
+		billing_frequency?: 'on_completion' | 'per_visit' | 'periodic' | 'never';
+		invoice_recurrence?: unknown;
 	},
-	ctx: z.RefinementCtx,
-	opts: { requireRecurringType: boolean }
+	ctx: z.RefinementCtx
 ): void {
-	if (!val.billing_type) return;
-	if (opts.requireRecurringType && val.job_type !== 'recurring') {
+	if (val.billing_frequency === 'periodic' && !val.invoice_recurrence) {
 		ctx.addIssue({
 			code: z.ZodIssueCode.custom,
-			path: ['billing_type'],
-			message: 'Recurring billing applies to recurring jobs only'
-		});
-	}
-	if (val.billing_type === 'fixed' && !(val.fixed_invoice_amount && val.fixed_invoice_amount > 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['fixed_invoice_amount'],
-			message: 'Enter the fixed invoice amount'
+			path: ['invoice_recurrence'],
+			message: 'Choose an invoice schedule'
 		});
 	}
 }
@@ -180,22 +169,18 @@ const jobCategorySchema = z.string().trim().max(100).nullable().optional();
 // field is non-null) and rejected on update (the type is immutable — duplicate instead).
 const jobTypeSchema = z.enum(['one_off', 'recurring']);
 
-// Recurring billing (manual, S4). billing_type 'visit_based' bills past visits grouped on one
-// invoice (priced at the job's line-item total); 'fixed' bills a flat fixed_invoice_amount each
-// time. invoice_frequency is an advisory cadence (no auto-fire in v1). All null = no recurring
-// billing. Cross-field rules (fixed needs an amount; billing implies a recurring job on create)
-// are enforced per-schema below.
-const billingTypeSchema = z.enum(['visit_based', 'fixed']).nullable().optional();
-const invoiceFrequencySchema = z
-	.enum(['per_visit', 'weekly', 'biweekly', 'monthly'])
-	.nullable()
+// Unified billing model (Jobber billingType × billingFrequency) on EVERY job.
+//   billing_type — WHAT each invoice contains: 'fixed' = the job's line items; 'visit_based' =
+//     the billable work on completed/past visits. Server defaults to 'fixed' when omitted.
+//   billing_frequency — WHEN to invoice: on_completion / per_visit / periodic / never. Server
+//     defaults to 'on_completion'.
+//   invoice_frequency — the cadence when billing_frequency='periodic' (weekly/biweekly/monthly);
+//     null otherwise. Advisory in v1 (nothing auto-fires). Cross-field rule in validateBilling.
+const billingTypeSchema = z.enum(['fixed', 'visit_based']).optional();
+const billingFrequencySchema = z
+	.enum(['on_completion', 'per_visit', 'periodic', 'never'])
 	.optional();
-const fixedInvoiceAmountSchema = z.coerce
-	.number()
-	.min(0, 'Amount cannot be negative')
-	.max(9999999.99)
-	.nullable()
-	.optional();
+const invoiceFrequencySchema = z.enum(['weekly', 'biweekly', 'monthly']).nullable().optional();
 
 // Recurring-job repeat rule. Mirrors $lib/server/jobs/recurrence JobRecurrence.
 // Cross-field shape (week needs weekdays; month needs a mode + its selections;
@@ -292,6 +277,62 @@ export function validateRecurrence(
 	}
 }
 
+// The periodic-invoicing recurrence (Jobber "Invoice frequency" → PERIODIC). Reuses the visit
+// recurrence field rules MINUS the end condition — a periodic invoice schedule inherits the job's
+// window, so it carries no end_type/end_on. Stored in jobs.invoice_recurrence.
+export const invoiceRecurrenceSchema = recurrenceSchema.omit({
+	end_type: true,
+	end_after_count: true,
+	end_after_unit: true,
+	end_on: true,
+	anytime: true
+});
+
+// Validate an invoice recurrence's freq/day/month selection — the non-end half of
+// validateRecurrence (there is no end condition to check on an invoice schedule).
+export function validateInvoiceRecurrence(
+	rec: z.infer<typeof invoiceRecurrenceSchema>,
+	ctx: z.RefinementCtx
+): void {
+	if (rec.freq === 'day' || rec.freq === 'year') {
+		// interval + the anchor date is the whole rule.
+	} else if (rec.freq === 'week') {
+		if (!rec.weekdays || rec.weekdays.length === 0) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['invoice_recurrence', 'weekdays'],
+				message: 'Pick at least one weekday'
+			});
+		}
+	} else {
+		const mode = rec.month_mode;
+		if (!mode) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['invoice_recurrence', 'month_mode'],
+				message: 'Choose day of month or day of week'
+			});
+		} else if (mode === 'day_of_month') {
+			if ((!rec.month_days || rec.month_days.length === 0) && !rec.month_last_day) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['invoice_recurrence', 'month_days'],
+					message: 'Pick at least one day of the month'
+				});
+			}
+		} else {
+			const legacy = (rec.month_weeks?.length ?? 0) > 0 && (rec.month_weekdays?.length ?? 0) > 0;
+			if ((rec.month_cells?.length ?? 0) === 0 && !legacy) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['invoice_recurrence', 'month_cells'],
+					message: 'Pick at least one day in the grid'
+				});
+			}
+		}
+	}
+}
+
 export const updateJobSchema = z
 	.object({
 		assigned_to: z.string().uuid().nullable().optional(),
@@ -307,10 +348,13 @@ export const updateJobSchema = z
 		{ message: 'Scheduled end must be after start', path: ['scheduled_end'] }
 	);
 
+// Jobber model: a job is open (`active`) or closed (`archived`). The only lifecycle moves are
+// closing it — as finished (`complete`) or called off (`cancel`) — and reopening it (`reopen`,
+// Jobber's jobReopen). The close REASON is recorded by completed_at / cancelled_at, which drive the
+// job.completed / job.cancelled outbox events. The status endpoint enforces which action is legal
+// from the current state.
 export const transitionStatusSchema = z.object({
-	// 'scheduled' is settable as the resume target from 'on_hold'. The ALLOWED source→target
-	// table in the status endpoint is the real guardrail; this just bounds the input.
-	status: z.enum(['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'])
+	action: z.enum(['complete', 'cancel', 'reopen'])
 });
 
 const nullableTrimmed = (max: number) =>
@@ -389,14 +433,16 @@ export const createJobSchema = z
 		recurrence: recurrenceSchema.nullable().optional(),
 		visit_instructions: nullableTrimmed(2000),
 		line_items: z.array(jobLineItemBase).max(200).optional(),
-		// One-off billing (S3): the close-reminder flag + an optional payment schedule.
-		invoice_on_close: z.boolean().optional(),
-		payment_milestones: paymentMilestonesSchema,
-		// Recurring billing (S4): how the recurring work is invoiced. Only meaningful on a
-		// recurring job (enforced below).
+		// Billing model (Jobber billingType × billingFrequency), applied to every job. billing_type
+		// 'fixed' bills the job's line items via an optional payment schedule (milestones); any
+		// frequency + type combo is allowed (validated below).
 		billing_type: billingTypeSchema,
+		billing_frequency: billingFrequencySchema,
 		invoice_frequency: invoiceFrequencySchema,
-		fixed_invoice_amount: fixedInvoiceAmountSchema,
+		// Jobber "Invoice frequency" repeat rule — required when billing_frequency='periodic',
+		// null/omitted otherwise (see validateBilling). Independent of the visit `recurrence` above.
+		invoice_recurrence: invoiceRecurrenceSchema.nullable().optional(),
+		payment_milestones: paymentMilestonesSchema,
 		// Custom field values (S7) entered on the New Job form. The required-field gate is
 		// enforced server-side against the org's live definitions (Zod can't know them here).
 		custom_field_values: z.array(jobCustomFieldValueSchema).max(100).optional()
@@ -414,7 +460,8 @@ export const createJobSchema = z
 	.superRefine(validateJobDiscount)
 	.superRefine((d, ctx) => {
 		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
-		validateBilling(d, ctx, { requireRecurringType: true });
+		if (d.invoice_recurrence) validateInvoiceRecurrence(d.invoice_recurrence, ctx);
+		validateBilling(d, ctx);
 		validatePaymentScheduleCap(d, ctx);
 	});
 
@@ -453,15 +500,16 @@ export const updateJobLineItemsSchema = z
 		// resumes normal one-off/recurring behavior. Omitted = leave the flag untouched.
 		schedule_as_needed: z.boolean().optional(),
 		visit_instructions: nullableTrimmed(2000),
-		// One-off billing (S3). On PATCH the schedule is wipe-and-reinserted by `key`,
-		// except rows already turned into invoices (those are locked server-side).
-		invoice_on_close: z.boolean().optional(),
-		payment_milestones: paymentMilestonesSchema,
-		// Recurring billing (S4). Editable on a job; the recurring-job requirement is not
-		// re-enforced here (a job can already be recurring before this PATCH).
+		// Billing model (Jobber billingType × billingFrequency). Editable on any job. The payment
+		// schedule is wipe-and-reinserted by `key`, except rows already turned into invoices (those
+		// are locked server-side).
 		billing_type: billingTypeSchema,
+		billing_frequency: billingFrequencySchema,
 		invoice_frequency: invoiceFrequencySchema,
-		fixed_invoice_amount: fixedInvoiceAmountSchema
+		// Jobber "Invoice frequency" repeat rule (see createJobSchema). Cleared server-side when
+		// billing_frequency ≠ 'periodic'.
+		invoice_recurrence: invoiceRecurrenceSchema.nullable().optional(),
+		payment_milestones: paymentMilestonesSchema
 	})
 	.refine(
 		(d) =>
@@ -476,7 +524,8 @@ export const updateJobLineItemsSchema = z
 	.superRefine(validateJobDiscount)
 	.superRefine((d, ctx) => {
 		if (d.recurrence) validateRecurrence(d.recurrence, ctx);
-		validateBilling(d, ctx, { requireRecurringType: false });
+		if (d.invoice_recurrence) validateInvoiceRecurrence(d.invoice_recurrence, ctx);
+		validateBilling(d, ctx);
 		validatePaymentScheduleCap(d, ctx);
 	});
 

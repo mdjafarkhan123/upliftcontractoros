@@ -578,13 +578,6 @@
 		}
 	}
 
-	// "Or" separator inside the Repeats dropdown, above "Custom schedule…" (ref job-new/4).
-	.repeat-or {
-		padding: $space-2 $space-3 $space-1;
-		color: var(--color-text-muted);
-		font-size: $fs-body;
-	}
-
 	.recur-note {
 		display: flex;
 		gap: $space-2;

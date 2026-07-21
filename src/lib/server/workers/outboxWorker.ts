@@ -139,7 +139,7 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			return [{ queue: 'automation', jobName: 'invoice_dispatch' }];
 		case 'job.completed':
 			// Customer review request + (conditionally, inside the handler) the contractor's
-			// "remind me to invoice" nudge when the job has invoice_on_close set.
+			// "remind me to invoice" nudge when the job is billed on_completion.
 			return [
 				{ queue: 'automation', jobName: 'review.send' },
 				{ queue: 'notification', jobName: 'job.completed' }

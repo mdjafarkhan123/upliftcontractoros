@@ -8,11 +8,15 @@
 	let {
 		jobId,
 		jobStatus,
+		completedAt = null,
 		status,
 		onSent
 	}: {
 		jobId: string;
 		jobStatus: JobStatus;
+		// Set when the job was closed as complete (archived + completed_at). A cancelled job is also
+		// archived but has no completed_at — it must never offer a review request.
+		completedAt?: string | null;
 		status: ReviewRequestStatus | null;
 		onSent?: (next: ReviewRequestStatus) => void;
 	} = $props();
@@ -46,7 +50,8 @@
 
 	const canTrigger = $derived(
 		canSend &&
-			jobStatus === 'completed' &&
+			jobStatus === 'archived' &&
+			!!completedAt &&
 			(status === null || status === 'failed' || status === 'no_response')
 	);
 

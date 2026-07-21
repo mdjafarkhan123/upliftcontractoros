@@ -71,7 +71,7 @@ export const POST: RequestHandler = async (event) => {
 				contact_id: source.contact_id,
 				title: `${source.title} (Copy)`,
 				// 'scheduled' enum + null start = the derived "Pending" (unscheduled) state.
-				status: 'scheduled',
+				status: 'active',
 				assigned_to: source.assigned_to,
 				// The copy keeps the source's type unless the caller deliberately switches it.
 				job_type: jobTypeOverride ?? source.job_type,
@@ -89,11 +89,10 @@ export const POST: RequestHandler = async (event) => {
 				service_address_line_2: source.service_address_line_2,
 				service_address_city: source.service_address_city,
 				service_address_state: source.service_address_state,
-				service_address_zip: source.service_address_zip,
-				invoice_on_close: source.invoice_on_close
+				service_address_zip: source.service_address_zip
 				// Deliberately NOT copied (defaults apply): scheduled_start/end, recurrence,
-				// billing_type, invoice_frequency, fixed_invoice_amount, completed_at,
-				// cancelled_at. The copy is a clean unscheduled job.
+				// billing_type, billing_frequency, invoice_frequency, completed_at, cancelled_at.
+				// The copy is a clean unscheduled job billed fixed/on-completion by default.
 			})
 			.returning();
 

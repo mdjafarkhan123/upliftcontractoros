@@ -1,0 +1,178 @@
+// =============================================================================
+// CONTRACTOR CRM — DESIGN SYSTEM THEME
+// =============================================================================
+// MIRRORS the runtime CSS custom properties in `src/lib/styles/_tokens.scss`.
+// These are the tokens components ACTUALLY paint with: var(--color-*),
+// var(--text-*), var(--shadow-*), etc. Light mode on :root; dark mode via the
+// dark-theme-tokens mixin, applied through prefers-color-scheme (no explicit
+// choice) and [data-theme="dark"] (explicit in-app toggle).
+//
+// Keep in sync with `_tokens.scss` (feedback-sync-tokens-to-skill rule).
+// =============================================================================
+@use 'variables' as v;
+
+:root {
+  // ── Brand ──
+  --color-brand:        #{v.$brand-primary};
+  --color-brand-strong: #{v.$brand-deep};
+  --color-brand-glow:   #{v.$brand-light};
+  --color-focus-ring:   rgba(34, 125, 83, 0.35);
+
+  // ── Surfaces ──
+  --color-bg-app:          #{v.$slate-50};
+  --color-bg-surface:      #{v.$slate-0};
+  --color-bg-surface-sunk: #{v.$slate-100};
+  --color-border:          #{v.$slate-200};
+  --color-border-strong:   #{v.$slate-300};
+
+  // ── Text ──
+  --color-text-primary:   #{v.$slate-900};
+  --color-text-secondary: #{v.$slate-600};
+  --color-text-muted:     #{v.$slate-400};
+  --color-text-on-brand:  #{v.$slate-0};
+
+  // ── Status ──
+  --success-bg:    #{v.$green-100};
+  --success-text:  #{v.$green-800};
+  --success-solid: #{v.$green-600};
+  --warning-bg:    #fef3e2;
+  --warning-text:  #92400e;
+  --warning-solid: #f59e0b;
+  --danger-bg:     #fde8e8;
+  --danger-text:   #b42318;
+  --danger-solid:  #e11d48;
+  --info-bg:       #e0eaff;
+  --info-text:     #3538cd;
+  --info-solid:    #3b82f6;
+  // Calendar "now" accent — indigo, deliberately OFF the brand-green/danger-red
+  // axis so the current-time line + gutter pill read as a neutral time marker.
+  --cal-now-solid: #4f46e5;
+
+  // ── Component-specific ──
+  --surface-hero-from:   #{v.$brand-deep};
+  --surface-hero-to:     #{v.$green-900};
+  --state-active-tint:   #{v.$green-50};
+  --avatar-fallback-bg:  #{v.$green-100};
+  --avatar-fallback-text: #{v.$green-800};
+
+  // Brand tints for overlays (drag ghost, selected bands) — theme-aware.
+  --brand-tint-strong: rgba(34, 125, 83, 0.2);
+  --brand-tint-solid:  rgba(34, 125, 83, 0.28);
+  --brand-glow-soft:   rgba(34, 125, 83, 0.18);
+
+  // ── Shadows — tinted dark-green rather than pure black for warmth ──
+  --shadow-xs:    0 1px 2px rgba(13, 21, 15, 0.04);
+  --shadow-sm:    0 2px 6px rgba(13, 21, 15, 0.05);
+  --shadow-md:    0 8px 20px rgba(13, 21, 15, 0.06);
+  --shadow-lg:    0 16px 40px rgba(13, 21, 15, 0.07);
+  --shadow-xl:    0 24px 56px rgba(13, 21, 15, 0.09);
+  --shadow-glow:  0 20px 48px rgba(19, 69, 45, 0.35), 0 0 0 1px rgba(23, 247, 0, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(34, 125, 83, 0.35);
+
+  // ── Radius / font as runtime vars (for use outside compiled Sass) ──
+  --radius-sm:   #{v.$radius-sm};
+  --radius-md:   #{v.$radius-md};
+  --radius-lg:   #{v.$radius-lg};
+  --radius-xl:   #{v.$radius-xl};
+  --radius-2xl:  #{v.$radius-2xl};
+  --radius-full: #{v.$radius-full};
+  --font-display: #{v.$font-display};
+  --font-body:    #{v.$font-body};
+
+  // ── Semantic type scale — runtime mirror of $fs-*/$lh-* ──
+  --text-caption: #{v.$fs-caption};
+  --text-body:    #{v.$fs-body};
+  --text-lg:      #{v.$fs-lg};
+  --text-h3:      #{v.$fs-h3};
+  --text-h2:      #{v.$fs-h2};
+  --text-h1:      #{v.$fs-h1};
+  --text-display: #{v.$fs-display};
+
+  --leading-caption: #{v.$lh-caption};
+  --leading-body:    #{v.$lh-body};
+  --leading-lg:      #{v.$lh-lg};
+  --leading-h3:      #{v.$lh-h3};
+  --leading-h2:      #{v.$lh-h2};
+  --leading-h1:      #{v.$lh-h1};
+  --leading-display: #{v.$lh-display};
+
+  --weight-regular:   #{v.$weight-regular};
+  --weight-medium:    #{v.$weight-medium};
+  --weight-semibold:  #{v.$weight-semibold};
+  --weight-bold:      #{v.$weight-bold};
+  --weight-extrabold: #{v.$weight-extrabold};
+
+  // ── Layout ──
+  --sidebar-width:     280px;
+  --header-height:     56px;
+  --bottom-nav-height: 64px;
+}
+
+// ─── DARK MODE — NOT a naive inversion ──────────────────────────────────────
+// Brand greens brighten 1–2 ramp steps so they don't go muddy on near-black.
+// Borders become translucent white. Shadow-glow gets MORE prominent. Status
+// badges flip contrast direction (dark tint + bright text).
+@mixin dark-theme-tokens {
+  --color-brand:        #{v.$green-500};
+  --color-brand-strong: #{v.$green-600};
+  --color-brand-glow:   #{v.$brand-light};
+  --color-focus-ring:   rgba(48, 176, 112, 0.45);
+
+  --color-bg-app:          #{v.$slate-950};
+  --color-bg-surface:      #{v.$slate-900};
+  --color-bg-surface-sunk: #{v.$slate-1000};
+  --color-border:          rgba(255, 255, 255, 0.08);
+  --color-border-strong:   rgba(255, 255, 255, 0.14);
+
+  --color-text-primary:   #{v.$slate-50};
+  --color-text-secondary: #{v.$slate-300};
+  --color-text-muted:     #{v.$slate-400};
+  --color-text-on-brand:  #{v.$slate-0};
+
+  --success-bg:    rgba(79, 207, 143, 0.14);
+  --success-text:  #{v.$green-400};
+  --success-solid: #{v.$green-500};
+  --warning-bg:    rgba(245, 158, 11, 0.16);
+  --warning-text:  #fcd34d;
+  --warning-solid: #f59e0b;
+  --danger-bg:     rgba(225, 29, 72, 0.16);
+  --danger-text:   #fca5a5;
+  --danger-solid:  #f43f5e;
+  --info-bg:       rgba(59, 130, 246, 0.16);
+  --info-text:     #93c5fd;
+  --info-solid:    #3b82f6;
+  // Lighter indigo on dark so it holds contrast against the dark grid.
+  --cal-now-solid: #6366f1;
+
+  --surface-hero-from:    #{v.$green-700};
+  --surface-hero-to:      #{v.$green-950};
+  --state-active-tint:    rgba(48, 176, 112, 0.14);
+  --avatar-fallback-bg:   rgba(79, 207, 143, 0.18);
+  --avatar-fallback-text: #{v.$green-300};
+
+  --brand-tint-strong: rgba(48, 176, 112, 0.22);
+  --brand-tint-solid:  rgba(48, 176, 112, 0.3);
+  --brand-glow-soft:   rgba(48, 176, 112, 0.22);
+
+  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm:   0 2px 6px rgba(0, 0, 0, 0.45);
+  --shadow-md:   0 8px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg:   0 16px 40px rgba(0, 0, 0, 0.55);
+  --shadow-xl:   0 24px 56px rgba(0, 0, 0, 0.6);
+  --shadow-glow:
+    0 20px 56px rgba(23, 247, 0, 0.2), 0 0 0 1px rgba(23, 247, 0, 0.14),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+  --shadow-focus: 0 0 0 3px rgba(48, 176, 112, 0.45);
+}
+
+// OS dark mode (no explicit user choice yet)
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include dark-theme-tokens;
+  }
+}
+
+// Explicit user choice via in-app toggle
+:root[data-theme='dark'] {
+  @include dark-theme-tokens;
+}

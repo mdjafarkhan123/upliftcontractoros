@@ -1,0 +1,175 @@
+// =============================================================================
+// CONTRACTOR CRM — DESIGN SYSTEM VARIABLES
+// =============================================================================
+// Raw design values. These are COMPILE-TIME constants.
+// NEVER use these directly for colors in component SCSS.
+// They flow into _theme.scss which outputs var(--token-name) CSS custom properties.
+// Components always use: var(--token-name) for colors.
+// Components may use $variable directly for: spacing, radii, shadow strings, breakpoints.
+// =============================================================================
+
+// ─── BRAND PALETTE ──────────────────────────────────────────────────────────
+$brand-primary:    #227d53 !default;   // Primary green — buttons, active states, links
+$brand-light:      #5fbd92 !default;   // Light green — brand dark-mode, accents
+$brand-deep:       #13452d !default;   // Deep forest — dark hover states
+
+// Extended green scale (used to derive all brand tokens)
+$green-50:   #eaf7f0 !default;
+$green-100:  #cff0e1 !default;
+$green-200:  #a5e0c9 !default;
+$green-300:  #72c9a8 !default;
+$green-400:  #5fbd92 !default;  // ≡ brand-light
+$green-500:  #3da873 !default;
+$green-600:  #227d53 !default;  // ≡ brand-primary
+$green-700:  #1a6343 !default;
+$green-800:  #13452d !default;  // ≡ brand-deep
+$green-900:  #0d2f1e !default;
+$green-950:  #071a11 !default;
+
+// ─── NEUTRAL GRAYS ──────────────────────────────────────────────────────────
+$white: #ffffff !default;
+$black: #000000 !default;
+
+$gray-50:  #F9FAFB !default;
+$gray-100: #F3F4F6 !default;
+$gray-200: #E5E7EB !default;
+$gray-300: #D1D5DB !default;
+$gray-400: #9CA3AF !default;
+$gray-500: #6B7280 !default;
+$gray-600: #4B5563 !default;
+$gray-700: #374151 !default;
+$gray-800: #1F2937 !default;
+$gray-900: #111827 !default;
+
+// ─── STATUS — SUCCESS (distinct green from brand) ────────────────────────────
+$green-s-50:  #f0fdf4 !default;
+$green-s-100: #dcfce7 !default;
+$green-s-500: #16a34a !default;
+$green-s-600: #15803d !default;
+$green-s-700: #166534 !default;
+$green-s-900: #14532d !default;
+
+// ─── STATUS — DANGER ────────────────────────────────────────────────────────
+$red-50:  #fef2f2 !default;
+$red-100: #fee2e2 !default;
+$red-200: #fecaca !default;
+$red-500: #ef4444 !default;
+$red-600: #dc2626 !default;
+$red-700: #b91c1c !default;
+$red-800: #991b1b !default;
+$red-900: #7f1d1d !default;
+
+// ─── STATUS — WARNING ───────────────────────────────────────────────────────
+$amber-50:  #fffbeb !default;
+$amber-100: #fef3c7 !default;
+$amber-200: #fde68a !default;
+$amber-300: #fcd34d !default;
+$amber-500: #f59e0b !default;
+$amber-600: #d97706 !default;
+$amber-700: #b45309 !default;
+$amber-900: #78350f !default;
+
+// ─── STATUS — INFO ──────────────────────────────────────────────────────────
+$blue-50:  #eff6ff !default;
+$blue-100: #dbeafe !default;
+$blue-200: #bfdbfe !default;
+$blue-400: #60a5fa !default;
+$blue-500: #3b82f6 !default;
+$blue-700: #1d4ed8 !default;
+$blue-900: #172554 !default;
+
+// ─── DARK MODE BASE SURFACES (green-tinted dark backgrounds) ────────────────
+$dark-base:      #0b1810 !default;   // Deepest background
+$dark-surface:   #0f1f15 !default;   // Page/app background
+$dark-raised:    #112118 !default;   // Card surface
+$dark-overlay:   #162d20 !default;   // Elevated panels, sidebars
+$dark-elevated:  #1a3326 !default;   // Dropdowns, tooltips, modals
+
+$dark-border-base:   #1f3d2c !default;
+$dark-border-medium: #2a4f38 !default;
+$dark-border-strong: #3d6650 !default;
+
+// ─── TYPOGRAPHY ─────────────────────────────────────────────────────────────
+$font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !default;
+$font-family-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, 'Courier New', monospace !default;
+
+$font-size-xs:    12px !default;
+$font-size-sm:    14px !default;
+$font-size-base:  16px !default;
+$font-size-lg:    20px !default;
+$font-size-xl:    24px !default;
+$font-size-2xl:   30px !default;
+$font-size-3xl:   36px !default;
+$font-size-4xl:   44px !default;
+$font-size-5xl:   60px !default;
+
+$font-weight-normal:    400 !default;
+$font-weight-medium:    500 !default;
+$font-weight-semibold:  600 !default;
+$font-weight-bold:      700 !default;
+
+$line-height-none:    1.0 !default;
+$line-height-tight:   1.15 !default;
+$line-height-snug:    1.25 !default;
+$line-height-normal:  1.5 !default;
+$line-height-relaxed: 1.625 !default;
+$line-height-loose:   1.7 !default;
+
+// ─── SPACING ────────────────────────────────────────────────────────────────
+// All spacing is on an 8px grid
+$space-1:  4px  !default;   // micro gaps
+$space-2:  8px  !default;   // tight: icon margins, small gaps
+$space-3:  12px !default;   // compact: nav item gaps, badge padding
+$space-4:  16px !default;   // base: form gaps, card padding compact
+$space-5:  20px !default;   // standard card padding
+$space-6:  24px !default;   // section header margin, grid gap
+$space-8:  32px !default;   // mobile section padding
+$space-10: 40px !default;
+$space-12: 48px !default;   // section header bottom margin
+$space-16: 64px !default;   // desktop padding
+$space-24: 96px !default;   // section vertical padding
+
+// ─── BORDER RADIUS ──────────────────────────────────────────────────────────
+$radius-sm:   4px    !default;   // Checkboxes, tiny indicators
+$radius-base: 8px    !default;   // Buttons, cards, inputs, dropdowns, modals
+$radius-lg:   12px   !default;   // Large panels, hero sections
+$radius-full: 9999px !default;   // Pills, avatars, toggles, status badges
+
+// ─── SHADOWS ────────────────────────────────────────────────────────────────
+$shadow-2xs: 0 1px rgb(0 0 0 / 0.05) !default;
+$shadow-xs:  0 1px 2px 0 rgb(0 0 0 / 0.05) !default;
+$shadow-sm:  0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10) !default;
+$shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.10) !default;
+$shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.10) !default;
+$shadow-xl:  0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.10) !default;
+$shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25) !default;
+
+// ─── LAYOUT ─────────────────────────────────────────────────────────────────
+$container-max-width:   1280px !default;
+$container-padding:     24px   !default;
+$sidebar-width:         260px  !default;
+$sidebar-collapsed:     64px   !default;
+$topbar-height:         64px   !default;
+
+// ─── BREAKPOINTS ────────────────────────────────────────────────────────────
+$breakpoint-sm:  640px  !default;
+$breakpoint-md:  768px  !default;
+$breakpoint-lg:  1024px !default;
+$breakpoint-xl:  1280px !default;
+$breakpoint-2xl: 1536px !default;
+
+// ─── Z-INDEX SCALE ──────────────────────────────────────────────────────────
+$z-sidebar:  20 !default;
+$z-sticky:   30 !default;
+$z-dropdown: 40 !default;
+$z-overlay:  50 !default;
+$z-modal:    60 !default;
+$z-toast:    70 !default;
+$z-tooltip:  80 !default;
+
+// ─── TRANSITION DURATIONS ───────────────────────────────────────────────────
+$duration-fast:    100ms !default;
+$duration-base:    150ms !default;
+$duration-normal:  200ms !default;
+$duration-slow:    300ms !default;
+$duration-sidebar: 250ms !default;

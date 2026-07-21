@@ -40,6 +40,8 @@
 		assignees = [],
 		canEditAssignee = false,
 		density = 'comfortable',
+		columnMode = 'week',
+		columnMembers = [],
 		onCreated
 	}: {
 		anchor: Date;
@@ -57,6 +59,12 @@
 		// Time-grid zoom: compact / comfortable / spacious (see DENSITY_HOUR_HEIGHT).
 		// Drives row height + card content thresholds.
 		density?: CalendarDensity;
+		// Column axis mode. 'week' (default) = 7 date columns. 'day' = one column per
+		// team member on `anchor`'s single day (Jobber dispatch grid) — dragging a card
+		// into another member's column reassigns the visit's crew.
+		columnMode?: 'week' | 'day';
+		// Day-view team members, in display order (one column each). Ignored in week mode.
+		columnMembers?: { id: string; name: string }[];
 		// Fired after an inline quick-create so the page can revalidate the window.
 		onCreated?: () => void;
 	} = $props();
@@ -108,6 +116,11 @@
 	const DEFAULT_DURATION_MIN = 60;
 	const SNAP_MINUTES = 15;
 	const weekdayFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
+	// Day-view single-day title, e.g. "Tue 21" (Jobber's day header).
+	const dayTitleFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric' });
+
+	// member id → display name, for day-view column headers + reassign labels.
+	const memberNameById = $derived(new Map(columnMembers.map((m) => [m.id, m.name])));
 
 	// Extract { hour, minute } in the org's timezone so an event scheduled at 9am
 	// org-time renders at the 9am grid line regardless of the user's browser tz.
@@ -164,13 +177,25 @@
 		cols: number;
 	};
 
-	type DayLane = {
-		date: Date;
+	// The grid reasons about COLUMNS, never "days" directly, so the week view (7 date
+	// columns) and the day view (one column per team member on a single day) share one
+	// drag/reschedule engine. A column carries the calendar day it represents plus an
+	// optional crew scope:
+	//   • memberId === null  → not crew-scoped (week view): a block belongs to the column
+	//     purely by matching the day.
+	//   • memberId === a member id (or UNASSIGNED_COL) → crew-scoped (day view): a block
+	//     also has to belong to that member, and a cross-column drop REASSIGNS it.
+	type GridColumn = {
 		key: string;
+		date: Date;
+		memberId: string | null;
 		laidOut: LaidOut[];
-		// "Anytime"/all-day items for this day — rendered in the top lane, not a time row.
+		// "Anytime"/all-day items for this column — rendered in the top lane, not a time row.
 		anytime: CalBlock[];
 	};
+
+	// Sentinel memberId for the "Unassigned" day-view column (visits with no crew).
+	const UNASSIGNED_COL = '__unassigned__';
 
 	// Packs a day's blocks into side-by-side columns. Overlap is judged on
 	// `paintEndMin` (the drawn box), not the real end, so a card inflated to the
@@ -218,14 +243,70 @@
 		return assigned;
 	}
 
-	// Which anchor-relative day-bucket key an instant falls into (org tz). Null if outside the week.
-	function matchDayKey(d: Date): string | null {
-		const tzKey = tzDateKey(d, orgTz);
-		for (let i = 0; i < 7; i++) {
-			const day = addDays(anchor, i);
-			if (tzDateKey(day, orgTz) === tzKey) return dayKey(day);
+	// The ordered column axis, with a precomputed org-tz date key per column for fast
+	// bucketing. Week view (current + default): 7 day columns, no crew scope. The day
+	// view will feed member columns here in a later step — the rest of the engine is
+	// already column-based, so only this list changes.
+	const columnDefs = $derived.by<{ key: string; date: Date; memberId: string | null; tzKey: string }[]>(
+		() => {
+			const out: { key: string; date: Date; memberId: string | null; tzKey: string }[] = [];
+
+			// Day view: one crew-scoped column per team member on `anchor`'s single day.
+			// An extra "Unassigned" column appears only when a visible visit/event that day
+			// has no crew (so unassigned work is never invisible), and always as a fallback
+			// when there are no members to show at all.
+			if (columnMode === 'day') {
+				const d = anchor;
+				const tzKey = tzDateKey(d, orgTz);
+				let hasUnassigned = false;
+				for (const it of items) {
+					if (it.assigned_to === null && tzDateKey(new Date(it.scheduled_start), orgTz) === tzKey) {
+						hasUnassigned = true;
+						break;
+					}
+				}
+				if (!hasUnassigned) {
+					for (const ev of events) {
+						if (
+							ev.assigned_to === null &&
+							ev.start_at &&
+							tzDateKey(new Date(ev.start_at), orgTz) === tzKey
+						) {
+							hasUnassigned = true;
+							break;
+						}
+					}
+				}
+				for (const m of columnMembers) {
+					out.push({ key: `m:${m.id}`, date: d, memberId: m.id, tzKey });
+				}
+				if (hasUnassigned || columnMembers.length === 0) {
+					out.push({ key: `m:${UNASSIGNED_COL}`, date: d, memberId: UNASSIGNED_COL, tzKey });
+				}
+				return out;
+			}
+
+			// Week view (default): 7 date columns, no crew scope.
+			for (let i = 0; i < 7; i++) {
+				const d = addDays(anchor, i);
+				out.push({ key: dayKey(d), date: d, memberId: null, tzKey: tzDateKey(d, orgTz) });
+			}
+			return out;
 		}
-		return null;
+	);
+
+	// Does a block belong in this column? The day must match always; the crew must
+	// match only when the column is crew-scoped (day view). A null-crew column (week)
+	// accepts any assignee, so the day match alone decides.
+	function columnAccepts(
+		col: { memberId: string | null; tzKey: string },
+		itemTzKey: string,
+		itemAssignedTo: string | null
+	): boolean {
+		if (col.tzKey !== itemTzKey) return false;
+		if (col.memberId === null) return true;
+		if (col.memberId === UNASSIGNED_COL) return itemAssignedTo === null;
+		return col.memberId === itemAssignedTo;
 	}
 
 	// Timed start/end minute-of-day for a block, expanding a missing/invalid end to a
@@ -248,63 +329,58 @@
 		return { startMin, endMin };
 	}
 
-	const days = $derived.by<DayLane[]>(() => {
-		const buckets = new Map<
-			string,
-			{ block: CalBlock; startMin: number; endMin: number; paintEndMin: number }[]
-		>();
-		const anytimeBuckets = new Map<string, CalBlock[]>();
-		for (let i = 0; i < 7; i++) {
-			const k = dayKey(addDays(anchor, i));
-			buckets.set(k, []);
-			anytimeBuckets.set(k, []);
-		}
+	const columns = $derived.by<GridColumn[]>(() => {
+		const defs = columnDefs;
+		// Bucket by column INDEX (not a day-key string): in day view several columns share
+		// the same day, so the member dimension is what tells them apart.
+		const timed: { block: CalBlock; startMin: number; endMin: number; paintEndMin: number }[][] =
+			defs.map(() => []);
+		const anytime: CalBlock[][] = defs.map(() => []);
+
 		for (const item of items) {
-			const matchedKey = matchDayKey(new Date(item.scheduled_start));
-			if (!matchedKey) continue;
+			const itemTzKey = tzDateKey(new Date(item.scheduled_start), orgTz);
+			const ci = defs.findIndex((c) => columnAccepts(c, itemTzKey, item.assigned_to));
+			if (ci < 0) continue;
 
 			// "Anytime" visits have no clock time — they live in the top lane, not a time row.
 			if (item.all_day) {
-				anytimeBuckets.get(matchedKey)?.push({ kind: 'appt', appt: item });
+				anytime[ci].push({ kind: 'appt', appt: item });
 				continue;
 			}
 			const { startMin, endMin } = timedMinutes(item.scheduled_start, item.scheduled_end);
-			buckets.get(matchedKey)?.push({
+			timed[ci].push({
 				block: { kind: 'appt', appt: item },
 				startMin,
 				endMin,
 				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
 			});
 		}
-		// Events share the grid: all-day → anytime lane, timed → a neutral block.
+		// Events share the grid: all-day → anytime lane, timed → a neutral block. In day
+		// view they land in their own assignee's column (same crew match as visits).
 		for (const ev of events) {
 			if (!ev.start_at) continue; // unscheduled event — not on the grid
-			const matchedKey = matchDayKey(new Date(ev.start_at));
-			if (!matchedKey) continue;
+			const evTzKey = tzDateKey(new Date(ev.start_at), orgTz);
+			const ci = defs.findIndex((c) => columnAccepts(c, evTzKey, ev.assigned_to));
+			if (ci < 0) continue;
 			if (ev.all_day) {
-				anytimeBuckets.get(matchedKey)?.push({ kind: 'event', event: ev });
+				anytime[ci].push({ kind: 'event', event: ev });
 				continue;
 			}
 			const { startMin, endMin } = timedMinutes(ev.start_at, ev.end_at);
-			buckets.get(matchedKey)?.push({
+			timed[ci].push({
 				block: { kind: 'event', event: ev },
 				startMin,
 				endMin,
 				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
 			});
 		}
-		const out: DayLane[] = [];
-		for (let i = 0; i < 7; i++) {
-			const d = addDays(anchor, i);
-			const k = dayKey(d);
-			out.push({
-				date: d,
-				key: k,
-				laidOut: layoutDay(buckets.get(k) ?? []),
-				anytime: anytimeBuckets.get(k) ?? []
-			});
-		}
-		return out;
+		return defs.map((c, i) => ({
+			key: c.key,
+			date: c.date,
+			memberId: c.memberId,
+			laidOut: layoutDay(timed[i]),
+			anytime: anytime[i]
+		}));
 	});
 
 	// The grid always renders the full 24 hours (Jobber / Google Calendar): hours
@@ -370,7 +446,7 @@
 	const nowVisible = $derived(nowMin >= range.startMin && nowMin <= range.endMin);
 	// The current time as a gutter pill (e.g. "9:30 AM"), shown only when the visible
 	// week actually contains today — otherwise "now" has no row to sit on.
-	const weekHasToday = $derived(days.some((d) => isSameDay(d.date, today)));
+	const gridHasToday = $derived(columns.some((c) => isSameDay(c.date, today)));
 	const nowLabel = $derived(formatTimeInOrgTz(now, orgTz));
 
 	// ── Coordinate / time helpers ───────────────────────────────────────────
@@ -382,6 +458,9 @@
 	// caption under both).
 	let headH = $state(0);
 	let anytimeH = $state(0);
+	// Day view only: measured height of the "Tue 21" title bar, so the sticky member
+	// header + Anytime lane pin directly beneath it. 0 (and unrendered) in week view.
+	let titleH = $state(0);
 	// The pinned "Anytime" lane, used to hit-test whether a drag is over it
 	// (Google Calendar / Jobber all-day row). Drop here → visit becomes untimed.
 	let anytimeEl = $state<HTMLDivElement | null>(null);
@@ -569,12 +648,19 @@
 	// A committed-optimistically reschedule awaiting confirmation. The move is already
 	// applied to the UI; the confirm popup decides whether to keep it. Visits (`appt`)
 	// then offer a client-notify step; Events (`event`) just save (no customer).
+	// A crew reassignment staged alongside a move (day view only). `undefined` = no
+	// crew change (week view, or dropped back on the same member); a member id assigns
+	// that person as sole crew; `null` unassigns (dropped on the Unassigned column).
+	// `name` is the display label for the confirm dialog (null when unassigning).
+	type Reassign = { to: string | null; name: string | null } | undefined;
+
 	type ApptMove = {
 		kind: 'appt';
 		item: AppointmentListItem;
 		startIso: string;
 		endIso: string | null;
 		allDay: boolean;
+		reassign: Reassign;
 		prev: ReturnType<typeof appointmentsStore.optimisticUpdate>;
 		datetimeLabel: string;
 	};
@@ -584,6 +670,7 @@
 		startIso: string;
 		endIso: string | null;
 		allDay: boolean;
+		reassign: Reassign;
 		prev: ReturnType<typeof eventsStore.optimisticUpdate>;
 		datetimeLabel: string;
 	};
@@ -618,6 +705,14 @@
 
 	function firstName(full: string): string {
 		return full.trim().split(/\s+/)[0] || full;
+	}
+
+	// Day-view reassignment clause for the confirm dialog (empty in week view / no crew change).
+	function reassignSuffix(m: PendingMove): string {
+		if (!m.reassign) return '';
+		return m.reassign.to
+			? ` and reassign to ${m.reassign.name ?? 'this member'}`
+			: ' and unassign the crew';
 	}
 
 	// Fill the reschedule preview tokens with this appointment's real values. The
@@ -691,7 +786,7 @@
 		// (Anytime visits now render as `.cal-week__event--anytime`; Events stay chips.)
 		if ((e.target as HTMLElement).closest('.cal-week__event--anytime, .cal-week__anytime-chip'))
 			return;
-		const date = days[colIndex]?.date;
+		const date = columns[colIndex]?.date;
 		if (!date) return;
 		// Browser-local noon — the /new form reinterprets the date part (matches create).
 		const start = new Date(date);
@@ -884,7 +979,7 @@
 		if (!d) return;
 
 		if (d.mode === 'create') {
-			const date = days[d.colIndex]?.date;
+			const date = columns[d.colIndex]?.date;
 			if (!date) return;
 			const startMin = d.ghostStartMin;
 			const endMin = d.moved ? d.ghostEndMin : startMin + DEFAULT_DURATION_MIN;
@@ -927,10 +1022,21 @@
 	// On drop: apply the move instantly (optimistic) so the card follows the cursor,
 	// then open the confirmation popup (step 1). Cancel snaps the card back; Save
 	// persists the move (spinner) and hands off to the notify popup (step 2).
+	// Day view only: does dropping in this column change the block's crew? Returns
+	// undefined when the column isn't crew-scoped (week) or the crew is unchanged, else
+	// the new crew ({to, name}) — `to:null` means the Unassigned column (drop to unassign).
+	function reassignForColumn(colIndex: number, currentAssignedTo: string | null): Reassign {
+		const col = columns[colIndex];
+		if (!col || col.memberId === null) return undefined; // week view — no crew scope
+		const to = col.memberId === UNASSIGNED_COL ? null : col.memberId;
+		if (to === currentAssignedTo) return undefined; // dropped back on the same member
+		return { to, name: to ? (memberNameById.get(to) ?? null) : null };
+	}
+
 	function applyReschedule(d: DragState, zone: 'grid' | 'anytime') {
 		const item = d.item;
 		if (!item) return;
-		const date = days[d.colIndex]?.date;
+		const date = columns[d.colIndex]?.date;
 		if (!date) return;
 
 		let startIso: string;
@@ -948,8 +1054,13 @@
 			allDay = false;
 		}
 
-		// No-op guard: same start, same end, same timed/untimed nature → nothing to do.
+		const reassign = reassignForColumn(d.colIndex, item.assigned_to);
+
+		// No-op guard: same start, same end, same timed/untimed nature, and no crew change
+		// → nothing to do. (A pure cross-column drop keeps the same time but reassigns, so
+		// the crew check must be part of the guard or it would swallow a reassignment.)
 		if (
+			!reassign &&
 			startIso === item.scheduled_start &&
 			(endIso ?? null) === (item.scheduled_end ?? null) &&
 			allDay === item.all_day
@@ -959,7 +1070,9 @@
 		const prev = appointmentsStore.optimisticUpdate(item.id, {
 			scheduled_start: startIso,
 			scheduled_end: endIso,
-			all_day: allDay
+			all_day: allDay,
+			// Reassign optimistically so the card jumps to the new member's column at once.
+			...(reassign ? { assigned_to: reassign.to, assignee_name: reassign.name, assignee_count: reassign.to ? 1 : 0 } : {})
 		});
 
 		// Stage the move and ask for confirmation before touching the server.
@@ -970,6 +1083,7 @@
 			startIso,
 			endIso,
 			allDay,
+			reassign,
 			prev,
 			datetimeLabel: formatDateTimeInOrgTz(startIso, allDay)
 		};
@@ -982,7 +1096,7 @@
 	function applyEventReschedule(d: DragState, zone: 'grid' | 'anytime') {
 		const ev = d.eventItem;
 		if (!ev) return;
-		const date = days[d.colIndex]?.date;
+		const date = columns[d.colIndex]?.date;
 		if (!date) return;
 
 		let startIso: string;
@@ -1000,8 +1114,11 @@
 			allDay = false;
 		}
 
-		// No-op guard: same start, same end, same timed/untimed nature → nothing to do.
+		const reassign = reassignForColumn(d.colIndex, ev.assigned_to);
+
+		// No-op guard: same start, same end, same timed/untimed nature, and no crew change.
 		if (
+			!reassign &&
 			startIso === ev.start_at &&
 			(endIso ?? null) === (ev.end_at ?? null) &&
 			allDay === ev.all_day
@@ -1011,7 +1128,8 @@
 		const prev = eventsStore.optimisticUpdate(ev.id, {
 			start_at: startIso,
 			end_at: endIso,
-			all_day: allDay
+			all_day: allDay,
+			...(reassign ? { assigned_to: reassign.to, assignee_name: reassign.name, assignee_count: reassign.to ? 1 : 0 } : {})
 		});
 
 		rescheduleDecided = false;
@@ -1021,6 +1139,7 @@
 			startIso,
 			endIso,
 			allDay,
+			reassign,
 			prev,
 			datetimeLabel: formatDateTimeInOrgTz(startIso, allDay)
 		};
@@ -1035,13 +1154,18 @@
 				eventsStore.optimisticUpdate(move.event.id, {
 					start_at: move.prev.start_at,
 					end_at: move.prev.end_at,
-					all_day: move.prev.all_day
+					all_day: move.prev.all_day,
+					assigned_to: move.prev.assigned_to,
+					assignee_name: move.prev.assignee_name,
+					assignee_count: move.prev.assignee_count
 				});
 		};
 		try {
 			// All-day events carry no end — omit it so the API forces NULL.
 			const payload: Record<string, unknown> = { start_at: move.startIso, all_day: move.allDay };
 			if (!move.allDay) payload.end_at = move.endIso;
+			// Day-view cross-column drop reassigns the event's crew.
+			if (move.reassign) payload.assigned_to = move.reassign.to;
 
 			const res = await fetch(`/api/events/${move.event.id}`, {
 				method: 'PATCH',
@@ -1054,14 +1178,28 @@
 				toast.error(body.error ?? 'Could not reschedule the event.');
 				return false;
 			}
-			// Re-assert the server-confirmed schedule onto the list cache (mirrors the visit path).
+			// Re-assert the server-confirmed schedule + crew onto the list cache (mirrors the
+			// visit path). The event PATCH echoes assigned_to + assignee_name.
 			const body = (await res.json()) as {
-				data: { start_at: string | null; end_at: string | null; all_day: boolean };
+				data: {
+					start_at: string | null;
+					end_at: string | null;
+					all_day: boolean;
+					assigned_to: string | null;
+					assignee_name: string | null;
+				};
 			};
 			eventsStore.optimisticUpdate(move.event.id, {
 				start_at: body.data.start_at ?? move.startIso,
 				end_at: body.data.end_at,
-				all_day: body.data.all_day
+				all_day: body.data.all_day,
+				...(move.reassign
+					? {
+							assigned_to: body.data.assigned_to,
+							assignee_name: body.data.assignee_name,
+							assignee_count: body.data.assigned_to ? 1 : 0
+						}
+					: {})
 			});
 			return true;
 		} catch {
@@ -1137,6 +1275,9 @@
 				notify_channel: 'none'
 			};
 			if (!move.allDay) payload.scheduled_end = move.endIso;
+			// Day-view cross-column drop reassigns the visit's crew (legacy single-assignee
+			// shape: this member becomes the sole crew, or null unassigns).
+			if (move.reassign) payload.assigned_to = move.reassign.to;
 
 			const res = await fetch(`/api/appointments/${move.item.id}`, {
 				method: 'PATCH',
@@ -1163,7 +1304,15 @@
 				// visit (a calendar card can't be dragged into the date-less 'unscheduled' state).
 				scheduled_start: body.data.scheduled_start!,
 				scheduled_end: body.data.scheduled_end,
-				all_day: body.data.all_day
+				all_day: body.data.all_day,
+				// Re-assert the server-confirmed crew when this move reassigned it.
+				...(move.reassign
+					? {
+							assigned_to: body.data.assigned_to,
+							assignee_name: body.data.assignee_name,
+							assignee_count: body.data.assigned_to ? 1 : 0
+						}
+					: {})
 			});
 			// Write-through to the SEPARATE jobs caches. Moving a visit re-pins its parent one-off
 			// job's schedule server-side; the server echoes the fresh date in `affected_job` so the
@@ -1273,8 +1422,8 @@
 
 <div
 	bind:this={scrollerEl}
-	class={['cal-week', `cal-week--${density}`]}
-	style="--cal-week-head-h: {headH}px; --cal-week-anytime-h: {anytimeH}px;"
+	class={['cal-week', `cal-week--${density}`, columnMode === 'day' && 'cal-week--day']}
+	style="--cal-cols: {columns.length}; --cal-week-head-h: {headH}px; --cal-week-anytime-h: {anytimeH}px; --cal-week-title-h: {titleH}px;"
 >
 	<!-- Shared visit-card rows — rendered identically by the timed grid card and the
 	     Anytime-lane card so the two never drift (Rule 23, one source of truth). The only
@@ -1385,20 +1534,47 @@
 		{/if}
 	{/snippet}
 
-	<!-- Day headers — sticky so they stay visible while the grid body scrolls.
-	     Its measured height pins the Anytime lane directly beneath it. -->
+	<!-- Day view only: single-day title ("Tue 21"), pinned above the member columns
+	     (Jobber's day header). Its measured height offsets everything sticky below it. -->
+	{#if columnMode === 'day'}
+		<div bind:clientHeight={titleH} class="cal-week__daytitle">
+			{dayTitleFmt.format(anchor)}
+		</div>
+	{/if}
+
+	<!-- Column headers — sticky so they stay visible while the grid body scrolls. Its
+	     measured height pins the Anytime lane directly beneath it. Week: day-of-week +
+	     date. Day: a team-member avatar + name (one column per crew member). -->
 	<div bind:clientHeight={headH} class="cal-week__head">
 		<div class="cal-week__head-gutter"></div>
-		{#each days as day (day.key)}
-			{@const today_ = isSameDay(day.date, today)}
-			<div class={['cal-week__head-day', today_ && 'cal-week__head-day--today']}>
-				<span class={['cal-week__head-dow', today_ && 'cal-week__head-dow--today']}>
-					{weekdayFmt.format(day.date)}
-				</span>
-				<span class={['cal-week__head-date', today_ && 'cal-week__head-date--today']}>
-					{day.date.getDate()}
-				</span>
-			</div>
+		{#each columns as col (col.key)}
+			{#if columnMode === 'day'}
+				{@const unassigned = col.memberId === UNASSIGNED_COL}
+				{@const name = unassigned ? 'Unassigned' : (memberNameById.get(col.memberId!) ?? 'Member')}
+				<div class="cal-week__head-member">
+					<span
+						class={['cal-week__head-avatar', unassigned && 'cal-week__head-avatar--unassigned']}
+						aria-hidden="true"
+					>
+						{#if unassigned}
+							<i class="ri-user-unfollow-line"></i>
+						{:else}
+							{initials(name)}
+						{/if}
+					</span>
+					<span class="cal-week__head-membername" title={name}>{name}</span>
+				</div>
+			{:else}
+				{@const today_ = isSameDay(col.date, today)}
+				<div class={['cal-week__head-day', today_ && 'cal-week__head-day--today']}>
+					<span class={['cal-week__head-dow', today_ && 'cal-week__head-dow--today']}>
+						{weekdayFmt.format(col.date)}
+					</span>
+					<span class={['cal-week__head-date', today_ && 'cal-week__head-date--today']}>
+						{col.date.getDate()}
+					</span>
+				</div>
+			{/if}
 		{/each}
 	</div>
 
@@ -1409,8 +1585,8 @@
 			<i class="ri-calendar-event-line" aria-hidden="true"></i>
 			<span>Anytime</span>
 		</div>
-		{#each days as day, i (day.key)}
-			{@const today_ = isSameDay(day.date, today)}
+		{#each columns as col, i (col.key)}
+			{@const today_ = columnMode === 'week' && isSameDay(col.date, today)}
 			<button
 				type="button"
 				data-col-index={i}
@@ -1424,9 +1600,9 @@
 						'cal-week__anytime-col--drop',
 					drag ? 'cal-week__anytime-col--grabbing' : canCreate && 'cal-week__anytime-col--copy'
 				]}
-				aria-label={canCreate ? `New Anytime visit on ${day.date.toDateString()}` : undefined}
+				aria-label={canCreate ? `New Anytime visit on ${col.date.toDateString()}` : undefined}
 			>
-				{#each day.anytime as blk (blk.kind === 'appt' ? blk.appt.id : blk.event.id)}
+				{#each col.anytime as blk (blk.kind === 'appt' ? blk.appt.id : blk.event.id)}
 					{#if blk.kind === 'appt'}
 						{@const ev = blk.appt}
 						{@const state = deriveVisitCardState(ev, now)}
@@ -1507,16 +1683,16 @@
 			{/each}
 			<!-- Current-time pill in the gutter (the line itself lives in the columns, behind
 			     the cards). Only when today is in view. -->
-			{#if weekHasToday && nowVisible}
+			{#if gridHasToday && nowVisible}
 				<div class="cal-week__now-label" style="top: {pxFromMin(nowMin)}px;">
 					{nowLabel}
 				</div>
 			{/if}
 		</div>
 
-		<!-- Day columns -->
-		{#each days as day, i (day.key)}
-			{@const today_ = isSameDay(day.date, today)}
+		<!-- Grid columns (week: one per day · day: one per team member) -->
+		{#each columns as col, i (col.key)}
+			{@const today_ = columnMode === 'week' && isSameDay(col.date, today)}
 			<button
 				type="button"
 				data-col-index={i}
@@ -1526,7 +1702,7 @@
 					today_ && 'cal-week__col--today',
 					drag ? 'cal-week__col--grabbing' : canCreate && 'cal-week__col--copy'
 				]}
-				aria-label={canCreate ? `New appointment on ${day.date.toDateString()}` : undefined}
+				aria-label={canCreate ? `New appointment on ${col.date.toDateString()}` : undefined}
 			>
 				<!-- Hour grid lines & off-hours shading -->
 				{#each hourLabels as h (h.hour)}
@@ -1539,13 +1715,13 @@
 				{/each}
 
 				<!-- Now-line: a thin rule across every column, BEHIND the cards (its time label
-				     is the gutter pill). Shown on the whole week that contains today. -->
-				{#if weekHasToday && nowVisible}
+				     is the gutter pill). Shown on the whole grid when the visible day is today. -->
+				{#if gridHasToday && nowVisible}
 					<div class="cal-week__now" style="top: {pxFromMin(nowMin)}px;"></div>
 				{/if}
 
 				<!-- Blocks: visits (colored, draggable) + Events (neutral grey, read-only) -->
-				{#each day.laidOut as ev (ev.block.kind === 'appt' ? ev.block.appt.id : ev.block.event.id)}
+				{#each col.laidOut as ev (ev.block.kind === 'appt' ? ev.block.appt.id : ev.block.event.id)}
 					{@const top = pxFromMin(ev.startMin)}
 					{@const height = pxFromMin(ev.paintEndMin) - top}
 					{@const widthPct = 100 / ev.cols}
@@ -1757,8 +1933,8 @@
 		bind:open={confirmRescheduleOpen}
 		title={pendingMove.kind === 'event' ? 'Reschedule event?' : 'Reschedule appointment?'}
 		description={pendingMove.kind === 'event'
-			? `Move "${pendingMove.event.title}" to ${pendingMove.datetimeLabel}.`
-			: `Move ${pendingMove.item.contact_name}'s ${TYPE_LABELS[pendingMove.item.type]} to ${pendingMove.datetimeLabel}.`}
+			? `Move "${pendingMove.event.title}" to ${pendingMove.datetimeLabel}${reassignSuffix(pendingMove)}.`
+			: `Move ${pendingMove.item.contact_name}'s ${TYPE_LABELS[pendingMove.item.type]} to ${pendingMove.datetimeLabel}${reassignSuffix(pendingMove)}.`}
 		confirmLabel="Save"
 		cancelLabel="Cancel"
 		loading={rescheduleSaving}

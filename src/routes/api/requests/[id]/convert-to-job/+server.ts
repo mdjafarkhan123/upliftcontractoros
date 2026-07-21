@@ -75,7 +75,7 @@ export const POST: RequestHandler = async (event) => {
 				title: req.title,
 				// New jobs are 'scheduled' (renders "Pending" until a date lands), unscheduled,
 				// one-off. The contractor gives it a visit/date on the job page.
-				status: 'scheduled',
+				status: 'active',
 				job_type: 'one_off',
 				notes: req.notes
 			})

@@ -1,17 +1,19 @@
 @use '../tokens' as *;
 
 .card {
-	background: var(--color-bg-surface);
+	background: var(--color-bg-surface-sunk);
+	border: 1px solid var(--color-border);
 	border-radius: $radius-2xl;
-	padding: $space-7 $space-6;
-	box-shadow: var(--shadow-md);
-	// no border — elevation comes from shadow alone
+	padding: $space-5;
+	box-shadow: var(--shadow-xs);
 
 	&__header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: $space-5;
+		padding: $space-4 $space-5;
+		border-bottom: 1px solid var(--color-border);
+		margin: calc(-1 * $space-5) calc(-1 * $space-5) $space-5;
 	}
 
 	&__title {
@@ -26,7 +28,7 @@
 	}
 
 	&__body {
-		// semantic wrapper; no extra padding (root .card already padded)
+		// semantic wrapper; inherits card padding
 	}
 
 	&__footer {
@@ -36,7 +38,80 @@
 		margin-top: $space-5;
 	}
 
-	// Dark accent variant — use at most once per view as a focal point
+	// Header title is 16px (skill spec) vs card title 20px
+	&__header &__title {
+		font-size: $fs-lg;
+	}
+
+	// ---- Variants ----
+
+	// Featured — brand background, white text, one per stats row
+	&--featured {
+		background: var(--color-brand);
+		border-color: transparent;
+		color: var(--color-text-on-brand);
+		box-shadow: var(--shadow-sm);
+
+		.card__title,
+		.card__header .card__title {
+			color: var(--color-text-on-brand);
+		}
+
+		.card__description {
+			color: rgba(255, 255, 255, 0.8);
+		}
+	}
+
+	// Dark — very dark background for Time Tracker, CTAs etc.
+	&--dark {
+		background: $slate-900;
+		border-color: transparent;
+		color: var(--color-text-on-brand);
+
+		.card__title,
+		.card__header .card__title {
+			color: var(--color-text-on-brand);
+		}
+
+		.card__description {
+			color: rgba(255, 255, 255, 0.7);
+		}
+
+		.card__header {
+			border-bottom-color: rgba(255, 255, 255, 0.1);
+		}
+	}
+
+	// Section — full-width container, 24px padding
+	&--section {
+		padding: $space-6;
+		width: 100%;
+
+		.card__header {
+			margin: calc(-1 * $space-6) calc(-1 * $space-6) $space-5;
+		}
+	}
+
+	// Interactive — clickable card with hover state
+	&--interactive {
+		cursor: pointer;
+		transition: background-color 150ms ease, box-shadow 150ms ease;
+
+		&:hover {
+			background: var(--color-bg-surface);
+		}
+	}
+
+	// Static — explicit no-hover marker (overrides interactive from parent)
+	&--static {
+		cursor: default;
+
+		&:hover {
+			background: var(--color-bg-surface-sunk);
+		}
+	}
+
+	// Hero accent — gradient variant (legacy; kept for backward compat)
 	&--hero {
 		background: linear-gradient(160deg, var(--surface-hero-from) 0%, var(--surface-hero-to) 100%);
 		color: var(--color-text-on-brand);

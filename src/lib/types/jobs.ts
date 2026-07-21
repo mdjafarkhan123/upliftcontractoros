@@ -1,4 +1,4 @@
-import type { JobRecurrence } from '$lib/jobs/recurrence';
+import type { JobRecurrence, InvoiceRecurrence } from '$lib/jobs/recurrence';
 
 // Echoed back by the appointment-status PATCH so the client can refresh a job's schedule
 // badge + list row locally (no full /api/jobs/:id reload). `scheduled_start`/`scheduled_end`
@@ -11,7 +11,11 @@ export type AppointmentStatusJobEcho = {
 	has_open_visits: boolean;
 } | null;
 
-export type JobStatus = 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+// Jobber's persisted job state: open (`active`) vs closed (`archived`). Everything else a
+// contractor sees (Upcoming/Today/Late/Unscheduled/Action Required + Completed/Cancelled) is
+// DERIVED — see deriveJobScheduleState. WHY an archived job closed is read from completed_at /
+// cancelled_at, not the status. Collapsed from the old 5-value model in migration 0165.
+export type JobStatus = 'active' | 'archived';
 export type JobSource = 'opportunity' | 'manual';
 // Jobber's `JobTypeTypeEnum`. The user picks this with the One-off/Recurring toggle at
 // creation and it can never change (jobs.job_type, NOT NULL) — to switch, duplicate the job.
@@ -31,6 +35,10 @@ export type JobListItem = {
 	created_at: string;
 	// Set only in the recycle-bin view (deleted=1); null on active rows.
 	deleted_at: string | null;
+	// Close timestamps — for an `archived` job the badge reads these to show Completed vs Cancelled.
+	// Both null on an open (`active`) job.
+	completed_at: string | null;
+	cancelled_at: string | null;
 	// Visit-truth signals for the status badge (see deriveJobScheduleState). next_open_visit_start =
 	// earliest still-open dated visit; has_open_visits = any still-open visit exists. These make the
 	// badge exact for multi-visit jobs (whose scheduled_start is a frozen series anchor).
@@ -57,7 +65,9 @@ export type JobListItem = {
 };
 
 // At most one billing badge per job row, describing the single most important next money action.
-export type JobBillingBadge = 'overdue' | 'needs_invoice' | 'awaiting_payment' | 'paid';
+// `draft` sits between needs_invoice and awaiting_payment: an invoice has been created but not yet
+// sent — the work IS invoiced (unlike needs_invoice), the client just hasn't been billed yet.
+export type JobBillingBadge = 'overdue' | 'needs_invoice' | 'draft' | 'awaiting_payment' | 'paid';
 
 // Server-derived booleans + the money-collected figure that feed the badge + progress bar. All
 // aggregates ignore soft-deleted and cancelled invoices. Kept as flat primitives so the list
@@ -65,9 +75,12 @@ export type JobBillingBadge = 'overdue' | 'needs_invoice' | 'awaiting_payment' |
 export type JobBillingSignals = {
 	// An invoice is past its due date with a balance owing (matches isEffectivelyOverdue).
 	has_overdue: boolean;
-	// The next invoice can be created or sent: a draft to send, an un-invoiced milestone, a
+	// Billable work exists with NO invoice on it yet — create one: an un-invoiced milestone, a
 	// completed one-off with no invoice, or a recurring visit-based job with an unbilled past visit.
+	// (A draft that already exists is NOT this — see has_draft.)
 	needs_invoice: boolean;
+	// A draft invoice exists but hasn't been sent yet — the work is invoiced, it just needs sending.
+	has_draft: boolean;
 	// A sent invoice still has money outstanding (not overdue).
 	has_unpaid_sent: boolean;
 	// At least one non-cancelled invoice exists and none has a balance remaining.
@@ -113,6 +126,41 @@ export type JobPaymentMilestoneRow = {
 	invoice_status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | null;
 	invoice_total: string | null;
 	invoice_amount_paid: string | null;
+};
+
+// Invoice reminder (Jobber `INVOICE_REMINDER`): a contractor to-do — "on this date,
+// remember to invoice this job." Lives in its own table; shown on the job's Billing
+// card → Reminders tab. `status` is only 'active'|'completed' in the DB — the face the
+// contractor sees (Upcoming/Today/Late/Completed/Unscheduled) is DERIVED for display by
+// `reminderDisplayStatus` in $lib/jobs/billing, never stored.
+export type JobInvoiceReminderRow = {
+	id: string;
+	description: string | null;
+	// null start = "schedule later" (no date yet); null end = all-day / anytime.
+	scheduled_start: string | null;
+	scheduled_end: string | null;
+	all_day: boolean;
+	// The persisted status (never 'overdue' — that is derived for display).
+	status: 'active' | 'completed';
+	completed_at: string | null;
+	notify_team_on_assign: boolean;
+	// Denormalized lead + full crew (source of truth = the assignees join).
+	assigned_to: string | null;
+	assignee_name: string | null;
+	assignees: { id: string; full_name: string; is_lead: boolean }[];
+};
+
+// One invoice created for a job, as shown on the Billing card → Invoicing tab grid (Jobber
+// ref/billing/20). `subject` is the invoice title/subject; `balance` is amount_due (numeric
+// string). Sorted newest-first by the API.
+export type JobInvoiceListRow = {
+	id: string;
+	invoice_number: number;
+	subject: string;
+	status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+	due_date: string | null;
+	total: string;
+	balance: string;
 };
 
 // Job costing (Session 1). What the work cost, logged as out-of-pocket expense rows on top of
@@ -389,15 +437,21 @@ export type JobDetail = {
 	tax_amount: string;
 	total: string;
 	line_items: JobLineItemRow[];
-	// One-off billing (S3): close-reminder flag + the payment schedule.
-	invoice_on_close: boolean;
+	// Billing model (Jobber billingType × billingFrequency) — on every job. billing_type 'fixed'
+	// bills the job's line items (optionally split via payment_milestones); 'visit_based' bills
+	// completed/past visits. billing_frequency = when to invoice; 'never' = billing not configured.
+	// invoice_frequency = the cadence when billing_frequency='periodic' (else null).
+	billing_type: 'fixed' | 'visit_based';
+	billing_frequency: 'on_completion' | 'per_visit' | 'periodic' | 'never';
+	invoice_frequency: 'weekly' | 'biweekly' | 'monthly' | null;
+	// Jobber "Invoice frequency" repeat rule — the periodic-invoicing schedule (non-null only when
+	// billing_frequency='periodic'). Reuses the same shape/label helpers as the visit recurrence.
+	invoice_recurrence: InvoiceRecurrence | null;
 	payment_milestones: JobPaymentMilestoneRow[];
-	// Recurring billing (S4): null billing_type = recurring billing not set up.
-	// fixed_invoice_amount is a numeric string (only meaningful when billing_type='fixed').
-	billing_type: 'visit_based' | 'fixed' | null;
-	invoice_frequency: 'per_visit' | 'weekly' | 'biweekly' | 'monthly' | null;
-	fixed_invoice_amount: string | null;
 	invoice_count: number;
+	// Invoices already created for this job — the Billing card → Invoicing tab grid (Jobber
+	// ref/billing/20). Newest first. Empty until the first invoice is generated.
+	invoices: JobInvoiceListRow[];
 	// Whether a non-cancelled invoice already exists for this job (drives Create vs View invoice).
 	has_active_invoice: boolean;
 	appointment_count: number;
@@ -425,20 +479,18 @@ export type JobDetail = {
 	custom_fields: JobCustomFieldRow[];
 };
 
-// Redesign tabs: all date-derived faces of a 'scheduled' job (status 'scheduled' in the DB):
-//   pending = no date yet · upcoming = future date · today = today's date · overdue = date passed.
-// The rest map 1:1 to stored statuses. 'awaiting_review'/'today'/'unscheduled' scopes remain in
-// JobsFilterScope for the legacy scope chips.
+// Redesign tabs. All but `completed`/`cancelled`/`deleted` are visit-derived faces of an `active`
+// job (see deriveJobScheduleState):
+//   unscheduled = no date yet · upcoming = future date · today = today's date · late = date passed
+//   · action_required = active but no open visits left (schedule more or close).
+// `completed`/`cancelled` are the two faces of an `archived` job (by completed_at / cancelled_at).
 export type JobsFilterStatus =
 	| 'all'
-	| 'pending'
+	| 'unscheduled'
 	| 'upcoming'
 	| 'today'
-	| 'overdue'
-	// Active job with no open visits left (Jobber action_required) — schedule more or close.
+	| 'late'
 	| 'action_required'
-	| 'in_progress'
-	| 'on_hold'
 	| 'completed'
 	| 'cancelled'
 	// Recycle-bin tab: soft-deleted jobs (deleted=1). Not a real job status.
@@ -460,22 +512,22 @@ export type JobsFilters = {
 
 export type JobsStats = {
 	today: number;
-	in_progress: number;
+	// Jobber model has no In Progress — Late (a passed, uncompleted visit) is the actionable number.
+	late: number;
 	awaiting_review: number;
 	unscheduled: number;
 };
 
 // Redesigned KPI strip — one count per display state. Returned alongside JobsStats from
-// /api/jobs/stats (additive). pending/upcoming/today/overdue are the four date-derived faces of a
-// stored 'scheduled' job (see deriveJobScheduleState); the rest map 1:1 to stored statuses.
+// /api/jobs/stats (additive). unscheduled/upcoming/today/late/action_required are the visit-derived
+// faces of an `active` job (see deriveJobScheduleState); completed/cancelled are the two faces of an
+// `archived` job (by close timestamp).
 export type JobsStatusCounts = {
-	pending: number;
+	unscheduled: number;
 	upcoming: number;
 	today: number;
-	overdue: number;
+	late: number;
 	action_required: number;
-	in_progress: number;
-	on_hold: number;
 	completed: number;
 	cancelled: number;
 };

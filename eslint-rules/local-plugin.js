@@ -2,7 +2,7 @@
  * Local ESLint plugin — project-specific UI-consistency rules.
  *
  * Part of the "UI consistency enforcement" plan. See
- * .claude/skills/contractor-crm-design/references/ui-primitives.md for the
+ * .claude/skills/design/ui-primitives.md for the
  * registry of built primitives these rules point people toward.
  */
 
@@ -37,7 +37,7 @@ const noNativeDatetimeInput = {
 		schema: [],
 		messages: {
 			native:
-				'Native <input type="{{type}}"> is banned — use the built {{replacement}} instead. See .claude/skills/contractor-crm-design/references/ui-primitives.md.'
+				'Native <input type="{{type}}"> is banned — use the built {{replacement}} instead. See .claude/skills/design/ui-primitives.md.'
 		}
 	},
 	create(context) {

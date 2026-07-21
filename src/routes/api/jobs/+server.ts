@@ -37,14 +37,15 @@ import { canViewAnyJob } from '$lib/server/jobs/permissions';
 import { createJobSchema } from '$lib/server/jobs/schemas';
 import { computeLineTotal, recalcJobTotals } from '$lib/server/jobs/recalc';
 import { expandRecurrence } from '$lib/server/jobs/recurrence';
+import { syncAutoReminders } from '$lib/server/jobs/reminderGeneration';
 import { resolveCustomFieldColumns, isCustomFieldFilled } from '$lib/server/jobs/customFieldValues';
 import { textMatch, textRank } from '$lib/server/search/textSearch';
 import type { JobCustomFieldType } from '$lib/types/jobs';
 
 const PAGE_SIZE = 30;
-// Real enum statuses are matched 1:1. 'pending' is a DERIVED tab (no DB enum value): a
-// 'scheduled' job with no date on the calendar yet; 'scheduled' tab means it HAS a date.
-const ENUM_STATUSES = new Set(['in_progress', 'on_hold', 'completed', 'cancelled']);
+// Jobber model: jobs.status is only `active` vs `archived`. Every status tab except
+// completed/cancelled is a DERIVED face of an `active` job (from its open visits); completed and
+// cancelled are the two faces of an `archived` job, told apart by completed_at / cancelled_at.
 const VALID_SCOPES = new Set(['today', 'awaiting_review', 'unscheduled']);
 
 function startOfTodayUtc(): Date {
@@ -113,51 +114,56 @@ export const GET: RequestHandler = async (event) => {
 		deletedFilter ? isNotNull(jobs.deleted_at) : isNull(jobs.deleted_at)
 	];
 
-	if (!deletedFilter && statusFilter === 'pending') {
+	if (!deletedFilter && statusFilter === 'unscheduled') {
 		// Unscheduled: open placeholder visit(s) waiting for a date.
 		conditions.push(
-			eq(jobs.status, 'scheduled'),
+			eq(jobs.status, 'active'),
 			sql`${effOpenStartSql} IS NULL`,
 			sql`${hasOpenVisitsSql}`
 		);
 	} else if (statusFilter === 'upcoming') {
 		// Next open visit is in the future.
-		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} > ${todayEndTz}`);
+		conditions.push(eq(jobs.status, 'active'), sql`${effOpenStartSql} > ${todayEndTz}`);
 	} else if (statusFilter === 'today') {
-		// Next open visit is today (not yet started).
+		// Next open visit is today.
 		conditions.push(
-			eq(jobs.status, 'scheduled'),
+			eq(jobs.status, 'active'),
 			sql`${effOpenStartSql} >= ${todayStartTz}`,
 			sql`${effOpenStartSql} <= ${todayEndTz}`
 		);
-	} else if (statusFilter === 'overdue') {
-		// Next open visit's date has passed and it was never completed/started.
-		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} < ${todayStartTz}`);
+	} else if (statusFilter === 'late') {
+		// Next open visit's date has passed and it was never completed (Jobber "Late").
+		conditions.push(eq(jobs.status, 'active'), sql`${effOpenStartSql} < ${todayStartTz}`);
 	} else if (statusFilter === 'action_required') {
 		// Active but no open visits remain — schedule more or close.
 		conditions.push(
-			eq(jobs.status, 'scheduled'),
+			eq(jobs.status, 'active'),
 			sql`${effOpenStartSql} IS NULL`,
 			sql`NOT ${hasOpenVisitsSql}`
 		);
-	} else if (statusFilter === 'scheduled') {
-		// Legacy alias (kept tolerant): 'scheduled' enum WITH any open dated visit.
-		conditions.push(eq(jobs.status, 'scheduled'), sql`${effOpenStartSql} IS NOT NULL`);
-	} else if (statusFilter && ENUM_STATUSES.has(statusFilter)) {
-		conditions.push(eq(jobs.status, statusFilter as 'in_progress'));
+	} else if (statusFilter === 'completed') {
+		// Archived because the work was finished (completed_at set, not cancelled).
+		conditions.push(
+			eq(jobs.status, 'archived'),
+			isNotNull(jobs.completed_at),
+			isNull(jobs.cancelled_at)
+		);
+	} else if (statusFilter === 'cancelled') {
+		// Archived because it was called off (cancelled_at set).
+		conditions.push(eq(jobs.status, 'archived'), isNotNull(jobs.cancelled_at));
 	}
 
 	if (scopeFilter && VALID_SCOPES.has(scopeFilter)) {
 		if (scopeFilter === 'today') {
 			// Exclude "As needed": its scheduled_start is a window anchor, not work due today.
 			conditions.push(
-				inArray(jobs.status, ['scheduled', 'in_progress']),
+				eq(jobs.status, 'active'),
 				sql`NOT ${jobs.schedule_as_needed}`,
 				gte(jobs.scheduled_start, startOfTodayUtc()),
 				lte(jobs.scheduled_start, endOfTodayUtc())
 			);
 		} else if (scopeFilter === 'awaiting_review') {
-			conditions.push(eq(jobs.status, 'completed'));
+			conditions.push(eq(jobs.status, 'archived'), isNotNull(jobs.completed_at));
 			conditions.push(
 				sql`NOT EXISTS (
 					SELECT 1 FROM ${reviewRequests}
@@ -166,7 +172,7 @@ export const GET: RequestHandler = async (event) => {
 				)`
 			);
 		} else if (scopeFilter === 'unscheduled') {
-			conditions.push(eq(jobs.status, 'scheduled'), isNull(jobs.scheduled_start));
+			conditions.push(eq(jobs.status, 'active'), isNull(jobs.scheduled_start));
 		}
 	}
 
@@ -255,25 +261,29 @@ export const GET: RequestHandler = async (event) => {
 		  AND i.status IN ('sent','partially_paid') AND i.amount_due > 0
 	)`;
 
-	// The next invoice can be created or sent. Any of: a draft waiting to be sent; an un-invoiced
+	// Billable work exists with NO invoice on it yet — create one. Any of: an un-invoiced
 	// payment-schedule milestone; a recurring visit-based job with a past unbilled visit (mirrors
 	// the generate-invoice endpoint's billable set); or a completed one-off with no invoice + no
-	// schedule. Recurring FIXED billing has no "next period due" anchor, so it's covered only by
-	// the draft branch here (documented limitation).
+	// schedule. A draft that already exists is NOT counted here — that's hasDraftSql ("Send
+	// Invoice"), because the work is invoiced, it just needs sending (Jobber keeps these distinct).
 	const needsInvoiceSql = sql<boolean>`(
-		EXISTS (SELECT 1 FROM ${invoices} i
-			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status = 'draft')
-		OR EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
+		EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 			WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL AND m.invoice_id IS NULL)
-		OR (${jobs.job_type} = 'recurring' AND ${jobs.billing_type} = 'visit_based'
+		OR (${jobs.billing_type} = 'visit_based'
 			AND EXISTS (SELECT 1 FROM ${appointments} a
 				WHERE a.job_id = ${jobs.id} AND a.deleted_at IS NULL AND a.status <> 'cancelled'
 				  AND a.billed_invoice_id IS NULL AND a.scheduled_start <= now()))
-		OR (${jobs.job_type} = 'one_off' AND ${jobs.status} = 'completed'
+		OR (${jobs.job_type} = 'one_off' AND ${jobs.status} = 'archived' AND ${jobs.completed_at} IS NOT NULL
 			AND NOT EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 				WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL)
 			AND NOT EXISTS (SELECT 1 FROM ${invoices} i
 				WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'cancelled'))
+	)`;
+
+	// A draft invoice exists but hasn't been sent yet — the work IS invoiced, it just needs sending.
+	const hasDraftSql = sql<boolean>`EXISTS (
+		SELECT 1 FROM ${invoices} i
+		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status = 'draft'
 	)`;
 
 	// Fully collected: at least one non-cancelled invoice exists and none has a balance owing.
@@ -304,6 +314,9 @@ export const GET: RequestHandler = async (event) => {
 			scheduled_end: jobs.scheduled_end,
 			created_at: jobs.created_at,
 			deleted_at: jobs.deleted_at,
+			// Close timestamps — let the badge show Completed vs Cancelled for archived jobs.
+			completed_at: jobs.completed_at,
+			cancelled_at: jobs.cancelled_at,
 			next_open_visit_start: nextOpenVisitStartSql,
 			has_open_visits: hasOpenVisitsSql,
 			has_series_anchor: sql<boolean>`(NOT ${mirrorsSingleVisitSql})`,
@@ -319,6 +332,7 @@ export const GET: RequestHandler = async (event) => {
 			service_address_zip: jobs.service_address_zip,
 			billing_has_overdue: hasOverdueSql,
 			billing_needs_invoice: needsInvoiceSql,
+			billing_has_draft: hasDraftSql,
 			billing_has_unpaid_sent: hasUnpaidSentSql,
 			billing_all_settled: allSettledSql,
 			billing_total_paid: totalPaidSql,
@@ -356,6 +370,7 @@ export const GET: RequestHandler = async (event) => {
 			rank: _rank,
 			billing_has_overdue,
 			billing_needs_invoice,
+			billing_has_draft,
 			billing_has_unpaid_sent,
 			billing_all_settled,
 			billing_total_paid,
@@ -365,6 +380,7 @@ export const GET: RequestHandler = async (event) => {
 			billing: {
 				has_overdue: billing_has_overdue,
 				needs_invoice: billing_needs_invoice,
+				has_draft: billing_has_draft,
 				has_unpaid_sent: billing_has_unpaid_sent,
 				all_settled: billing_all_settled,
 				total_paid: billing_total_paid
@@ -505,9 +521,9 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	// New jobs are always 'scheduled' (rendered as "Pending" until a date lands). The lifecycle
-	// only advances through the /status transition endpoint, never at creation.
-	const status = 'scheduled' as const;
+	// New jobs are always `active` (Jobber model). The badge derives Unscheduled/Upcoming/Today from
+	// the visits; the job only becomes `archived` through the /status close endpoint, never here.
+	const status = 'active' as const;
 
 	const discountType = input.discount_type ?? 'none';
 
@@ -590,13 +606,17 @@ export const POST: RequestHandler = async (event) => {
 						: null,
 				discount_amount: null,
 				discount_label: discountType !== 'none' ? input.discount_label?.trim() || null : null,
-				invoice_on_close: input.invoice_on_close ?? false,
-				// Recurring billing (S4): only meaningful on a recurring job (zod enforces that);
-				// stored as-is so the detail page + the deferred billing cron can read them.
-				billing_type: input.billing_type ?? null,
-				invoice_frequency: input.invoice_frequency ?? null,
-				fixed_invoice_amount:
-					input.fixed_invoice_amount != null ? String(input.fixed_invoice_amount) : null,
+				// Billing model (Jobber billingType × billingFrequency) — applied to every job. Server
+				// defaults mirror the DB (fixed / on_completion). invoice_frequency only meaningful
+				// when billing_frequency='periodic'; cleared otherwise so a stale cadence never lingers.
+				billing_type: input.billing_type ?? 'fixed',
+				billing_frequency: input.billing_frequency ?? 'on_completion',
+				invoice_frequency:
+					input.billing_frequency === 'periodic' ? (input.invoice_frequency ?? null) : null,
+				// Jobber "Invoice frequency" repeat rule — stored only for periodic billing; NULL
+				// otherwise so a stale schedule never lingers on a non-periodic job.
+				invoice_recurrence:
+					input.billing_frequency === 'periodic' ? (input.invoice_recurrence ?? null) : null,
 				completed_at: null
 			})
 			.returning();
@@ -869,6 +889,11 @@ export const POST: RequestHandler = async (event) => {
 				idempotency_key: `job.scheduled:${row.id}:${row.scheduled_start.getTime()}`
 			});
 		}
+
+		// Materialize the job's invoice reminders from its billing_frequency (Jobber B3.2).
+		// Runs after every visit is inserted so per_visit reminders see their visits. Manual
+		// reminders don't exist yet on a fresh job; this only creates source='auto' rows.
+		await syncAutoReminders(tx, auth.orgId, row.id);
 
 		return row;
 	});

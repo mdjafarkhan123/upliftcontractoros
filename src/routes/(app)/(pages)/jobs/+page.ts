@@ -6,13 +6,11 @@ export const ssr = false;
 
 const STATUSES: readonly JobsFilterStatus[] = [
 	'all',
-	'pending',
+	'unscheduled',
 	'upcoming',
 	'today',
-	'overdue',
+	'late',
 	'action_required',
-	'in_progress',
-	'on_hold',
 	'completed',
 	'cancelled',
 	'deleted'

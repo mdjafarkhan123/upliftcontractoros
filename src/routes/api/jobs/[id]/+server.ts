@@ -22,6 +22,7 @@ import { canViewCostMargin } from '$lib/server/finance/permissions';
 import { updateJobLineItemsSchema } from '$lib/server/jobs/schemas';
 import { computeLineTotal, recalcJobTotals } from '$lib/server/jobs/recalc';
 import { expandRecurrence } from '$lib/server/jobs/recurrence';
+import { syncAutoReminders } from '$lib/server/jobs/reminderGeneration';
 import { loadTimeEntriesAndCosting } from '$lib/server/jobs/timeEntryResponse';
 import { loadJobTasks } from '$lib/server/jobs/taskResponse';
 import { loadJobFormSubmissions } from '$lib/server/jobs/formSubmissionResponse';
@@ -70,10 +71,10 @@ export const GET: RequestHandler = async (event) => {
 			scheduled_end: jobs.scheduled_end,
 			recurrence: jobs.recurrence,
 			schedule_as_needed: jobs.schedule_as_needed,
-			invoice_on_close: jobs.invoice_on_close,
 			billing_type: jobs.billing_type,
+			billing_frequency: jobs.billing_frequency,
 			invoice_frequency: jobs.invoice_frequency,
-			fixed_invoice_amount: jobs.fixed_invoice_amount,
+			invoice_recurrence: jobs.invoice_recurrence,
 			completed_at: jobs.completed_at,
 			cancelled_at: jobs.cancelled_at,
 			created_at: jobs.created_at,
@@ -101,6 +102,7 @@ export const GET: RequestHandler = async (event) => {
 	const [
 		invoiceCountRows,
 		activeInvoiceRows,
+		invoiceListRows,
 		lineItems,
 		paymentMilestones,
 		appointmentCountRows,
@@ -133,6 +135,24 @@ export const GET: RequestHandler = async (event) => {
 					ne(invoices.status, 'cancelled')
 				)
 			),
+
+		// Invoices already created for this job — the Invoicing tab grid (Jobber ref/billing/20).
+		// Newest first; `balance` is amount_due. Includes cancelled so the history stays visible.
+		db
+			.select({
+				id: invoices.id,
+				invoice_number: invoices.invoice_number,
+				subject: invoices.title,
+				status: invoices.status,
+				due_date: invoices.due_date,
+				total: invoices.total,
+				balance: invoices.amount_due
+			})
+			.from(invoices)
+			.where(
+				and(eq(invoices.job_id, id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at))
+			)
+			.orderBy(desc(invoices.created_at)),
 
 		db
 			.select({
@@ -292,6 +312,7 @@ export const GET: RequestHandler = async (event) => {
 			line_items: safeLineItems,
 			payment_milestones: paymentMilestones,
 			invoice_count: invoiceCountRows[0]?.c ?? 0,
+			invoices: invoiceListRows,
 			has_active_invoice: (activeInvoiceRows[0]?.c ?? 0) > 0,
 			appointment_count: appointmentCountRows[0]?.c ?? 0,
 			next_open_visit_start: visitSignalRows[0]?.next_open_visit_start ?? null,
@@ -380,7 +401,7 @@ export const PATCH: RequestHandler = async (event) => {
 		error(403, 'Forbidden');
 	}
 
-	if (existing.status === 'completed' || existing.status === 'cancelled') {
+	if (existing.status === 'archived') {
 		return json({ error: 'Cannot edit a closed job.' }, { status: 422 });
 	}
 
@@ -417,12 +438,20 @@ export const PATCH: RequestHandler = async (event) => {
 	if (input.schedule_as_needed !== undefined) updates.schedule_as_needed = input.schedule_as_needed;
 	if (input.notes !== undefined) updates.notes = input.notes;
 	if (input.scope_of_work !== undefined) updates.scope_of_work = input.scope_of_work;
-	if (input.invoice_on_close !== undefined) updates.invoice_on_close = input.invoice_on_close;
 	if (input.billing_type !== undefined) updates.billing_type = input.billing_type;
-	if (input.invoice_frequency !== undefined) updates.invoice_frequency = input.invoice_frequency;
-	if (input.fixed_invoice_amount !== undefined)
-		updates.fixed_invoice_amount =
-			input.fixed_invoice_amount == null ? null : String(input.fixed_invoice_amount);
+	if (input.billing_frequency !== undefined) {
+		updates.billing_frequency = input.billing_frequency;
+		// Keep the schedule consistent with the frequency: a periodic frequency carries its cadence +
+		// invoice recurrence rule; any other frequency clears both so a stale schedule never lingers.
+		updates.invoice_frequency =
+			input.billing_frequency === 'periodic' ? (input.invoice_frequency ?? null) : null;
+		updates.invoice_recurrence =
+			input.billing_frequency === 'periodic' ? (input.invoice_recurrence ?? null) : null;
+	} else {
+		if (input.invoice_frequency !== undefined) updates.invoice_frequency = input.invoice_frequency;
+		if (input.invoice_recurrence !== undefined)
+			updates.invoice_recurrence = input.invoice_recurrence;
+	}
 	if (input.tax_rate !== undefined) updates.tax_rate = String(input.tax_rate);
 	if (discountType !== undefined) {
 		updates.discount_type = discountType;
@@ -976,6 +1005,22 @@ export const PATCH: RequestHandler = async (event) => {
 				},
 				idempotency_key: `job.assigned:${id}:${input.assigned_to ?? 'null'}`
 			});
+		}
+
+		// Reconcile auto invoice reminders (Jobber B3.2). Runs after all visit writes + the job
+		// update above, so it sees the new billing config and the rebuilt visits. Guarded to the
+		// changes that alter the reminder set — a frequency switch, a new invoice recurrence, or a
+		// schedule move (per_visit tracks visits, on_completion dates to the window end). Manual
+		// reminders are never touched.
+		if (
+			input.billing_type !== undefined ||
+			input.billing_frequency !== undefined ||
+			input.invoice_recurrence !== undefined ||
+			input.recurrence !== undefined ||
+			input.scheduled_start !== undefined ||
+			input.scheduled_end !== undefined
+		) {
+			await syncAutoReminders(tx, auth.orgId, id);
 		}
 
 		// Re-read the job AFTER recalc so the response carries the authoritative totals,

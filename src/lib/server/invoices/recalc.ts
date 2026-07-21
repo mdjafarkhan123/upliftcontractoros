@@ -84,7 +84,10 @@ export async function recalcInvoiceTotals(tx: Tx, invoiceId: string): Promise<vo
 			total       = calc.total,
 			late_fee_total = calc.late_fee_total,
 			amount_paid = paid.amount_paid,
-			amount_due  = calc.total - paid.amount_paid,
+			-- A balance owing can never be negative: clamp at 0 so a stray overpayment (e.g. a
+			-- duplicate capture) can't corrupt the ledger with a negative due. Overpayment is a
+			-- Stripe-side refund/credit matter, not a negative receivable.
+			amount_due  = GREATEST(calc.total - paid.amount_paid, 0),
 			tip_total   = paid.tip_total,
 			status = CASE
 				WHEN invoices.status = 'cancelled' THEN invoices.status

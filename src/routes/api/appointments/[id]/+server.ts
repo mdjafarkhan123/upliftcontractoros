@@ -210,13 +210,18 @@ export const PATCH: RequestHandler = async (event) => {
 			return { kind: 'ok' as const, row, repinnedJob: null };
 		}
 
-		if (
-			existing.status === 'completed' ||
-			existing.status === 'cancelled' ||
-			existing.status === 'no_show'
-		) {
+		// A cancelled / no-show visit stays locked — reviving it is a deliberate status action,
+		// not a calendar drag. A COMPLETED visit, however, may still be moved and reassigned:
+		// dragging it just corrects its date/time/crew and keeps it completed (Jobber's
+		// per-visit `visitEdit` — the "completed visits never change" rule only governs job
+		// recurrence edits, not moving one visit by hand). See the isCompleted quiet-path below.
+		if (existing.status === 'cancelled' || existing.status === 'no_show') {
 			return { kind: 'terminal' as const, status: existing.status };
 		}
+		// Moving a completed visit is a historical correction: it must NOT reset reminders or
+		// fire the staff "rescheduled" notification (the work is already done). The status stays
+		// `completed` on its own — none of the status-flip branches below touch a completed row.
+		const isCompleted = existing.status === 'completed';
 
 		// Anytime toggle: `all_day` may flip on/off; when on, the visit carries no end.
 		const nextAllDay = input.all_day ?? existing.all_day;
@@ -306,7 +311,7 @@ export const PATCH: RequestHandler = async (event) => {
 		if (unscheduling) updates.status = 'unscheduled';
 		else if (existing.status === 'unscheduled' && nextStart != null) updates.status = 'scheduled';
 
-		if (scheduleChanged) {
+		if (scheduleChanged && !isCompleted) {
 			updates.reminder_24h_sent = false;
 			updates.reminder_1h_sent = false;
 		}
@@ -356,8 +361,9 @@ export const PATCH: RequestHandler = async (event) => {
 		// confirmation must be reachable even when isReschedule is false.
 		if (isReschedule || (input.notify_channel && input.notify_channel !== 'none')) {
 			const finalLead = crew ? crew.leadMemberId : row.assigned_to;
-			// Staff-facing reschedule event fires ONLY when the slot genuinely moved.
-			if (isReschedule)
+			// Staff-facing reschedule event fires ONLY when the slot genuinely moved — and never
+			// for a completed visit, whose move is a silent historical correction (see isCompleted).
+			if (isReschedule && !isCompleted)
 				await tx
 					.insert(outboxEvents)
 					.values({

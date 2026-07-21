@@ -1,31 +1,38 @@
 import type { JobStatus } from '$lib/types/jobs';
 
-// The precise, user-facing state shown on a job (badge, tabs, KPI). A job's STORED status is the
-// authority for the manual work states (in_progress / on_hold / completed / cancelled). A job that
-// is still 'scheduled' shows one of five VISIT-derived faces instead — matching Jobber's model:
+// The precise, user-facing state shown on a job (badge, tabs, KPI). Jobber's model: the STORED
+// status is only open (`active`) vs closed (`archived`) — everything a contractor sees day-to-day is
+// DERIVED here from the job's visits. An `active` job shows one of five visit-derived faces:
 //   • unscheduled     — has open visits but none has a date yet (Jobber "Schedule later")
 //   • upcoming        — next open visit is in the future
-//   • today           — next open visit is today, crew hasn't started
-//   • overdue         — next open visit's date has passed and it was never completed (money-at-risk)
+//   • today           — next open visit is today, not yet completed
+//   • late            — next open visit's date has passed and it was never completed (Jobber "Late")
 //   • action_required — active but NO open visits remain: all done, or an "as needed" job with none
 //                       yet. Jobber's `action_required` — prompt to schedule more or close the job.
-// The moment the contractor taps "Start" the stored status becomes in_progress and the manual
-// state wins here — so "Today until you start it, then In Progress" falls out for free.
+// An `archived` (closed) job shows WHY it closed, read from the close timestamps (display only — the
+// stored status is just `archived`): `completed` (completed_at set) or `cancelled` (cancelled_at
+// set). This keeps our friendlier "Completed vs Cancelled" labels while the underlying model stays
+// exactly Jobber's active/archived.
+//
+// NOTE: the money dimension (Jobber's `requires_invoicing`) is intentionally NOT folded in here — it
+// is surfaced by the separate billing badge (deriveJobBillingBadge in $lib/jobs/billing.ts), which
+// already computes overdue-invoice / needs-invoice / awaiting-payment / paid. Schedule-state stays
+// about the SCHEDULE; billing badge stays about the MONEY. Jobber crams both into one enum; keeping
+// them as two orthogonal badges is cleaner and matches our existing architecture.
 export type JobScheduleState =
 	| 'unscheduled'
 	| 'upcoming'
 	| 'today'
-	| 'overdue'
+	| 'late'
 	| 'action_required'
-	| 'in_progress'
-	| 'on_hold'
 	| 'completed'
-	| 'cancelled';
+	| 'cancelled'
+	| 'archived';
 
 // The visit-truth signals a display state is derived from. These come from the job's actual visit
 // rows (appointments), NOT the job's single denormalized date — which is why the badge is now exact
 // for recurring / multi-visit jobs (their stored `scheduled_start` is the frozen series anchor and
-// would otherwise show a stale "Overdue").
+// would otherwise show a stale "Late").
 //   • nextOpenVisitStart — earliest still-open ('scheduled' status) DATED visit; null if none dated.
 //   • hasOpenVisits      — any still-open visit exists at all ('scheduled' or 'unscheduled' status).
 //   • scheduledStart     — the job's own denormalized date. Used ONLY as a fallback when the job
@@ -36,12 +43,16 @@ export type JobScheduleState =
 //                          "as needed" (a stored job window). Such a date is never a real visit
 //                          date, so the fallback must not read it. This is NOT "is recurring": a
 //                          ONE-OFF job may carry a repeat rule, and its anchor is just as frozen.
+//   • completedAt / cancelledAt — the close timestamps, read only when the job is `archived` to
+//                          choose the Completed vs Cancelled display face.
 export type JobScheduleSignals = {
 	status: JobStatus;
 	hasSeriesAnchor?: boolean;
 	scheduledStart?: string | Date | null;
 	nextOpenVisitStart?: string | Date | null;
 	hasOpenVisits?: boolean;
+	completedAt?: string | Date | null;
+	cancelledAt?: string | Date | null;
 };
 
 function toDate(value: string | Date | null | undefined): Date | null {
@@ -57,8 +68,12 @@ export function deriveJobScheduleState(
 	sig: JobScheduleSignals,
 	now: Date = new Date()
 ): JobScheduleState {
-	// Manual work states always win over the visit-derived faces.
-	if (sig.status !== 'scheduled') return sig.status;
+	// Closed job: show WHY it closed (display only — the stored status is just `archived`).
+	if (sig.status === 'archived') {
+		if (toDate(sig.cancelledAt)) return 'cancelled';
+		if (toDate(sig.completedAt)) return 'completed';
+		return 'archived';
+	}
 
 	// The date to judge against: the next open dated visit if any; otherwise, for a job that has NO
 	// open visits and no visit rows at all (legacy), fall back to the job's own denormalized date.
@@ -75,7 +90,7 @@ export function deriveJobScheduleState(
 
 		if (openDate > dayEnd) return 'upcoming';
 		if (openDate >= dayStart) return 'today';
-		return 'overdue';
+		return 'late';
 	}
 
 	// No dated open visit. Open placeholder(s) waiting for a date → Unscheduled; otherwise the job
@@ -88,12 +103,11 @@ const LABELS: Record<JobScheduleState, string> = {
 	unscheduled: 'Unscheduled',
 	upcoming: 'Upcoming',
 	today: 'Today',
-	overdue: 'Overdue',
+	late: 'Late',
 	action_required: 'Action Required',
-	in_progress: 'In Progress',
-	on_hold: 'On Hold',
 	completed: 'Completed',
-	cancelled: 'Cancelled'
+	cancelled: 'Cancelled',
+	archived: 'Closed'
 };
 
 export function jobScheduleStateLabel(state: JobScheduleState): string {

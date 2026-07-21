@@ -1,21 +1,24 @@
 import { json, error } from '@sveltejs/kit';
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
+	appointments,
 	contacts,
 	invoiceLineItems,
 	invoices,
+	jobInvoiceReminders,
 	orgMembers,
 	organizations,
 	payments
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import { canEditInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
+import { canDeleteInvoice, canEditInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { updateInvoiceSchema } from '$lib/server/invoices/schemas';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { deactivatePaymentLink, getOrgStripeClient } from '$lib/server/invoices/stripe';
+import { repinOneOffJobSchedule } from '$lib/server/jobs/repinSchedule';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -302,4 +305,111 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	return json({ data: { id } });
+};
+
+export const DELETE: RequestHandler = async (event) => {
+	const auth = event.locals.auth;
+	assertOrgActive(auth);
+	if (!canDeleteInvoice(auth.member)) error(403, 'Forbidden');
+
+	const id = event.params.id!;
+	const now = new Date();
+
+	// Deleting an invoice must REVERSE everything invoice-creation did to a visit-based job's visits,
+	// so the visit "flips back to its default state" — otherwise a deleted invoice would leave its
+	// visits looking permanently billed (never reappearing in the picker). All of it runs in one
+	// transaction so the invoice can't be gone while its visits stay stamped.
+	await db.transaction(async (tx) => {
+		// A paid or partly-paid invoice is a financial record — Jobber blocks deleting an invoice
+		// with money against it (you must refund/remove the payments first). Drafts and sent-but-unpaid
+		// invoices (and cancelled ones, which by rule have no payments) delete freely. The guard +
+		// soft-delete run in one atomic statement so the payment check can't race the delete.
+		const rows = await tx
+			.update(invoices)
+			.set({ deleted_at: now, updated_at: now })
+			.where(
+				and(
+					eq(invoices.id, id),
+					eq(invoices.org_id, auth.orgId),
+					isNull(invoices.deleted_at),
+					sql`${invoices.status} <> 'paid'`,
+					sql`${invoices.amount_paid} = 0`
+				)
+			)
+			.returning({ id: invoices.id, job_id: invoices.job_id });
+
+		if (rows.length === 0) {
+			// Distinguish "blocked because it has payments" from "genuinely not found".
+			const [existing] = await tx
+				.select({ status: invoices.status, amount_paid: invoices.amount_paid })
+				.from(invoices)
+				.where(
+					and(eq(invoices.id, id), eq(invoices.org_id, auth.orgId), isNull(invoices.deleted_at))
+				)
+				.limit(1);
+			if (existing && (existing.status === 'paid' || Number(existing.amount_paid) > 0)) {
+				throw error(
+					422,
+					'Invoices with recorded payments can’t be deleted — refund the payment first'
+				);
+			}
+			throw error(404, 'Invoice not found');
+		}
+
+		const jobId = rows[0].job_id;
+
+		// 1) Un-bill every visit this invoice billed. Clearing billed_invoice_id is what makes the
+		//    visit selectable again in the "Select visits to invoice" picker and re-adds it to the
+		//    job's "Requires Invoicing" set (the reported bug: it never came back before).
+		const unbilled = await tx
+			.update(appointments)
+			.set({ billed_invoice_id: null, updated_at: now })
+			.where(and(eq(appointments.org_id, auth.orgId), eq(appointments.billed_invoice_id, id)))
+			.returning({ id: appointments.id });
+
+		// 2) Revert ONLY the completions THIS invoice caused (Part 1 auto-complete). The marker
+		//    completed_via_invoice_id is the deterministic key — a crew-entered completion has it NULL
+		//    and is deliberately left untouched, so real work is never un-completed.
+		const reopened = await tx
+			.update(appointments)
+			.set({
+				status: 'scheduled',
+				completed_at: null,
+				completed_by: null,
+				completed_via_invoice_id: null,
+				updated_at: now
+			})
+			.where(and(eq(appointments.org_id, auth.orgId), eq(appointments.completed_via_invoice_id, id)))
+			.returning({ id: appointments.id });
+
+		// 3) Reopen the auto invoice-reminders the invoice had discharged for those visits, so the
+		//    "invoice this visit" prompt returns. Only source='auto' + completed rows for the exact
+		//    un-billed visits — manual reminders and unrelated ones are left alone.
+		if (unbilled.length > 0) {
+			await tx
+				.update(jobInvoiceReminders)
+				.set({ status: 'active', completed_at: null, completed_by: null, updated_at: now })
+				.where(
+					and(
+						eq(jobInvoiceReminders.org_id, auth.orgId),
+						inArray(
+							jobInvoiceReminders.visit_id,
+							unbilled.map((v) => v.id)
+						),
+						eq(jobInvoiceReminders.source, 'auto'),
+						eq(jobInvoiceReminders.status, 'completed'),
+						isNull(jobInvoiceReminders.deleted_at)
+					)
+				);
+		}
+
+		// 4) If a completion reverted, the earliest open visit changed — re-pin the job's denormalized
+		//    schedule date so its list badge (Today/Upcoming/Overdue) follows the visit rows. No-op for
+		//    series-anchor / recurring / as-needed jobs (guarded inside the helper).
+		if (jobId && reopened.length > 0) {
+			await repinOneOffJobSchedule(tx, { orgId: auth.orgId, jobId });
+		}
+	});
+
+	return new Response(null, { status: 204 });
 };

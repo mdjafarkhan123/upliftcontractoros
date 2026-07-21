@@ -7,30 +7,31 @@
 		pctOf
 	} from '$lib/jobs/billing';
 	import { formatCurrency } from '$lib/utils/format';
-	import type { JobBillingSignals, JobStatus } from '$lib/types/jobs';
+	import type { JobBillingSignals } from '$lib/types/jobs';
 
 	// At most one billing badge (BILLING.md) + an optional payment-progress bar. Renders nothing
 	// when there is no billing action to show, so it can be dropped into a row/card with zero
 	// layout cost. Work status stays separate — this is money-only visibility.
 	let {
-		status,
+		cancelledAt = null,
 		billing,
 		total,
 		showProgress = true,
 		class: className
 	}: {
-		status: JobStatus;
+		// A cancelled job (archived + cancelled_at) shows no billing badge/bar.
+		cancelledAt?: string | null;
 		billing: JobBillingSignals | undefined;
 		total: string;
 		showProgress?: boolean;
 		class?: string;
 	} = $props();
 
-	const badge = $derived(deriveJobBillingBadge(status, billing));
+	const badge = $derived(deriveJobBillingBadge(billing, cancelledAt));
 	const paid = $derived(Number(billing?.total_paid ?? 0));
 	const totalNum = $derived(Number(total ?? 0));
 	// Progress bar only while some money is collected but the job is not fully paid.
-	const showBar = $derived(showProgress && status !== 'cancelled' && paid > 0 && paid < totalNum);
+	const showBar = $derived(showProgress && !cancelledAt && paid > 0 && paid < totalNum);
 	const pct = $derived(Math.min(100, pctOf(paid, totalNum)));
 </script>
 

@@ -249,7 +249,7 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 					AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')), 0)::text AS open_quotes_value,
 				(SELECT COUNT(*)::int FROM jobs
 					WHERE contact_id = ${contactId} AND org_id = ${orgId}
-					AND deleted_at IS NULL AND status IN ('scheduled', 'in_progress')) AS active_jobs_count
+					AND deleted_at IS NULL AND status = 'active') AS active_jobs_count
 		`)
 		});
 
@@ -400,14 +400,14 @@ export async function loadContactOverview(
 				FROM jobs
 				WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL
-					AND status IN ('scheduled', 'in_progress')
+					AND status = 'active'
 				ORDER BY scheduled_start ASC NULLS LAST
 				LIMIT ${OVERVIEW_LIMIT}
 			) j), '[]') AS active_jobs,
 			(SELECT COUNT(*)::int FROM jobs
 				WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL
-					AND status IN ('scheduled', 'in_progress')) AS active_jobs_count,
+					AND status = 'active') AS active_jobs_count,
 
 			COALESCE((SELECT json_agg(i) FROM (
 				SELECT id, invoice_number, title, status, total::float8 AS total,

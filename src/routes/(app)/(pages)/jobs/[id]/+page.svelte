@@ -17,12 +17,10 @@
 	import JobTimeTrackingSection from '$lib/components/jobs/JobTimeTrackingSection.svelte';
 	import JobCostingSection from '$lib/components/jobs/JobCostingSection.svelte';
 	import JobBillingSection from '$lib/components/jobs/JobBillingSection.svelte';
-	import JobBillingEditor from '$lib/components/jobs/JobBillingEditor.svelte';
-	import JobRecurringBillingEditor from '$lib/components/jobs/JobRecurringBillingEditor.svelte';
-	import JobRecurringBillingSection from '$lib/components/jobs/JobRecurringBillingSection.svelte';
+	import JobBillingSettingsDialog from '$lib/components/jobs/JobBillingSettingsDialog.svelte';
 	import JobScheduleEditor from '$lib/components/jobs/JobScheduleEditor.svelte';
 	import JobProductsPricing from '$lib/components/jobs/JobProductsPricing.svelte';
-	import type { BillingType, InvoiceFrequency } from '$lib/jobs/billing';
+	import type { InvoiceFrequency } from '$lib/jobs/billing';
 	import JobLinksSection from '$lib/components/jobs/JobLinksSection.svelte';
 	import JobVisitsSection from '$lib/components/jobs/JobVisitsSection.svelte';
 	import JobSignoffSection from '$lib/components/jobs/JobSignoffSection.svelte';
@@ -71,10 +69,8 @@
 		return false;
 	});
 	// Inline pencils follow the same gate as the global Edit button: editable rights AND the
-	// job isn't closed (the API rejects edits on completed/cancelled jobs).
-	const canInlineEdit = $derived(
-		canEdit && job?.status !== 'completed' && job?.status !== 'cancelled'
-	);
+	// job is still open (the API rejects edits on a closed/archived job).
+	const canInlineEdit = $derived(canEdit && job?.status === 'active');
 	const canCancel = $derived(member().can_view_full_pipeline);
 	const canInvoice = $derived(member().can_create_invoices);
 	// A recurring job bills on a schedule (S4); a one-off job uses the payment schedule (S3).
@@ -179,7 +175,13 @@
 		form.discountValue = j.discount_value ?? '';
 		form.discountLabel = j.discount_label ?? '';
 		form.taxRatePct = rateToPct(j.tax_rate);
-		form.invoiceOnClose = j.invoice_on_close;
+		// Billing model (Jobber billingType × billingFrequency).
+		form.billingType = j.billing_type;
+		form.billingFrequency = j.billing_frequency;
+		form.invoiceFrequency = (j.invoice_frequency as InvoiceFrequency) ?? 'weekly';
+		// Jobber "Invoice frequency" repeat rule (periodic billing). Seeds the recurrence modal /
+		// dropdown; null → the canned monthly-last-day default.
+		form.hydrateInvoiceRecurrence(j.invoice_recurrence);
 		form.splitEnabled = j.payment_milestones.length > 0;
 		form.splitBy = (j.payment_milestones[0]?.amount_type as 'percent' | 'fixed') ?? 'percent';
 		form.billingMilestones = j.payment_milestones.map((m) => ({
@@ -192,10 +194,6 @@
 			// server preserves them on save regardless of the payload.
 			locked: !!m.invoice_id
 		}));
-		form.recurBillingEnabled = !!j.billing_type;
-		form.recurBillingType = (j.billing_type as BillingType) ?? 'visit_based';
-		form.invoiceFrequency = (j.invoice_frequency as InvoiceFrequency) ?? 'per_visit';
-		form.fixedInvoiceAmount = j.fixed_invoice_amount ?? '';
 		form.addrLine1 = j.service_address_line_1 ?? '';
 		form.addrLine2 = j.service_address_line_2 ?? '';
 		form.addrCity = j.service_address_city ?? '';
@@ -526,25 +524,19 @@
 			schedule_as_needed: asNeeded
 		};
 		if (asNeeded) {
-			// "As needed": strip the rule and any recurring-billing config; the server clears the
-			// job's live visit so it sits in Action Required with nothing on the calendar.
+			// "As needed": strip the rule; the server clears the job's live visit so it sits in
+			// Action Required with nothing on the calendar. Billing is independent (Jobber) and is
+			// saved via the Billing card — schedule changes never touch it.
 			payload.recurrence = null;
-			payload.billing_type = null;
-			payload.invoice_frequency = null;
-			payload.fixed_invoice_amount = null;
 		} else if (seriesMode) {
 			// Any job with a rule — including a one-off — sends it; the server freezes past /
 			// invoiced visits and rebuilds the upcoming ones from it.
 			payload.recurrence = nextRecurrence;
 			payload.visit_instructions = form.visitInstructions.trim() || null;
 		} else if (wasRecurring) {
-			// The rule was dropped ("Does not repeat"). Clear it, plus any recurring-billing config
-			// so a job can't keep an invisible recurring-billing schedule with nothing generating
-			// visits. job_type itself is immutable and is never sent.
+			// The rule was dropped ("Does not repeat"). Clear it; job_type itself is immutable and is
+			// never sent. Billing is independent and left untouched.
 			payload.recurrence = null;
-			payload.billing_type = null;
-			payload.invoice_frequency = null;
-			payload.fixed_invoice_amount = null;
 		}
 		// Notify the client only when the start moved to a real new date and a channel is chosen.
 		// Never for "As needed" — its start is a window anchor, not a visit the client attends.
@@ -678,39 +670,25 @@
 
 	async function saveBilling() {
 		if (!job) return;
-		// "As needed" jobs use the one-off payment schedule (they have no recurring rule).
-		const recurringMode = form.jobMode === 'recurring' && !form.scheduleAsNeeded;
-		const payload: Record<string, unknown> = {};
+		// The fixed-price payment schedule can never bill more than the job total.
+		if (form.billingType === 'fixed' && form.paymentOverAllocated) {
+			return failBilling(
+				'The payment schedule bills more than the job total. Lower an amount to continue.'
+			);
+		}
 
-		if (recurringMode) {
-			if (
-				form.recurBillingEnabled &&
-				form.recurBillingType === 'fixed' &&
-				!(Number(form.fixedInvoiceAmount) > 0)
-			) {
-				return failBilling('Enter the fixed invoice amount.');
-			}
-			if (form.recurBillingEnabled) {
-				payload.billing_type = form.recurBillingType;
-				payload.invoice_frequency = form.invoiceFrequency;
-				payload.fixed_invoice_amount =
-					form.recurBillingType === 'fixed' ? Number(form.fixedInvoiceAmount) || 0 : null;
-			} else {
-				payload.billing_type = null;
-				payload.invoice_frequency = null;
-				payload.fixed_invoice_amount = null;
-			}
-		} else {
-			// One-off: the payment schedule can never bill more than the job total.
-			if (form.paymentOverAllocated) {
-				return failBilling(
-					'The payment schedule bills more than the job total. Lower an amount to continue.'
-				);
-			}
-			payload.invoice_on_close = form.invoiceOnClose;
-			// An empty array clears the (non-invoiced) schedule; locked (invoiced) rows are sent
-			// with their key so the server matches them as locked instead of re-creating them.
-			payload.payment_milestones = form.splitEnabled
+		// Unified billing model (Jobber billingType × billingFrequency) — sent for every job.
+		const payload: Record<string, unknown> = {
+			billing_type: form.billingType,
+			billing_frequency: form.billingFrequency,
+			invoice_frequency: form.billingFrequency === 'periodic' ? form.invoiceFrequency : null,
+			// Jobber "Invoice frequency" repeat rule — null unless billing is periodic.
+			invoice_recurrence: form.buildInvoiceRecurrence()
+		};
+		// Payment schedule only applies to fixed-price jobs. An empty array clears the (non-invoiced)
+		// schedule; locked (invoiced) rows are sent with their key so the server keeps them.
+		payload.payment_milestones =
+			form.billingType === 'fixed' && form.splitEnabled
 				? form.billingMilestones
 						.filter((m) => m.locked || (m.description.trim() && Number(m.amount_value) > 0))
 						.map((m) => ({
@@ -721,7 +699,6 @@
 							due_date: m.due_date || null
 						}))
 				: [];
-		}
 
 		billingSaving = true;
 		billingError = null;
@@ -736,9 +713,11 @@
 		billingEditing = false;
 	}
 
-	// Only one section editor (schedule / pricing / billing) or inline row may be open at once.
-	const sectionEditing = $derived(scheduleEditing || pricingEditing || billingEditing);
-	const anySectionEditing = $derived(sectionEditing || editCtl.editing);
+	// Only one section editor (schedule / pricing) or inline row may be open at once. Billing edits
+	// through a MODAL ("Edit invoice settings", Jobber), so it's NOT part of the in-card sectionEditing
+	// / floating-header-bar flow — but it still blocks other edits while open (anySectionEditing).
+	const sectionEditing = $derived(scheduleEditing || pricingEditing);
+	const anySectionEditing = $derived(sectionEditing || editCtl.editing || billingEditing);
 
 	// ── Header edit bar wiring ────────────────────────────────────────────────────
 	// The block editors (Schedule / Pricing / Billing) mirror their in-card Save/Cancel up in the
@@ -755,37 +734,21 @@
 	const inlineLabel = $derived(
 		editCtl.editingKey ? `Editing ${INLINE_LABELS[editCtl.editingKey] ?? 'field'}` : undefined
 	);
-	const sectionBusy = $derived(scheduleSaving || pricingSaving || billingSaving);
+	const sectionBusy = $derived(scheduleSaving || pricingSaving);
 	const sectionDirty = $derived(
-		scheduleEditing
-			? scheduleDirty
-			: pricingEditing
-				? pricingDirty
-				: billingEditing
-					? billingDirty
-					: true
+		scheduleEditing ? scheduleDirty : pricingEditing ? pricingDirty : true
 	);
 	const sectionError = $derived(
-		scheduleEditing
-			? scheduleError
-			: pricingEditing
-				? pricingError
-				: billingEditing
-					? billingError
-					: null
+		scheduleEditing ? scheduleError : pricingEditing ? pricingError : null
 	);
-	const sectionLabel = $derived(
-		scheduleEditing ? 'Schedule' : pricingEditing ? 'Pricing' : billingEditing ? 'Billing' : ''
-	);
+	const sectionLabel = $derived(scheduleEditing ? 'Schedule' : pricingEditing ? 'Pricing' : '');
 	function saveCurrentSection() {
 		if (scheduleEditing) void saveSchedule();
 		else if (pricingEditing) void savePricing();
-		else if (billingEditing) void saveBilling();
 	}
 	function cancelCurrentSection() {
 		if (scheduleEditing) cancelSchedule();
 		else if (pricingEditing) cancelPricing();
-		else if (billingEditing) cancelBilling();
 	}
 
 	// ── Status transitions ────────────────────────────────────────────────────────
@@ -794,7 +757,7 @@
 	let cancelOpen = $state(false);
 	let actionError = $state<string | null>(null);
 
-	async function transition(next: JobStatus) {
+	async function transition(action: 'complete' | 'cancel' | 'reopen') {
 		if (!job) return;
 		actionLoading = true;
 		actionError = null;
@@ -802,7 +765,7 @@
 			const res = await fetch(`/api/jobs/${id}/status`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ status: next })
+				body: JSON.stringify({ action })
 			});
 			const body = await res.json();
 			if (!res.ok) {
@@ -851,29 +814,19 @@
 		}
 	});
 
-	const showStart = $derived(canEdit && job?.status === 'scheduled');
-	const showComplete = $derived(
-		canEdit && (job?.status === 'scheduled' || job?.status === 'in_progress')
-	);
-	const showCancel = $derived(
-		canCancel &&
-			(job?.status === 'scheduled' || job?.status === 'in_progress' || job?.status === 'on_hold')
-	);
-	// Put on hold from an active job; resume returns it to the normal queue ('scheduled').
-	const showHold = $derived(
-		canEdit && (job?.status === 'scheduled' || job?.status === 'in_progress')
-	);
-	const showResume = $derived(canEdit && job?.status === 'on_hold');
-	// "On my way" — a manual customer alert the field tech taps when heading over.
-	// Available for active jobs to anyone who can send customer messages.
+	// Jobber lifecycle: an open (`active`) job can be closed (complete or cancel); a closed
+	// (`archived`) job can be reopened. No Start / Hold / Resume — those were the retired manual
+	// work states; day-to-day progress now reads from the visits (the derived badge).
+	const showComplete = $derived(canEdit && job?.status === 'active');
+	const showCancel = $derived(canCancel && job?.status === 'active');
+	const showReopen = $derived(canEdit && job?.status === 'archived');
+	// "On my way" — a manual customer alert the field tech taps when heading over. Available on any
+	// open job to anyone who can send customer messages.
 	const showOnMyWay = $derived(
-		!anySectionEditing &&
-			member().can_send_messages &&
-			(job?.status === 'scheduled' || job?.status === 'in_progress')
+		!anySectionEditing && member().can_send_messages && job?.status === 'active'
 	);
 	const showActions = $derived(
-		!anySectionEditing &&
-			(showStart || showComplete || showCancel || showOnMyWay || showHold || showResume)
+		!anySectionEditing && (showComplete || showCancel || showOnMyWay || showReopen)
 	);
 	let onMyWayOpen = $state(false);
 </script>
@@ -935,21 +888,17 @@
 						</div>
 					{/if}
 				</div>
-				<JobStatusBadge status={h.status} scheduledStart={job?.scheduled_start ?? null} />
+				<JobStatusBadge
+					status={h.status}
+					scheduledStart={job?.scheduled_start ?? null}
+					{hasSeriesAnchor}
+					nextOpenVisitStart={job?.next_open_visit_start ?? null}
+					hasOpenVisits={job?.has_open_visits}
+					completedAt={job?.completed_at ?? null}
+					cancelledAt={job?.cancelled_at ?? null}
+				/>
 			</div>
 		</div>
-
-		{#snippet billingActions()}
-			<EditActionBar
-				onSave={() => void saveBilling()}
-				onCancel={cancelBilling}
-				saving={billingSaving}
-				canSave={billingDirty}
-				error={billingError}
-				saveLabel="Save billing"
-				variant="card"
-			/>
-		{/snippet}
 
 		<!-- Provenance: this job was converted from a Request (Jobber back-link). -->
 		{#if job?.request_id}
@@ -1076,50 +1025,25 @@
 					/>
 				{/if}
 
-				<!-- Billing — focused editor. Recurring jobs bill on a schedule; one-off jobs use the
-				     payment schedule. Over-allocation is a hard block here (schedule edited directly). -->
-				{#if billingEditing}
-					{#if form.jobMode === 'recurring' && !form.scheduleAsNeeded}
-						<JobRecurringBillingEditor
-							bind:enabled={form.recurBillingEnabled}
-							bind:billingType={form.recurBillingType}
-							bind:invoiceFrequency={form.invoiceFrequency}
-							bind:fixedAmount={form.fixedInvoiceAmount}
-							preview={form.preview}
-							previewLoading={form.previewLoading}
-							showSummary={false}
-						>
-							{#snippet footer()}
-								{@render billingActions()}
-							{/snippet}
-						</JobRecurringBillingEditor>
-					{:else}
-						<JobBillingEditor
-							bind:invoiceOnClose={form.invoiceOnClose}
-							bind:splitEnabled={form.splitEnabled}
-							bind:splitBy={form.splitBy}
-							bind:milestones={form.billingMilestones}
-							total={form.total}
-						>
-							{#snippet footer()}
-								{@render billingActions()}
-							{/snippet}
-						</JobBillingEditor>
-					{/if}
-				{:else if job}
-					{#if isRecurring}
-						<JobRecurringBillingSection
-							{job}
-							{canInvoice}
-							onEdit={canInlineEdit && !anySectionEditing ? startBillingEdit : undefined}
-						/>
-					{:else}
-						<JobBillingSection
-							{job}
-							{canInvoice}
-							onEdit={canInlineEdit && !anySectionEditing ? startBillingEdit : undefined}
-						/>
-					{/if}
+				<!-- Billing — one unified model for every job (Jobber billingType × billingFrequency).
+				     The read view is the Jobber tabbed card (Invoicing | Reminders); settings edit
+				     through the "Edit invoice settings" modal below. Over-allocation of the fixed-price
+				     schedule is a hard block on save. -->
+				{#if job}
+					<JobBillingSection
+						{job}
+						{canInvoice}
+						onEdit={canInlineEdit && !anySectionEditing ? startBillingEdit : undefined}
+						onInvoiced={() => void jobDetailStore.load(id, true)}
+					/>
+					<JobBillingSettingsDialog
+						open={billingEditing}
+						{form}
+						saving={billingSaving}
+						error={billingError}
+						onsave={() => void saveBilling()}
+						oncancel={cancelBilling}
+					/>
 				{/if}
 
 				<!-- Scope of work + Notes -->
@@ -1241,6 +1165,8 @@
 								{hasSeriesAnchor}
 								nextOpenVisitStart={job.next_open_visit_start}
 								hasOpenVisits={job.has_open_visits}
+								completedAt={job.completed_at}
+								cancelledAt={job.cancelled_at}
 							/>
 						</div>
 
@@ -1250,6 +1176,7 @@
 								<JobReviewIndicator
 									jobId={job.id}
 									jobStatus={job.status}
+									completedAt={job.completed_at}
 									status={job.review_request_status}
 									onSent={(next) => {
 										jobDetailStore.patch(id, (prev) => ({
@@ -1273,29 +1200,17 @@
 										{#snippet icon()}<i class="ri-truck-line" aria-hidden="true"></i>{/snippet}
 									</Button>
 								{/if}
-								{#if showResume}
+								{#if showReopen}
 									<Button
 										class="btn--full"
-										loadingLabel="Resuming…"
-										successLabel="Resumed"
+										loadingLabel="Reopening…"
+										successLabel="Reopened"
 										loading={actionLoading}
-										onclick={() => void transition('scheduled')}
+										onclick={() => void transition('reopen')}
 									>
-										Resume job
+										Reopen job
 										{#snippet icon()}<i class="ri-play-circle-line" aria-hidden="true"
 											></i>{/snippet}
-									</Button>
-								{/if}
-								{#if showStart}
-									<Button
-										class="btn--full"
-										loadingLabel="Starting…"
-										successLabel="Started"
-										loading={actionLoading}
-										onclick={() => void transition('in_progress')}
-									>
-										Start job
-										{#snippet icon()}<i class="ri-play-fill" aria-hidden="true"></i>{/snippet}
 									</Button>
 								{/if}
 								{#if showComplete}
@@ -1309,20 +1224,6 @@
 									>
 										Mark complete
 										{#snippet icon()}<i class="ri-checkbox-circle-line" aria-hidden="true"
-											></i>{/snippet}
-									</Button>
-								{/if}
-								{#if showHold}
-									<Button
-										variant="outline"
-										class="btn--full"
-										loadingLabel="Holding…"
-										successLabel="On hold"
-										loading={actionLoading}
-										onclick={() => void transition('on_hold')}
-									>
-										Put on hold
-										{#snippet icon()}<i class="ri-pause-circle-line" aria-hidden="true"
 											></i>{/snippet}
 									</Button>
 								{/if}
@@ -1460,22 +1361,22 @@
 			<ConfirmDialog
 				bind:open={completeOpen}
 				title="Mark job complete?"
-				description="A review request will be triggered for the customer."
+				description="The job will be closed as complete. You can reopen it later if needed."
 				confirmLabel="Mark complete"
 				loading={actionLoading}
 				onConfirm={async () => {
-					await transition('completed');
+					await transition('complete');
 				}}
 			/>
 			<ConfirmDialog
 				bind:open={cancelOpen}
 				title="Cancel this job?"
-				description="The job will be marked cancelled. This action cannot be undone."
+				description="The job will be closed as cancelled. You can reopen it later if needed."
 				confirmLabel="Cancel job"
 				variant="destructive"
 				loading={actionLoading}
 				onConfirm={async () => {
-					await transition('cancelled');
+					await transition('cancel');
 				}}
 			/>
 		{/if}

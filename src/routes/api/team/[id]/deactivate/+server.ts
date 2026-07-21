@@ -88,7 +88,7 @@ export const PATCH: RequestHandler = async (event) => {
 				and(
 					eq(jobs.assigned_to, memberId),
 					eq(jobs.org_id, auth.orgId),
-					inArray(jobs.status, ['scheduled', 'in_progress']),
+					eq(jobs.status, 'active'),
 					isNull(jobs.deleted_at)
 				)
 			),

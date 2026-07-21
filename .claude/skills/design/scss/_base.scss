@@ -1,0 +1,200 @@
+// =============================================================================
+// CONTRACTOR CRM — BASE STYLES
+// =============================================================================
+// MIRRORS the reset + base element rules in the live global stylesheet
+// `src/lib/styles/app.scss`. Import order in the app's root stylesheet:
+//   @use './tokens' as *;     // = variables + theme (this skill splits them)
+//   @use './components/...';  // app BEM blocks (not part of this skill)
+// In this skill the equivalent order is:
+//   @use 'scss/variables' as *;
+//   @use 'scss/theme';        // outputs the var(--color-*) custom properties
+//   @use 'scss/base';         // this file
+// =============================================================================
+@use 'variables' as v;
+
+// ─── FONTS — self-hosted, no Google Fonts round-trip ────────────────────────
+// font-display:swap paints fallback text immediately.
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-v20-latin-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/inter-v20-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/inter-v20-latin-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/inter-v20-latin-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/inter-v20-latin-800.woff2') format('woff2');
+}
+
+// ─── RESET — minimal; nothing opinionated ───────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+img,
+video,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+// ─── BASE ELEMENTS ──────────────────────────────────────────────────────────
+
+// No button label should ever wrap to a second line.
+button {
+  white-space: nowrap;
+}
+
+// 62.5% makes 1rem = 10px (assuming the 16px browser default). The $fs-* /
+// $text-* SIZE tokens use rem, so mental math is just moving the decimal:
+// 14px → 1.4rem. ($lh-* line-heights are UNITLESS multipliers, Jobber-style.)
+// Respects browser zoom + OS font-size accessibility settings; px doesn't.
+html {
+  font-size: 62.5%;
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: v.$font-body;
+  font-size: v.$fs-body;   // 1.4rem = 14px — the readable floor (Jobber "base")
+  line-height: v.$lh-body; // 1.25 — Jobber-exact body line-height
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-feature-settings:
+    'rlig' 1,
+    'calt' 1;
+}
+
+::selection {
+  background-color: var(--state-active-tint);
+  color: var(--color-text-primary);
+}
+
+// ─── SCROLLBAR ──────────────────────────────────────────────────────────────
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: v.$radius-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
+// ─── FOCUS — single global default ──────────────────────────────────────────
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+// ─── STATUS DOTS — shared utility (badges, list rows, timeline items) ────────
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: v.$radius-full;
+  flex-shrink: 0;
+
+  &--active   { background-color: var(--success-solid); }
+  &--pending  { background-color: var(--warning-solid); }
+  &--inactive { background-color: var(--color-text-muted); }
+  &--overdue  { background-color: var(--danger-solid); }
+  &--lead     { background-color: var(--info-solid); }
+  &--draft    { background-color: var(--color-text-muted); }
+}
+
+// ─── SKELETON SHIMMER — loading placeholders; adapts to both themes ─────────
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface-sunk) 25%,
+    var(--color-border) 50%,
+    var(--color-bg-surface-sunk) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: v.$radius-sm;
+}
+
+// ─── LOADING SPINNER — generic infinite rotation ────────────────────────────
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 0.75s linear infinite;
+  transform-origin: center;
+}
+
+// Success checkmark — scale in with an overshoot spring.
+.animate-pop-in {
+  animation: pop-in 0.42s #{v.$ease-spring} forwards;
+  transform-origin: center;
+}
+
+@keyframes pop-in {
+  0%   { transform: scale(0);    opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+// ─── REDUCED MOTION — collapse animations for users who opt out ─────────────
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

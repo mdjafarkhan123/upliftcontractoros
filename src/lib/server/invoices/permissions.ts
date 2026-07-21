@@ -23,3 +23,7 @@ export function canRecordPayment(member: OrgMember): boolean {
 export function canCancelInvoice(member: OrgMember): boolean {
 	return member.can_delete_invoices;
 }
+
+export function canDeleteInvoice(member: OrgMember): boolean {
+	return member.can_delete_invoices;
+}

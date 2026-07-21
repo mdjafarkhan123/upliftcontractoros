@@ -78,7 +78,12 @@ export async function createInvoicePaymentLink(args: {
 	const link = await args.stripe.paymentLinks.create({
 		line_items: [{ price: price.id, quantity: 1 }],
 		metadata,
-		payment_intent_data: { metadata }
+		payment_intent_data: { metadata },
+		// Single-use: an invoice must be payable exactly ONCE. Stripe enforces this server-side —
+		// after one completed checkout the link auto-deactivates, so a reused/leaked link cannot
+		// double-charge. This is the race-free primitive (independent of our async link-deactivation
+		// on invoice.paid, which is now just a redundant belt-and-suspenders).
+		restrictions: { completed_sessions: { limit: 1 } }
 	});
 	return { id: link.id, url: link.url };
 }

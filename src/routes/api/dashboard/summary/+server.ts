@@ -293,7 +293,7 @@ export const GET: RequestHandler = async (event) => {
 						left join contacts c on c.id = j.contact_id
 						where j.org_id = ${orgId}
 							and j.deleted_at is null
-							and j.status in ('scheduled', 'in_progress')
+							and j.status = 'active'
 							and j.scheduled_start is not null
 							and j.scheduled_start >= ${dayStart}
 							and j.scheduled_start < ${dayEnd}

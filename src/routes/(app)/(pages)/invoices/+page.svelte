@@ -35,7 +35,9 @@
 	});
 
 	// ── Send + Cancel — one lazy ConfirmDialog, mirroring the Quotes page ─────────
-	let confirmAction = $state<{ kind: 'send' | 'cancel'; invoice: InvoiceRow } | null>(null);
+	let confirmAction = $state<{ kind: 'send' | 'cancel' | 'delete'; invoice: InvoiceRow } | null>(
+		null
+	);
 	let confirmOpen = $state(false);
 	let confirmBusy = $state(false);
 
@@ -48,6 +50,14 @@
 				description: `${invoice.contact_name} will receive this invoice and can pay it online.`,
 				confirmLabel: 'Send to client',
 				variant: 'default' as const
+			};
+		}
+		if (kind === 'delete') {
+			return {
+				title: `Delete ${invoice.invoice_number_display}?`,
+				description: `This removes the invoice for ${invoice.contact_name} from your list. You can only delete invoices with no recorded payments.`,
+				confirmLabel: 'Delete invoice',
+				variant: 'destructive' as const
 			};
 		}
 		return {
@@ -64,6 +74,10 @@
 	}
 	function requestCancel(invoice: InvoiceRow) {
 		confirmAction = { kind: 'cancel', invoice };
+		confirmOpen = true;
+	}
+	function requestDelete(invoice: InvoiceRow) {
+		confirmAction = { kind: 'delete', invoice };
 		confirmOpen = true;
 	}
 
@@ -86,6 +100,19 @@
 				});
 				void invoiceStatsStore.load(true);
 				toast.success(`${invoice.invoice_number_display} sent to ${invoice.contact_name}`);
+				confirmOpen = false;
+				return;
+			}
+			if (kind === 'delete') {
+				const res = await fetch(`/api/invoices/${invoice.id}`, { method: 'DELETE' });
+				if (!res.ok) {
+					const body = await res.json().catch(() => ({}));
+					toast.error(body.error ?? 'Failed to delete invoice');
+					return;
+				}
+				invoicesStore.remove(invoice.id);
+				void invoiceStatsStore.load(true);
+				toast.success(`${invoice.invoice_number_display} deleted`);
 				confirmOpen = false;
 				return;
 			}
@@ -195,6 +222,7 @@
 					{canCancel}
 					onSend={requestSend}
 					onCancel={requestCancel}
+					onDelete={requestDelete}
 				/>
 			</div>
 

@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { and, desc, eq, exists, isNull, not } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, isNull, not } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import { contacts, jobs, reviewRequests } from '$lib/server/db/schema';
@@ -37,7 +37,9 @@ export const GET: RequestHandler = async (event) => {
 		.where(
 			and(
 				eq(jobs.org_id, auth.orgId),
-				eq(jobs.status, 'completed'),
+				// Closed as complete (archived + completed_at), never cancelled.
+				eq(jobs.status, 'archived'),
+				isNotNull(jobs.completed_at),
 				isNull(jobs.deleted_at),
 				isNull(contacts.deleted_at),
 				eq(contacts.sms_opt_out, false),

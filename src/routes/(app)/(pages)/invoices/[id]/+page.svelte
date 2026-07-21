@@ -19,6 +19,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
+	import { goto } from '$app/navigation';
 	import { isEffectivelyOverdue } from '$lib/utils/invoices';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { getMemberContext } from '$lib/context/member';
@@ -263,8 +264,10 @@
 	let paymentOpen = $state(false);
 	let linkOpen = $state(false);
 	let cancelOpen = $state(false);
+	let deleteOpen = $state(false);
 	let saving = $state(false);
 	let cancelling = $state(false);
+	let deleting = $state(false);
 
 	// Edit-after-send: the contractor has re-opened an already-sent (sent / partially_paid / overdue)
 	// invoice to amend it. Draft invoices are edited without this toggle (always editable).
@@ -298,6 +301,12 @@
 	const canEditPerm = $derived(member().can_create_invoices);
 	const canSendPerm = $derived(member().can_send_invoices);
 	const canCancelPerm = $derived(member().can_delete_invoices);
+	// Delete is allowed only while no money is against the invoice (Jobber rule): drafts,
+	// sent-but-unpaid, and cancelled invoices qualify — anything paid/partly-paid is a locked record.
+	const canDeletePerm = $derived(member().can_delete_invoices);
+	const showDelete = $derived(
+		!!invoice && !isPaid && Number(invoice.amount_paid) === 0 && canDeletePerm
+	);
 	// Edit-after-send is offered while the invoice is still collectible (sent / partial / overdue)
 	// and the member can edit invoices.
 	const canEnterEditMode = $derived(canResend && canEditPerm);
@@ -664,7 +673,7 @@
 		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
 	>(null);
 	$effect(() => {
-		if (!cancelOpen || ConfirmDialog) return;
+		if ((!cancelOpen && !deleteOpen) || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
 			ConfirmDialog = m.default;
 		});
@@ -684,6 +693,24 @@
 			await refresh();
 		} finally {
 			cancelling = false;
+		}
+	}
+
+	async function deleteInvoice() {
+		if (!invoice) return;
+		deleting = true;
+		try {
+			const res = await fetch(`/api/invoices/${invoice.id}`, { method: 'DELETE' });
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				toast.error(body.error ?? 'Failed to delete invoice');
+				return;
+			}
+			invoicesStore.remove(invoice.id);
+			toast.success('Invoice deleted');
+			await goto('/invoices');
+		} finally {
+			deleting = false;
 		}
 	}
 </script>
@@ -776,7 +803,7 @@
 			{#if editingSection === null}
 				{@const showPdf = !isDraft}
 				{@const showCancel = !isDraft && !isCancelled && !isPaid && canCancelPerm}
-				{#if showPdf || showCancel}
+				{#if showPdf || showCancel || showDelete}
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger class="btn btn--icon btn--outline" aria-label="More actions">
 							<i class="ri-more-2-fill" aria-hidden="true"></i>
@@ -802,6 +829,15 @@
 									onclick={() => (cancelOpen = true)}
 								>
 									<i class="ri-forbid-line" aria-hidden="true"></i> Cancel invoice
+								</DropdownMenu.Item>
+							{/if}
+							{#if showDelete}
+								{#if showPdf || showCancel}<DropdownMenu.Separator />{/if}
+								<DropdownMenu.Item
+									class="dropdown__item--danger"
+									onclick={() => (deleteOpen = true)}
+								>
+									<i class="ri-delete-bin-line" aria-hidden="true"></i> Delete invoice
 								</DropdownMenu.Item>
 							{/if}
 						</DropdownMenu.Content>
@@ -1333,6 +1369,16 @@
 				variant="destructive"
 				loading={cancelling}
 				onConfirm={cancelInvoice}
+			/>
+			<ConfirmDialog
+				bind:open={deleteOpen}
+				title="Delete invoice?"
+				description="This removes the invoice from your list. You can only delete invoices with no recorded payments."
+				confirmLabel="Delete invoice"
+				cancelLabel="Keep invoice"
+				variant="destructive"
+				loading={deleting}
+				onConfirm={deleteInvoice}
 			/>
 		{/if}
 	</PageWrapper>

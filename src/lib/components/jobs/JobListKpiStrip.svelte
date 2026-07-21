@@ -19,18 +19,16 @@
 	} = $props();
 
 	const META: { key: StatusKey; label: string; icon: string; tone: KpiTone }[] = [
-		{ key: 'pending', label: 'Unscheduled', icon: 'ri-calendar-todo-line', tone: 'muted' },
+		{ key: 'unscheduled', label: 'Unscheduled', icon: 'ri-calendar-todo-line', tone: 'muted' },
 		{ key: 'upcoming', label: 'Upcoming', icon: 'ri-calendar-schedule-line', tone: 'info' },
 		{ key: 'today', label: 'Today', icon: 'ri-calendar-event-line', tone: 'brand' },
-		{ key: 'overdue', label: 'Overdue', icon: 'ri-alarm-warning-line', tone: 'warn' },
+		{ key: 'late', label: 'Late', icon: 'ri-alarm-warning-line', tone: 'warn' },
 		{
 			key: 'action_required',
 			label: 'Action Required',
 			icon: 'ri-error-warning-line',
 			tone: 'warn'
 		},
-		{ key: 'in_progress', label: 'In Progress', icon: 'ri-hammer-line', tone: 'violet' },
-		{ key: 'on_hold', label: 'On Hold', icon: 'ri-pause-circle-line', tone: 'warn' },
 		{ key: 'completed', label: 'Completed', icon: 'ri-checkbox-circle-line', tone: 'success' },
 		{ key: 'cancelled', label: 'Cancelled', icon: 'ri-close-circle-line', tone: 'muted' }
 	];

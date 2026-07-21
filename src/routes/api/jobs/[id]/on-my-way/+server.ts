@@ -97,7 +97,7 @@ export const GET: RequestHandler = async (event) => {
 	return json({
 		data: {
 			enabled: ctx.settings.job_on_my_way_enabled,
-			job_closed: ctx.job.status === 'completed' || ctx.job.status === 'cancelled',
+			job_closed: ctx.job.status === 'archived',
 			contact_name: ctx.contact.full_name,
 			channels: {
 				sms: { available: smsReason === null, reason: smsReason },
@@ -148,7 +148,7 @@ export const POST: RequestHandler = async (event) => {
 	if ('errorResponse' in loaded) return loaded.errorResponse;
 	const { ctx } = loaded;
 
-	if (ctx.job.status === 'completed' || ctx.job.status === 'cancelled') {
+	if (ctx.job.status === 'archived') {
 		return json(
 			{ error: 'This job is closed — an "on my way" message can only be sent for active jobs.' },
 			{ status: 422 }

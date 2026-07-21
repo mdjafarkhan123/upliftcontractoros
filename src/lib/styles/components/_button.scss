@@ -32,6 +32,11 @@
 	}
 
 	// Size modifiers
+	&--xs {
+		font-size: $fs-caption;
+		padding: $space-1 $space-3;
+	}
+
 	&--sm {
 		font-size: $fs-body;
 	}
@@ -40,10 +45,20 @@
 		font-size: $fs-lg;
 	}
 
+	&--xl {
+		font-size: $fs-lg;
+		padding: $space-4 $space-6;
+	}
+
 	// Variant modifiers
 	&--primary {
 		background: var(--color-brand);
 		color: var(--color-text-on-brand);
+		// Glint — top-edge sheen + brand lift shadow (see design skill buttons.md)
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.35),
+			var(--color-brand-strong) 0 4px 10px -5px;
 
 		&:hover:not(:disabled) {
 			background: var(--color-brand);
@@ -52,8 +67,6 @@
 		&:active:not(:disabled) {
 			transform: scale(0.98) translateY(0);
 		}
-
-		// Top-edge highlight
 	}
 
 	&--secondary {
@@ -107,6 +120,11 @@
 	&--danger {
 		background: var(--danger-solid);
 		color: #fff;
+		// Glint — sheen + danger-tinted lift shadow
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.35),
+			var(--danger-solid) 0 4px 10px -5px;
 		&:hover:not(:disabled) {
 			filter: brightness(0.9);
 		}
@@ -138,6 +156,11 @@
 		background: var(--color-brand);
 		color: var(--color-text-on-brand);
 		border: none;
+		// Glint — sheen + brand lift shadow
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.35),
+			var(--color-brand-strong) 0 4px 10px -5px;
 		&:hover:not(:disabled) {
 			filter: brightness(0.92);
 		}
@@ -151,6 +174,58 @@
 		&:hover:not(:disabled) {
 			border-color: rgba(225, 29, 72, 0.7);
 			background: rgba(225, 29, 72, 0.06);
+			transform: translateY(-1px);
+		}
+		&:active:not(:disabled) {
+			transform: scale(0.98) translateY(0);
+		}
+	}
+
+	// Warning — solid amber fill (glint)
+	&--warning {
+		background: var(--warning-solid);
+		color: #fff;
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.35),
+			var(--warning-solid) 0 4px 10px -5px;
+		&:hover:not(:disabled) {
+			filter: brightness(0.9);
+			transform: translateY(-1px);
+		}
+		&:active:not(:disabled) {
+			transform: scale(0.98) translateY(0);
+		}
+	}
+
+	// Info — solid blue fill (glint)
+	&--info {
+		background: var(--info-solid);
+		color: #fff;
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.35),
+			var(--info-solid) 0 4px 10px -5px;
+		&:hover:not(:disabled) {
+			filter: brightness(0.9);
+			transform: translateY(-1px);
+		}
+		&:active:not(:disabled) {
+			transform: scale(0.98) translateY(0);
+		}
+	}
+
+	// Dark — high-contrast neutral fill (glint). NOTE: bg uses --color-text-primary,
+	// which flips light in dark mode; white text then loses contrast (see skill flag).
+	&--dark {
+		background: var(--color-text-primary);
+		color: #fff;
+		box-shadow:
+			var(--shadow-xs),
+			inset 0 6px 0 -5px rgba(255, 255, 255, 0.25),
+			rgba(0, 0, 0, 0.4) 0 4px 10px -5px;
+		&:hover:not(:disabled) {
+			filter: brightness(0.85);
 			transform: translateY(-1px);
 		}
 		&:active:not(:disabled) {

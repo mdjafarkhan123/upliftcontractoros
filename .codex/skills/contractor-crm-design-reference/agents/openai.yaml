@@ -1,4 +1,0 @@
-interface:
-  display_name: 'Contractor CRM Design'
-  short_description: 'Visual design rules for Contractor OS.'
-  default_prompt: 'Use this skill when polishing Contractor OS UI, styling components, choosing layout patterns, or applying design tokens.'

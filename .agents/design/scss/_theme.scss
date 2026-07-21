@@ -1,0 +1,259 @@
+// =============================================================================
+// CONTRACTOR CRM — DESIGN SYSTEM THEME
+// =============================================================================
+// Outputs ALL CSS custom properties for light and dark modes.
+// Import this file ONCE at the global root of your app.
+// Components consume: var(--token-name)
+//
+// Dark mode options:
+//   1. Manual:   add data-theme="dark" to <html>
+//   2. Automatic: respects prefers-color-scheme: dark
+//   3. Force light: add data-theme="light" to <html>
+// =============================================================================
+@use 'variables' as v;
+
+// ─── LIGHT THEME (DEFAULT) ──────────────────────────────────────────────────
+:root,
+[data-theme="light"] {
+
+  // ── Backgrounds — Neutral ──
+  --neutral-primary-soft:      #{v.$white};
+  --neutral-primary:           #{v.$white};
+  --neutral-primary-medium:    #{v.$white};
+  --neutral-primary-strong:    #{v.$white};
+  --neutral-secondary-soft:    #{v.$gray-50};
+  --neutral-secondary:         #{v.$gray-50};
+  --neutral-secondary-medium:  #{v.$gray-50};
+  --neutral-secondary-strong:  #{v.$gray-50};
+  --neutral-tertiary-soft:     #{v.$gray-100};
+  --neutral-tertiary:          #{v.$gray-100};
+  --neutral-tertiary-medium:   #{v.$gray-100};
+  --neutral-quaternary:        #{v.$gray-200};
+  --quaternary-medium:         #{v.$gray-200};
+  --gray:                      #{v.$gray-300};
+
+  // ── Backgrounds — Brand ──
+  --brand-softer:   #{v.$green-50};
+  --brand-soft:     #{v.$green-100};
+  --brand:          #{v.$brand-primary};
+  --brand-medium:   #{v.$green-200};
+  --brand-strong:   #{v.$brand-deep};
+
+  // ── Backgrounds — Status ──
+  --success-soft:    #{v.$green-s-50};
+  --success:         #{v.$green-s-500};
+  --success-medium:  #{v.$green-s-100};
+  --success-strong:  #{v.$green-s-600};
+
+  --danger-soft:    #{v.$red-50};
+  --danger:         #{v.$red-600};
+  --danger-medium:  #{v.$red-100};
+  --danger-strong:  #{v.$red-700};
+
+  --warning-soft:    #{v.$amber-50};
+  --warning:         #{v.$amber-500};
+  --warning-medium:  #{v.$amber-100};
+  --warning-strong:  #{v.$amber-600};
+
+  --info-soft:    #{v.$blue-50};
+  --info:         #{v.$blue-500};
+  --info-medium:  #{v.$blue-100};
+  --info-strong:  #{v.$blue-700};
+
+  // ── Backgrounds — Utility ──
+  --dark:        #{v.$gray-800};
+  --dark-strong: #{v.$gray-900};
+  --disabled:    #{v.$gray-100};
+
+  // ── Text ──
+  --white:        #{v.$white};
+  --black:        #{v.$gray-900};
+  --heading:      #{v.$gray-900};
+  --body:         #{v.$gray-600};
+  --body-subtle:  #{v.$gray-500};
+
+  // ── Text — Brand ──
+  --fg-brand-subtle:  #{v.$green-200};
+  --fg-brand:         #{v.$brand-primary};
+  --fg-brand-strong:  #{v.$brand-deep};
+
+  // ── Text — Status ──
+  --fg-success:        #{v.$green-s-600};
+  --fg-success-strong: #{v.$green-s-700};
+  --fg-danger:         #{v.$red-600};
+  --fg-danger-strong:  #{v.$red-700};
+  --fg-warning-subtle: #{v.$amber-600};
+  --fg-warning:        #{v.$amber-700};
+  --fg-info:           #{v.$blue-700};
+  --fg-disabled:       #{v.$gray-400};
+
+  // ── Borders — Neutral ──
+  --border-dark:             #{v.$gray-800};
+  --border-buffer:           #{v.$white};
+  --border-buffer-medium:    #{v.$white};
+  --border-buffer-strong:    #{v.$white};
+  --border-muted:            #{v.$gray-50};
+  --border-light-subtle:     #{v.$gray-100};
+  --border-light:            #{v.$gray-100};
+  --border-light-medium:     #{v.$gray-100};
+  --border-default-subtle:   #{v.$gray-200};
+  --border-default:          #{v.$gray-200};
+  --border-default-medium:   #{v.$gray-300};
+  --border-default-strong:   #{v.$gray-400};
+
+  // ── Borders — Status ──
+  --border-success-subtle:   #{v.$green-s-100};
+  --border-success:          #{v.$green-s-500};
+  --border-danger-subtle:    #{v.$red-200};
+  --border-danger:           #{v.$red-600};
+  --border-warning-subtle:   #{v.$amber-100};
+  --border-warning:          #{v.$amber-600};
+  --border-info-subtle:      #{v.$blue-100};
+  --border-info:             #{v.$blue-500};
+
+  // ── Borders — Brand ──
+  --border-brand-subtle:  #{v.$green-200};
+  --border-brand-light:   #{v.$brand-light};
+  --border-brand:         #{v.$brand-primary};
+  --border-dark-subtle:   #{v.$gray-700};
+
+  // ── Shadows ──
+  --shadow-2xs: #{v.$shadow-2xs};
+  --shadow-xs:  #{v.$shadow-xs};
+  --shadow-sm:  #{v.$shadow-sm};
+  --shadow-md:  #{v.$shadow-md};
+  --shadow-lg:  #{v.$shadow-lg};
+  --shadow-xl:  #{v.$shadow-xl};
+  --shadow-2xl: #{v.$shadow-2xl};
+
+  // ── Button Glint ──
+  --color-1-400: rgba(255, 255, 255, 0.22);
+  --color-1-700: rgba(0, 0, 0, 0.10);
+
+  // ── Layout ──
+  --sidebar-width:     #{v.$sidebar-width};
+  --sidebar-collapsed: #{v.$sidebar-collapsed};
+}
+
+// ─── DARK THEME ─────────────────────────────────────────────────────────────
+@mixin dark-theme-vars {
+
+  // Backgrounds — Neutral (green-tinted darks)
+  --neutral-primary-soft:     #{v.$dark-surface};
+  --neutral-primary:          #{v.$dark-base};
+  --neutral-primary-medium:   #{v.$dark-raised};
+  --neutral-primary-strong:   #{v.$dark-overlay};
+  --neutral-secondary-soft:   #{v.$dark-surface};
+  --neutral-secondary:        #{v.$dark-base};
+  --neutral-secondary-medium: #{v.$dark-raised};
+  --neutral-secondary-strong: #{v.$dark-overlay};
+  --neutral-tertiary-soft:    #{v.$dark-raised};
+  --neutral-tertiary:         #{v.$dark-overlay};
+  --neutral-tertiary-medium:  #{v.$dark-elevated};
+  --neutral-quaternary:       #{v.$dark-border-base};
+  --quaternary-medium:        #{v.$dark-border-medium};
+  --gray:                     #{v.$dark-border-medium};
+
+  // Backgrounds — Brand (flip: lighter for dark mode readability)
+  --brand-softer:  #{v.$green-950};
+  --brand-soft:    #{v.$green-900};
+  --brand:         #{v.$brand-light};      // #5fbd92 on dark
+  --brand-medium:  #{v.$green-700};
+  --brand-strong:  #{v.$brand-primary};    // #227d53 becomes "strong" on dark
+
+  // Backgrounds — Status
+  --success-soft:    #{v.$green-s-900};
+  --success:         #22c55e;
+  --success-medium:  #{v.$green-s-700};
+  --success-strong:  #{v.$green-s-500};
+
+  --danger-soft:    #{v.$red-900};
+  --danger:         #{v.$red-500};
+  --danger-medium:  #7f1d1d;
+  --danger-strong:  #{v.$red-600};
+
+  --warning-soft:    #{v.$amber-900};
+  --warning:         #{v.$amber-500};
+  --warning-medium:  #{v.$amber-700};
+  --warning-strong:  #{v.$amber-600};
+
+  --info-soft:    #{v.$blue-900};
+  --info:         #{v.$blue-400};
+  --info-medium:  #1e3a5f;
+  --info-strong:  #{v.$blue-500};
+
+  // Backgrounds — Utility
+  --dark:        #{v.$gray-800};
+  --dark-strong: #{v.$gray-700};
+  --disabled:    #{v.$dark-overlay};
+
+  // Text
+  --white:       #{v.$white};
+  --black:       #{v.$gray-900};
+  --heading:     #{v.$gray-50};
+  --body:        #{v.$gray-400};
+  --body-subtle: #{v.$gray-500};
+
+  // Text — Brand
+  --fg-brand-subtle:  #{v.$green-700};
+  --fg-brand:         #{v.$brand-light};
+  --fg-brand-strong:  #{v.$green-200};
+
+  // Text — Status
+  --fg-success:        #4ade80;
+  --fg-success-strong: #86efac;
+  --fg-danger:         #f87171;
+  --fg-danger-strong:  #fca5a5;
+  --fg-warning-subtle: #{v.$amber-300};
+  --fg-warning:        #fbbf24;
+  --fg-info:           #{v.$blue-400};
+  --fg-disabled:       #{v.$gray-600};
+
+  // Borders — Neutral
+  --border-dark:             #{v.$gray-600};
+  --border-buffer:           #{v.$dark-base};
+  --border-buffer-medium:    #{v.$dark-surface};
+  --border-buffer-strong:    #{v.$gray-700};
+  --border-muted:            #{v.$dark-raised};
+  --border-light-subtle:     #{v.$dark-raised};
+  --border-light:            #{v.$dark-surface};
+  --border-light-medium:     #{v.$gray-800};
+  --border-default-subtle:   #{v.$dark-raised};
+  --border-default:          #{v.$dark-border-base};
+  --border-default-medium:   #{v.$dark-border-medium};
+  --border-default-strong:   #{v.$dark-border-strong};
+
+  // Borders — Status
+  --border-success-subtle:   #{v.$green-s-900};
+  --border-success:          #{v.$green-s-500};
+  --border-danger-subtle:    #{v.$red-900};
+  --border-danger:           #{v.$red-600};
+  --border-warning-subtle:   #{v.$amber-900};
+  --border-warning:          #{v.$amber-500};
+  --border-info-subtle:      #1e3a5f;
+  --border-info:             #{v.$blue-400};
+
+  // Borders — Brand
+  --border-brand-subtle:  #{v.$green-800};
+  --border-brand-light:   #{v.$brand-primary};
+  --border-brand:         #{v.$brand-light};   // #5fbd92 in dark
+  --border-dark-subtle:   #{v.$gray-700};
+
+  // Button Glint (adjusted for dark backgrounds)
+  --color-1-400: rgba(255, 255, 255, 0.10);
+  --color-1-700: rgba(0, 0, 0, 0.22);
+}
+
+// ─── APPLY DARK THEME ───────────────────────────────────────────────────────
+
+// Via OS/browser preference (unless overridden to light)
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include dark-theme-vars;
+  }
+}
+
+// Via manual HTML attribute (highest priority)
+[data-theme="dark"] {
+  @include dark-theme-vars;
+}

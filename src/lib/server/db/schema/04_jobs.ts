@@ -16,15 +16,16 @@ import { sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
 import { contacts } from './02_contacts';
 import { opportunities } from './03_pipeline';
-import type { JobRecurrence } from '../../jobs/recurrence';
+import type { JobRecurrence, InvoiceRecurrence } from '../../jobs/recurrence';
 
-export const jobStatusEnum = pgEnum('job_status', [
-	'scheduled',
-	'in_progress',
-	'on_hold',
-	'completed',
-	'cancelled'
-]);
+// Jobber's `JobStatusTypeEnum` reduced to what Jobber actually PERSISTS: open vs closed.
+// Everything a user sees day-to-day (Upcoming / Today / Late / Unscheduled / Action Required /
+// Requires Invoicing / Expiring) is DERIVED at read-time from the job's visits + invoicing — never
+// stored — see deriveJobScheduleState in $lib/jobs/status.ts. There is no stored 'in_progress',
+// 'completed', or 'cancelled': a closed job is 'archived', and WHY it closed (finished vs called
+// off) is recorded by completed_at / cancelled_at, which still drive the job.completed /
+// job.cancelled outbox events + review automation. Collapsed from the old 5-value enum in 0165.
+export const jobStatusEnum = pgEnum('job_status', ['active', 'archived']);
 
 export const jobSourceEnum = pgEnum('job_source', ['opportunity', 'manual']);
 
@@ -34,6 +35,21 @@ export const jobSourceEnum = pgEnum('job_source', ['opportunity', 'manual']);
 // done"), so visit count distinguishes nothing. IMMUTABLE after create, like Jobber — the
 // escape hatch is duplicating the job (POST /api/jobs/[id]/duplicate).
 export const jobTypeEnum = pgEnum('job_type', ['one_off', 'recurring']);
+
+// Jobber's `BillingFrequencyEnum` — WHEN the contractor is prompted to invoice a job. Applies to
+// EVERY job (one-off and recurring alike), paired with `billing_type` (WHAT each invoice contains).
+//   on_completion — invoice once the job is finished (Jobber ON_COMPLETION; the default).
+//   per_visit     — invoice on each completed/past visit (Jobber PER_VISIT).
+//   periodic      — invoice on a repeating cadence (Jobber PERIODIC); the cadence is `invoice_frequency`.
+//   never         — never prompt/auto-invoice (Jobber NEVER); e.g. billing not configured.
+// This replaces the old split where one-off jobs used `invoice_on_close` and recurring jobs used a
+// nullable `billing_type` — see migration 0166.
+export const jobBillingFrequencyEnum = pgEnum('job_billing_frequency', [
+	'on_completion',
+	'per_visit',
+	'periodic',
+	'never'
+]);
 
 export const jobs = pgTable('jobs', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -52,7 +68,7 @@ export const jobs = pgTable('jobs', {
 		.notNull()
 		.references(() => contacts.id),
 	title: text('title').notNull(),
-	status: jobStatusEnum('status').notNull().default('scheduled'),
+	status: jobStatusEnum('status').notNull().default('active'),
 	assigned_to: uuid('assigned_to').references(() => orgMembers.id),
 	// One-off vs recurring — the authority. Every read (badge, list scopes, stats, detail)
 	// must consult THIS, never `recurrence IS NOT NULL`. See jobTypeEnum above.
@@ -87,25 +103,32 @@ export const jobs = pgTable('jobs', {
 	service_address_city: text('service_address_city'),
 	service_address_state: text('service_address_state'),
 	service_address_zip: text('service_address_zip'),
-	// One-off billing reminder: when true, completing this job nudges the contractor (in-app
-	// notification) to invoice it so it doesn't slip through. Pure operational flag — no money.
-	invoice_on_close: boolean('invoice_on_close').notNull().default(false),
-	// ── Recurring billing (manual) ──────────────────────────────────────────────
-	// How a RECURRING job is invoiced. NULL = no recurring billing configured (every one-off
-	// job, and recurring jobs whose billing hasn't been set up). 'visit_based' = each past
-	// visit becomes a billable line grouped onto one invoice, priced at the job's line-item
-	// total (the lines describe one visit's work). 'fixed' = each invoice is a flat set amount
-	// (fixed_invoice_amount). Manual v1: the contractor generates each invoice on demand via
-	// POST /api/jobs/[id]/generate-invoice — nothing auto-charges yet. This is the foundation
-	// the deferred auto-invoice + auto-charge layer builds on.
-	billing_type: text('billing_type'), // 'visit_based' | 'fixed' | null
-	// Advisory cadence for how often to invoice the recurring work. Stored for display + as the
-	// schedule the deferred billing cron will read; it does NOT fire any automatic invoice in
-	// v1. 'per_visit' | 'weekly' | 'biweekly' | 'monthly'.
+	// ── Billing model (Jobber `billingType` × `billingFrequency`) ────────────────
+	// The unified billing model applied to EVERY job — one-off and recurring alike (Jobber has one
+	// model, not a per-type split). Two independent dials:
+	//   billing_type — WHAT each invoice contains. 'fixed' = the job's own line items, billed at
+	//     the agreed price (Jobber FIXED_PRICE). 'visit_based' = the billable work on completed /
+	//     past visits, one line per visit (Jobber VISIT_BASED). NOT NULL, default 'fixed'.
+	//   billing_frequency — WHEN to invoice (see jobBillingFrequencyEnum). NOT NULL, default
+	//     'on_completion'. 'never' = billing not configured (replaces the old NULL billing_type).
+	// Manual v1: the contractor presses "Generate invoice" / "Create invoice" — nothing
+	// auto-charges yet (that layer is deferred). Consolidated from invoice_on_close + a nullable
+	// billing_type + fixed_invoice_amount in migration 0166.
+	billing_type: text('billing_type').notNull().default('fixed'), // 'fixed' | 'visit_based'
+	billing_frequency: jobBillingFrequencyEnum('billing_frequency').notNull().default('on_completion'),
+	// LEGACY thin cadence for billing_frequency = 'periodic' ('weekly' | 'biweekly' | 'monthly').
+	// Superseded by `invoice_recurrence` below (B1, Jobber tour) — Jobber's periodic invoicing is a
+	// full recurrence rule ("Monthly on the last day of the month", custom schedule), not a fixed
+	// weekly/biweekly/monthly. Kept nullable + unused by new writes; readers migrate to
+	// invoice_recurrence, then this column is dropped in a later cleanup migration.
 	invoice_frequency: text('invoice_frequency'),
-	// Flat per-invoice amount when billing_type = 'fixed' (tax-inclusive, like a milestone).
-	// NULL for visit-based / non-billing jobs.
-	fixed_invoice_amount: numeric('fixed_invoice_amount', { precision: 12, scale: 2 }),
+	// Jobber `InvoiceSchedule.recurrenceSchedule` — the repeat rule for periodic invoicing on a
+	// recurring job. Same JobRecurrence jsonb shape as the visit `recurrence` above (reused so the
+	// same RecurringScheduleModal + summarizeRecurrence build & label it). NON-NULL only when
+	// billing_frequency = 'periodic'; NULL for on_completion / per_visit / never. Advisory in v1 —
+	// nothing auto-fires; the deferred billing cron will read it. Distinct from the visit recurrence:
+	// how often we INVOICE is independent of how often we VISIT (Jobber lets them differ).
+	invoice_recurrence: jsonb('invoice_recurrence').$type<InvoiceRecurrence>(),
 	scheduled_start: timestamp('scheduled_start', { withTimezone: true }),
 	scheduled_end: timestamp('scheduled_end', { withTimezone: true }),
 	// Recurring jobs only: the repeat rule. Visits are materialized up-front as

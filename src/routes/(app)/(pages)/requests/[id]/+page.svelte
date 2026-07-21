@@ -597,44 +597,46 @@
 		<SkeletonLoader lines={6} height="92px" label="Loading request" />
 	{:else if errorMsg && !req}
 		<EmptyState title="Couldn't load request" description={errorMsg} />
-	{:else if headerVM && req}
-		{@const r = req}
+	{:else if headerVM}
+		{@const h = headerVM}
 
 		<!-- ── Header band ─────────────────────────────────────────────────── -->
 		<div class="req-detail__header">
 			<div class="req-detail__header-top">
 				<div class="req-detail__header-lead">
 					<span class="req-detail__eyebrow-icon"><i class="ri-inbox-archive-line"></i></span>
-					<RequestStatusBadge status={r.status} />
+					<RequestStatusBadge status={h.status} />
 				</div>
-				<div class="req-detail__header-actions">
-					<RowActionsMenu actions={rowActions} label="Request actions" />
-					{#if needsApproval}
-						<Button
-							variant="danger-outline"
-							loading={actionLoading}
-							loadingLabel="Working…"
-							onclick={() => (declineOpen = true)}
-						>
-							Decline
-						</Button>
-						<Button loading={actionLoading} loadingLabel="Working…" onclick={acceptAndSchedule}>
-							Accept and Schedule
-						</Button>
-					{:else if isConverted && (r.converted_to_quote_id || r.converted_to_job_id)}
-						<a
-							class="req-detail__converted-link"
-							href={r.converted_to_quote_id
-								? `/quotes/${r.converted_to_quote_id}`
-								: `/jobs/${r.converted_to_job_id}`}
-						>
-							<i class={r.converted_to_quote_id ? 'ri-price-tag-3-line' : 'ri-hammer-line'}></i>
-							View {r.converted_to_quote_id ? 'quote' : 'job'}
-						</a>
-					{:else if canConvert}
-						<Button variant="secondary" onclick={() => (convertOpen = true)}>Convert</Button>
-					{/if}
-				</div>
+				{#if req}
+					<div class="req-detail__header-actions">
+						<RowActionsMenu actions={rowActions} label="Request actions" />
+						{#if needsApproval}
+							<Button
+								variant="danger-outline"
+								loading={actionLoading}
+								loadingLabel="Working…"
+								onclick={() => (declineOpen = true)}
+							>
+								Decline
+							</Button>
+							<Button loading={actionLoading} loadingLabel="Working…" onclick={acceptAndSchedule}>
+								Accept and Schedule
+							</Button>
+						{:else if isConverted && (req.converted_to_quote_id || req.converted_to_job_id)}
+							<a
+								class="req-detail__converted-link"
+								href={req.converted_to_quote_id
+									? `/quotes/${req.converted_to_quote_id}`
+									: `/jobs/${req.converted_to_job_id}`}
+							>
+								<i class={req.converted_to_quote_id ? 'ri-price-tag-3-line' : 'ri-hammer-line'}></i>
+								View {req.converted_to_quote_id ? 'quote' : 'job'}
+							</a>
+						{:else if canConvert}
+							<Button variant="secondary" onclick={() => (convertOpen = true)}>Convert</Button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 
 			{#if editCtl.isEditing('title')}
@@ -656,7 +658,7 @@
 				</div>
 			{:else}
 				<div class="req-detail__title-row">
-					<h1 class="req-detail__title">{r.title}</h1>
+					<h1 class="req-detail__title">{h.title}</h1>
 					{#if canInlineEdit}
 						<EditPencil onclick={enterTitleEdit} ariaLabel="Edit request title" />
 					{/if}
@@ -665,76 +667,356 @@
 
 			<div class="req-detail__header-meta">
 				<div class="req-detail__client-card">
-					<p class="req-detail__client-name">{r.contact.full_name}</p>
-					{#if r.contact.company_name}
-						<p class="req-detail__client-line">{r.contact.company_name}</p>
+					<p class="req-detail__client-name">{h.name}</p>
+					{#if req}
+						{#if req.contact.company_name}
+							<p class="req-detail__client-line">{req.contact.company_name}</p>
+						{/if}
+						{#if req.contact.phone}<p class="req-detail__client-line">{req.contact.phone}</p>{/if}
+						{#if req.contact.email}
+							<a class="req-detail__client-email" href="mailto:{req.contact.email}"
+								>{req.contact.email}</a
+							>
+						{/if}
+						<a class="req-detail__client-open" href="/contacts/{req.contact.id}">View client →</a>
+					{:else}
+						<SkeletonLoader lines={2} height="18px" label="" />
 					{/if}
-					{#if r.contact.phone}<p class="req-detail__client-line">{r.contact.phone}</p>{/if}
-					{#if r.contact.email}
-						<a class="req-detail__client-email" href="mailto:{r.contact.email}">{r.contact.email}</a>
-					{/if}
-					<a class="req-detail__client-open" href="/contacts/{r.contact.id}">View client →</a>
 				</div>
 				<dl class="req-detail__dates">
 					<div class="req-detail__date">
 						<dt>Requested</dt>
-						<dd>{fmtDate(r.requested_at)}</dd>
+						<dd>{req ? fmtDate(req.requested_at) : 'Loading…'}</dd>
 					</div>
 					<div class="req-detail__date">
 						<dt>Assessment</dt>
-						<dd>{fmtDateTime(r.assessment)}</dd>
+						<dd>{req ? fmtDateTime(req.assessment) : 'Loading…'}</dd>
 					</div>
 				</dl>
 			</div>
 		</div>
 
-		<div class="req-detail__body">
-			<!-- ── LEFT COLUMN ──────────────────────────────────────────────── -->
-			<div class="req-detail__main">
-				<!-- Overview -->
-				<section class="req-card">
-					<div class="req-card__head">
-						<h2 class="req-card__title">Overview</h2>
-						{#if canInlineEdit && !overviewEditing && !anyEditing}
-							<EditPencil onclick={startOverviewEdit} ariaLabel="Edit overview" />
-						{/if}
-					</div>
-
-					{#if overviewEditing}
-						<div class="req-card__field">
-							<span class="req-card__label">Service details</span>
-							<textarea class="field__input req-detail__area" rows="4" bind:value={serviceDraft}
-							></textarea>
-						</div>
-						<div class="req-card__field">
-							<span class="req-card__label">How did you hear about us?</span>
-							<input class="field__input" bind:value={leadSourceDraft} />
-						</div>
-						<EditActionBar
-							onSave={() => void saveOverview()}
-							onCancel={cancelOverview}
-							saving={overviewSaving}
-							error={overviewError}
-							saveLabel="Save overview"
-							variant="card"
-						/>
-					{:else}
-						<div class="req-card__field">
-							<span class="req-card__label">Service details</span>
-							{#if r.service_details}
-								<p class="req-detail__text">{r.service_details}</p>
-							{:else}
-								<span class="req-detail__muted">No service details</span>
+		{#if req}
+			{@const r = req}
+			<div class="req-detail__body">
+				<!-- ── LEFT COLUMN ──────────────────────────────────────────────── -->
+				<div class="req-detail__main">
+					<!-- Overview -->
+					<section class="req-card">
+						<div class="req-card__head">
+							<h2 class="req-card__title">Overview</h2>
+							{#if canInlineEdit && !overviewEditing && !anyEditing}
+								<EditPencil onclick={startOverviewEdit} ariaLabel="Edit overview" />
 							{/if}
 						</div>
 
+						{#if overviewEditing}
+							<div class="req-card__field">
+								<span class="req-card__label">Service details</span>
+								<textarea class="field__input req-detail__area" rows="4" bind:value={serviceDraft}
+								></textarea>
+							</div>
+							<div class="req-card__field">
+								<span class="req-card__label">How did you hear about us?</span>
+								<input class="field__input" bind:value={leadSourceDraft} />
+							</div>
+							<EditActionBar
+								onSave={() => void saveOverview()}
+								onCancel={cancelOverview}
+								saving={overviewSaving}
+								error={overviewError}
+								saveLabel="Save overview"
+								variant="card"
+							/>
+						{:else}
+							<div class="req-card__field">
+								<span class="req-card__label">Service details</span>
+								{#if r.service_details}
+									<p class="req-detail__text">{r.service_details}</p>
+								{:else}
+									<span class="req-detail__muted">No service details</span>
+								{/if}
+							</div>
+
+							{#if r.photos.length > 0}
+								<div class="req-card__field">
+									<span class="req-card__label">Images of the work</span>
+									<div class="req-detail__photos">
+										{#each r.photos as photo (photo.id)}
+											<a
+												class="req-detail__photo"
+												href={photo.web_url}
+												target="_blank"
+												rel="noopener"
+												title={photo.original_filename}
+											>
+												<img
+													src={photo.thumbnail_url}
+													alt={photo.original_filename}
+													loading="lazy"
+												/>
+											</a>
+										{/each}
+									</div>
+								</div>
+							{/if}
+
+							<div class="req-card__field">
+								<span class="req-card__label">How did you hear about us?</span>
+								{#if r.lead_source_answer}
+									<p class="req-detail__text">{r.lead_source_answer}</p>
+								{:else}
+									<span class="req-detail__muted">—</span>
+								{/if}
+							</div>
+
+							{#each r.custom_answers as ans (ans.id)}
+								<div class="req-card__field">
+									<span class="req-card__label">{ans.question_label}</span>
+									{#if ans.value_json && ans.value_json.length > 0}
+										<p class="req-detail__text">{ans.value_json.join(', ')}</p>
+									{:else if ans.value_text}
+										<p class="req-detail__text">{ans.value_text}</p>
+									{:else}
+										<span class="req-detail__muted">—</span>
+									{/if}
+								</div>
+							{/each}
+						{/if}
+					</section>
+
+					<!-- On-site assessment -->
+					<section class="req-card">
+						<div class="req-card__head">
+							<h2 class="req-card__title">On-site assessment</h2>
+							{#if canInlineEdit && !assessmentEditing && !anyEditing && r.assessment}
+								<EditPencil onclick={startAssessmentEdit} ariaLabel="Edit assessment" />
+							{/if}
+						</div>
+
+						{#if assessmentEditing}
+							<RequestAssessmentEditor
+								bind:instructions
+								bind:startDate
+								bind:endDate
+								bind:startTime
+								bind:endTime
+								bind:scheduleLater
+								bind:anytime
+								bind:selectedIds={crewIds}
+								bind:leadId
+								errors={assessmentFieldErrors}
+							/>
+							<div class="req-detail__assessment-foot">
+								{#if r.assessment}
+									<Button
+										variant="danger-outline"
+										loading={assessmentSaving}
+										onclick={() => void deleteAssessment()}
+									>
+										Delete
+									</Button>
+								{/if}
+								<div class="req-detail__assessment-foot-right">
+									<EditActionBar
+										onSave={() => void saveAssessment()}
+										onCancel={cancelAssessment}
+										saving={assessmentSaving}
+										error={assessmentError}
+										saveLabel="Save assessment"
+										variant="card"
+									/>
+								</div>
+							</div>
+						{:else if r.assessment}
+							{@const a = r.assessment}
+							{#if a.notes}
+								<div class="req-card__field">
+									<span class="req-card__label">Instructions</span>
+									<p class="req-detail__text">{a.notes}</p>
+								</div>
+							{/if}
+							<div class="req-detail__assessment-grid">
+								<div class="req-card__field">
+									<span class="req-card__label">Schedule</span>
+									<p class="req-detail__text">{fmtDateTime(a)}</p>
+									{#if canCompleteAssessment}
+										<label class="req-detail__complete">
+											<input
+												type="checkbox"
+												checked={a.status === 'completed'}
+												disabled={completing}
+												onchange={() => void completeAssessment()}
+											/>
+											<span>Complete assessment</span>
+										</label>
+									{:else if a.status === 'completed'}
+										<span class="req-detail__done"><i class="ri-check-line"></i> Completed</span>
+									{/if}
+								</div>
+								<div class="req-card__field">
+									<span class="req-card__label">Team</span>
+									{#if a.assignee_ids.length > 0}
+										<ul class="req-detail__team">
+											{#each a.assignee_ids as mid (mid)}
+												<li>{assigneeNames[mid] ?? 'Team member'}</li>
+											{/each}
+										</ul>
+									{:else}
+										<span class="req-detail__muted">Unassigned</span>
+									{/if}
+								</div>
+							</div>
+						{:else}
+							<button
+								type="button"
+								class="req-detail__placeholder"
+								disabled={!canInlineEdit}
+								onclick={startAssessmentEdit}
+							>
+								<span class="req-detail__placeholder-icon"><i class="ri-truck-line"></i></span>
+								<span>Visit the property to assess the job before you do the work</span>
+							</button>
+						{/if}
+					</section>
+
+					<!-- Product / Service -->
+					<section class="req-card">
+						<div class="req-card__head">
+							<h2 class="req-card__title">Product / Service</h2>
+							{#if canInlineEdit && !pricingEditing && !anyEditing}
+								<EditPencil onclick={startPricingEdit} ariaLabel="Edit products and services" />
+							{/if}
+						</div>
+
+						{#if pricingEditing}
+							<div class="req-detail__line-actions">
+								<Button type="button" onclick={() => lineControls?.addItem()}>
+									<i class="ri-add-line" aria-hidden="true"></i> Add line item
+								</Button>
+								<Button type="button" variant="secondary" onclick={() => (catalogOpen = true)}>
+									<i class="ri-book-2-line" aria-hidden="true"></i> Add from price book
+								</Button>
+							</div>
+							<LineItemEditor
+								bind:lineItems
+								enableCatalog
+								hoistActions
+								bind:catalogOpen
+								bind:controls={lineControls}
+							/>
+							<div class="req-detail__totals">
+								<div class="req-detail__totals-row req-detail__totals-row--total">
+									<span>Total</span>
+									<span>{formatCurrency(editSubtotal)}</span>
+								</div>
+							</div>
+							<EditActionBar
+								onSave={() => void savePricing()}
+								onCancel={cancelPricing}
+								saving={pricingSaving}
+								error={pricingError}
+								saveLabel="Save products"
+								variant="card"
+							/>
+						{:else if r.line_items.length > 0}
+							<table class="req-detail__items">
+								<thead>
+									<tr>
+										<th>Item</th>
+										<th class="req-detail__num">Qty</th>
+										<th class="req-detail__num">Unit price</th>
+										<th class="req-detail__num">Total</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each r.line_items as li (li.id)}
+										<tr>
+											<td>
+												<span class="req-detail__item-name">{li.description}</span>
+												{#if li.details}<span class="req-detail__item-details">{li.details}</span
+													>{/if}
+											</td>
+											<td class="req-detail__num">{li.quantity}</td>
+											<td class="req-detail__num">{formatCurrency(Number(li.unit_price))}</td>
+											<td class="req-detail__num">{formatCurrency(Number(li.total))}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+							<div class="req-detail__totals">
+								<div class="req-detail__totals-row req-detail__totals-row--total">
+									<span>Total</span>
+									<span>{formatCurrency(Number(r.total))}</span>
+								</div>
+							</div>
+						{:else}
+							<p class="req-detail__muted">
+								Keep everything on track by adding products and services.
+							</p>
+							{#if canInlineEdit}
+								<div>
+									<Button type="button" onclick={startPricingEdit}>
+										<i class="ri-add-line" aria-hidden="true"></i> Add line item
+									</Button>
+								</div>
+							{/if}
+						{/if}
+					</section>
+
+					<!-- Labor (Jobber renders a placeholder here; real labor is tracked on the Job
+				     after conversion) -->
+					<section class="req-card">
+						<h2 class="req-card__title">Labor</h2>
+						<div class="req-detail__labor">
+							<i class="ri-time-line" aria-hidden="true"></i>
+							<span>Time tracked to this request will show here</span>
+						</div>
+					</section>
+				</div>
+
+				<!-- ── RIGHT RAIL ───────────────────────────────────────────────── -->
+				<div class="req-detail__rail">
+					<!-- Notes -->
+					<section class="req-card">
+						<div class="req-card__head">
+							<h2 class="req-card__title">Notes</h2>
+						</div>
+						<InlineEditRow
+							label="Internal note"
+							canEdit={canInlineEdit}
+							{...rowCtl(
+								'notes',
+								() => (notesDraft = r.notes ?? ''),
+								() => patchRequestField({ notes: notesDraft.trim() || null })
+							)}
+						>
+							{#snippet display()}
+								{#if r.notes}
+									<p class="req-detail__text">{r.notes}</p>
+								{:else}
+									<span class="req-detail__muted">Add an internal note</span>
+								{/if}
+							{/snippet}
+							{#snippet editor()}
+								<!-- svelte-ignore a11y_autofocus -->
+								<textarea
+									class="field__input req-detail__area"
+									rows="4"
+									bind:value={notesDraft}
+									placeholder="Note visible only to your team"
+									autofocus
+								></textarea>
+							{/snippet}
+						</InlineEditRow>
+
 						{#if r.photos.length > 0}
 							<div class="req-card__field">
-								<span class="req-card__label">Images of the work</span>
+								<span class="req-card__label">Attachments from client</span>
 								<div class="req-detail__photos">
 									{#each r.photos as photo (photo.id)}
 										<a
-											class="req-detail__photo"
+											class="req-detail__photo req-detail__photo--sm"
 											href={photo.web_url}
 											target="_blank"
 											rel="noopener"
@@ -746,309 +1028,53 @@
 								</div>
 							</div>
 						{/if}
-
-						<div class="req-card__field">
-							<span class="req-card__label">How did you hear about us?</span>
-							{#if r.lead_source_answer}
-								<p class="req-detail__text">{r.lead_source_answer}</p>
-							{:else}
-								<span class="req-detail__muted">—</span>
-							{/if}
-						</div>
-
-						{#each r.custom_answers as ans (ans.id)}
-							<div class="req-card__field">
-								<span class="req-card__label">{ans.question_label}</span>
-								{#if ans.value_json && ans.value_json.length > 0}
-									<p class="req-detail__text">{ans.value_json.join(', ')}</p>
-								{:else if ans.value_text}
-									<p class="req-detail__text">{ans.value_text}</p>
-								{:else}
-									<span class="req-detail__muted">—</span>
-								{/if}
-							</div>
-						{/each}
-					{/if}
-				</section>
-
-				<!-- On-site assessment -->
-				<section class="req-card">
-					<div class="req-card__head">
-						<h2 class="req-card__title">On-site assessment</h2>
-						{#if canInlineEdit && !assessmentEditing && !anyEditing && r.assessment}
-							<EditPencil onclick={startAssessmentEdit} ariaLabel="Edit assessment" />
-						{/if}
-					</div>
-
-					{#if assessmentEditing}
-						<RequestAssessmentEditor
-							bind:instructions
-							bind:startDate
-							bind:endDate
-							bind:startTime
-							bind:endTime
-							bind:scheduleLater
-							bind:anytime
-							bind:selectedIds={crewIds}
-							bind:leadId
-							errors={assessmentFieldErrors}
-						/>
-						<div class="req-detail__assessment-foot">
-							{#if r.assessment}
-								<Button
-									variant="danger-outline"
-									loading={assessmentSaving}
-									onclick={() => void deleteAssessment()}
-								>
-									Delete
-								</Button>
-							{/if}
-							<div class="req-detail__assessment-foot-right">
-								<EditActionBar
-									onSave={() => void saveAssessment()}
-									onCancel={cancelAssessment}
-									saving={assessmentSaving}
-									error={assessmentError}
-									saveLabel="Save assessment"
-									variant="card"
-								/>
-							</div>
-						</div>
-					{:else if r.assessment}
-						{@const a = r.assessment}
-						{#if a.notes}
-							<div class="req-card__field">
-								<span class="req-card__label">Instructions</span>
-								<p class="req-detail__text">{a.notes}</p>
-							</div>
-						{/if}
-						<div class="req-detail__assessment-grid">
-							<div class="req-card__field">
-								<span class="req-card__label">Schedule</span>
-								<p class="req-detail__text">{fmtDateTime(a)}</p>
-								{#if canCompleteAssessment}
-									<label class="req-detail__complete">
-										<input
-											type="checkbox"
-											checked={a.status === 'completed'}
-											disabled={completing}
-											onchange={() => void completeAssessment()}
-										/>
-										<span>Complete assessment</span>
-									</label>
-								{:else if a.status === 'completed'}
-									<span class="req-detail__done"><i class="ri-check-line"></i> Completed</span>
-								{/if}
-							</div>
-							<div class="req-card__field">
-								<span class="req-card__label">Team</span>
-								{#if a.assignee_ids.length > 0}
-									<ul class="req-detail__team">
-										{#each a.assignee_ids as mid (mid)}
-											<li>{assigneeNames[mid] ?? 'Team member'}</li>
-										{/each}
-									</ul>
-								{:else}
-									<span class="req-detail__muted">Unassigned</span>
-								{/if}
-							</div>
-						</div>
-					{:else}
-						<button
-							type="button"
-							class="req-detail__placeholder"
-							disabled={!canInlineEdit}
-							onclick={startAssessmentEdit}
-						>
-							<span class="req-detail__placeholder-icon"><i class="ri-truck-line"></i></span>
-							<span>Visit the property to assess the job before you do the work</span>
-						</button>
-					{/if}
-				</section>
-
-				<!-- Product / Service -->
-				<section class="req-card">
-					<div class="req-card__head">
-						<h2 class="req-card__title">Product / Service</h2>
-						{#if canInlineEdit && !pricingEditing && !anyEditing}
-							<EditPencil onclick={startPricingEdit} ariaLabel="Edit products and services" />
-						{/if}
-					</div>
-
-					{#if pricingEditing}
-						<div class="req-detail__line-actions">
-							<Button type="button" onclick={() => lineControls?.addItem()}>
-								<i class="ri-add-line" aria-hidden="true"></i> Add line item
-							</Button>
-							<Button type="button" variant="secondary" onclick={() => (catalogOpen = true)}>
-								<i class="ri-book-2-line" aria-hidden="true"></i> Add from price book
-							</Button>
-						</div>
-						<LineItemEditor
-							bind:lineItems
-							enableCatalog
-							hoistActions
-							bind:catalogOpen
-							bind:controls={lineControls}
-						/>
-						<div class="req-detail__totals">
-							<div class="req-detail__totals-row req-detail__totals-row--total">
-								<span>Total</span>
-								<span>{formatCurrency(editSubtotal)}</span>
-							</div>
-						</div>
-						<EditActionBar
-							onSave={() => void savePricing()}
-							onCancel={cancelPricing}
-							saving={pricingSaving}
-							error={pricingError}
-							saveLabel="Save products"
-							variant="card"
-						/>
-					{:else if r.line_items.length > 0}
-						<table class="req-detail__items">
-							<thead>
-								<tr>
-									<th>Item</th>
-									<th class="req-detail__num">Qty</th>
-									<th class="req-detail__num">Unit price</th>
-									<th class="req-detail__num">Total</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each r.line_items as li (li.id)}
-									<tr>
-										<td>
-											<span class="req-detail__item-name">{li.description}</span>
-											{#if li.details}<span class="req-detail__item-details">{li.details}</span>{/if}
-										</td>
-										<td class="req-detail__num">{li.quantity}</td>
-										<td class="req-detail__num">{formatCurrency(Number(li.unit_price))}</td>
-										<td class="req-detail__num">{formatCurrency(Number(li.total))}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-						<div class="req-detail__totals">
-							<div class="req-detail__totals-row req-detail__totals-row--total">
-								<span>Total</span>
-								<span>{formatCurrency(Number(r.total))}</span>
-							</div>
-						</div>
-					{:else}
-						<p class="req-detail__muted">
-							Keep everything on track by adding products and services.
-						</p>
-						{#if canInlineEdit}
-							<div>
-								<Button type="button" onclick={startPricingEdit}>
-									<i class="ri-add-line" aria-hidden="true"></i> Add line item
-								</Button>
-							</div>
-						{/if}
-					{/if}
-				</section>
-
-				<!-- Labor (Jobber renders a placeholder here; real labor is tracked on the Job
-				     after conversion) -->
-				<section class="req-card">
-					<h2 class="req-card__title">Labor</h2>
-					<div class="req-detail__labor">
-						<i class="ri-time-line" aria-hidden="true"></i>
-						<span>Time tracked to this request will show here</span>
-					</div>
-				</section>
+					</section>
+				</div>
 			</div>
 
-			<!-- ── RIGHT RAIL ───────────────────────────────────────────────── -->
-			<div class="req-detail__rail">
-				<!-- Notes -->
-				<section class="req-card">
-					<div class="req-card__head">
-						<h2 class="req-card__title">Notes</h2>
-					</div>
-					<InlineEditRow
-						label="Internal note"
-						canEdit={canInlineEdit}
-						{...rowCtl(
-							'notes',
-							() => (notesDraft = r.notes ?? ''),
-							() => patchRequestField({ notes: notesDraft.trim() || null })
-						)}
-					>
-						{#snippet display()}
-							{#if r.notes}
-								<p class="req-detail__text">{r.notes}</p>
-							{:else}
-								<span class="req-detail__muted">Add an internal note</span>
-							{/if}
-						{/snippet}
-						{#snippet editor()}
-							<!-- svelte-ignore a11y_autofocus -->
-							<textarea
-								class="field__input req-detail__area"
-								rows="4"
-								bind:value={notesDraft}
-								placeholder="Note visible only to your team"
-								autofocus
-							></textarea>
-						{/snippet}
-					</InlineEditRow>
+			<RequestConvertDialog
+				bind:open={convertOpen}
+				convertSoon={false}
+				{converting}
+				onConvertQuote={() => convert('quote')}
+				onConvertJob={() => convert('job')}
+				onArchive={() => void runAction('archive').then((ok) => ok && toast.success('Archived'))}
+				onLeave={() => {}}
+			/>
 
-					{#if r.photos.length > 0}
-						<div class="req-card__field">
-							<span class="req-card__label">Attachments from client</span>
-							<div class="req-detail__photos">
-								{#each r.photos as photo (photo.id)}
-									<a
-										class="req-detail__photo req-detail__photo--sm"
-										href={photo.web_url}
-										target="_blank"
-										rel="noopener"
-										title={photo.original_filename}
-									>
-										<img src={photo.thumbnail_url} alt={photo.original_filename} loading="lazy" />
-									</a>
-								{/each}
-							</div>
-						</div>
-					{/if}
-				</section>
+			<ConfirmDialog
+				bind:open={declineOpen}
+				title="Decline this request?"
+				description="The request is closed and any held assessment slot is released. You can unarchive it later."
+				confirmLabel="Decline"
+				variant="destructive"
+				loading={actionLoading}
+				onConfirm={async () => {
+					const ok = await runAction('decline');
+					if (ok) toast.success('Request declined');
+				}}
+			/>
+
+			<ConfirmDialog
+				bind:open={deleteOpen}
+				title="Delete this request?"
+				description="This removes the request and its assessment. This cannot be undone."
+				confirmLabel="Delete"
+				variant="destructive"
+				loading={deleting}
+				onConfirm={confirmDelete}
+			/>
+		{:else}
+			<div class="req-detail__body">
+				<div class="req-detail__main">
+					<SkeletonLoader lines={3} height="92px" label="Loading details" />
+					<SkeletonLoader lines={2} height="92px" label="" />
+				</div>
+				<div class="req-detail__rail">
+					<SkeletonLoader lines={2} height="92px" label="" />
+				</div>
 			</div>
-		</div>
-
-		<RequestConvertDialog
-			bind:open={convertOpen}
-			convertSoon={false}
-			converting={converting}
-			onConvertQuote={() => convert('quote')}
-			onConvertJob={() => convert('job')}
-			onArchive={() => void runAction('archive').then((ok) => ok && toast.success('Archived'))}
-			onLeave={() => {}}
-		/>
-
-		<ConfirmDialog
-			bind:open={declineOpen}
-			title="Decline this request?"
-			description="The request is closed and any held assessment slot is released. You can unarchive it later."
-			confirmLabel="Decline"
-			variant="destructive"
-			loading={actionLoading}
-			onConfirm={async () => {
-				const ok = await runAction('decline');
-				if (ok) toast.success('Request declined');
-			}}
-		/>
-
-		<ConfirmDialog
-			bind:open={deleteOpen}
-			title="Delete this request?"
-			description="This removes the request and its assessment. This cannot be undone."
-			confirmLabel="Delete"
-			variant="destructive"
-			loading={deleting}
-			onConfirm={confirmDelete}
-		/>
+		{/if}
 	{:else}
 		<EmptyState title="Couldn't load request" description={errorMsg ?? 'Unknown error.'} />
 	{/if}

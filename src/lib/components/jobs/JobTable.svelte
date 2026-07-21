@@ -170,12 +170,14 @@
 						hasSeriesAnchor={job.has_series_anchor}
 						nextOpenVisitStart={job.next_open_visit_start}
 						hasOpenVisits={job.has_open_visits}
+						completedAt={job.completed_at}
+						cancelledAt={job.cancelled_at}
 					/>
 				</td>
 
 				<!-- Billing -->
 				<td class="list-table__td list-table__td--lg">
-					<JobBillingBadge status={job.status} billing={job.billing} total={job.total} />
+					<JobBillingBadge cancelledAt={job.cancelled_at} billing={job.billing} total={job.total} />
 				</td>
 
 				<!-- Total -->

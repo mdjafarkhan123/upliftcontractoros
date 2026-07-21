@@ -134,13 +134,40 @@ export const appointmentsStore = {
 	 * a drag-to-move / drag-to-resize reflects instantly before the server confirms.
 	 * Returns the prior {scheduled_start, scheduled_end} so the caller can revert on
 	 * a failed PATCH (pass it straight back into optimisticUpdate). Null if not found.
+	 *
+	 * The Day-view dispatch grid also drags cards ACROSS team-member columns, which is
+	 * a crew reassignment — so the patch/prev optionally carry the assignee fields too,
+	 * letting the card jump to the new person's column before the server confirms. The
+	 * returned prev always includes them, so passing it straight back reverts cleanly.
 	 */
 	optimisticUpdate(
 		id: string,
-		patch: { scheduled_start: string; scheduled_end: string | null; all_day?: boolean }
-	): { scheduled_start: string; scheduled_end: string | null; all_day: boolean } | null {
-		let prev: { scheduled_start: string; scheduled_end: string | null; all_day: boolean } | null =
-			null;
+		patch: {
+			scheduled_start: string;
+			scheduled_end: string | null;
+			all_day?: boolean;
+			assigned_to?: string | null;
+			assignee_name?: string | null;
+			assignee_count?: number;
+		}
+	): {
+		scheduled_start: string;
+		scheduled_end: string | null;
+		all_day: boolean;
+		assigned_to: string | null;
+		assignee_name: string | null;
+		assignee_count: number;
+	} | null {
+		let prev:
+			| {
+					scheduled_start: string;
+					scheduled_end: string | null;
+					all_day: boolean;
+					assigned_to: string | null;
+					assignee_name: string | null;
+					assignee_count: number;
+			  }
+			| null = null;
 		for (const [key, entry] of cache) {
 			let changed = false;
 			const items = entry.items.map((it) => {
@@ -149,7 +176,10 @@ export const appointmentsStore = {
 					prev = {
 						scheduled_start: it.scheduled_start,
 						scheduled_end: it.scheduled_end,
-						all_day: it.all_day
+						all_day: it.all_day,
+						assigned_to: it.assigned_to,
+						assignee_name: it.assignee_name,
+						assignee_count: it.assignee_count
 					};
 				}
 				changed = true;
@@ -157,7 +187,12 @@ export const appointmentsStore = {
 					...it,
 					scheduled_start: patch.scheduled_start,
 					scheduled_end: patch.scheduled_end,
-					all_day: patch.all_day ?? it.all_day
+					all_day: patch.all_day ?? it.all_day,
+					assigned_to: patch.assigned_to !== undefined ? patch.assigned_to : it.assigned_to,
+					assignee_name:
+						patch.assignee_name !== undefined ? patch.assignee_name : it.assignee_name,
+					assignee_count:
+						patch.assignee_count !== undefined ? patch.assignee_count : it.assignee_count
 				};
 			});
 			if (changed) cache.set(key, { items, fetchedAt: entry.fetchedAt });

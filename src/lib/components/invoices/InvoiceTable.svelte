@@ -15,7 +15,8 @@
 		canSend = false,
 		canCancel = false,
 		onSend,
-		onCancel
+		onCancel,
+		onDelete
 	}: {
 		items: InvoiceListItem[];
 		canEdit?: boolean;
@@ -23,6 +24,7 @@
 		canCancel?: boolean;
 		onSend?: (invoice: InvoiceListItem) => void;
 		onCancel?: (invoice: InvoiceListItem) => void;
+		onDelete?: (invoice: InvoiceListItem) => void;
 	} = $props();
 
 	function fmtDate(iso: string | null): string {
@@ -53,7 +55,10 @@
 			cancellable:
 				invoice.status !== 'paid' &&
 				invoice.status !== 'cancelled' &&
-				Number(invoice.amount_paid) === 0
+				Number(invoice.amount_paid) === 0,
+			// Delete (soft): the DELETE endpoint blocks only paid / partly-paid invoices, so
+			// drafts, sent-but-unpaid, AND cancelled invoices are deletable. Mirror that gate.
+			deletable: invoice.status !== 'paid' && Number(invoice.amount_paid) === 0
 		};
 	}
 
@@ -94,6 +99,14 @@
 				icon: 'ri-close-circle-line',
 				destructive: true,
 				onSelect: () => onCancel(invoice)
+			});
+		if (canCancel && a.deletable && onDelete)
+			actions.push({
+				key: 'delete',
+				label: 'Delete invoice',
+				icon: 'ri-delete-bin-line',
+				destructive: true,
+				onSelect: () => onDelete(invoice)
 			});
 		return actions;
 	}

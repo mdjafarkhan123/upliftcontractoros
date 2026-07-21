@@ -96,22 +96,57 @@ export const eventsStore = {
 	 */
 	optimisticUpdate(
 		id: string,
-		patch: { start_at: string; end_at: string | null; all_day?: boolean }
-	): { start_at: string | null; end_at: string | null; all_day: boolean } | null {
-		let prev: { start_at: string | null; end_at: string | null; all_day: boolean } | null = null;
+		patch: {
+			start_at: string;
+			end_at: string | null;
+			all_day?: boolean;
+			assigned_to?: string | null;
+			assignee_name?: string | null;
+			assignee_count?: number;
+		}
+	): {
+		start_at: string | null;
+		end_at: string | null;
+		all_day: boolean;
+		assigned_to: string | null;
+		assignee_name: string | null;
+		assignee_count: number;
+	} | null {
+		let prev:
+			| {
+					start_at: string | null;
+					end_at: string | null;
+					all_day: boolean;
+					assigned_to: string | null;
+					assignee_name: string | null;
+					assignee_count: number;
+			  }
+			| null = null;
 		for (const [key, entry] of cache) {
 			let changed = false;
 			const items = entry.items.map((it) => {
 				if (it.id !== id) return it;
 				if (!prev) {
-					prev = { start_at: it.start_at, end_at: it.end_at, all_day: it.all_day };
+					prev = {
+						start_at: it.start_at,
+						end_at: it.end_at,
+						all_day: it.all_day,
+						assigned_to: it.assigned_to,
+						assignee_name: it.assignee_name,
+						assignee_count: it.assignee_count
+					};
 				}
 				changed = true;
 				return {
 					...it,
 					start_at: patch.start_at,
 					end_at: patch.end_at,
-					all_day: patch.all_day ?? it.all_day
+					all_day: patch.all_day ?? it.all_day,
+					assigned_to: patch.assigned_to !== undefined ? patch.assigned_to : it.assigned_to,
+					assignee_name:
+						patch.assignee_name !== undefined ? patch.assignee_name : it.assignee_name,
+					assignee_count:
+						patch.assignee_count !== undefined ? patch.assignee_count : it.assignee_count
 				};
 			});
 			if (changed) cache.set(key, { items, fetchedAt: entry.fetchedAt });

@@ -11,9 +11,15 @@
 // $state fields, so reactivity flows through the shared reference.
 
 import type { QuoteLineDraft } from '$lib/types/quotes';
-import type { JobRecurrence, EndUnit } from '$lib/jobs/recurrence';
+import type { JobRecurrence, InvoiceRecurrence, EndUnit } from '$lib/jobs/recurrence';
 import { summarizeRecurrence, shortRepeatLabel } from '$lib/jobs/recurrence';
-import { milestoneAmount, type BillingType, type InvoiceFrequency } from '$lib/jobs/billing';
+import {
+	milestoneAmount,
+	type BillingType,
+	type BillingFrequency,
+	type InvoiceFrequency,
+	type BillingRepeatMode
+} from '$lib/jobs/billing';
 import type { RecurrenceShape } from '$lib/components/jobs/RecurringScheduleModal.svelte';
 import type { MilestoneDraft } from '$lib/components/jobs/JobBillingEditor.svelte';
 
@@ -50,6 +56,32 @@ function emptyRecurShape(): RecurrenceShape {
 		month_last_day: false,
 		month_cells: []
 	};
+}
+
+// The canned "Monthly on the last day of the month" invoice schedule — Jobber's default periodic
+// invoice option (ref/billing/10). A month-mode rule flagged for the last day, nothing else set.
+function monthlyLastDayShape(): RecurrenceShape {
+	return {
+		freq: 'month',
+		interval: 1,
+		weekdays: [],
+		month_mode: 'day_of_month',
+		month_days: [],
+		month_last_day: true,
+		month_cells: []
+	};
+}
+
+// Whether a shape IS the canned monthly-last-day rule (vs an arbitrary custom periodic rule) — used
+// to decide which "Invoice frequency" option the recurring billing rests on.
+function isMonthlyLastDay(s: RecurrenceShape): boolean {
+	return (
+		s.freq === 'month' &&
+		s.interval === 1 &&
+		s.month_mode === 'day_of_month' &&
+		s.month_last_day === true &&
+		s.month_days.length === 0
+	);
 }
 
 // Pick the smartest notify default the moment a contact is chosen: SMS + Email when we have
@@ -118,17 +150,27 @@ export class JobFormState {
 	discountLabel = $state('');
 	taxRatePct = $state('');
 
-	// ── Billing (one-off): close reminder + payment schedule ──────────────────────
-	invoiceOnClose = $state(false);
+	// ── Billing model (Jobber billingType × billingFrequency) — one model, every job ──
+	// billingType = WHAT each invoice contains ('fixed' = the job's line items; 'visit_based' =
+	// completed visits). billingFrequency = WHEN to invoice ('never' = not set up). invoiceFrequency
+	// = the cadence when billingFrequency='periodic'. The payment schedule (split/milestones) is a
+	// fixed-price progress-invoicing option and applies only when billingType='fixed'.
+	billingType = $state<BillingType>('fixed');
+	billingFrequency = $state<BillingFrequency>('on_completion');
+	invoiceFrequency = $state<InvoiceFrequency>('weekly');
 	splitEnabled = $state(false);
 	splitBy = $state<'percent' | 'fixed'>('percent');
 	billingMilestones = $state<MilestoneDraft[]>([]);
 
-	// ── Billing (recurring): how a recurring job is invoiced ──────────────────────
-	recurBillingEnabled = $state(false);
-	recurBillingType = $state<BillingType>('visit_based');
-	invoiceFrequency = $state<InvoiceFrequency>('per_visit');
-	fixedInvoiceAmount = $state('');
+	// ── Invoice recurrence (Jobber "Invoice frequency" → periodic) ──────────────────
+	// The repeat rule for periodic invoicing, INDEPENDENT of the visit recurrence (recurShape): a
+	// job may VISIT weekly but INVOICE monthly (Jobber lets them differ). Reuses the same
+	// RecurrenceShape + RecurringScheduleModal + summarizeRecurrence as the visit rule. Meaningful
+	// only when billingFrequency === 'periodic'. No end condition — the invoice window inherits the
+	// job's schedule window (Jobber shows no end picker in the billing section). Defaults to the
+	// canned monthly-last-day rule so a fresh recurring job lands on Jobber's default.
+	invoiceRecurShape = $state<RecurrenceShape>(monthlyLastDayShape());
+	invoiceRecurModalOpen = $state(false);
 
 	// ── Assignment & client notification ──────────────────────────────────────────
 	assignees = $state<JobAssignee[]>([]);
@@ -210,7 +252,7 @@ export class JobFormState {
 		)
 	);
 	paymentOverAllocated = $derived(
-		this.jobMode === 'one_off' &&
+		this.billingType === 'fixed' &&
 			this.splitEnabled &&
 			Math.round((this.paymentAllocated - this.total) * 100) / 100 > 0.01
 	);
@@ -278,6 +320,25 @@ export class JobFormState {
 	repeatShort = $derived(
 		this.recurConfigured
 			? shortRepeatLabel({ ...this.recurShape, end_type: this.endType } as JobRecurrence)
+			: ''
+	);
+
+	// ── Derived: which Jobber "Invoice frequency" option recurring billing rests on ──
+	// From billingFrequency (+ the invoice rule's shape for the periodic ones). 'custom' (the
+	// action row) is never a resting value, so it never appears here.
+	billingRepeatMode = $derived.by<BillingRepeatMode>(() => {
+		if (this.billingFrequency === 'on_completion') return 'on_completion';
+		if (this.billingFrequency === 'per_visit') return 'per_visit';
+		if (this.billingFrequency === 'never') return 'never';
+		// periodic: the canned monthly-last-day preset, or a saved custom rule.
+		return isMonthlyLastDay(this.invoiceRecurShape) ? 'monthly_last' : 'custom_saved';
+	});
+
+	// Friendly label for a saved CUSTOM invoice rule (the 'custom_saved' dropdown option), e.g.
+	// "Every 2 weeks on Mon". Empty for the canned presets (which have their own fixed labels).
+	invoiceRepeatLabel = $derived(
+		this.billingRepeatMode === 'custom_saved'
+			? summarizeRecurrence({ ...this.invoiceRecurShape, end_type: 'after' } as JobRecurrence)
 			: ''
 	);
 
@@ -392,6 +453,29 @@ export class JobFormState {
 	setJobMode = (mode: JobMode): void => {
 		if (mode === this.jobMode) return;
 		this.jobMode = mode;
+		// Billing UI differs by type (Jobber): one-off = 2 checkboxes (always fixed price); recurring
+		// = billing-type radios + an invoice-frequency schedule. Seed each type's SHOWN default when
+		// the billing is still pristine, so a toggle lands on Jobber's default rather than a stale
+		// cross-type state — but never clobber a schedule the contractor already customized.
+		if (mode === 'recurring') {
+			const pristineOneOff =
+				this.billingType === 'fixed' &&
+				this.billingFrequency === 'on_completion' &&
+				!this.splitEnabled;
+			if (pristineOneOff) {
+				// Jobber recurring default (ref/billing/10): Visit based + Monthly on the last day.
+				this.billingType = 'visit_based';
+				this.billingFrequency = 'periodic';
+				this.invoiceRecurShape = monthlyLastDayShape();
+			}
+		} else {
+			// One-off is always fixed price (Jobber). A recurring-only frequency (per_visit / periodic)
+			// has no one-off equivalent, so fall back to "invoice when the job is closed".
+			this.billingType = 'fixed';
+			if (this.billingFrequency === 'per_visit' || this.billingFrequency === 'periodic') {
+				this.billingFrequency = 'on_completion';
+			}
+		}
 		if (mode === 'recurring' && !this.recurConfigured && !this.scheduleAsNeeded) {
 			this.setRepeatMode('week1');
 			return;
@@ -437,6 +521,73 @@ export class JobFormState {
 		if (!this.scheduledStart) this.setDateQuick(0);
 		this.recurShape = this.presetShape(mode);
 		this.recurConfigured = true;
+	};
+
+	// Apply a Jobber "Invoice frequency" dropdown selection (recurring billing). 'custom' opens the
+	// recurrence modal (commits via onInvoiceRecurSaved — nothing changes until Save); 'custom_saved'
+	// is the resting label (no-op); the three plain frequencies set billingFrequency directly;
+	// 'monthly_last' selects periodic with the canned monthly-last-day rule. Independent of the
+	// VISIT repeat rule — this configures how often the job INVOICES.
+	setBillingRepeatMode = (mode: BillingRepeatMode): void => {
+		if (mode === 'custom') {
+			this.invoiceRecurModalOpen = true;
+			return;
+		}
+		if (mode === 'custom_saved') return;
+		if (mode === 'on_completion' || mode === 'per_visit' || mode === 'never') {
+			this.billingFrequency = mode;
+			return;
+		}
+		// monthly_last
+		this.billingFrequency = 'periodic';
+		this.invoiceRecurShape = monthlyLastDayShape();
+	};
+
+	// Commit a custom invoice schedule from the RecurringScheduleModal → periodic billing.
+	onInvoiceRecurSaved = (v: RecurrenceShape): void => {
+		this.invoiceRecurShape = v;
+		this.billingFrequency = 'periodic';
+	};
+
+	// Build the InvoiceRecurrence payload from the shape. Null unless billing is periodic. No end
+	// condition — the invoice window inherits the job's schedule window.
+	buildInvoiceRecurrence = (): InvoiceRecurrence | null => {
+		if (this.billingFrequency !== 'periodic') return null;
+		const s = this.invoiceRecurShape;
+		const r: InvoiceRecurrence = {
+			freq: s.freq,
+			interval: Math.max(1, Math.floor(Number(s.interval) || 1))
+		};
+		if (s.freq === 'week') {
+			r.weekdays = [...s.weekdays].sort((a, b) => a - b);
+		} else if (s.freq === 'month') {
+			r.month_mode = s.month_mode;
+			if (s.month_mode === 'day_of_month') {
+				r.month_days = [...s.month_days].sort((a, b) => a - b);
+				r.month_last_day = s.month_last_day;
+			} else {
+				r.month_cells = [...s.month_cells].sort((a, b) => a.week - b.week || a.weekday - b.weekday);
+			}
+		}
+		return r;
+	};
+
+	// Seed invoiceRecurShape from a stored rule (edit-page hydrate). Missing arrays default empty so
+	// the shape is always complete; null → the canned monthly-last-day default.
+	hydrateInvoiceRecurrence = (r: InvoiceRecurrence | null): void => {
+		if (!r) {
+			this.invoiceRecurShape = monthlyLastDayShape();
+			return;
+		}
+		this.invoiceRecurShape = {
+			freq: r.freq,
+			interval: r.interval,
+			weekdays: r.weekdays ? [...r.weekdays] : [],
+			month_mode: r.month_mode ?? 'day_of_month',
+			month_days: r.month_days ? [...r.month_days] : [],
+			month_last_day: r.month_last_day ?? false,
+			month_cells: r.month_cells ? r.month_cells.map((c) => ({ ...c })) : []
+		};
 	};
 
 	// Quick-date chip (Today / Tomorrow / …). Changes only the DATE — a time already
@@ -571,14 +722,13 @@ export class JobFormState {
 			discountValue: this.discountValue,
 			discountLabel: this.discountLabel,
 			taxRatePct: this.taxRatePct,
-			invoiceOnClose: this.invoiceOnClose,
+			billingType: this.billingType,
+			billingFrequency: this.billingFrequency,
+			invoiceFrequency: this.invoiceFrequency,
+			invoiceRecurShape: JSON.stringify($state.snapshot(this.invoiceRecurShape)),
 			splitEnabled: this.splitEnabled,
 			splitBy: this.splitBy,
 			billingMilestones: JSON.stringify($state.snapshot(this.billingMilestones)),
-			recurBillingEnabled: this.recurBillingEnabled,
-			recurBillingType: this.recurBillingType,
-			invoiceFrequency: this.invoiceFrequency,
-			fixedInvoiceAmount: this.fixedInvoiceAmount,
 			jobMode: this.jobMode,
 			scheduleAsNeeded: this.scheduleAsNeeded,
 			recurConfigured: this.recurConfigured,

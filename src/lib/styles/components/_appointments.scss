@@ -821,16 +821,82 @@ $cal-rail-w: 88px;
 		}
 	}
 
-	// Sticky day-of-week header row.
-	&__head {
+	// Day view: single-day title ("Tue 21") pinned at the very top, above the member
+	// columns. Sticky top:0 so it never scrolls away; its measured height (via
+	// --cal-week-title-h) offsets the header + Anytime lane that pin beneath it.
+	&__daytitle {
 		position: sticky;
 		top: 0;
+		z-index: 31; // above __head (30)
+		flex-shrink: 0;
+		padding: $space-2 0;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-surface);
+		text-align: center;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
+	}
+
+	// Sticky column-header row (week: day-of-week + date · day: team-member avatars).
+	// In day view it pins below the day title, so its sticky top follows the title's
+	// measured height (--cal-week-title-h, 0px in week view).
+	&__head {
+		position: sticky;
+		top: var(--cal-week-title-h, 0px);
 		z-index: 30;
 		display: grid;
-		grid-template-columns: $cal-rail-w repeat(7, 1fr);
+		grid-template-columns: $cal-rail-w repeat(var(--cal-cols, 7), 1fr);
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-bg-surface);
+	}
+
+	// Day-view member column header: avatar (initials) + name, centered like the week
+	// header. Shares the head-day cell chrome (border, today tint unused here).
+	&__head-member {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 3px;
+		min-width: 0;
+		padding: $space-2 $space-1;
+		border-right: 1px solid var(--color-border);
+		text-align: center;
+
+		&:last-child {
+			border-right: none;
+		}
+	}
+
+	&__head-avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: $radius-full;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		background: var(--color-brand);
+		color: var(--color-text-on-brand);
+
+		&--unassigned {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+			border: 1px dashed var(--color-border-strong);
+		}
+	}
+
+	&__head-membername {
+		max-width: 100%;
+		overflow: hidden;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	&__head-gutter {
@@ -886,10 +952,10 @@ $cal-rail-w: 88px;
 	// height, set inline by CalendarWeekGrid.
 	&__anytime {
 		position: sticky;
-		top: var(--cal-week-head-h, 0px);
+		top: calc(var(--cal-week-title-h, 0px) + var(--cal-week-head-h, 0px));
 		z-index: 29; // under __head (30), above grid blocks (<= 20)
 		display: grid;
-		grid-template-columns: $cal-rail-w repeat(7, 1fr);
+		grid-template-columns: $cal-rail-w repeat(var(--cal-cols, 7), 1fr);
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-bg-surface);
@@ -1092,11 +1158,11 @@ $cal-rail-w: 88px;
 		border: 1px solid var(--color-bg-surface);
 	}
 
-	// Scrollable grid body: time rail + 7 day columns.
+	// Scrollable grid body: time rail + N columns (week: 7 days · day: crew members).
 	&__body {
 		position: relative;
 		display: grid;
-		grid-template-columns: $cal-rail-w repeat(7, 1fr);
+		grid-template-columns: $cal-rail-w repeat(var(--cal-cols, 7), 1fr);
 		flex: 1;
 	}
 
@@ -1808,7 +1874,6 @@ $cal-rail-w: 88px;
 		box-shadow:
 			var(--shadow-md),
 			0 0 0 1px rgba(34, 125, 83, 0.2);
-		transform: scale(1.02);
 	}
 
 	// Tentative "being created" block — stays painted behind the quick-create
@@ -3071,6 +3136,35 @@ $cal-rail-w: 88px;
 		margin: 2px 0 0;
 		font-size: $fs-body;
 		color: var(--color-text-secondary);
+	}
+
+	// Info | Client tabs (Jobber ref/billing/18) — used by the invoice-reminder detail popover.
+	&__tabs {
+		margin-top: $space-3;
+		display: flex;
+		gap: $space-4;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	&__tab {
+		padding: $space-2 0;
+		border: none;
+		border-bottom: 2px solid transparent;
+		background: transparent;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+
+		&:hover {
+			color: var(--color-text-primary);
+		}
+
+		&--active {
+			color: var(--color-brand);
+			border-bottom-color: var(--color-brand);
+			font-weight: $weight-semibold;
+		}
 	}
 
 	// Shared section label — bold, sentence-case, like Jobber's "Details" / "Team".

@@ -40,16 +40,18 @@ Load them when relevant — do not load all at once.
 | **Project Tech Stack**                            | `references/stack.md`                         |
 | **Target contractors**                            | `contractor-crm/references/contractors.md`    |
 
-### UI Design & Aesthetics (`contractor-crm-design`)
+### UI Design & Aesthetics (`design`)
 
-Two reference screenshots live at `assets/reference-dashboard.webp` and `assets/reference-pipeline.webp` inside the skill folder — view them before building anything new. They are the ground truth for what "done well" looks like.
+The `design` skill is the full component design system — deep forest-green brand, clean white surfaces, automatic dark mode. **Load its `SKILL.md` first**, then read only the module(s) your task touches. Foundation files (`layout.md`, `typography.md`, `colors.md`, `shadows.md`, `radius.md`, `borders.md`) apply to any UI work; component and CRM-specific files load per task.
 
-| Working on...                                          | Reference File                   |
-| ------------------------------------------------------ | -------------------------------- |
-| **Tokens**, CSS variables, colors, spacing, shadows    | `references/tokens.scss`         |
-| **Components**, buttons, badges, cards, sidebar, forms | `references/components.md`       |
-| **Layout Patterns**, sidebar, topbar, grids, pipeline  | `references/layout-patterns.md`  |
-| **Visual Reference**, screenshot element index         | `references/visual-reference.md` |
+**SCSS architecture** lives in `.claude/skills/design/scss/`: `_variables.scss` (raw palette + layout values — never used directly in component code), `_mixins.scss` (helpers: card-base, focus-ring, glint, etc.), `_theme.scss` (emits every `var(--token)` for light + dark), `_base.scss` (reset + base elements). Tokens are semantic CSS custom properties (`var(--brand)`, `var(--heading)`, `var(--border-default)`) — no raw hex in component code.
+
+| Working on...                                          | Reference File                                       |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| **Foundation** — colors, type, spacing, radius, shadow | `brand.md` · `colors.md` · `typography.md` · `layout.md` · `radius.md` · `shadows.md` · `borders.md` |
+| **Core components** — buttons, cards, inputs, modals…  | `buttons.md`, `cards.md`, `inputs.md`, `modals.md`, `tables.md`, `sidebars.md`, `badges.md`, `tabs.md`, `dropdown.md`, `alerts.md`, `avatars.md`, `tooltips-popovers.md`, `accordion.md`, `pagination.md`, `lists.md`, `radios-checkboxes-toggle.md`, `button-group.md`, `icon-shapes.md`, `content.md` |
+| **CRM-specific** — status, KPI cards, charts           | `status-indicators.md` · `stats-cards.md` · `data-display.md` |
+| **Project governance** — primitive registry + Styling Law | `ui-primitives.md`                                |
 
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
 
@@ -117,10 +119,10 @@ Full patterns and code examples live in skills — these are the guardrails.
 
 1. Update skill whenever you need
 1. **Svelte 5 Runes only** — no `export let`, no `$:`, no `on:click`, no slots, no `writable`. Use `$props()`, `$state()`, `$derived()`, `$effect()`, and `$bindable()` only. For two-way bindable props, declare with `$bindable()` inside `$props()`. Details in `contractor-crm-svelte-ui` skill. Write code efficiently. Focus on performance.
-1. SCSS with BEM only. Desktop design first. Always use remix icon. If you see any inline svg remove and use remix icon. **The Styling Law:** any BEM class used by 2+ components MUST be defined in a global `src/lib/styles/components/_*.scss` partial, never in a component's scoped `<style>` (Svelte's scope hash makes a scoped class apply to only that one component — the others ship unstyled and it compiles clean). See `.claude/skills/contractor-crm-design/references/ui-primitives.md`.
+1. SCSS with BEM only. Desktop design first. Always use remix icon. If you see any inline svg remove and use remix icon. **The Styling Law:** any BEM class used by 2+ components MUST be defined in a global `src/lib/styles/components/_*.scss` partial, never in a component's scoped `<style>` (Svelte's scope hash makes a scoped class apply to only that one component — the others ship unstyled and it compiles clean). See `.claude/skills/design/ui-primitives.md`.
 
 1. For any Async operation like: create, read, delete, update... alwasy shows a loading animation whether by animated button or popup until the operation is finished
-1. Alwasy use bits ui component for Calender, Time picker, dropdown, select/option etc.. whatever exist. Never a native `<input type="date"|"time"|"datetime-local">` or native `<select>`. The canonical built primitives + import paths are in the **UI Primitives Registry**: `.claude/skills/contractor-crm-design/references/ui-primitives.md` (grep `src/lib/components/ui/` before hand-rolling anything).
+1. Alwasy use bits ui component for Calender, Time picker, dropdown, select/option etc.. whatever exist. Never a native `<input type="date"|"time"|"datetime-local">` or native `<select>`. The canonical built primitives + import paths are in the **UI Primitives Registry**: `.claude/skills/design/ui-primitives.md` (grep `src/lib/components/ui/` before hand-rolling anything).
 1. **SSR layout shell, CSR page content** — The `/(app)/+layout.svelte` shell (sidebar, nav, session) is server-side rendered for instant first paint. All page content lives under `/(app)/(pages)/` and is CSR only — no `+page.server.ts` for page data, no store reads during SSR. The root `+layout.ts` does NOT set `ssr = false`; the `(pages)` group layout does. In `/(app)/+layout.ts`, always guard `sessionStore.update()` with a `browser` check to prevent module-level state leaking between server requests. `$lib/server/*` remains forbidden in `.svelte` files and `+page.ts`.
 1. **Server isolation absolute** — `SUPABASE_SERVICE_ROLE_KEY` never in `.svelte` or `+page.ts`. All writes go through `/api/*`. `$lib/server/*` never imported in `.svelte` files.
 1. **Workers run standalone** — `npm run worker` in a separate terminal (runs `node --env-file=.env --import tsx worker.ts`; plain `npx tsx worker.ts` fails with `DATABASE_URL is required` because it skips `.env`). Never started from `hooks.server.ts`, `+layout.ts`, or any SvelteKit lifecycle.

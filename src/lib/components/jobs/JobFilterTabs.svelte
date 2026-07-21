@@ -14,13 +14,11 @@
 
 	const total = $derived(
 		counts
-			? counts.pending +
+			? counts.unscheduled +
 					counts.upcoming +
 					counts.today +
-					counts.overdue +
+					counts.late +
 					counts.action_required +
-					counts.in_progress +
-					counts.on_hold +
 					counts.completed +
 					counts.cancelled
 			: 0
@@ -28,13 +26,11 @@
 
 	const tabs = $derived<ListTab<JobsFilterStatus>[]>([
 		{ value: 'all', label: 'All', count: total },
-		{ value: 'pending', label: 'Unscheduled', count: counts?.pending },
+		{ value: 'unscheduled', label: 'Unscheduled', count: counts?.unscheduled },
 		{ value: 'upcoming', label: 'Upcoming', count: counts?.upcoming },
 		{ value: 'today', label: 'Today', count: counts?.today },
-		{ value: 'overdue', label: 'Overdue', count: counts?.overdue },
+		{ value: 'late', label: 'Late', count: counts?.late },
 		{ value: 'action_required', label: 'Action Required', count: counts?.action_required },
-		{ value: 'in_progress', label: 'In Progress', count: counts?.in_progress },
-		{ value: 'on_hold', label: 'On Hold', count: counts?.on_hold },
 		{ value: 'completed', label: 'Completed', count: counts?.completed },
 		{ value: 'cancelled', label: 'Cancelled', count: counts?.cancelled },
 		{ value: 'deleted', label: 'Deleted' }

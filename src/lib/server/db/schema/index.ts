@@ -70,6 +70,7 @@ export type {
 // Domain 4 — Jobs
 export {
 	jobStatusEnum,
+	jobBillingFrequencyEnum,
 	jobExpenseCategoryEnum,
 	jobs,
 	jobExpenses,
@@ -191,7 +192,13 @@ export {
 	appointments,
 	appointmentAssignees,
 	calendarEvents,
-	calendarEventAssignees
+	calendarEventAssignees,
+	// MUST stay exported (same rule as bookingFormTypeEnum): drizzle-kit only sees
+	// exported enums, so dropping it here makes `generate` emit a destructive
+	// DROP TYPE. See [[drizzle-enum-barrel-export-fix]].
+	jobInvoiceReminderStatusEnum,
+	jobInvoiceReminders,
+	jobInvoiceReminderAssignees
 } from './07_appointments';
 export type {
 	Appointment,
@@ -201,7 +208,11 @@ export type {
 	CalendarEvent,
 	NewCalendarEvent,
 	CalendarEventAssignee,
-	NewCalendarEventAssignee
+	NewCalendarEventAssignee,
+	JobInvoiceReminder,
+	NewJobInvoiceReminder,
+	JobInvoiceReminderAssignee,
+	NewJobInvoiceReminderAssignee
 } from './07_appointments';
 
 // Domain 8 — Reputation

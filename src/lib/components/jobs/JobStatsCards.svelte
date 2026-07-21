@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { JobsStats } from '$lib/types/jobs';
 
-	export type JobStatsKey = 'today' | 'in_progress' | 'awaiting_review' | 'unscheduled';
+	export type JobStatsKey = 'today' | 'late' | 'awaiting_review' | 'unscheduled';
 
 	let {
 		stats,
@@ -24,7 +24,7 @@
 
 	const cards: Card[] = [
 		{ scope: 'today', label: 'Today', icon: 'ri-calendar-schedule-line', tint: 'today' },
-		{ scope: 'in_progress', label: 'In progress', icon: 'ri-hammer-line', tint: 'in-progress' },
+		{ scope: 'late', label: 'Late', icon: 'ri-alarm-warning-line', tint: 'late' },
 		{
 			scope: 'awaiting_review',
 			label: 'Awaiting review',

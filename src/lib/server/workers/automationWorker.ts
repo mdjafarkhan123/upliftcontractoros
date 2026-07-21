@@ -1303,7 +1303,8 @@ async function handleJobScheduledConfirmation(data: EventJobData) {
 		.select()
 		.from(jobs)
 		.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId), isNull(jobs.deleted_at)));
-	if (!jobRow || !jobRow.scheduled_start || jobRow.status === 'cancelled') return;
+	// Only send schedule confirmations for open jobs — a closed (archived) job never needs one.
+	if (!jobRow || !jobRow.scheduled_start || jobRow.status !== 'active') return;
 
 	const { org, settings } = await loadContext(orgId);
 	if (!org || !settings) return;

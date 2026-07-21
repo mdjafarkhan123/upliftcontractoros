@@ -36,13 +36,11 @@ export const GET: RequestHandler = async (event) => {
 	// single denormalized date — so recurring/multi-visit jobs are counted where their badge sits.
 	const [row] = await db.execute<{
 		today_active: number;
-		in_progress: number;
-		on_hold: number;
 		awaiting_review: number;
-		pending: number;
+		unscheduled: number;
 		upcoming: number;
 		today_scheduled: number;
-		overdue: number;
+		late: number;
 		action_required: number;
 		completed: number;
 		cancelled: number;
@@ -50,6 +48,8 @@ export const GET: RequestHandler = async (event) => {
 		WITH job_state AS (
 			SELECT
 				jobs.status AS status,
+				jobs.completed_at AS completed_at,
+				jobs.cancelled_at AS cancelled_at,
 				EXISTS (SELECT 1 FROM appointments a
 					WHERE a.job_id = jobs.id AND a.deleted_at IS NULL
 					  AND a.status IN ('scheduled','unscheduled')) AS has_open,
@@ -73,40 +73,40 @@ export const GET: RequestHandler = async (event) => {
 			WHERE ${and(...scopeFilters)}
 		)
 		SELECT
-			COUNT(*) FILTER (WHERE status IN ('scheduled','in_progress')
+			COUNT(*) FILTER (WHERE status = 'active'
 				AND eff_open_start >= ${todayStart}::timestamptz
 				AND eff_open_start <= ${todayEnd}::timestamptz)::int AS today_active,
-			COUNT(*) FILTER (WHERE status = 'in_progress')::int AS in_progress,
-			COUNT(*) FILTER (WHERE status = 'on_hold')::int AS on_hold,
-			COUNT(*) FILTER (WHERE status = 'completed' AND NOT reviewed)::int AS awaiting_review,
-			COUNT(*) FILTER (WHERE status = 'scheduled' AND eff_open_start IS NULL AND has_open)::int AS pending,
-			COUNT(*) FILTER (WHERE status = 'scheduled' AND eff_open_start > ${todayEnd}::timestamptz)::int AS upcoming,
-			COUNT(*) FILTER (WHERE status = 'scheduled'
+			-- A closed-as-completed job (archived + completed_at) that hasn't yet been reviewed.
+			COUNT(*) FILTER (WHERE status = 'archived' AND completed_at IS NOT NULL AND NOT reviewed)::int AS awaiting_review,
+			COUNT(*) FILTER (WHERE status = 'active' AND eff_open_start IS NULL AND has_open)::int AS unscheduled,
+			COUNT(*) FILTER (WHERE status = 'active' AND eff_open_start > ${todayEnd}::timestamptz)::int AS upcoming,
+			COUNT(*) FILTER (WHERE status = 'active'
 				AND eff_open_start >= ${todayStart}::timestamptz
 				AND eff_open_start <= ${todayEnd}::timestamptz)::int AS today_scheduled,
-			COUNT(*) FILTER (WHERE status = 'scheduled' AND eff_open_start < ${todayStart}::timestamptz)::int AS overdue,
-			COUNT(*) FILTER (WHERE status = 'scheduled' AND eff_open_start IS NULL AND NOT has_open)::int AS action_required,
-			COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-			COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+			COUNT(*) FILTER (WHERE status = 'active' AND eff_open_start < ${todayStart}::timestamptz)::int AS late,
+			COUNT(*) FILTER (WHERE status = 'active' AND eff_open_start IS NULL AND NOT has_open)::int AS action_required,
+			-- Archived jobs, split by WHY they closed (Jobber stores only archived; the close
+			-- timestamp is the discriminator). Cancelled wins if both somehow set.
+			COUNT(*) FILTER (WHERE status = 'archived' AND cancelled_at IS NULL AND completed_at IS NOT NULL)::int AS completed,
+			COUNT(*) FILTER (WHERE status = 'archived' AND cancelled_at IS NOT NULL)::int AS cancelled
 		FROM job_state
 	`);
 
 	return json({
 		data: {
-			// Legacy KPI cards (current page) — kept until Session 2 swaps the UI.
+			// Legacy KPI cards (current page). `in_progress` no longer exists (Jobber model) —
+			// surface Late instead, the most actionable at-a-glance number.
 			today: row?.today_active ?? 0,
-			in_progress: row?.in_progress ?? 0,
+			late: row?.late ?? 0,
 			awaiting_review: row?.awaiting_review ?? 0,
-			unscheduled: row?.pending ?? 0,
+			unscheduled: row?.unscheduled ?? 0,
 			// Redesigned KPI strip — one count per display state.
 			status_counts: {
-				pending: row?.pending ?? 0,
+				unscheduled: row?.unscheduled ?? 0,
 				upcoming: row?.upcoming ?? 0,
 				today: row?.today_scheduled ?? 0,
-				overdue: row?.overdue ?? 0,
+				late: row?.late ?? 0,
 				action_required: row?.action_required ?? 0,
-				in_progress: row?.in_progress ?? 0,
-				on_hold: row?.on_hold ?? 0,
 				completed: row?.completed ?? 0,
 				cancelled: row?.cancelled ?? 0
 			}

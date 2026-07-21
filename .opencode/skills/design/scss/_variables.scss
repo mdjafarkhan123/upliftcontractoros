@@ -1,0 +1,130 @@
+// =============================================================================
+// CONTRACTOR CRM — DESIGN SYSTEM VARIABLES
+// =============================================================================
+// This file MIRRORS the live app tokens in `src/lib/styles/_tokens.scss`.
+// It is documentation-of-reality: the values here are exactly what the app
+// ships. If you change a token in `_tokens.scss`, update this file in the same
+// turn (see the `feedback-sync-tokens-to-skill` rule).
+//
+// These are COMPILE-TIME constants. For COLORS in component SCSS, never use
+// these raw $variables — use the runtime `var(--color-*)` tokens from
+// _theme.scss so dark mode works. Use $variables directly ONLY for values that
+// never change between themes: spacing, radius, type scale, motion, z-index,
+// breakpoints, and the raw colour ramps these tokens are generated from.
+// =============================================================================
+
+// ─── 1. BRAND ───────────────────────────────────────────────────────────────
+$brand-deep:    #13452d !default;   // Deep forest — dark hover, hero gradient
+$brand-primary: #227d53 !default;   // Primary green — buttons, active, links
+$brand-light:   #17f700 !default;   // Neon glow accent — shadows/gradient stops ONLY
+
+// ─── 2. GREEN RAMP ──────────────────────────────────────────────────────────
+$green-50:  #effbf5 !default;
+$green-100: #dbf5e8 !default;
+$green-200: #b3eacf !default;
+$green-300: #83ddb0 !default;
+$green-400: #4fcf8f !default;
+$green-500: #30b070 !default;
+$green-600: #238052 !default;
+$green-700: #1a603d !default;
+$green-800: #14482e !default;
+$green-900: #0d301f !default;
+$green-950: #092014 !default;
+
+// ─── 3. NEUTRAL / SLATE RAMP ────────────────────────────────────────────────
+$slate-0:    #ffffff !default;
+$slate-50:   #f9fafb !default;
+$slate-100:  #f7f7f7 !default;
+$slate-200:  #e4e7ec !default;
+$slate-300:  #d0d4dd !default;
+$slate-400:  #a3abbd !default;
+$slate-500:  #77829c !default;
+$slate-600:  #5a647c !default;
+$slate-700:  #454c5f !default;
+$slate-800:  #2f3541 !default;
+$slate-900:  #2f333f !default;
+$slate-950:  #222530 !default;
+$slate-1000: #232b2f !default;
+
+// ─── 4. SPACING — 4px base unit ─────────────────────────────────────────────
+$space-1:  4px  !default;   // micro gaps
+$space-2:  8px  !default;   // tight: icon margins, small gaps
+$space-3:  12px !default;   // compact: nav item gaps, badge padding
+$space-4:  16px !default;   // base: form gaps, compact card padding
+$space-5:  20px !default;   // standard card padding
+$space-6:  24px !default;   // section header margin, grid gap
+$space-7:  28px !default;
+$space-8:  32px !default;   // large section padding
+$space-10: 40px !default;
+$space-12: 48px !default;
+$space-16: 64px !default;
+$space-20: 80px !default;
+
+// ─── 5. RADIUS — generous by design (cards 16–28px, not 8px Bootstrap) ───────
+$radius-sm:   8px   !default;   // inputs, small controls, chips
+$radius-md:   12px  !default;   // buttons, badges
+$radius-lg:   16px  !default;   // cards, dropdowns, modals
+$radius-xl:   20px  !default;   // large panels
+$radius-2xl:  28px  !default;   // hero cards, feature surfaces
+$radius-full: 999px !default;   // pills, avatars, toggles, status dots
+
+// ─── 6. TYPOGRAPHY ──────────────────────────────────────────────────────────
+// Inter is the single self-hosted UI font (weights 400/500/600/700/800).
+$font-body:
+  'Inter',
+  system-ui,
+  -apple-system,
+  sans-serif !default;
+$font-display: $font-body !default;   // alias so legacy refs don't break
+
+// ── 6a. SEMANTIC TYPE SCALE — THE ONE SOURCE OF TRUTH FOR FONT SIZE ──
+// Locked 1:1 to Jobber's Atlantis type scale. `html` is 62.5% so 1rem = 10px:
+// 14px → 1.4rem, 24px → 2.4rem. Line-heights are UNITLESS multipliers (tight,
+// Jobber's signature). NEVER type a raw `font-size` in a component — reach for
+// a role token ($fs-* here, or the runtime var(--text-*) mirror).
+// 14px floor: $fs-body is the smallest READABLE size. 12px ($fs-caption) is
+// reserved for UPPERCASE tracked micro-labels and badge text ONLY.
+$fs-caption: 1.2rem  !default;  // 12px — Jobber "small"       — UPPERCASE labels & badges ONLY
+$fs-body:    1.4rem  !default;  // 14px — Jobber "base"        — DEFAULT readable floor
+$fs-lg:      1.6rem  !default;  // 16px — Jobber "large"       — emphasis / lead-in / inputs
+$fs-h3:      2rem    !default;  // 20px — Jobber "larger"      — section / card headings
+$fs-h2:      2.4rem  !default;  // 24px — Jobber "largest"     — page headings
+$fs-h1:      3.6rem  !default;  // 36px — Jobber "jumbo"       — page title
+$fs-display: 4.8rem  !default;  // 48px — Jobber "extravagant" — hero stats / display
+
+// Line-heights — Jobber-exact, unitless.
+$lh-caption: 1.143 !default;  // 12px
+$lh-body:    1.25  !default;  // 14px
+$lh-lg:      1.34  !default;  // 16px
+$lh-h3:      1.2   !default;  // 20px
+$lh-h2:      1.12  !default;  // 24px
+$lh-h1:      1.08  !default;  // 36px
+$lh-display: 1.08  !default;  // 48px
+
+$weight-regular:   400 !default;
+$weight-medium:    500 !default;
+$weight-semibold:  600 !default;
+$weight-bold:      700 !default;
+$weight-extrabold: 800 !default;   // heaviest Inter weight loaded
+
+$tracking-label: 0.06em !default;
+
+// ─── 7. MOTION ──────────────────────────────────────────────────────────────
+$duration-fast: 120ms !default;
+$duration-base: 180ms !default;
+$duration-slow: 280ms !default;
+
+$ease-standard: cubic-bezier(0.4, 0, 0.2, 1)    !default;
+$ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1) !default;
+
+// ─── 8. Z-INDEX & BREAKPOINTS ───────────────────────────────────────────────
+$z-dropdown: 250  !default;
+$z-sticky:   200  !default;
+$z-overlay:  900  !default;
+$z-modal:    1000 !default;
+$z-popover:  1050 !default;   // portaled floating menus opened from inside a modal
+$z-toast:    1100 !default;
+$z-tooltip:  1200 !default;
+
+$bp-tablet: 1024px !default;
+$bp-mobile: 640px  !default;

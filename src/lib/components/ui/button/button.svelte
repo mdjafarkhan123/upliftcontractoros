@@ -9,8 +9,11 @@
 		| 'outline'
 		| 'secondary'
 		| 'ghost'
-		| 'link';
-	type Size = 'default' | 'sm' | 'lg' | 'icon';
+		| 'link'
+		| 'warning'
+		| 'info'
+		| 'dark';
+	type Size = 'default' | 'xs' | 'sm' | 'lg' | 'xl' | 'icon';
 	type State = 'idle' | 'loading' | 'success';
 
 	let {
@@ -84,13 +87,18 @@
 		outline: 'btn--outline',
 		secondary: 'btn--secondary',
 		ghost: 'btn--ghost',
-		link: 'btn--link'
+		link: 'btn--link',
+		warning: 'btn--warning',
+		info: 'btn--info',
+		dark: 'btn--dark'
 	};
 
 	const sizeModifier: Record<Size, string> = {
 		default: '',
+		xs: 'btn--xs',
 		sm: 'btn--sm',
 		lg: 'btn--lg',
+		xl: 'btn--xl',
 		icon: 'btn--icon'
 	};
 

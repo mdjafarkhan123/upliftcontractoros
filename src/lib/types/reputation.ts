@@ -32,7 +32,7 @@ export type ReviewRequestListItem = {
 	id: string;
 	job_id: string;
 	job_title: string | null;
-	job_status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+	job_status: 'active' | 'archived';
 	contact_id: string;
 	contact_name: string;
 	status: 'scheduled' | 'sent' | 'engaged' | 'likely_reviewed' | 'completed_internal' | 'expired';

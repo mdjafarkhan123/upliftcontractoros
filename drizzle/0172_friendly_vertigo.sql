@@ -1,0 +1,2 @@
+ALTER TABLE "appointments" ADD COLUMN "completed_via_invoice_id" uuid;--> statement-breakpoint
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_completed_via_invoice_id_invoices_id_fk" FOREIGN KEY ("completed_via_invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;

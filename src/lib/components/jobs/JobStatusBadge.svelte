@@ -9,6 +9,8 @@
 		hasSeriesAnchor = false,
 		nextOpenVisitStart = undefined,
 		hasOpenVisits = undefined,
+		completedAt = undefined,
+		cancelledAt = undefined,
 		class: className
 	}: {
 		status: JobStatus;
@@ -21,30 +23,36 @@
 		// job's own date — correct only for a single-visit job, whose scheduled_start tracks it.
 		nextOpenVisitStart?: string | null;
 		hasOpenVisits?: boolean;
+		// Close timestamps — read only for an `archived` job to show Completed vs Cancelled. When
+		// omitted, an archived job simply reads "Closed".
+		completedAt?: string | null;
+		cancelledAt?: string | null;
 		class?: string;
 	} = $props();
 
 	// Precise display state derived from the stored status + the job's OPEN visits. See
-	// $lib/jobs/status — Unscheduled/Upcoming/Today/Overdue/Action Required are faces of a
-	// 'scheduled' job, driven by the next open visit rather than a single (stale) job date.
+	// $lib/jobs/status — Unscheduled/Upcoming/Today/Late/Action Required are faces of an `active`
+	// job (driven by the next open visit); Completed/Cancelled are faces of an `archived` job.
 	const state = $derived(
 		deriveJobScheduleState({
 			status,
 			hasSeriesAnchor,
 			scheduledStart,
 			nextOpenVisitStart,
-			hasOpenVisits
+			hasOpenVisits,
+			completedAt,
+			cancelledAt
 		})
 	);
 
 	const variant = $derived(
 		state === 'completed'
 			? 'success'
-			: state === 'overdue' || state === 'cancelled'
+			: state === 'late' || state === 'cancelled'
 				? 'danger'
-				: state === 'today' || state === 'on_hold' || state === 'action_required'
+				: state === 'today' || state === 'action_required'
 					? 'warning'
-					: state === 'upcoming' || state === 'in_progress'
+					: state === 'upcoming'
 						? 'info'
 						: 'default'
 	);

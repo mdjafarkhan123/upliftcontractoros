@@ -55,11 +55,7 @@
 							<span class="widget-card__list-label">{job.title}</span>
 							<span class="widget-card__list-sub">{job.contact_name ?? 'No contact'}</span>
 						</span>
-						{#if job.status === 'in_progress'}
-							<span class="job-badge job-badge--progress">In progress</span>
-						{:else}
-							<span class="job-badge job-badge--scheduled">Scheduled</span>
-						{/if}
+						<span class="job-badge job-badge--scheduled">Today</span>
 						<i class="ri-arrow-right-s-line widget-card__chevron"></i>
 					</a>
 				</li>
