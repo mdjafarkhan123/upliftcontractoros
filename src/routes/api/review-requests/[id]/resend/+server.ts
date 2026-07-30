@@ -8,6 +8,7 @@ import { canSendReviewRequests } from '$lib/server/reputation/permissions';
 import { interpolate } from '$lib/server/workers/templates';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { buildReviewLink } from '$lib/server/reputation/reviewLink';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 
 // Manual resend of the original review-request SMS for rows in `sent` status.
 // Reuses the existing token. Does not change `status`, `sent_at`, or
@@ -55,9 +56,18 @@ export const POST: RequestHandler = async (event) => {
 		)
 		.limit(1);
 	if (!contact) return json({ error: 'Contact not found.' }, { status: 422 });
-	if (contact.sms_opt_out) {
-		return json({ error: 'Contact has opted out of SMS.' }, { status: 422 });
-	}
+	const eligibility = await canContactReceiveCommunication({
+		orgId: auth.orgId,
+		contactId: contact.id,
+		channel: 'sms',
+		direction: 'outbound',
+		category: 'review_request'
+	});
+	if (!eligibility.allowed)
+		return json(
+			{ error: eligibility.reasonMessage ?? 'This communication is blocked.' },
+			{ status: 422 }
+		);
 
 	const [org] = await db
 		.select()

@@ -18,6 +18,8 @@
 	import { summarizeRecurrence, type JobRecurrence } from '$lib/jobs/recurrence';
 	import type { JobDetail, JobPaymentMilestoneRow, JobInvoiceReminderRow } from '$lib/types/jobs';
 	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import InvoiceStatusBadge from '$lib/components/invoices/InvoiceStatusBadge.svelte';
 	import InvoiceReminderFormDialog from './InvoiceReminderFormDialog.svelte';
 	import InvoiceReminderDetailPopover from './InvoiceReminderDetailPopover.svelte';
@@ -94,7 +96,30 @@
 	const discount = $derived(Number(job.discount_amount ?? 0));
 	const taxAmount = $derived(Number(job.tax_amount ?? 0));
 
-	// Invoicing | Reminders tab (Jobber ref/billing/4-5).
+	type BadgeVariant = 'default' | 'brand' | 'dark' | 'success' | 'warning' | 'danger' | 'info';
+
+	const MILESTONE_BADGE: Record<string, BadgeVariant> = {
+		paid: 'success',
+		awaiting: 'warning',
+		draft: 'default',
+		upcoming: 'default',
+		cancelled: 'danger'
+	};
+
+	const REMINDER_BADGE: Record<string, BadgeVariant> = {
+		completed: 'success',
+		today: 'brand',
+		late: 'danger',
+		upcoming: 'default',
+		unscheduled: 'default'
+	};
+
+	const CREATE_ROW_BADGE: Record<string, BadgeVariant> = {
+		today: 'brand',
+		late: 'danger',
+		upcoming: 'default'
+	};
+
 	let tab = $state<'invoicing' | 'reminders'>('invoicing');
 
 	let creatingId = $state<string | null>(null);
@@ -396,30 +421,13 @@
 	</div>
 
 	<!-- Tabs -->
-	<div class="job-billing__tabs" role="tablist">
-		<button
-			type="button"
-			role="tab"
-			aria-selected={tab === 'invoicing'}
-			class="job-billing__tab"
-			class:job-billing__tab--active={tab === 'invoicing'}
-			onclick={() => (tab = 'invoicing')}
-		>
-			Invoicing
-		</button>
-		<button
-			type="button"
-			role="tab"
-			aria-selected={tab === 'reminders'}
-			class="job-billing__tab"
-			class:job-billing__tab--active={tab === 'reminders'}
-			onclick={() => (tab = 'reminders')}
-		>
-			Reminders
-		</button>
-	</div>
+	<Tabs.Root value={tab} onValueChange={(v) => (tab = v as 'invoicing' | 'reminders')}>
+		<Tabs.List class="job-billing__tabs-list">
+			<Tabs.Trigger value="invoicing" class="job-billing__tab">Invoicing</Tabs.Trigger>
+			<Tabs.Trigger value="reminders" class="job-billing__tab">Reminders</Tabs.Trigger>
+		</Tabs.List>
 
-	{#if tab === 'invoicing'}
+		<Tabs.Content value="invoicing" class="job-billing__panel">
 		{#if hasSchedule}
 			<!-- Payment schedule (fixed-price progress invoicing) — Jobber ref/billing/4. -->
 			<div class="job-billing__pay-head">
@@ -465,54 +473,71 @@
 				</div>
 			</div>
 
-			<div class="job-billing__grid-head">
-				<span>Invoice</span>
-				<span>Due date</span>
-				<span>Status</span>
-				<span>%</span>
-				<span>Description</span>
-				<span class="job-billing__gcell--num">Total</span>
-				<span class="job-billing__gcell--num">Balance</span>
-			</div>
-
-			{#each milestones as m (m.id)}
-				{@const status = milestoneStatus(m)}
-				<div class="job-billing__grid-row">
-					<div class="job-billing__gcell">
-						{#if m.invoice_id}
-							<Button href="/invoices/{m.invoice_id}" variant="secondary" size="sm">View</Button>
-						{:else if canInvoice}
-							<Button size="sm" loading={creatingId === m.id} onclick={() => createInvoice(m)}>
-								Create
-							</Button>
-						{:else}
-							<span class="job-billing__gcell--muted">—</span>
-						{/if}
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--muted">
-						{m.due_date ? formatDate(m.due_date) : '—'}
-					</div>
-					<div class="job-billing__gcell">
-						<span class="job-billing__status job-billing__status--{status}">
-							<span class="job-billing__dot job-billing__dot--{status}" aria-hidden="true"></span>
-							{m.invoice_number != null ? `#${m.invoice_number} · ` : ''}{MILESTONE_STATUS_LABEL[
-								status
-							]}
-						</span>
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--muted">
-						{pctOf(rowTotal(m), total)}%
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--desc">{m.description}</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(rowTotal(m))}
-						<span class="job-billing__gsub">Subtotal {formatCurrency(rowTotal(m))}</span>
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(rowBalance(m))}
-					</div>
-				</div>
-			{/each}
+			<table class="job-billing__table">
+				<colgroup>
+					<col style="width:96px">
+					<col style="width:96px">
+					<col style="width:132px">
+					<col style="width:56px">
+					<col>
+					<col style="width:128px">
+					<col style="width:116px">
+				</colgroup>
+				<thead>
+					<tr>
+						<th scope="col">Invoice</th>
+						<th scope="col">Due date</th>
+						<th scope="col">Status</th>
+						<th scope="col" class="job-billing__cell--num">%</th>
+						<th scope="col">Description</th>
+						<th scope="col" class="job-billing__cell--num">Total</th>
+						<th scope="col" class="job-billing__cell--num">Balance</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each milestones as m (m.id)}
+						{@const status = milestoneStatus(m)}
+						<tr>
+							<td>
+								{#if m.invoice_id}
+									<Button href="/invoices/{m.invoice_id}" variant="secondary" size="sm">View</Button>
+								{:else if canInvoice}
+									<Button size="sm" loading={creatingId === m.id} onclick={() => createInvoice(m)}>
+										Create
+									</Button>
+								{:else}
+									<span class="job-billing__cell--muted">—</span>
+								{/if}
+							</td>
+							<td class="job-billing__cell--muted">{m.due_date ? formatDate(m.due_date) : '—'}</td>
+							<td>
+								<Badge variant={MILESTONE_BADGE[status]}>
+									{m.invoice_number != null ? `#${m.invoice_number} · ` : ''}{MILESTONE_STATUS_LABEL[status]}
+								</Badge>
+							</td>
+							<td class="job-billing__cell--num job-billing__cell--muted">
+								{pctOf(rowTotal(m), total)}%
+							</td>
+							<td class="job-billing__cell--desc">{m.description}</td>
+							<td class="job-billing__cell--num">
+								{formatCurrency(rowTotal(m))}
+								<span class="job-billing__gsub">Subtotal {formatCurrency(rowTotal(m))}</span>
+							</td>
+							<td class="job-billing__cell--num">{formatCurrency(rowBalance(m))}</td>
+						</tr>
+					{/each}
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="5">Total</td>
+						<td class="job-billing__cell--num">
+							{formatCurrency(scheduleTotal)}
+							<span class="job-billing__gsub">Subtotal {formatCurrency(scheduleTotal)}</span>
+						</td>
+						<td class="job-billing__cell--num">{formatCurrency(scheduleBalance)}</td>
+					</tr>
+				</tfoot>
+			</table>
 
 			{#if onEdit}
 				<div class="job-billing__addrow">
@@ -522,88 +547,66 @@
 					</button>
 				</div>
 			{/if}
-
-			<div class="job-billing__grid-foot">
-				<span>Total</span>
-				<span></span>
-				<span></span>
-				<span></span>
-				<span></span>
-				<span class="job-billing__gcell--num">
-					{formatCurrency(scheduleTotal)}
-					<span class="job-billing__gsub">Subtotal {formatCurrency(scheduleTotal)}</span>
-				</span>
-				<span class="job-billing__gcell--num">{formatCurrency(scheduleBalance)}</span>
-			</div>
 		{:else if canGenerate}
-			<!-- Invoicing grid (Jobber ref/billing/20): the invoices already created for this job,
-			     plus a single "Create" row for the next invoice when there is work to bill. -->
-			<div class="job-billing__inv-head">
-				<span>Invoice</span>
-				<span>Due date</span>
-				<span>Status</span>
-				<span>Subject</span>
-				<span class="job-billing__gcell--num">Total</span>
-				<span class="job-billing__gcell--num">Balance</span>
-			</div>
-
-			{#each job.invoices as inv (inv.id)}
-				<div class="job-billing__inv-row">
-					<div class="job-billing__gcell">
-						<Button href="/invoices/{inv.id}" variant="secondary" size="sm">View</Button>
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--muted">
-						{inv.due_date ? formatDate(inv.due_date) : '—'}
-					</div>
-					<div class="job-billing__gcell">
-						<InvoiceStatusBadge status={inv.status} />
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--desc">
-						{inv.subject || 'For Services Rendered'}
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(Number(inv.total))}
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(Number(inv.balance))}
-					</div>
-				</div>
-			{/each}
-
-			{#if showCreateRow && canInvoice}
-				<div class="job-billing__inv-row">
-					<div class="job-billing__gcell">
-						<Button size="sm" loading={!isVisitBased && generating} onclick={startCreate}>
-							Create
-						</Button>
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--muted">—</div>
-					<div class="job-billing__gcell">
-						<span class="job-billing__status job-billing__status--{createRowState}">
-							<span class="job-billing__dot job-billing__dot--{createRowState}" aria-hidden="true"
-							></span>
-							{CREATE_ROW_LABEL[createRowState]}
-						</span>
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--desc">For Services Rendered</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(createRowTotal)}
-					</div>
-					<div class="job-billing__gcell job-billing__gcell--num">
-						{formatCurrency(createRowTotal)}
-					</div>
-				</div>
-			{/if}
+			<table class="job-billing__table">
+				<colgroup>
+					<col style="width:110px">
+					<col style="width:96px">
+					<col style="width:132px">
+					<col>
+					<col style="width:128px">
+					<col style="width:116px">
+				</colgroup>
+				<thead>
+					<tr>
+						<th scope="col">Invoice</th>
+						<th scope="col">Due date</th>
+						<th scope="col">Status</th>
+						<th scope="col">Subject</th>
+						<th scope="col" class="job-billing__cell--num">Total</th>
+						<th scope="col" class="job-billing__cell--num">Balance</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each job.invoices as inv (inv.id)}
+						<tr>
+							<td><Button href="/invoices/{inv.id}" variant="secondary" size="sm">View</Button></td>
+							<td class="job-billing__cell--muted">{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
+							<td><InvoiceStatusBadge status={inv.status} /></td>
+							<td class="job-billing__cell--desc">{inv.subject || 'For Services Rendered'}</td>
+							<td class="job-billing__cell--num">{formatCurrency(Number(inv.total))}</td>
+							<td class="job-billing__cell--num">{formatCurrency(Number(inv.balance))}</td>
+						</tr>
+					{/each}
+					{#if showCreateRow && canInvoice}
+						<tr>
+							<td>
+								<Button size="sm" loading={!isVisitBased && generating} onclick={startCreate}>
+									Create
+								</Button>
+							</td>
+							<td class="job-billing__cell--muted">—</td>
+							<td>
+								<Badge variant={CREATE_ROW_BADGE[createRowState]}>
+									{CREATE_ROW_LABEL[createRowState]}
+								</Badge>
+							</td>
+							<td class="job-billing__cell--desc">For Services Rendered</td>
+							<td class="job-billing__cell--num">{formatCurrency(createRowTotal)}</td>
+							<td class="job-billing__cell--num">{formatCurrency(createRowTotal)}</td>
+						</tr>
+					{/if}
+				</tbody>
+			</table>
 
 			{#if job.invoices.length === 0 && !showCreateRow}
-				<div class="job-billing__rem-empty">
+				<div class="job-billing__empty">
 					{billableLoading
 						? 'Checking for billable visits…'
 						: 'No invoices yet. Visits appear here to invoice as they come due.'}
 				</div>
 			{/if}
 		{:else}
-			<!-- No schedule and nothing to generate: just the close-reminder / no-billing note. -->
 			{#if frequency === 'on_completion'}
 				<div class="job-billing__reminder">
 					<i class="ri-notification-3-line" aria-hidden="true"></i>
@@ -616,71 +619,85 @@
 				</div>
 			{/if}
 		{/if}
-	{:else}
+	</Tabs.Content>
+	<Tabs.Content value="reminders" class="job-billing__panel">
 		<!-- Reminders tab (Jobber ref/billing/5,8). A reminder is a contractor to-do to
 		     invoice this job — not customer dunning. -->
 		{#if remindersLoading && !remindersLoaded}
-			<div class="job-billing__rem-empty">Loading reminders…</div>
+			<div class="job-billing__empty">Loading reminders…</div>
 		{:else if reminders.length === 0}
-			<div class="job-billing__rem-empty">
+			<div class="job-billing__empty">
 				No invoice reminders yet. Add one to be prompted to invoice this job.
 			</div>
 		{:else}
-			<div class="job-billing__rem-head">
-				<span>Scheduled</span>
-				<span>Description</span>
-				<span>Status</span>
-				<span>Assigned</span>
-				<span></span>
-			</div>
-			{#each reminders as r (r.id)}
-				{@const st = reminderDisplayStatus(r)}
-				<div
-					class="job-billing__rem-row"
-					class:job-billing__rem-row--done={r.status === 'completed'}
-				>
-					<span class="job-billing__rem-cell job-billing__gcell--muted">{reminderWhen(r)}</span>
-					<button
-						type="button"
-						class="job-billing__rem-cell job-billing__rem-desc"
-						onclick={(e) => openReminderDetail(r, e.currentTarget)}
-					>
-						{r.description || 'Invoice reminder'}
-					</button>
-					<span class="job-billing__rem-cell">
-						<span class="job-billing__status job-billing__status--{st}">
-							<span class="job-billing__dot job-billing__dot--{st}" aria-hidden="true"></span>
-							{REMINDER_DISPLAY_LABEL[st]}
-						</span>
-					</span>
-					<span class="job-billing__rem-cell job-billing__gcell--muted">{reminderCrew(r)}</span>
-					<span class="job-billing__rem-actions">
-						{#if canInvoice}
-							<button
-								type="button"
-								class="job-billing__pencil"
-								onclick={() => toggleComplete(r)}
-								disabled={busyReminderId === r.id}
-								aria-label={r.status === 'completed' ? 'Reopen reminder' : 'Mark reminder done'}
-							>
-								<i
-									class={r.status === 'completed' ? 'ri-arrow-go-back-line' : 'ri-check-line'}
-									aria-hidden="true"
-								></i>
-							</button>
-							<button
-								type="button"
-								class="job-billing__pencil"
-								onclick={() => deleteReminder(r)}
-								disabled={busyReminderId === r.id}
-								aria-label="Delete reminder"
-							>
-								<i class="ri-delete-bin-line" aria-hidden="true"></i>
-							</button>
-						{/if}
-					</span>
-				</div>
-			{/each}
+			<table class="job-billing__table">
+				<colgroup>
+					<col style="width:180px">
+					<col>
+					<col style="width:120px">
+					<col style="width:140px">
+					<col style="width:96px">
+				</colgroup>
+				<thead>
+					<tr>
+						<th scope="col">Scheduled</th>
+						<th scope="col">Description</th>
+						<th scope="col">Status</th>
+						<th scope="col">Assigned</th>
+						<th scope="col">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each reminders as r (r.id)}
+						{@const st = reminderDisplayStatus(r)}
+						<tr class:job-billing__row--done={r.status === 'completed'}>
+							<td class="job-billing__cell--muted">{reminderWhen(r)}</td>
+							<td>
+								<button
+									type="button"
+									class="job-billing__rem-desc"
+									onclick={(e) => openReminderDetail(r, e.currentTarget)}
+								>
+									{r.description || 'Invoice reminder'}
+								</button>
+							</td>
+							<td>
+								<Badge variant={REMINDER_BADGE[st]}>
+									{REMINDER_DISPLAY_LABEL[st]}
+								</Badge>
+							</td>
+							<td class="job-billing__cell--muted">{reminderCrew(r)}</td>
+							<td>
+								{#if canInvoice}
+									<div class="job-billing__rem-actions">
+										<button
+											type="button"
+											class="job-billing__pencil"
+											onclick={() => toggleComplete(r)}
+											disabled={busyReminderId === r.id}
+											aria-label={r.status === 'completed' ? 'Reopen reminder' : 'Mark reminder done'}
+										>
+											<i
+												class={r.status === 'completed' ? 'ri-arrow-go-back-line' : 'ri-check-line'}
+												aria-hidden="true"
+											></i>
+										</button>
+										<button
+											type="button"
+											class="job-billing__pencil"
+											onclick={() => deleteReminder(r)}
+											disabled={busyReminderId === r.id}
+											aria-label="Delete reminder"
+										>
+											<i class="ri-delete-bin-line" aria-hidden="true"></i>
+										</button>
+									</div>
+								{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		{/if}
 
 		{#if canInvoice}
@@ -718,7 +735,8 @@
 				</div>
 			</div>
 		{/if}
-	{/if}
+	</Tabs.Content>
+</Tabs.Root>
 </section>
 
 <InvoiceReminderFormDialog

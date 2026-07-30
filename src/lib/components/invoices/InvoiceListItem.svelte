@@ -12,7 +12,7 @@
 		invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-US') : null
 	);
 	const showDue = $derived(
-		invoice.status !== 'paid' && invoice.status !== 'cancelled' && Number(invoice.amount_due) > 0
+		invoice.status !== 'paid' && invoice.status !== 'bad_debt' && Number(invoice.amount_due) > 0
 	);
 	const overdue = $derived(
 		isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due)

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
 	import type { DndEvent } from 'svelte-dnd-action';
@@ -369,7 +370,7 @@
 	// id -> the card's current stage, rebuilt on every seed. A cross-stage drop reads
 	// this to discover the card's ORIGIN without having to diff the live (already
 	// mutated) columns during the drag.
-	let stageByCard = new Map<string, string>();
+	let stageByCard = new SvelteMap<string, string>();
 
 	// Rebuild `columns` (and `stageByCard`) from the store's filtered deals, grouped
 	// by stage in server sort order. Only ever called outside a drag.
@@ -378,7 +379,7 @@
 		for (const s of stages) g.set(s.id, []);
 		for (const o of filteredOpportunities) g.get(o.stage_id)?.push(o);
 		columns = stages.map((stage) => ({ stage, items: g.get(stage.id) ?? [] }));
-		stageByCard = new Map(filteredOpportunities.map((o) => [o.id, o.stage_id]));
+		stageByCard = new SvelteMap(filteredOpportunities.map((o) => [o.id, o.stage_id]));
 	}
 
 	// One-time seed the instant the board data is first ready. Guarded by `seeded`
@@ -436,11 +437,35 @@
 			// Same-column reorder — auto-sort model persists nothing.
 			if (!origin || origin === stageId) return;
 
-			void persistMove(movedId, origin, stageId);
+			queueMove(movedId, origin, stageId);
 		};
 	}
 
-	async function persistMove(id: string, fromStageId: string, toStageId: string) {
+	// Exactly one durable stage mutation may run for a card at a time. A person can
+	// still drag it again immediately: we keep only their newest intended stage and
+	// send it after the in-flight move succeeds. This is deliberately per-card, so
+	// unrelated cards remain fully concurrent.
+	type CardMoveState = {
+		confirmedStageId: string;
+		desiredStageId: string;
+		running: boolean;
+	};
+	const cardMoves = new SvelteMap<string, CardMoveState>();
+
+	function queueMove(id: string, fromStageId: string, toStageId: string) {
+		let move = cardMoves.get(id);
+		if (!move) {
+			move = { confirmedStageId: fromStageId, desiredStageId: toStageId, running: false };
+			cardMoves.set(id, move);
+		} else {
+			move.desiredStageId = toStageId;
+		}
+
+		applyOptimisticMove(id, toStageId);
+		if (!move.running) void drainMoveQueue(id, move);
+	}
+
+	function applyOptimisticMove(id: string, toStageId: string) {
 		// Update the card's stage bookkeeping IN PLACE only. We deliberately do NOT
 		// reorder the destination array here: svelte-dnd-action is still running its
 		// drop animation, and re-sorting the settling list swaps the dropped card's
@@ -467,38 +492,53 @@
 				: c
 		);
 		pipelineStore.moveToStage(id, toStageId);
-
-		try {
-			const res = await fetch(`/api/pipeline/opportunities/${id}/stage`, {
-				method: 'PATCH',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					stage_id: toStageId,
-					from_stage_id: fromStageId,
-					move_request_id: newRequestId()
-				})
-			});
-			if (res.status === 409) {
-				// Someone else moved it first — re-pull and re-seed to reconcile.
-				await pipelineStore.refreshOpportunities();
-				seedColumns();
-				return;
-			}
-			if (!res.ok) {
-				revertMove(id, fromStageId);
-				const body = (await res.json().catch(() => ({}))) as { error?: string };
-				toast.error(body.error ?? 'Failed to move deal.');
-			}
-		} catch {
-			revertMove(id, fromStageId);
-			toast.error('Failed to move deal.');
-		}
 	}
 
-	function revertMove(id: string, originStageId: string) {
-		stageByCard.set(id, originStageId);
-		pipelineStore.applyStage(id, originStageId);
-		seedColumns();
+	async function drainMoveQueue(id: string, move: CardMoveState) {
+		move.running = true;
+		try {
+			while (move.confirmedStageId !== move.desiredStageId) {
+				const fromStageId = move.confirmedStageId;
+				const toStageId = move.desiredStageId;
+				const res = await fetch(`/api/pipeline/opportunities/${id}/stage`, {
+					method: 'PATCH',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						stage_id: toStageId,
+						from_stage_id: fromStageId,
+						move_request_id: newRequestId()
+					})
+				});
+
+				if (res.ok) {
+					move.confirmedStageId = toStageId;
+					continue;
+				}
+
+				if (res.status === 409) {
+					// A real concurrent change won. Do not replay the user's old intent
+					// against that new state: reload the authoritative board instead.
+					await pipelineStore.refreshOpportunities();
+					seedColumns();
+					return;
+				}
+
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				await pipelineStore.refreshOpportunities();
+				seedColumns();
+				toast.error(body.error ?? 'Failed to move deal.');
+				return;
+			}
+		} catch {
+			// A network failure leaves the result unknown. Reload rather than guessing
+			// whether the server applied it, which prevents a local phantom move.
+			await pipelineStore.refreshOpportunities();
+			seedColumns();
+			toast.error('Failed to move deal.');
+		} finally {
+			move.running = false;
+			cardMoves.delete(id);
+		}
 	}
 
 	async function openDetail(id: string) {

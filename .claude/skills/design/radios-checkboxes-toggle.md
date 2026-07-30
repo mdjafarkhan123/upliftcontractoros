@@ -5,7 +5,7 @@
 ## Checkbox
 
 - Size: 16×16px
-- Radius: 4px (`$radius-sm`)
+- Radius: `$radius-xs` (4px)
 - Border: 1px `var(--color-border-strong)`
 - Background: `var(--color-bg-surface-sunk)`
 - Focus ring: `box-shadow: 0 0 0 2px var(--state-active-tint)`
@@ -64,15 +64,15 @@ Group all radio items under the same `name` attribute.
 
 ## Label + Control Layout
 
-- Flex row, align-start, 10px gap
+- Flex row, align-start, `$space-2` (10px) gap
 - Label: 14px, `var(--color-text-primary)`, medium
 - Helper text: 12px, `var(--color-text-muted)`, 2px below label
 
 ## Checkbox Group (CRM Filter Panel)
 
-- Vertical flex, 12px gap between items
+- Vertical flex, `$space-3` (12px) gap between items
 - Group label: 12px, uppercase, `var(--color-text-muted)`, 0.5px letter-spacing
-- Divider between groups: 16px margin, 1px `var(--color-border)`
+- Divider between groups: `$space-4` (16px) margin, 1px `var(--color-border)`
 
 ## Rules
 

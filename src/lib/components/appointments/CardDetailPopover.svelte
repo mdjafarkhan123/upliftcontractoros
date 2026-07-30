@@ -2,9 +2,14 @@
 	import { goto } from '$app/navigation';
 	import DraggablePanel from '$lib/components/shared/DraggablePanel.svelte';
 	import RequestConvertDialog from '$lib/components/requests/RequestConvertDialog.svelte';
+	import VisitCompleteActionsDialog from '$lib/components/jobs/VisitCompleteActionsDialog.svelte';
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { formatCurrencyExact } from '$lib/utils/format';
 	import { toast } from '$lib/stores/toast.svelte';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
+	import { getMemberContext } from '$lib/context/member';
+	import { shouldPromptVisitComplete } from '$lib/jobs/visitCompletePrompt';
+	import type { AppointmentStatusJobEcho } from '$lib/types/jobs';
 	import type {
 		AppointmentListItem,
 		AppointmentStatus,
@@ -29,6 +34,8 @@
 		onClose: () => void;
 	} = $props();
 
+	const member = getMemberContext();
+
 	const TYPE_LABELS: Record<AppointmentType, string> = {
 		estimate: 'Estimate',
 		job_start: 'Job',
@@ -44,13 +51,6 @@
 		cancelled: 'Cancelled',
 		no_show: 'No-show'
 	};
-
-	function initials(name: string): string {
-		const parts = name.trim().split(/\s+/).filter(Boolean);
-		if (parts.length === 0) return '?';
-		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-	}
 
 	function formatDateInOrgTz(iso: string): string {
 		try {
@@ -137,6 +137,9 @@
 
 	// ---- Status actions ---------------------------------------------------------
 	let statusSaving = $state<AppointmentStatus | 'incomplete' | null>(null);
+	// Jobber's post-completion prompt (Invoice now/later + Close/Leave-open) after marking done.
+	let visitPromptOpen = $state(false);
+	let completionEcho = $state<AppointmentStatusJobEcho>(null);
 	let showMore = $state(false);
 
 	// "Assessment completed" prompt (Jobber ref/visit/4) — opens the moment an
@@ -195,8 +198,11 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ status: next })
 			});
+			const body = (await res.json().catch(() => ({}))) as {
+				error?: string;
+				data?: { job?: AppointmentStatusJobEcho };
+			};
 			if (!res.ok) {
-				const body = (await res.json().catch(() => ({}))) as { error?: string };
 				toast.error(body.error ?? 'Could not update status.');
 				return;
 			}
@@ -215,8 +221,17 @@
 							: 'Marked no-show.'
 			);
 			showMore = false;
-			// Completing an assessment opens the convert prompt (Jobber ref/visit/4).
-			if (next === 'completed' && isAssessment) convertOpen = true;
+			// Completing an assessment opens the convert prompt (Jobber ref/visit/4); a job
+			// visit instead raises the Invoice-now/later + Close/Leave-open prompt (jobber-04 §3.3).
+			if (next === 'completed' && isAssessment) {
+				convertOpen = true;
+			} else if (next === 'completed' && item.job_id) {
+				const echo = body?.data?.job ?? null;
+				if (shouldPromptVisitComplete(echo, member())) {
+					completionEcho = echo;
+					visitPromptOpen = true;
+				}
+			}
 		} catch {
 			toast.error('Could not update status.');
 		} finally {
@@ -291,7 +306,7 @@
 				<span class="card-detail-pop__team-label">Team</span>
 				{#if item.assignee_name}
 					<span class="card-detail-pop__crew">
-						<span class="card-detail-pop__avatar">{initials(item.assignee_name)}</span>
+						<Avatar size="sm" name={item.assignee_name} />
 						<span>{item.assignee_name}</span>
 						{#if item.assignee_count > 1}
 							<span class="card-detail-pop__more">+{item.assignee_count - 1}</span>
@@ -437,6 +452,16 @@
 				onArchive={archiveRequest}
 				onLeave={() => {}}
 			/>
+
+			<!-- Job visit completed → Invoice now/later + Close/Leave-open (Jobber jobber-04 §3.3). -->
+			{#if item.job_id}
+				<VisitCompleteActionsDialog
+					bind:open={visitPromptOpen}
+					jobId={item.job_id}
+					jobTitle={item.title}
+					echo={completionEcho}
+				/>
+			{/if}
 		{/if}
 	</div>
 </DraggablePanel>

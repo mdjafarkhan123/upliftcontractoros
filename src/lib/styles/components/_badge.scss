@@ -1,16 +1,26 @@
 @use '../tokens' as *;
 
+// =============================================================================
+// BADGE — label / status chip
+// Docs: .claude/skills/design/badges.md
+// =============================================================================
 .badge {
 	display: inline-flex;
 	align-items: center;
 	gap: $space-1;
 	height: 24px;
-	padding: 0 $space-3;
+	padding: 0 6px;
 	border-radius: $radius-full;
-	font-size: $fs-body;
+	font-size: $fs-caption;
 	font-weight: $weight-medium;
+	line-height: 1;
 	white-space: nowrap;
 
+	// ---- Variants ----
+	&--neutral {
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+	}
 	&--success {
 		background: var(--success-bg);
 		color: var(--success-text);
@@ -27,11 +37,16 @@
 		background: var(--info-bg);
 		color: var(--info-text);
 	}
-	&--neutral {
-		background: var(--color-bg-surface-sunk);
-		color: var(--color-text-secondary);
+	&--brand {
+		background: var(--state-active-tint);
+		color: var(--color-brand-strong);
+	}
+	&--dark {
+		background: var(--color-text-primary);
+		color: #ffffff;
 	}
 
+	// Solid sub-variant — bright bg, white text
 	&--solid {
 		color: var(--color-text-on-brand);
 		&.badge--success {
@@ -47,9 +62,91 @@
 			background: var(--info-solid);
 		}
 	}
+
+	// ---- Sizes ----
+	&--lg {
+		height: 28px;
+		padding: 0 10px;
+		font-size: $fs-body;
+	}
+
+	// ---- Icon-only (square) ----
+	&--icon-only {
+		width: 24px;
+		padding: 0;
+		justify-content: center;
+
+		&.badge--lg {
+			width: 28px;
+		}
+	}
+
+	// ---- Dismiss button ----
+	&__dismiss {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		margin: 0;
+		padding: 0;
+		border: none;
+		border-radius: $radius-full;
+		background: transparent;
+		color: currentColor;
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity $duration-fast;
+
+		&:hover {
+			opacity: 1;
+		}
+	}
 }
 
-// Tiny circular trend indicator — up/down arrows before "Increased from last month"
+// =============================================================================
+// BADGE-DOT — absolutely positioned notification indicator
+// Docs: .claude/skills/design/badges.md -> Dot / Notification Badge
+// =============================================================================
+.badge-dot {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	width: 10px;
+	height: 10px;
+	border-radius: $radius-full;
+	border: 2px solid var(--color-border);
+	background: var(--danger-solid);
+
+	&--count {
+		background: var(--color-brand);
+	}
+}
+
+// =============================================================================
+// BADGE-NUMBER — sidebar / list count (auto-width, brand bg)
+// Docs: .claude/skills/design/badges.md -> Number Badge
+// =============================================================================
+.badge-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: $radius-full;
+	background: var(--color-brand);
+	color: #ffffff;
+	font-size: 11px;
+	font-weight: $weight-semibold;
+	line-height: 1;
+}
+
+// =============================================================================
+// TREND CHIP — tiny circular up/down arrow for KPI comparisons
+// =============================================================================
 .trend-chip {
 	display: inline-flex;
 	align-items: center;
@@ -68,7 +165,9 @@
 	}
 }
 
-// Micro uppercase label — sidebar section headers, pipeline column stats
+// =============================================================================
+// EYEBROW — micro uppercase label (sidebar section headers, pipeline stats)
+// =============================================================================
 .eyebrow {
 	font-size: $fs-caption;
 	line-height: $lh-caption;

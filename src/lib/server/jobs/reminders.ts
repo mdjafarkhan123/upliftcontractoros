@@ -38,7 +38,11 @@ export async function loadJobReminders(
 	const where = and(
 		eq(jobInvoiceReminders.org_id, orgId),
 		eq(jobInvoiceReminders.job_id, jobId),
-		isNull(jobInvoiceReminders.deleted_at)
+		isNull(jobInvoiceReminders.deleted_at),
+		// Jobber never shows a "Completed" reminder — once its duty ends the reminder simply leaves
+		// the list. We keep the completed row (audit + it powers the delete-invoice revert) but hide
+		// it here, so only live/active reminders appear in the Reminders tab.
+		eq(jobInvoiceReminders.status, 'active')
 	);
 
 	const [rows, [{ value: total }]] = await Promise.all([

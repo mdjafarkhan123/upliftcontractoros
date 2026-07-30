@@ -13,19 +13,13 @@ import {
 	outboxEvents,
 	pipelineStages,
 	quotes,
-	reviewRequests,
 	type AutomationJob
 } from '$lib/server/db/schema';
 import { markOpportunityWon, markOpportunityLost } from '$lib/server/pipeline/transitions';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
 import { deactivatePaymentLink, getOrgStripeClient } from '$lib/server/invoices/stripe';
-import {
-	AUTOMATION_QUEUE,
-	addJob,
-	automationQueue,
-	redisConnection
-} from '$lib/server/queue/bullmq';
+import { AUTOMATION_QUEUE, redisConnection } from '$lib/server/queue/bullmq';
 import { interpolate } from './templates';
 import {
 	enroll,
@@ -36,12 +30,20 @@ import {
 	stopEnrollmentsForResource,
 	reanchorEnrollments
 } from '$lib/server/automation/engine';
-import { generateReviewToken, reviewTokenExpiry } from '$lib/server/reputation/token';
-import { buildReviewLink } from '$lib/server/reputation/reviewLink';
 import { buildManageLink } from '$lib/server/tokens/appointmentManageToken';
-import { emitReviewEvent, transitionToExpired } from '$lib/server/reputation/lifecycle';
+import { transitionToExpired } from '$lib/server/reputation/lifecycle';
 import { featureForAutomationJob } from '$lib/permissions/featureMap';
 import type { FeatureFlagKey } from '$lib/types';
+import {
+	canContactReceiveCommunication,
+	type CommunicationPreferenceCategory,
+	type CommunicationPreferenceChannel,
+	type CommunicationPreferenceDirection,
+	type CommunicationPreferenceStatus
+} from '$lib/server/communication-preferences';
+import { runCommunicationPreferenceWorkflows } from '$lib/server/communication-preferences/workflows';
+
+type CustomerCommunicationCategory = Exclude<CommunicationPreferenceCategory, 'all'>;
 
 const FEATURE_CACHE_TTL_MS = 15_000;
 const featureCache = new Map<string, { value: boolean; expiresAt: number }>();
@@ -84,6 +86,31 @@ async function loadContact(orgId: string, contactId: string) {
 			and(eq(contacts.id, contactId), eq(contacts.org_id, orgId), isNull(contacts.deleted_at))
 		);
 	return contact ?? null;
+}
+
+async function customerChannelAllowed(
+	orgId: string,
+	contactId: string,
+	channel: Exclude<CommunicationPreferenceChannel, 'all'>,
+	category: CustomerCommunicationCategory
+): Promise<boolean> {
+	const result = await canContactReceiveCommunication({
+		orgId,
+		contactId,
+		channel,
+		direction: 'outbound',
+		category
+	});
+	if (!result.allowed) {
+		console.info('[automation] customer communication skipped', {
+			orgId,
+			contactId,
+			channel,
+			category,
+			reason: result.reasonCode
+		});
+	}
+	return result.allowed;
 }
 
 async function insertAutomationJob(
@@ -518,7 +545,7 @@ async function dispatchInitialQuote(data: EventJobData) {
 	// The public link must always survive, even if a custom message drops the token.
 	const ensureLink = (text: string) => (text.includes(url) ? text : `${text}\n\n${url}`);
 
-	if (wantSms && !contact.sms_opt_out) {
+	if (wantSms && (await customerChannelAllowed(orgId, contact.id, 'sms', 'quote_send'))) {
 		const verb = isResend ? 'updated your quote' : 'sent you a quote';
 		const defaultBody = `Hi ${contact.full_name}, ${org.name} ${verb} (${quoteNumberDisplay}, ${totalFormatted}). View it here: ${url}`;
 		const body = ensureLink(customSms ? interpolate(customSms, vars) : defaultBody);
@@ -534,7 +561,12 @@ async function dispatchInitialQuote(data: EventJobData) {
 		}
 	}
 
-	if (wantEmail && hasEmail && contact.email) {
+	if (
+		wantEmail &&
+		hasEmail &&
+		contact.email &&
+		(await customerChannelAllowed(orgId, contact.id, 'email', 'quote_send'))
+	) {
 		try {
 			const verb = isResend ? 'updated your quote' : 'sent you a quote';
 			const subject = customEmailSubject
@@ -604,7 +636,7 @@ async function handleInvoiceDispatch(data: EventJobData) {
 		.from(invoices)
 		.where(and(eq(invoices.id, data.resource_id), eq(invoices.org_id, orgId)))
 		.limit(1);
-	if (!invRow || invRow.deleted_at || invRow.status === 'cancelled') return;
+	if (!invRow || invRow.deleted_at || invRow.status === 'bad_debt') return;
 
 	const contactId = data.payload.contact_id as string | undefined;
 	const rawToken = data.payload.public_token as string | undefined;
@@ -645,7 +677,7 @@ async function handleInvoiceDispatch(data: EventJobData) {
 		// The public link must always survive, even if a custom message drops the token.
 		const ensureLink = (text: string) => (text.includes(url) ? text : `${text}\n\n${url}`);
 
-		if (wantSms && !contact.sms_opt_out) {
+		if (wantSms && (await customerChannelAllowed(orgId, contact.id, 'sms', 'invoice_send'))) {
 			// Primary link first; the Stripe fallback link is always appended, labeled as secondary.
 			const fallbackSms = paymentLinkUrl
 				? `\nBackup payment link (original amount only): ${paymentLinkUrl}`
@@ -665,7 +697,12 @@ async function handleInvoiceDispatch(data: EventJobData) {
 			}
 		}
 
-		if (wantEmail && hasEmail && contact.email) {
+		if (
+			wantEmail &&
+			hasEmail &&
+			contact.email &&
+			(await customerChannelAllowed(orgId, contact.id, 'email', 'invoice_send'))
+		) {
 			try {
 				const fallbackEmail = paymentLinkUrl
 					? `\n\nBackup payment link (use only if the link above is unavailable):
@@ -764,6 +801,108 @@ async function handleInvoiceRemindersToggle(data: EventJobData) {
 	}
 }
 
+// Customer-facing payment receipt (payment.receipt_requested — emitted by the /receipt endpoint).
+// Delivers a "we received your payment" note over the chosen channel(s), mirroring the invoice
+// dispatch delivery path (same queueAutomationSms/Email helpers + custom-copy interpolation). The
+// receipt marker (receipt_sent_at/via) was already stamped by the endpoint.
+async function handlePaymentReceipt(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const { org } = await loadContext(orgId);
+	if (!org) return;
+
+	const contactId = data.payload.contact_id as string | undefined;
+	if (!contactId) return;
+	const contact = await loadContact(orgId, contactId);
+	if (!contact) return;
+
+	const amountFormatted = (data.payload.amount_formatted as string | undefined) ?? '';
+	const tipFormatted = (data.payload.tip_formatted as string | null | undefined) ?? null;
+	const methodLabel = (data.payload.method_label as string | undefined) ?? 'Payment';
+	const paidAtIso = data.payload.paid_at_iso as string | undefined;
+	const invoiceNumberDisplay = (data.payload.invoice_number_display as string | undefined) ?? '';
+	const rawToken = (data.payload.public_token as string | null | undefined) ?? null;
+	const channels = (data.payload.channels as ('email' | 'sms')[] | undefined) ?? ['email', 'sms'];
+	const customSms = (data.payload.sms_body as string | null | undefined) ?? null;
+	const customEmailSubject = (data.payload.email_subject as string | null | undefined) ?? null;
+	const customEmailBody = (data.payload.email_body as string | null | undefined) ?? null;
+
+	const url = rawToken ? publicInvoiceUrl(rawToken) : '';
+	const paidOn = paidAtIso
+		? new Date(paidAtIso).toLocaleDateString('en-US', {
+				month: 'short',
+				day: 'numeric',
+				year: 'numeric'
+			})
+		: '';
+	const tipLine = tipFormatted ? ` (incl. ${tipFormatted} tip)` : '';
+
+	const vars = {
+		contact_name: contact.full_name,
+		org_name: org.name,
+		invoice_number: invoiceNumberDisplay,
+		amount: amountFormatted,
+		invoice_amount: amountFormatted,
+		invoice_link: url
+	};
+	const ensureLink = (text: string) => (!url || text.includes(url) ? text : `${text}\n\n${url}`);
+
+	const wantSms = channels.includes('sms');
+	const wantEmail = channels.includes('email');
+
+	if (wantSms && (await customerChannelAllowed(orgId, contact.id, 'sms', 'payment_receipt'))) {
+		const linkLine = url ? ` View invoice: ${url}` : '';
+		const defaultBody = `Hi ${contact.full_name}, thanks! ${org.name} received your ${amountFormatted}${tipLine} payment for invoice ${invoiceNumberDisplay}.${linkLine}`;
+		const smsBody = customSms ? ensureLink(interpolate(customSms, vars)) : defaultBody;
+		try {
+			await queueAutomationSms(db, {
+				orgId,
+				contactId: contact.id,
+				body: smsBody,
+				source: 'automation.payment_receipt'
+			});
+		} catch (err) {
+			console.error('[automation] payment receipt SMS dispatch failed:', err);
+		}
+	}
+
+	if (
+		wantEmail &&
+		contact.email &&
+		(await customerChannelAllowed(orgId, contact.id, 'email', 'payment_receipt'))
+	) {
+		try {
+			const subject = customEmailSubject
+				? interpolate(customEmailSubject, vars)
+				: `Payment received — invoice ${invoiceNumberDisplay}`;
+			const linkBlock = url ? `\n\nView your invoice:\n${url}` : '';
+			const defaultBody = `Hi ${contact.full_name},
+
+Thank you — we've received your payment.
+
+Invoice: ${invoiceNumberDisplay}
+Amount: ${amountFormatted}${tipLine}
+Method: ${methodLabel}${paidOn ? `\nDate: ${paidOn}` : ''}${linkBlock}
+
+Thanks for your business,
+${org.name}`;
+			const emailBody = customEmailBody
+				? ensureLink(interpolate(customEmailBody, vars))
+				: defaultBody;
+			await queueAutomationEmail(db, {
+				orgId,
+				contactId: contact.id,
+				contactEmail: contact.email,
+				subject,
+				body: emailBody,
+				source: 'automation.payment_receipt'
+			});
+		} catch (err) {
+			console.error('[automation] payment receipt email dispatch failed:', err);
+		}
+	}
+}
+
 // ============================================================================
 // Review lifecycle handlers — 5 jobs, all gated by feature_review_funnel.
 //
@@ -781,314 +920,16 @@ async function handleInvoiceRemindersToggle(data: EventJobData) {
 // fails. Pre-scheduling without runtime guards would double-send on retry.
 // ============================================================================
 
-// `job.completed` setup: schedule the eventual `review.send` after the
-// contractor-configured delay (default 2h).
-async function handleReviewSendSetup(data: EventJobData) {
-	if (!data.org_id) return;
-	const { settings } = await loadContext(data.org_id);
-	if (!settings || !settings.review_funnel_enabled) return;
-	const delayMs = settings.review_funnel_delay_hours * 3600_000;
-	const bullJob = await addJob(
-		automationQueue(),
-		'review.send',
-		{
-			outbox_event_id: `review.send:${data.resource_id}`,
-			event_type: 'review.send',
-			org_id: data.org_id,
-			resource_type: 'job',
-			resource_id: data.resource_id,
-			payload: data.payload
-		},
-		{ delay: delayMs }
-	);
-	await insertAutomationJob({
-		org_id: data.org_id,
-		type: 'review_request',
-		resource_type: 'job',
-		resource_id: data.resource_id,
-		bull_job_id: String(bullJob.id),
-		status: 'pending',
-		scheduled_for: new Date(Date.now() + delayMs)
-	});
-}
+// Review requests are now explicitly sent by a staff member. These no-ops also
+// safely consume delayed jobs created before that policy changed.
+async function handleReviewSendSetup() {}
 
-// `review.send`: create the review_request row in `sent` status, queue the SMS,
-// emit `review_request.sent` so the outbox pre-schedules unengaged + expire.
-async function handleReviewSend(job: Job, data: EventJobData) {
-	if (!data.org_id) return;
+async function handleReviewSend(job: Job) {
 	const [automationJobRow] = await db
 		.select()
 		.from(automationJobs)
 		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const { org, settings } = await loadContext(data.org_id);
-	if (!org || !settings || !settings.review_funnel_enabled) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const contactId = data.payload.contact_id as string | undefined;
-	if (!contactId) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-	const contact = await loadContact(data.org_id, contactId);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		const token = await generateReviewToken();
-		const reviewLink = buildReviewLink(token);
-		const now = new Date();
-
-		const inserted = await db.transaction<{ id: string; token: string } | null>(async (tx) => {
-			const [row] = await tx
-				.insert(reviewRequests)
-				.values({
-					org_id: data.org_id!,
-					job_id: data.resource_id,
-					contact_id: contact.id,
-					status: 'sent',
-					sent_by_automation: true,
-					sent_at: now,
-					token,
-					token_expires_at: reviewTokenExpiry()
-				})
-				.onConflictDoNothing({ target: reviewRequests.job_id })
-				.returning({ id: reviewRequests.id, token: reviewRequests.token });
-			if (!row || !row.token) return null;
-
-			await emitReviewEvent(tx, {
-				org_id: data.org_id!,
-				review_request_id: row.id,
-				type: 'sent'
-			});
-
-			// Pre-schedule the unengaged reminder (+72h) and the absolute expiry
-			// (+14d) via the outbox. Both fire-time handlers re-read state.
-			await tx.insert(outboxEvents).values({
-				org_id: data.org_id!,
-				event_type: 'review_request.sent',
-				resource_type: 'review_request',
-				resource_id: row.id,
-				payload: {
-					review_request_id: row.id,
-					org_id: data.org_id!,
-					job_id: data.resource_id,
-					contact_id: contact.id
-				},
-				idempotency_key: `review_request.sent:${row.id}`
-			});
-			return { id: row.id, token: row.token };
-		});
-
-		// Conflict: a review request already exists for this job (manual send
-		// or earlier worker run). Skip silently.
-		if (!inserted) {
-			if (automationJobRow) await markJobCompleted(automationJobRow.id);
-			return;
-		}
-
-		const body = interpolate(settings.review_funnel_message, {
-			contact_name: contact.full_name,
-			org_name: org.name,
-			review_link: reviewLink
-		});
-		await queueAutomationSms(db, {
-			orgId: data.org_id,
-			contactId: contact.id,
-			body,
-			source: 'automation.review.send'
-		});
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
-	}
-}
-
-// Shared loader: returns null and marks job complete if any precondition fails.
-async function loadActiveReviewRequest(
-	orgId: string,
-	reviewRequestId: string,
-	allowed: ReadonlyArray<'sent' | 'engaged'>
-) {
-	const [rr] = await db
-		.select()
-		.from(reviewRequests)
-		.where(and(eq(reviewRequests.id, reviewRequestId), isNull(reviewRequests.deleted_at)));
-	if (!rr || !rr.token) return null;
-	if (!allowed.includes(rr.status as 'sent' | 'engaged')) return null;
-	if (rr.org_id !== orgId) return null;
-	return rr;
-}
-
-// `review.unengaged`: 72h after sent, if still `sent`, send the reminder copy.
-async function handleReviewUnengaged(job: Job, data: EventJobData) {
-	if (!data.org_id) return;
-	const [automationJobRow] = await db
-		.select()
-		.from(automationJobs)
-		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const reviewRequestId = (data.payload.review_request_id as string | undefined) ?? null;
-	if (!reviewRequestId) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const rr = await loadActiveReviewRequest(data.org_id, reviewRequestId, ['sent']);
-	const { org, settings } = await loadContext(data.org_id);
-	if (
-		!rr ||
-		!org?.twilio_phone_number ||
-		!settings?.review_funnel_enabled ||
-		!settings.review_funnel_reminder_enabled
-	) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const contact = await loadContact(data.org_id, rr.contact_id);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		const reviewLink = buildReviewLink(rr.token!);
-		const body = interpolate(settings.review_funnel_reminder_message, {
-			contact_name: contact.full_name,
-			org_name: org.name,
-			review_link: reviewLink
-		});
-		await db.transaction(async (tx) => {
-			await queueAutomationSms(tx, {
-				orgId: data.org_id!,
-				contactId: contact.id,
-				body,
-				source: 'automation.review.unengaged'
-			});
-			await emitReviewEvent(tx, {
-				org_id: data.org_id!,
-				review_request_id: rr.id,
-				type: 'reminder_sent'
-			});
-		});
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
-	}
-}
-
-// Shared nudge handler. `expectedCount` is the value of `nudge_count` we
-// require BEFORE this nudge fires; the UPDATE bumps it to expectedCount + 1.
-// The `WHERE nudge_count = expectedCount` guard makes retries safe.
-async function runNudge(
-	job: Job,
-	data: EventJobData,
-	nudgeNumber: 1 | 2,
-	expectedCount: 0 | 1,
-	pickTemplate: (settings: {
-		review_funnel_nudge_1_message: string;
-		review_funnel_nudge_2_message: string;
-	}) => string
-) {
-	if (!data.org_id) return;
-	const [automationJobRow] = await db
-		.select()
-		.from(automationJobs)
-		.where(eq(automationJobs.bull_job_id, String(job.id)));
-	if (automationJobRow && (await isJobCancelled(automationJobRow.id))) return;
-
-	const reviewRequestId = (data.payload.review_request_id as string | undefined) ?? null;
-	if (!reviewRequestId) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const rr = await loadActiveReviewRequest(data.org_id, reviewRequestId, ['engaged']);
-	const { org, settings } = await loadContext(data.org_id);
-	if (
-		!rr ||
-		!org?.twilio_phone_number ||
-		!settings?.review_funnel_enabled ||
-		rr.nudge_count !== expectedCount
-	) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	const contact = await loadContact(data.org_id, rr.contact_id);
-	if (!contact || contact.sms_opt_out) {
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-		return;
-	}
-
-	if (automationJobRow) await markJobStarted(automationJobRow.id);
-	try {
-		const reviewLink = buildReviewLink(rr.token!);
-		const body = interpolate(pickTemplate(settings), {
-			contact_name: contact.full_name,
-			org_name: org.name,
-			review_link: reviewLink
-		});
-
-		// Atomic guard: only proceed if nudge_count is still at the expected
-		// value. A concurrent retry trying to fire the same nudge gets 0 rows.
-		const claimed = await db.transaction<boolean>(async (tx) => {
-			const updated = await tx
-				.update(reviewRequests)
-				.set({ nudge_count: expectedCount + 1, updated_at: new Date() })
-				.where(
-					and(
-						eq(reviewRequests.id, rr.id),
-						eq(reviewRequests.status, 'engaged'),
-						eq(reviewRequests.nudge_count, expectedCount)
-					)
-				)
-				.returning({ id: reviewRequests.id });
-			if (updated.length === 0) return false;
-
-			await queueAutomationSms(tx, {
-				orgId: data.org_id!,
-				contactId: contact.id,
-				body,
-				source: `automation.review.nudge_${nudgeNumber}`
-			});
-			await emitReviewEvent(tx, {
-				org_id: data.org_id!,
-				review_request_id: rr.id,
-				type: 'nudge_sent',
-				nudge_number: nudgeNumber
-			});
-			return true;
-		});
-
-		if (!claimed) {
-			if (automationJobRow) await markJobCompleted(automationJobRow.id);
-			return;
-		}
-		if (automationJobRow) await markJobCompleted(automationJobRow.id);
-	} catch (err) {
-		if (automationJobRow) await markJobFailed(automationJobRow.id, err);
-		throw err;
-	}
-}
-
-async function handleReviewNudge1(job: Job, data: EventJobData) {
-	return runNudge(job, data, 1, 0, (s) => s.review_funnel_nudge_1_message);
-}
-
-async function handleReviewNudge2(job: Job, data: EventJobData) {
-	return runNudge(job, data, 2, 1, (s) => s.review_funnel_nudge_2_message);
+	if (automationJobRow) await markJobCompleted(automationJobRow.id);
 }
 
 // `review.expire`: 14d after sent, force-terminate any still-active row.
@@ -1243,7 +1084,11 @@ async function handleAppointmentConfirmation(data: EventJobData) {
 
 		// SMS — best-effort. Skip when contact opted out, has no phone, or org
 		// has no Twilio number configured.
-		if (contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+		if (
+			contact.phone &&
+			org.twilio_phone_number &&
+			(await customerChannelAllowed(orgId, contact.id, 'sms', 'appointment_confirmation'))
+		) {
 			try {
 				const smsBody = interpolate(settings.appointment_confirmation_sms_message, templateVars);
 				await queueAutomationSms(db, {
@@ -1259,7 +1104,10 @@ async function handleAppointmentConfirmation(data: EventJobData) {
 
 		// Email — also best-effort; the .ics attachment lives downstream in
 		// emailWorker via the appointmentId carried on the outbox payload.
-		if (contact.email) {
+		if (
+			contact.email &&
+			(await customerChannelAllowed(orgId, contact.id, 'email', 'appointment_confirmation'))
+		) {
 			try {
 				const subject = interpolate(settings.appointment_confirmation_email_subject, templateVars);
 				const body = interpolate(settings.appointment_confirmation_email_message, templateVars);
@@ -1327,7 +1175,12 @@ async function handleJobScheduledConfirmation(data: EventJobData) {
 	const wantsEmail = channel === 'email' || channel === 'both';
 
 	// SMS — best-effort. Skip when opted out, no phone, or org has no Twilio number.
-	if (wantsSms && contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+	if (
+		wantsSms &&
+		contact.phone &&
+		org.twilio_phone_number &&
+		(await customerChannelAllowed(orgId, contact.id, 'sms', 'job_scheduled'))
+	) {
 		try {
 			const smsBody = interpolate(customSms ?? settings.job_scheduled_sms_message, templateVars);
 			await queueAutomationSms(db, {
@@ -1342,7 +1195,11 @@ async function handleJobScheduledConfirmation(data: EventJobData) {
 	}
 
 	// Email — also best-effort.
-	if (wantsEmail && contact.email) {
+	if (
+		wantsEmail &&
+		contact.email &&
+		(await customerChannelAllowed(orgId, contact.id, 'email', 'job_scheduled'))
+	) {
 		try {
 			const subject = interpolate(
 				customSubject ?? settings.job_scheduled_email_subject,
@@ -1421,7 +1278,12 @@ async function handleAppointmentRescheduleConfirmation(data: EventJobData) {
 	const wantsEmail = channel === 'email' || channel === 'both';
 
 	// SMS — best-effort. Skip when opted out, no phone, or org has no Twilio number.
-	if (wantsSms && contact.phone && !contact.sms_opt_out && org.twilio_phone_number) {
+	if (
+		wantsSms &&
+		contact.phone &&
+		org.twilio_phone_number &&
+		(await customerChannelAllowed(orgId, contact.id, 'sms', 'appointment_confirmation'))
+	) {
 		try {
 			const smsBody = interpolate(
 				customSms ?? settings.appointment_confirmation_sms_message,
@@ -1439,7 +1301,11 @@ async function handleAppointmentRescheduleConfirmation(data: EventJobData) {
 	}
 
 	// Email — also best-effort; .ics attachment is added downstream via appointmentId.
-	if (wantsEmail && contact.email) {
+	if (
+		wantsEmail &&
+		contact.email &&
+		(await customerChannelAllowed(orgId, contact.id, 'email', 'appointment_confirmation'))
+	) {
 		try {
 			const subject = interpolate(
 				customSubject ?? settings.appointment_confirmation_email_subject,
@@ -1740,6 +1606,18 @@ export const automationWorker = new Worker<EventJobData>(
 				return handleEngineOppClosed(data, 'won');
 			case 'automation.opp_lost':
 				return handleEngineOppClosed(data, 'lost');
+			case 'contact.communication_preference_changed':
+				return runCommunicationPreferenceWorkflows({
+					org_id: data.org_id as string,
+					contact_id: data.payload.contact_id as string,
+					channel: data.payload.channel as CommunicationPreferenceChannel,
+					direction: data.payload.direction as CommunicationPreferenceDirection,
+					next_status: data.payload.next_status as CommunicationPreferenceStatus,
+					previous_status: data.payload.previous_status as CommunicationPreferenceStatus | null,
+					provider: data.payload.provider as string | null,
+					provider_event_id: data.payload.provider_event_id as string | null,
+					metadata: data.payload.metadata as Record<string, unknown>
+				});
 			case 'missed_call_textback':
 				return handleMissedCallTextbackEnroll(data);
 			case 'pipeline_auto_create':
@@ -1756,19 +1634,20 @@ export const automationWorker = new Worker<EventJobData>(
 				return handleInvoiceDispatch(data);
 			case 'invoice_reminders_toggle':
 				return handleInvoiceRemindersToggle(data);
+			case 'payment_receipt':
+				return handlePaymentReceipt(data);
 			case 'quote_followup':
 				// Only ever enqueued for quote.sent now; follow-ups run on the engine
 				// (automation.advance). Stage 3.c.2.
 				return handleQuoteFollowupSetup(data);
 			case 'review.send':
-				if (data.event_type === 'job.completed') return handleReviewSendSetup(data);
-				return handleReviewSend(job, data);
+				if (data.event_type === 'job.completed') return handleReviewSendSetup();
+				return handleReviewSend(job);
 			case 'review.unengaged':
-				return handleReviewUnengaged(job, data);
 			case 'review.nudge_1':
-				return handleReviewNudge1(job, data);
 			case 'review.nudge_2':
-				return handleReviewNudge2(job, data);
+				// Legacy delayed review messages must never send under the manual-only policy.
+				return handleReviewSend(job);
 			case 'review.expire':
 				return handleReviewExpire(job, data);
 			case 'appointment_reminder':

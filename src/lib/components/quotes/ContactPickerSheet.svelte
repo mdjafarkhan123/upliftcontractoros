@@ -2,6 +2,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	type ContactItem = { id: string; full_name: string; phone: string; email: string | null };
 
@@ -75,9 +76,7 @@
 								open = false;
 							}}
 						>
-							<span class="contact-picker__avatar">
-								<i class="ri-user-line" aria-hidden="true"></i>
-							</span>
+							<Avatar size="sm" name={c.full_name} />
 							<span class="contact-picker__info">
 								<span class="contact-picker__name">{c.full_name}</span>
 								<span class="contact-picker__sub">

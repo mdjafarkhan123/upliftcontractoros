@@ -3,25 +3,18 @@
 
 	let { status, class: className }: { status: InvoiceStatus; class?: string } = $props();
 
-	const modifiers: Record<InvoiceStatus, string> = {
-		draft: 'invoice-badge--draft',
-		sent: 'invoice-badge--sent',
-		partially_paid: 'invoice-badge--partially_paid',
-		paid: 'invoice-badge--paid',
-		overdue: 'invoice-badge--overdue',
-		cancelled: 'invoice-badge--cancelled'
-	};
-
+	// Strict Jobber labels (see jobber-05 §2). sent_not_due reads "Sent" (sent, not yet due);
+	// awaiting_payment reads "Awaiting Payment" (due now, unpaid); past_due reads "Past Due".
 	const labels: Record<InvoiceStatus, string> = {
 		draft: 'Draft',
-		sent: 'Sent',
-		partially_paid: 'Partial',
+		sent_not_due: 'Sent',
+		awaiting_payment: 'Awaiting Payment',
 		paid: 'Paid',
-		overdue: 'Overdue',
-		cancelled: 'Cancelled'
+		past_due: 'Past Due',
+		bad_debt: 'Bad Debt'
 	};
 </script>
 
-<span class="invoice-badge {modifiers[status]} {className ?? ''}">
+<span class="invoice-badge invoice-badge--{status} {className ?? ''}">
 	{labels[status]}
 </span>

@@ -134,6 +134,7 @@ export {
 	quoteStatusEnum,
 	invoiceStatusEnum,
 	paymentMethodEnum,
+	paymentAdjustmentTypeEnum,
 	quotes,
 	quoteLineItems,
 	quotePackages,
@@ -344,6 +345,42 @@ export type {
 	AutomationEnrollment,
 	NewAutomationEnrollment
 } from './18_automation_engine';
+
+// Domain 19 — Contact communication preferences and consent
+export {
+	communicationPreferenceChannelEnum,
+	communicationPreferenceDirectionEnum,
+	communicationPreferenceCategoryEnum,
+	communicationPreferenceStatusEnum,
+	communicationPreferenceSourceEnum,
+	communicationConsentStatusEnum,
+	contactCommunicationPreferences,
+	contactCommunicationPreferenceEvents,
+	contactCommunicationConsents
+} from './19_communication_preferences';
+
+// Domain 20 — HighLevel-style communication workflows
+export {
+	communicationWorkflowStatusEnum,
+	communicationWorkflowTriggerEnum,
+	communicationWorkflowActionEnum,
+	communicationWorkflows
+} from './20_communication_workflows';
+export type { CommunicationWorkflow, NewCommunicationWorkflow } from './20_communication_workflows';
+export type {
+	CommunicationPreferenceChannel,
+	CommunicationPreferenceDirection,
+	CommunicationPreferenceCategory,
+	CommunicationPreferenceStatus,
+	CommunicationPreferenceSource,
+	CommunicationConsentStatus,
+	ContactCommunicationPreference,
+	NewContactCommunicationPreference,
+	ContactCommunicationPreferenceEvent,
+	NewContactCommunicationPreferenceEvent,
+	ContactCommunicationConsent,
+	NewContactCommunicationConsent
+} from './19_communication_preferences';
 
 // Domain 10 — Growth, Automation & System
 export {

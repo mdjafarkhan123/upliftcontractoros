@@ -1,6 +1,8 @@
 <script lang="ts">
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import Input from '$lib/components/ui/input/input.svelte';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import type { CallOutcome } from '$lib/stores/inbox.svelte';
 
 	let {
@@ -85,7 +87,7 @@
 
 		<div class="log-call__field">
 			<label for="call-duration" class="log-call__label"> Duration (minutes) </label>
-			<input
+			<Input
 				id="call-duration"
 				type="number"
 				inputmode="numeric"
@@ -98,14 +100,14 @@
 
 		<div class="log-call__field">
 			<label for="call-note" class="log-call__label"> Note </label>
-			<textarea
+			<Textarea
 				id="call-note"
 				bind:value={note}
-				rows="2"
-				maxlength="2000"
+				rows={2}
+				maxlength={2000}
 				placeholder="Optional — what was discussed"
 				class="log-call__textarea"
-			></textarea>
+			/>
 		</div>
 
 		<div class="log-call__actions">

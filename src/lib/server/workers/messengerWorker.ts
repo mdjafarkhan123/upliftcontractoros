@@ -15,6 +15,10 @@ import {
 	isPermanentSendError
 } from '$lib/server/messenger/graph';
 import { createLogger } from '$lib/server/log';
+import {
+	canContactReceiveCommunication,
+	communicationCategoryFromSource
+} from '$lib/server/communication-preferences';
 
 const env = process.env;
 const log = createLogger('messenger.worker');
@@ -99,6 +103,21 @@ async function processMessengerSend(job: Job<MessengerJobData>) {
 		.where(eq(conversations.id, msg.conversation_id))
 		.limit(1);
 	if (!conv) throw new Error(`Conversation ${msg.conversation_id} not found`);
+	const eligibility = await canContactReceiveCommunication({
+		orgId: msg.org_id,
+		contactId: conv.contact_id,
+		channel: 'messenger',
+		direction: 'outbound',
+		category: communicationCategoryFromSource(msg.source),
+		conversationId: conv.id
+	});
+	if (!eligibility.allowed) {
+		await markUndeliverable(
+			messageId,
+			eligibility.reasonMessage ?? 'Customer communication is blocked'
+		);
+		return;
+	}
 
 	// Resolve the recipient PSID + the Page it belongs to from the contact's
 	// Messenger identity, then the live Page token from the org's integration.

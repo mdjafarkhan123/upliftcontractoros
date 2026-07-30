@@ -38,9 +38,16 @@ import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/eve
 import { formatQuoteNumber } from '$lib/server/quotes/format';
 
 const PAGE_SIZE = 30;
-const ALL_STATUSES = ['draft', 'sent', 'partially_paid', 'paid', 'overdue', 'cancelled'] as const;
-const OPEN_STATUSES = ['sent', 'partially_paid', 'overdue'] as const;
-const CLOSED_STATUSES = ['paid', 'cancelled'] as const;
+const ALL_STATUSES = [
+	'draft',
+	'sent_not_due',
+	'awaiting_payment',
+	'paid',
+	'past_due',
+	'bad_debt'
+] as const;
+const OPEN_STATUSES = ['sent_not_due', 'awaiting_payment', 'past_due'] as const;
+const CLOSED_STATUSES = ['paid', 'bad_debt'] as const;
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -58,14 +65,14 @@ export const GET: RequestHandler = async (event) => {
 		conditions.push(inArray(invoices.status, [...OPEN_STATUSES]));
 	} else if (statusParam === 'closed') {
 		conditions.push(inArray(invoices.status, [...CLOSED_STATUSES]));
-	} else if (statusParam === 'overdue') {
-		// Effective overdue: actual 'overdue' status OR sent/partially_paid past due_date.
-		// The nightly cron (deferred) will eventually flip these to 'overdue' status.
+	} else if (statusParam === 'past_due') {
+		// Effective overdue: actual 'past_due' status OR sent_not_due/awaiting_payment past due_date
+		// (the nightly sweep will later flip these to 'past_due' status).
 		conditions.push(
 			or(
-				eq(invoices.status, 'overdue'),
+				eq(invoices.status, 'past_due'),
 				and(
-					inArray(invoices.status, ['sent', 'partially_paid']),
+					inArray(invoices.status, ['sent_not_due', 'awaiting_payment']),
 					isNotNull(invoices.due_date),
 					lt(invoices.due_date, sql`CURRENT_DATE`),
 					gt(invoices.amount_due, '0')

@@ -164,6 +164,7 @@ export const updateContactSchema = z
 			.optional()
 			.or(z.literal('').transform(() => null)),
 		email_opt_in: z.boolean().optional(),
+		receives_review_requests: z.boolean().optional(),
 		do_not_contact: z.boolean().optional(),
 		// Profile photo. Carries the id of an uploaded media row (purpose_tag
 		// 'contact_avatar'); the route resolves it to the stored r2_key. null clears.

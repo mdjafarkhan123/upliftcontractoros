@@ -31,7 +31,7 @@
 			</button>
 		{/snippet}
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-48">
+	<DropdownMenu.Content align="end">
 		<DropdownMenu.Group>
 			<DropdownMenu.Label>Snooze until</DropdownMenu.Label>
 			<DropdownMenu.Separator />

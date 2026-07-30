@@ -299,7 +299,7 @@
 			}
 
 			&--head {
-				background: var(--color-surface-2, var(--color-bg-subtle));
+				background: var(--color-bg-surface-sunk);
 				font-size: $fs-caption;
 				font-weight: $weight-semibold;
 				color: var(--color-text-secondary);
@@ -308,7 +308,7 @@
 			}
 
 			&--job {
-				background: var(--color-bg-subtle);
+				background: var(--color-bg-surface-sunk);
 				font-weight: $weight-medium;
 			}
 		}

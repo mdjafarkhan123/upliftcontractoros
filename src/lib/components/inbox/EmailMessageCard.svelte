@@ -3,18 +3,21 @@
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import MessageMedia from './MessageMedia.svelte';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		message: m,
 		canRetry = false,
 		inboundInitials = '',
 		outboundInitials = '',
+		outboundName = '',
 		grouped = false
 	}: {
 		message: ThreadMessage;
 		canRetry?: boolean;
 		inboundInitials?: string;
 		outboundInitials?: string;
+		outboundName?: string;
 		grouped?: boolean;
 	} = $props();
 
@@ -79,13 +82,11 @@
 <div class="msg msg--{isInbound ? 'in' : 'out'}" class:msg--grouped={grouped}>
 	{#if isInbound}
 		{#if !grouped}
-			<div class="msg__avatar msg__avatar--in" aria-hidden="true">
-				{#if inboundInitials}
-					{inboundInitials}
-				{:else}
-					<i class="ri-mail-line" aria-hidden="true"></i>
-				{/if}
-			</div>
+			{#if inboundInitials}
+				<Avatar size="sm" name={inboundInitials} />
+			{:else}
+				<div class="msg__avatar-icon"><i class="ri-mail-line" aria-hidden="true"></i></div>
+			{/if}
 		{:else}
 			<div class="msg__spacer"></div>
 		{/if}
@@ -170,13 +171,11 @@
 
 	{#if !isInbound}
 		{#if !grouped}
-			<div class="msg__avatar msg__avatar--out" aria-hidden="true">
-				{#if outboundInitials}
-					{outboundInitials}
-				{:else}
-					<i class="ri-mail-line" aria-hidden="true"></i>
-				{/if}
-			</div>
+			{#if outboundName || outboundInitials}
+				<Avatar size="sm" name={outboundName || outboundInitials} />
+			{:else}
+				<div class="msg__avatar-icon"><i class="ri-mail-line" aria-hidden="true"></i></div>
+			{/if}
 		{:else}
 			<div class="msg__spacer"></div>
 		{/if}

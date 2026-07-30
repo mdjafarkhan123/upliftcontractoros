@@ -161,12 +161,12 @@
 		color: var(--color-text-muted);
 	}
 
-	&--sent {
+	&--sent_not_due {
 		background: rgba(59, 130, 246, 0.12);
 		color: #1d4ed8;
 	}
 
-	&--partially_paid {
+	&--awaiting_payment {
 		background: rgba(245, 158, 11, 0.15);
 		color: #b45309;
 	}
@@ -176,12 +176,12 @@
 		color: #047857;
 	}
 
-	&--overdue {
+	&--past_due {
 		background: rgba(244, 63, 94, 0.12);
 		color: #be123c;
 	}
 
-	&--cancelled {
+	&--bad_debt {
 		background: rgba(113, 113, 122, 0.12);
 		color: #52525b;
 	}
@@ -189,11 +189,11 @@
 
 :root[data-theme='dark'] {
 	.invoice-badge {
-		&--sent {
+		&--sent_not_due {
 			color: #93c5fd;
 			background: rgba(59, 130, 246, 0.12);
 		}
-		&--partially_paid {
+		&--awaiting_payment {
 			color: #fcd34d;
 			background: rgba(245, 158, 11, 0.12);
 		}
@@ -201,11 +201,11 @@
 			color: #6ee7b7;
 			background: rgba(16, 185, 129, 0.12);
 		}
-		&--overdue {
+		&--past_due {
 			color: #fda4af;
 			background: rgba(244, 63, 94, 0.12);
 		}
-		&--cancelled {
+		&--bad_debt {
 			color: #a1a1aa;
 			background: rgba(161, 161, 170, 0.1);
 		}
@@ -224,123 +224,6 @@
 // =============================================================================
 // INVOICE DETAIL (S7.1)
 // =============================================================================
-
-// -----------------------------------------------------------------------------
-// PAYMENT HISTORY — collapsible list of recorded payments
-// (component: PaymentHistory — reused on detail page)
-// -----------------------------------------------------------------------------
-.payment-history {
-	border-radius: $radius-xl;
-	background: var(--color-bg-surface);
-	box-shadow: var(--shadow-sm);
-	overflow: hidden;
-
-	&__toggle {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: $space-2;
-		width: 100%;
-		padding: $space-4;
-		border: none;
-		background: transparent;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-		transition: background-color $duration-fast $ease-standard;
-
-		&:hover {
-			background: var(--color-bg-surface-sunk);
-		}
-		&:focus-visible {
-			outline: none;
-			box-shadow: var(--shadow-focus);
-		}
-	}
-
-	&__head {
-		display: flex;
-		align-items: center;
-		gap: $space-2;
-		min-width: 0;
-	}
-
-	&__icon {
-		color: var(--color-text-muted);
-		font-size: 1.5rem;
-		line-height: 1;
-	}
-
-	&__title {
-		font-size: $fs-body;
-		font-weight: $weight-semibold;
-		color: var(--color-text-primary);
-	}
-
-	&__meta {
-		font-size: $fs-caption;
-		color: var(--color-text-muted);
-	}
-
-	&__chevron {
-		flex-shrink: 0;
-		color: var(--color-text-muted);
-		font-size: 1.5rem;
-		line-height: 1;
-	}
-
-	&__body {
-		border-top: 1px solid var(--color-border);
-	}
-
-	&__empty {
-		padding: $space-4;
-		font-size: $fs-body;
-		color: var(--color-text-muted);
-	}
-
-	&__list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-
-	&__item {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: $space-3;
-		padding: $space-4;
-
-		& + & {
-			border-top: 1px solid var(--color-border);
-		}
-	}
-
-	&__amount {
-		font-size: $fs-body;
-		font-weight: $weight-medium;
-		font-variant-numeric: tabular-nums;
-		color: var(--color-text-primary);
-	}
-
-	&__tip {
-		margin-left: $space-1;
-		font-size: $fs-caption;
-		font-weight: $weight-medium;
-		color: var(--success-text);
-	}
-
-	&__detail,
-	&__note {
-		font-size: $fs-caption;
-		color: var(--color-text-muted);
-	}
-
-	&__note {
-		margin-top: $space-1;
-	}
-}
 
 // =============================================================================
 // INVOICE NEW (S7.2)

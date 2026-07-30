@@ -24,6 +24,7 @@
 		recipientEmail = null,
 		recipientPhone = null,
 		recipientSmsOptOut = false,
+		recipientSummary = null,
 		editable = true,
 		mergeFields = [],
 		fill,
@@ -50,6 +51,10 @@
 		recipientEmail?: string | null;
 		recipientPhone?: string | null;
 		recipientSmsOptOut?: boolean;
+		// Batch/multi-recipient mode: when set, the single-recipient line is replaced by this
+		// summary (e.g. "12 clients — each gets their own invoice") and BOTH channels are treated
+		// as available (per-recipient reachability is resolved server-side, reported per row).
+		recipientSummary?: string | null;
 		editable?: boolean;
 		mergeFields?: MergeField[];
 		fill: (template: string, link: string) => string;
@@ -72,8 +77,9 @@
 		) => Promise<ConfirmResult | boolean>;
 	} = $props();
 
-	const emailAvailable = $derived(Boolean(recipientEmail));
-	const smsAvailable = $derived(!recipientSmsOptOut && Boolean(recipientPhone));
+	const batchMode = $derived(recipientSummary !== null);
+	const emailAvailable = $derived(batchMode || Boolean(recipientEmail));
+	const smsAvailable = $derived(batchMode || (!recipientSmsOptOut && Boolean(recipientPhone)));
 	const anyAvailable = $derived(emailAvailable || smsAvailable);
 
 	let channel = $state<Channel>('both');
@@ -201,17 +207,22 @@
 		<div class="send-doc__body">
 			<!-- Recipient -->
 			<div class="send-doc__recipient">
-				<p class="send-doc__recipient-name">{recipientName}</p>
-				<p class="send-doc__recipient-meta">
-					{#if recipientPhone}<span>{recipientPhone}</span>{/if}
-					{#if recipientEmail}
-						{#if recipientPhone}<span aria-hidden="true">·</span>{/if}
-						<span>{recipientEmail}</span>
-					{:else}
-						{#if recipientPhone}<span aria-hidden="true">·</span>{/if}
-						<span class="send-doc__recipient-warn">No email on file</span>
-					{/if}
-				</p>
+				{#if batchMode}
+					<p class="send-doc__recipient-name">{recipientName}</p>
+					<p class="send-doc__recipient-meta"><span>{recipientSummary}</span></p>
+				{:else}
+					<p class="send-doc__recipient-name">{recipientName}</p>
+					<p class="send-doc__recipient-meta">
+						{#if recipientPhone}<span>{recipientPhone}</span>{/if}
+						{#if recipientEmail}
+							{#if recipientPhone}<span aria-hidden="true">·</span>{/if}
+							<span>{recipientEmail}</span>
+						{:else}
+							{#if recipientPhone}<span aria-hidden="true">·</span>{/if}
+							<span class="send-doc__recipient-warn">No email on file</span>
+						{/if}
+					</p>
+				{/if}
 			</div>
 
 			<!-- Channel picker -->

@@ -8,6 +8,10 @@
 		/** Visual accent. 'danger'/'warning' recolor the label; 'default' is neutral. */
 		tone?: 'default' | 'danger' | 'warning';
 		disabled?: boolean;
+		/** When true the action shows a spinner (in place of its icon) and its label swaps to
+		 * `loadingLabel` — for actions that run immediately without a confirm dialog. */
+		loading?: boolean;
+		loadingLabel?: string;
 		onSelect: () => void;
 	};
 </script>
@@ -52,8 +56,13 @@
 					disabled={busy || action.disabled}
 					onclick={action.onSelect}
 				>
-					<i class={action.icon} aria-hidden="true"></i>
-					{action.label}
+					{#if action.loading}
+						<i class="ri-loader-4-line animate-spin" aria-hidden="true"></i>
+						{action.loadingLabel ?? action.label}
+					{:else}
+						<i class={action.icon} aria-hidden="true"></i>
+						{action.label}
+					{/if}
 				</button>
 			{/each}
 		</div>

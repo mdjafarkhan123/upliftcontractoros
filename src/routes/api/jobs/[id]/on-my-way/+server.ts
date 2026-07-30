@@ -17,6 +17,7 @@ import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { interpolate } from '$lib/server/workers/templates';
 import { queueAutomationSms } from '$lib/server/conversations/queueAutomationSms';
 import { queueAutomationEmail } from '$lib/server/conversations/queueAutomationEmail';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 
 // Manual, one-tap "on my way" customer alert. Mirrors the review-request flow: a
 // contractor-triggered message that hands off directly to the unified SMS/email
@@ -161,6 +162,27 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 
+	const eligibility = await Promise.all(
+		parsed.data.channels.map((channel) =>
+			canContactReceiveCommunication({
+				orgId: auth.orgId,
+				contactId: ctx.contact.id,
+				channel,
+				direction: 'outbound',
+				category: 'job_on_my_way'
+			})
+		)
+	);
+	const blocked = eligibility.find((result) => !result.allowed);
+	if (blocked)
+		return json(
+			{
+				error: blocked.reasonMessage ?? 'This communication is blocked.',
+				field_errors: { channels: blocked.reasonMessage ?? 'Channel unavailable' }
+			},
+			{ status: 422 }
+		);
+
 	// Re-validate reachability for each requested channel. Surface as a field_error
 	// on `channels` so the dialog can map it back to the picker.
 	if (wantsSms) {
@@ -178,15 +200,6 @@ export const POST: RequestHandler = async (event) => {
 				{
 					error: 'This customer has no phone number on file.',
 					field_errors: { channels: 'No phone number on file.' }
-				},
-				{ status: 422 }
-			);
-		}
-		if (ctx.contact.sms_opt_out) {
-			return json(
-				{
-					error: 'This customer has opted out of text messages.',
-					field_errors: { channels: 'Customer opted out of SMS.' }
 				},
 				{ status: 422 }
 			);

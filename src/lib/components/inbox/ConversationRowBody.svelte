@@ -1,10 +1,10 @@
 <script lang="ts">
 	import type { ConversationListItem, MessageChannel } from '$lib/stores/inbox.svelte';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		c,
 		dense,
-		initials,
 		channelKey,
 		channelIcon,
 		timeLabel,
@@ -20,7 +20,6 @@
 	}: {
 		c: ConversationListItem;
 		dense: boolean;
-		initials: string;
 		channelKey: MessageChannel | null;
 		channelIcon: string;
 		timeLabel: string;
@@ -45,9 +44,7 @@
 </script>
 
 <div class="convo-row__avatar-wrap">
-	<div class="convo-row__avatar" class:convo-row__avatar--unread={hasUnread && !isClosed}>
-		{initials}
-	</div>
+	<Avatar size="base" name={c.contact_name} />
 	<div class="convo-row__channel convo-row__channel--{channelKey ?? 'sms'}">
 		<i class={channelIcon} aria-hidden="true"></i>
 	</div>

@@ -1,14 +1,16 @@
 import { json } from '@sveltejs/kit';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
 import {
 	invoiceLineItems,
 	invoiceViews,
 	invoices,
+	media,
 	outboxEvents,
 	payments
 } from '$lib/server/db/schema';
+import { r2Presign } from '$lib/server/media/r2';
 import {
 	clientIpFrom,
 	lookupValidInvoiceByToken,
@@ -122,6 +124,31 @@ export const GET: RequestHandler = async (event) => {
 	// M7: tips are extra money, summed independently — never affects totalDue/totalPaid.
 	const totalTip = paymentRows.reduce((s, p) => s + Number(p.tip_amount), 0);
 
+	// Read-only display of the customer's in-person signature, when one is on file. Resolve a
+	// short-lived signed URL for the drawn image.
+	let signature: { signer_name: string | null; signed_at: string; url: string } | null = null;
+	if (invoice.signature_media_id && invoice.signed_at) {
+		const [sig] = await db
+			.select({ r2_key: media.r2_key, web_key: media.web_key })
+			.from(media)
+			.where(
+				and(
+					eq(media.id, invoice.signature_media_id),
+					eq(media.org_id, invoice.org_id),
+					eq(media.purpose_tag, 'invoice_signature'),
+					isNull(media.deleted_at)
+				)
+			)
+			.limit(1);
+		if (sig) {
+			signature = {
+				signer_name: invoice.signature_name,
+				signed_at: invoice.signed_at.toISOString(),
+				url: await r2Presign(sig.web_key ?? sig.r2_key, 3600)
+			};
+		}
+	}
+
 	return json({
 		data: {
 			invoice_number_display: formatInvoiceNumber(invoice.invoice_number),
@@ -148,7 +175,8 @@ export const GET: RequestHandler = async (event) => {
 			// are collectable here; manual tips are logged by the contractor in the app.
 			tips_enabled: invoice.tips_enabled,
 			tip_presets: invoice.tip_preset_percents,
-			line_items: lineItems
+			line_items: lineItems,
+			signature
 		}
 	});
 };

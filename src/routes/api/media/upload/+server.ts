@@ -55,6 +55,7 @@ const ALLOWED_PURPOSE_TAGS = [
 	'job_visit_photo',
 	'job_signoff_signature',
 	'quote_signature',
+	'invoice_signature',
 	'request_photo'
 ] as const;
 type PurposeTag = (typeof ALLOWED_PURPOSE_TAGS)[number];
@@ -146,6 +147,9 @@ export const POST: RequestHandler = async (event) => {
 	// The customer's drawn signature captured in person when approving a quote (quote_id, no
 	// line_key — one per quote). "Close in the field" / sign-on-this-device.
 	const isQuoteSignature = purpose_tag === 'quote_signature';
+	// The customer's drawn signature captured in person acknowledging an invoice (invoice_id, no
+	// line_key — one per invoice). Mirrors quote_signature.
+	const isInvoiceSignature = purpose_tag === 'invoice_signature';
 
 	const isOrgLogo = purpose_tag === 'org_logo';
 	const isOrgSignature = purpose_tag === 'org_signature';
@@ -329,6 +333,21 @@ export const POST: RequestHandler = async (event) => {
 			if (contact_id || opportunity_id || job_id || invoice_id) {
 				return json(
 					{ error: 'quote_signature must not include another parent FK' },
+					{ status: 422 }
+				);
+			}
+		}
+		if (isInvoiceSignature) {
+			// Bound to an invoice (one per invoice): parent is the invoice, no line_key.
+			if (!invoice_id) {
+				return json({ error: 'invoice_id is required for invoice_signature' }, { status: 422 });
+			}
+			if (line_key) {
+				return json({ error: 'invoice_signature must not include a line_key' }, { status: 422 });
+			}
+			if (contact_id || opportunity_id || job_id || quote_id) {
+				return json(
+					{ error: 'invoice_signature must not include another parent FK' },
 					{ status: 422 }
 				);
 			}
@@ -586,6 +605,24 @@ export const POST: RequestHandler = async (event) => {
 			)
 			.limit(1);
 		if (!inv) return json({ error: 'Invoice not found' }, { status: 404 });
+
+		// One signature per invoice — redo means clearing the pad client-side (or the /sign DELETE)
+		// before submitting, so a second upload is a duplicate. Cap before the R2 round-trip.
+		if (isInvoiceSignature) {
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(media)
+				.where(
+					and(
+						eq(media.invoice_id, invoice_id),
+						eq(media.purpose_tag, 'invoice_signature'),
+						isNull(media.deleted_at)
+					)
+				);
+			if (count >= 1) {
+				return json({ error: 'A signature is already captured for this invoice.' }, { status: 422 });
+			}
+		}
 	}
 	if (request_id) {
 		const [r] = await db

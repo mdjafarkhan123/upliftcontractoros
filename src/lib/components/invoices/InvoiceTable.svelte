@@ -13,17 +13,25 @@
 		items,
 		canEdit = false,
 		canSend = false,
-		canCancel = false,
+		canDelete = false,
+		selectable = false,
+		selected,
+		onToggleSelect,
+		onToggleAll,
+		allSelected = false,
 		onSend,
-		onCancel,
 		onDelete
 	}: {
 		items: InvoiceListItem[];
 		canEdit?: boolean;
 		canSend?: boolean;
-		canCancel?: boolean;
+		canDelete?: boolean;
+		selectable?: boolean;
+		selected?: Set<string>;
+		onToggleSelect?: (id: string) => void;
+		onToggleAll?: () => void;
+		allSelected?: boolean;
 		onSend?: (invoice: InvoiceListItem) => void;
-		onCancel?: (invoice: InvoiceListItem) => void;
 		onDelete?: (invoice: InvoiceListItem) => void;
 	} = $props();
 
@@ -50,14 +58,8 @@
 		return {
 			editable: invoice.status === 'draft',
 			sendable: invoice.status === 'draft',
-			// Cancel/Void: the /cancel endpoint blocks paid, already-cancelled, or any
-			// invoice with recorded payments — mirror that gate so we never offer a no-op.
-			cancellable:
-				invoice.status !== 'paid' &&
-				invoice.status !== 'cancelled' &&
-				Number(invoice.amount_paid) === 0,
-			// Delete (soft): the DELETE endpoint blocks only paid / partly-paid invoices, so
-			// drafts, sent-but-unpaid, AND cancelled invoices are deletable. Mirror that gate.
+			// Delete (soft): the DELETE endpoint blocks only paid / partly-paid invoices, so drafts and
+			// sent-but-unpaid invoices are deletable. (Strict Jobber has no cancel — cancel = delete.)
 			deletable: invoice.status !== 'paid' && Number(invoice.amount_paid) === 0
 		};
 	}
@@ -92,15 +94,7 @@
 				icon: 'ri-send-plane-line',
 				onSelect: () => onSend(invoice)
 			});
-		if (canCancel && a.cancellable && onCancel)
-			actions.push({
-				key: 'cancel',
-				label: 'Cancel invoice',
-				icon: 'ri-close-circle-line',
-				destructive: true,
-				onSelect: () => onCancel(invoice)
-			});
-		if (canCancel && a.deletable && onDelete)
+		if (canDelete && a.deletable && onDelete)
 			actions.push({
 				key: 'delete',
 				label: 'Delete invoice',
@@ -114,6 +108,19 @@
 
 <ListTable ariaLabel="Invoices">
 	{#snippet head()}
+		{#if selectable}
+			<th class="list-table__th list-table__th--check">
+				<button
+					type="button"
+					onclick={onToggleAll}
+					aria-label="Select all invoices"
+					class="list-check"
+					class:list-check--on={allSelected}
+				>
+					{#if allSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+				</button>
+			</th>
+		{/if}
 		<th class="list-table__th">Invoice</th>
 		<th class="list-table__th list-table__th--lg">Client</th>
 		<th class="list-table__th">Status</th>
@@ -127,33 +134,55 @@
 	{#snippet body()}
 		{#each items as invoice (invoice.id)}
 			{@const overdue = isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due)}
+			{@const isSelected = selected?.has(invoice.id) ?? false}
 			<tr
 				class="list-table__row"
-				use:prefetchOnIntent={() => invoicesStore.prefetchDetail(invoice.id)}
-				onclick={() => goto(`/invoices/${invoice.id}`)}
+				class:list-table__row--selected={isSelected}
+				use:prefetchOnIntent={() => {
+					if (!selectable) invoicesStore.prefetchDetail(invoice.id);
+				}}
+				onclick={selectable
+					? () => onToggleSelect?.(invoice.id)
+					: () => goto(`/invoices/${invoice.id}`)}
 			>
+				{#if selectable}
+					<td class="list-table__td list-table__td--check">
+						<span class="list-check" class:list-check--on={isSelected}>
+							{#if isSelected}<i class="ri-check-line" aria-hidden="true"></i>{/if}
+						</span>
+					</td>
+				{/if}
+
 				<!-- Invoice number + title -->
 				<td class="list-table__td">
 					<span class="invoice-tbl__number">{invoice.invoice_number_display}</span>
-					<a
-						href="/invoices/{invoice.id}"
-						onclick={(e) => e.stopPropagation()}
-						class="invoice-tbl__title"
-					>
-						{invoice.title}
-					</a>
+					{#if selectable}
+						<span class="invoice-tbl__title">{invoice.title}</span>
+					{:else}
+						<a
+							href="/invoices/{invoice.id}"
+							onclick={(e) => e.stopPropagation()}
+							class="invoice-tbl__title"
+						>
+							{invoice.title}
+						</a>
+					{/if}
 					<span class="invoice-tbl__client-inline">{invoice.contact_name}</span>
 				</td>
 
 				<!-- Client — hidden on small screens -->
 				<td class="list-table__td list-table__td--lg">
-					<a
-						href="/contacts/{invoice.contact_id}"
-						onclick={(e) => e.stopPropagation()}
-						class="invoice-tbl__client-link"
-					>
-						{invoice.contact_name}
-					</a>
+					{#if selectable}
+						<span class="invoice-tbl__client-link">{invoice.contact_name}</span>
+					{:else}
+						<a
+							href="/contacts/{invoice.contact_id}"
+							onclick={(e) => e.stopPropagation()}
+							class="invoice-tbl__client-link"
+						>
+							{invoice.contact_name}
+						</a>
+					{/if}
 				</td>
 
 				<!-- Status -->

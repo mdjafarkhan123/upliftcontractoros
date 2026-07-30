@@ -37,7 +37,87 @@ $green-900: #0d301f;
 $green-950: #092014;
 
 // -----------------------------------------------------------------------------
-// 3. NEUTRAL / SLATE RAMP
+// 3. PALETTE RAMPS — 8-color avatar fallback palette
+// -----------------------------------------------------------------------------
+$sky-50: #f0f9ff;
+$sky-100: #e0f2fe;
+$sky-200: #bae6fd;
+$sky-300: #7dd3fc;
+$sky-400: #38bdf8;
+$sky-500: #0ea5e9;
+$sky-600: #0284c7;
+$sky-700: #0369a1;
+$sky-800: #075985;
+$sky-900: #0c4a6e;
+
+$purple-50: #faf5ff;
+$purple-100: #f3e8ff;
+$purple-200: #e9d5ff;
+$purple-300: #d8b4fe;
+$purple-400: #c084fc;
+$purple-500: #a855f7;
+$purple-600: #9333ea;
+$purple-700: #7e22ce;
+$purple-800: #6b21a8;
+$purple-900: #581c87;
+
+$orange-50: #fff7ed;
+$orange-100: #ffedd5;
+$orange-200: #fed7aa;
+$orange-300: #fdba74;
+$orange-400: #fb923c;
+$orange-500: #f97316;
+$orange-600: #ea580c;
+$orange-700: #c2410c;
+$orange-800: #9a3412;
+$orange-900: #7c2d12;
+
+$teal-50: #f0fdfa;
+$teal-100: #ccfbf1;
+$teal-200: #99f6e4;
+$teal-300: #5eead4;
+$teal-400: #2dd4bf;
+$teal-500: #14b8a6;
+$teal-600: #0d9488;
+$teal-700: #0f766e;
+$teal-800: #115e59;
+$teal-900: #134e4a;
+
+$pink-50: #fdf2f8;
+$pink-100: #fce7f3;
+$pink-200: #fbcfe8;
+$pink-300: #f9a8d4;
+$pink-400: #f472b6;
+$pink-500: #ec4899;
+$pink-600: #db2777;
+$pink-700: #be185d;
+$pink-800: #9d174d;
+$pink-900: #831843;
+
+$indigo-50: #eef2ff;
+$indigo-100: #e0e7ff;
+$indigo-200: #c7d2fe;
+$indigo-300: #a5b4fc;
+$indigo-400: #818cf8;
+$indigo-500: #6366f1;
+$indigo-600: #4f46e5;
+$indigo-700: #4338ca;
+$indigo-800: #3730a3;
+$indigo-900: #312e81;
+
+$amber-50: #fffbeb;
+$amber-100: #fef3c7;
+$amber-200: #fde68a;
+$amber-300: #fcd34d;
+$amber-400: #fbbf24;
+$amber-500: #f59e0b;
+$amber-600: #d97706;
+$amber-700: #b45309;
+$amber-800: #92400e;
+$amber-900: #78350f;
+
+// -----------------------------------------------------------------------------
+// 4. NEUTRAL / SLATE RAMP
 // -----------------------------------------------------------------------------
 $slate-0: #ffffff;
 $slate-50: #f9fafb;
@@ -72,6 +152,7 @@ $space-20: 80px;
 // -----------------------------------------------------------------------------
 // 5. RADIUS — generous by design; cards at 20–28px, not default 8px Bootstrap
 // -----------------------------------------------------------------------------
+$radius-xs: 4px; // checkboxes, compact controls
 $radius-sm: 8px;
 $radius-md: 12px;
 $radius-lg: 16px;
@@ -169,6 +250,7 @@ $bp-mobile: 640px;
 	--color-brand: #{$brand-primary};
 	--color-brand-strong: #{$brand-deep};
 	--color-brand-glow: #{$brand-light};
+	--color-brand-rgb: 34, 125, 83;
 	--color-focus-ring: rgba(34, 125, 83, 0.35);
 
 	// Surfaces
@@ -183,6 +265,8 @@ $bp-mobile: 640px;
 	--color-text-secondary: #{$slate-600};
 	--color-text-muted: #{$slate-400};
 	--color-text-on-brand: #{$slate-0};
+	--color-text-on-brand-soft: rgba(255, 255, 255, 0.8);
+	--color-text-on-brand-subtle: rgba(255, 255, 255, 0.7);
 
 	// Status
 	--success-bg: #{$green-100};
@@ -194,6 +278,7 @@ $bp-mobile: 640px;
 	--danger-bg: #fde8e8;
 	--danger-text: #b42318;
 	--danger-solid: #e11d48;
+	--danger-solid-rgb: 225, 29, 72;
 	--info-bg: #e0eaff;
 	--info-text: #3538cd;
 	--info-solid: #3b82f6;
@@ -208,12 +293,32 @@ $bp-mobile: 640px;
 	--state-active-tint: #{$green-50};
 	--avatar-fallback-bg: #{$green-100};
 	--avatar-fallback-text: #{$green-800};
+	--palette-brand-bg: #{$green-100};
+	--palette-brand-text: #{$green-800};
+	--palette-sky-bg: #{$sky-100};
+	--palette-sky-text: #{$sky-700};
+	--palette-purple-bg: #{$purple-100};
+	--palette-purple-text: #{$purple-700};
+	--palette-orange-bg: #{$orange-100};
+	--palette-orange-text: #{$orange-700};
+	--palette-teal-bg: #{$teal-100};
+	--palette-teal-text: #{$teal-700};
+	--palette-pink-bg: #{$pink-100};
+	--palette-pink-text: #{$pink-700};
+	--palette-indigo-bg: #{$indigo-100};
+	--palette-indigo-text: #{$indigo-700};
+	--palette-amber-bg: #{$amber-100};
+	--palette-amber-text: #{$amber-700};
 
 	// Brand tints for overlays (drag ghost, selected bands) — theme-aware so
 	// they stay legible in both light and dark.
 	--brand-tint-strong: rgba(34, 125, 83, 0.2);
 	--brand-tint-solid: rgba(34, 125, 83, 0.28);
 	--brand-glow-soft: rgba(34, 125, 83, 0.18);
+
+	// Overlays
+	--overlay: rgba(0, 0, 0, 0.5);
+	--overlay-soft: rgba(0, 0, 0, 0.4);
 
 	// Shadows — tinted dark-green rather than pure black for warmth
 	--shadow-xs: 0 1px 2px rgba(13, 21, 15, 0.04);
@@ -225,6 +330,7 @@ $bp-mobile: 640px;
 	--shadow-focus: 0 0 0 3px rgba(34, 125, 83, 0.35);
 
 	// Radius/font as runtime vars for use outside compiled Sass
+	--radius-xs: #{$radius-xs};
 	--radius-sm: #{$radius-sm};
 	--radius-md: #{$radius-md};
 	--radius-lg: #{$radius-lg};
@@ -276,6 +382,7 @@ $bp-mobile: 640px;
 	--color-brand: #{$green-500};
 	--color-brand-strong: #{$green-600};
 	--color-brand-glow: #{$brand-light};
+	--color-brand-rgb: 48, 176, 112;
 	--color-focus-ring: rgba(48, 176, 112, 0.45);
 
 	--color-bg-app: #{$slate-950};
@@ -288,6 +395,8 @@ $bp-mobile: 640px;
 	--color-text-secondary: #{$slate-300};
 	--color-text-muted: #{$slate-400};
 	--color-text-on-brand: #{$slate-0};
+	--color-text-on-brand-soft: rgba(255, 255, 255, 0.8);
+	--color-text-on-brand-subtle: rgba(255, 255, 255, 0.7);
 
 	--success-bg: rgba(79, 207, 143, 0.14);
 	--success-text: #{$green-400};
@@ -298,6 +407,7 @@ $bp-mobile: 640px;
 	--danger-bg: rgba(225, 29, 72, 0.16);
 	--danger-text: #fca5a5;
 	--danger-solid: #f43f5e;
+	--danger-solid-rgb: 244, 63, 94;
 	--info-bg: rgba(59, 130, 246, 0.16);
 	--info-text: #93c5fd;
 	--info-solid: #3b82f6;
@@ -309,12 +419,30 @@ $bp-mobile: 640px;
 	--state-active-tint: rgba(48, 176, 112, 0.14);
 	--avatar-fallback-bg: rgba(79, 207, 143, 0.18);
 	--avatar-fallback-text: #{$green-300};
+	--palette-brand-bg: rgba(48, 176, 112, 0.18);
+	--palette-brand-text: #{$green-300};
+	--palette-sky-bg: rgba(14, 165, 233, 0.18);
+	--palette-sky-text: #{$sky-300};
+	--palette-purple-bg: rgba(168, 85, 247, 0.18);
+	--palette-purple-text: #{$purple-300};
+	--palette-orange-bg: rgba(249, 115, 22, 0.18);
+	--palette-orange-text: #{$orange-300};
+	--palette-teal-bg: rgba(20, 184, 166, 0.18);
+	--palette-teal-text: #{$teal-300};
+	--palette-pink-bg: rgba(236, 72, 153, 0.18);
+	--palette-pink-text: #{$pink-300};
+	--palette-indigo-bg: rgba(99, 102, 241, 0.18);
+	--palette-indigo-text: #{$indigo-300};
+	--palette-amber-bg: rgba(245, 158, 11, 0.18);
+	--palette-amber-text: #{$amber-300};
 
 	// Brand tints for overlays — dark theme uses brighter, translucent greens.
 	--brand-tint-strong: rgba(48, 176, 112, 0.22);
 	--brand-tint-solid: rgba(48, 176, 112, 0.3);
 	--brand-glow-soft: rgba(48, 176, 112, 0.22);
 
+	--overlay: rgba(0, 0, 0, 0.5);
+	--overlay-soft: rgba(0, 0, 0, 0.4);
 	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
 	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
 	--shadow-md: 0 8px 20px rgba(0, 0, 0, 0.5);

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { resolveRoute } from '$app/paths';
 	import { jafarDashboardStore } from '$lib/stores/jafarDashboard.svelte';
 	import AdminTableSkeleton from '$lib/components/jafar/skeletons/AdminTableSkeleton.svelte';
@@ -9,7 +8,7 @@
 	let busyEventId = $state<string | null>(null);
 	let actionError = $state('');
 
-	onMount(() => {
+	$effect(() => {
 		jafarDashboardStore.load();
 	});
 
@@ -82,8 +81,7 @@
 			<button
 				type="button"
 				onclick={() => jafarDashboardStore.refresh()}
-				class="jafar-btn"
-				style="margin-top: 0.5rem;"
+				class="jafar-btn jafar-btn--retry"
 			>
 				Retry
 			</button>
@@ -248,100 +246,3 @@
 	{/if}
 </div>
 
-<style lang="scss">
-	.jafar-dash {
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-
-		&__hd {
-			display: flex;
-			flex-direction: column;
-			gap: 0.75rem;
-			@media (min-width: 640px) {
-				flex-direction: row;
-				align-items: center;
-				justify-content: space-between;
-			}
-		}
-
-		&__title {
-			font-size: 1.5rem;
-			font-weight: 700;
-			letter-spacing: -0.02em;
-			color: #fff;
-			@media (min-width: 640px) {
-				font-size: 1.875rem;
-			}
-		}
-
-		&__sub {
-			margin-top: 0.25rem;
-			font-size: 0.875rem;
-			color: #94a3b8;
-		}
-
-		&__refresh {
-			margin-left: 0.25rem;
-			display: inline-flex;
-			align-items: center;
-			gap: 0.25rem;
-			font-size: 0.75rem;
-			color: #64748b;
-			i {
-				animation: jafar-spin 0.7s linear infinite;
-				font-size: 0.625rem;
-			}
-		}
-
-		&__scroll {
-			overflow-x: auto;
-		}
-
-		&__empty {
-			padding: 3rem 1.25rem;
-			text-align: center;
-			p:first-child {
-				font-size: 0.875rem;
-				color: #94a3b8;
-			}
-			p + p {
-				margin-top: 0.25rem;
-				font-size: 0.75rem;
-				color: #64748b;
-			}
-		}
-
-		&__ok {
-			font-size: 0.75rem;
-			font-weight: 500;
-			color: #34d399;
-		}
-		&__muted {
-			font-size: 0.75rem;
-			color: #64748b;
-		}
-
-		&__action-err {
-			border-bottom: 1px solid rgba(239, 68, 68, 0.3);
-			background: rgba(239, 68, 68, 0.1);
-			padding: 0.75rem 1.25rem;
-			font-size: 0.875rem;
-			color: #fca5a5;
-		}
-
-		&__error-cell {
-			font-size: 0.75rem;
-			color: #94a3b8;
-			max-width: 20rem;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		&__cache-warn {
-			font-size: 0.75rem;
-			color: rgba(251, 191, 36, 0.8);
-		}
-	}
-</style>

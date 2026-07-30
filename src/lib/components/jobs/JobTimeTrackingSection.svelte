@@ -5,6 +5,7 @@
 	import { getMemberContext } from '$lib/context/member';
 	import type { JobCosting, JobTimeEntryRow } from '$lib/types/jobs';
 	import { Button } from '$lib/components/ui/button';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		jobId,
@@ -306,14 +307,7 @@
 
 	{#each entries as e (e.id)}
 		<div class="job-timetrack__entry" class:job-timetrack__entry--editing={editingId === e.id}>
-			<div class="job-timetrack__entry-avatar">
-				{e.member_name
-					.split(' ')
-					.map((p) => p[0] ?? '')
-					.slice(0, 2)
-					.join('')
-					.toUpperCase()}
-			</div>
+			<Avatar size="base" name={e.member_name} />
 			<div class="job-timetrack__entry-main">
 				<p class="job-timetrack__entry-name">
 					{e.member_name}
@@ -458,20 +452,6 @@
 			&--editing {
 				opacity: 0.5;
 			}
-		}
-
-		&__entry-avatar {
-			flex-shrink: 0;
-			width: 34px;
-			height: 34px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			border-radius: $radius-full;
-			background: var(--color-bg-surface-sunk);
-			color: var(--color-text-secondary);
-			font-size: $fs-body;
-			font-weight: $weight-semibold;
 		}
 
 		&__entry-main {

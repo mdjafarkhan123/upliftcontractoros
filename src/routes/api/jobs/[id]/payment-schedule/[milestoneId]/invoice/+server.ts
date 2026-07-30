@@ -14,6 +14,7 @@ import { generateToken } from '$lib/server/quotes/token';
 import { recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { orgLateFeeSnapshot } from '$lib/server/invoices/lateFee';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
+import { dischargeJobInvoiceReminders } from '$lib/server/jobs/reminderDischarge';
 
 // Turn ONE payment-schedule milestone into a real invoice ("Create" on the Billing card).
 // Unlike convert-to-invoice (which snapshots every job line), a milestone invoice is a single
@@ -140,6 +141,15 @@ export const POST: RequestHandler = async (event) => {
 			.update(jobPaymentMilestones)
 			.set({ invoice_id: inserted.id, updated_at: new Date() })
 			.where(eq(jobPaymentMilestones.id, milestoneId));
+
+		// Auto-complete any of the job's invoice reminders whose date window covers today (an
+		// invoice created within a reminder's range clears it). No billed visits on this path.
+		await dischargeJobInvoiceReminders(tx, {
+			orgId: auth.orgId,
+			jobId,
+			now: new Date(),
+			completedBy: auth.member.id
+		});
 
 		return { existing: false, id: inserted.id, invoice_number: invoiceNumber };
 	});

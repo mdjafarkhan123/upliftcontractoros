@@ -4,24 +4,34 @@
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
+	import ReminderDetailController from './ReminderDetailController.svelte';
 	import type { AppointmentListItem } from '$lib/types/appointments';
 	import type { EventListItem } from '$lib/types/events';
+	import type { ReminderCalendarItem } from '$lib/types/reminders';
 	import { isEventPast } from '$lib/appointments/eventState';
+	import { reminderDisplayStatus } from '$lib/jobs/billing';
 
 	let {
 		anchor,
 		items,
 		events = [],
+		reminders = [],
+		canInvoice = false,
 		onDayClick
 	}: {
 		anchor: Date; // start of the displayed month
 		items: AppointmentListItem[];
 		// Non-billable calendar Events (Jobber `Event`) — rendered as neutral grey pills.
 		events?: EventListItem[];
+		// Invoice reminders (Jobber INVOICE_REMINDER) — read-only amber pills.
+		reminders?: ReminderCalendarItem[];
+		canInvoice?: boolean;
 		onDayClick: (d: Date) => void;
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
+
+	let reminderCtl: ReminderDetailController;
 
 	const MAX_VISIBLE = 3; // pills shown per cell before "+N more"
 	const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -31,7 +41,14 @@
 	// toward the same "+N more" overflow (they occupy the same visual grid).
 	type MonthPill =
 		| { kind: 'appt'; id: string; all_day: boolean; start: string; item: AppointmentListItem }
-		| { kind: 'event'; id: string; all_day: boolean; start: string; event: EventListItem };
+		| { kind: 'event'; id: string; all_day: boolean; start: string; event: EventListItem }
+		| {
+				kind: 'reminder';
+				id: string;
+				all_day: boolean;
+				start: string;
+				reminder: ReminderCalendarItem;
+		  };
 
 	// Resolve an item to its calendar day in the org's timezone so an 11pm org-time
 	// item lands on the correct cell regardless of the viewer's browser tz.
@@ -72,6 +89,16 @@
 				all_day: ev.all_day,
 				start: ev.start_at,
 				event: ev
+			});
+		}
+		for (const rem of reminders) {
+			if (!rem.scheduled_start) continue;
+			push(tzDateKey(new Date(rem.scheduled_start), orgTz), {
+				kind: 'reminder',
+				id: rem.id,
+				all_day: rem.all_day,
+				start: rem.scheduled_start,
+				reminder: rem
 			});
 		}
 		for (const arr of map.values()) {
@@ -152,7 +179,7 @@
 								</span>
 								<span class="cal-month__pill-title">{ev.title}</span>
 							</a>
-						{:else}
+						{:else if pill.kind === 'event'}
 							{@const evt = pill.event}
 							{@const evtDone = isEventPast(evt)}
 							<div
@@ -169,9 +196,34 @@
 										: formatTimeInOrgTz(evt.start_at, orgTz)}
 								</span>
 								<span class="cal-month__pill-title">
-									{#if evtDone}<i class="ri-check-line" aria-hidden="true"></i> {/if}{evt.title}
+									{#if evtDone}<i class="ri-check-line" aria-hidden="true"></i>
+									{/if}{evt.title}
 								</span>
 							</div>
+						{:else}
+							{@const rem = pill.reminder}
+							{@const state = reminderDisplayStatus(rem)}
+							<!-- Invoice reminder: read-only amber pill. Click → detail popover. -->
+							<button
+								type="button"
+								class={[
+									'cal-month__pill',
+									'cal-month__pill--reminder',
+									`cal-month__pill--rem-${state}`
+								]}
+								title={rem.description || 'Invoice reminder'}
+								onclick={(e) => reminderCtl.open(rem, e.currentTarget)}
+							>
+								<span class="cal-month__pill-time">
+									<i class="ri-bill-line" aria-hidden="true"></i>
+									{rem.all_day || !rem.scheduled_start
+										? 'Anytime'
+										: formatTimeInOrgTz(rem.scheduled_start, orgTz)}
+								</span>
+								<span class="cal-month__pill-title">
+									{rem.description || 'Invoice reminder'}
+								</span>
+							</button>
 						{/if}
 					{/each}
 					{#if overflow > 0}
@@ -184,3 +236,5 @@
 		{/each}
 	</div>
 </div>
+
+<ReminderDetailController bind:this={reminderCtl} {canInvoice} />

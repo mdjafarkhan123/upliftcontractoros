@@ -130,7 +130,7 @@
 // ─── FOCUS RING — the single app-wide focus token ───────────────────────────
 @mixin focus-ring {
   outline: none;
-  box-shadow: var(--shadow-focus);
+  box-shadow: 0 0 0 1px var(--color-brand);
 }
 
 // ─── BUTTON GLINT — top-edge sheen + colored lift shadow ────────────────────
@@ -145,20 +145,17 @@
 
 // ─── CARD BASE ──────────────────────────────────────────────────────────────
 @mixin card-base {
-  background: var(--color-bg-surface);
+  background: var(--color-bg-surface-sunk);
   border: 1px solid var(--color-border);
-  border-radius: v.$radius-lg;         // 16px — generous by design
-  box-shadow: var(--shadow-sm);
+  border-radius: v.$radius-2xl;        // 28px
+  box-shadow: var(--shadow-xs);
 }
 @mixin card-interactive {
   @include card-base;
   cursor: pointer;
-  transition:
-    box-shadow v.$duration-base v.$ease-standard,
-    border-color v.$duration-base v.$ease-standard;
+  transition: background-color 150ms ease;
   &:hover {
-    box-shadow: var(--shadow-md);
-    border-color: var(--color-border-strong);
+    background: var(--color-bg-surface);
   }
 }
 
@@ -166,22 +163,26 @@
 @mixin input-base {
   display: block;
   width: 100%;
-  border-radius: v.$radius-sm;         // 8px
+  height: 44px;
+  padding: 0 16px;
+  border-radius: v.$radius-md;         // 12px
   border: 1px solid var(--color-border-strong);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-surface-sunk);
+  box-shadow: var(--shadow-xs);
   font-size: v.$fs-body;
   font-family: inherit;
   color: var(--color-text-primary);
-  padding: 10px 12px;
-  transition: border-color v.$duration-base v.$ease-standard, box-shadow v.$duration-base v.$ease-standard;
+  transition:
+    border-color v.$duration-fast v.$ease-standard,
+    box-shadow v.$duration-fast v.$ease-standard;
 
-  &::placeholder { color: var(--color-text-muted); }
+  &::placeholder { color: var(--color-text-secondary); }
 
-  &:hover { border-color: var(--color-text-muted); }
+  &:hover { border-color: var(--color-border-strong); }
   &:focus {
     outline: none;
     border-color: var(--color-brand);
-    box-shadow: var(--shadow-focus);
+    box-shadow: 0 0 0 1px var(--color-brand);
   }
   &:disabled {
     background: var(--color-bg-surface-sunk);

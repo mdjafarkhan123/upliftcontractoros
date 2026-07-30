@@ -12,9 +12,9 @@
 .list-table {
 	overflow: hidden;
 	border: 1px solid var(--color-border);
-	border-radius: $radius-lg;
-	background: var(--color-bg-surface);
-	box-shadow: var(--shadow-sm);
+	border-radius: $radius-sm;
+	background: var(--color-bg-surface-sunk);
+	box-shadow: var(--shadow-xs);
 
 	&__scroll {
 		overflow-x: auto;
@@ -29,14 +29,14 @@
 
 	&__head-row {
 		border-bottom: 1px solid var(--color-border);
-		background: var(--color-bg-surface-sunk);
+		background: var(--color-bg-app);
 	}
 
 	&__th {
 		padding: $space-3 $space-4;
 		text-align: left;
 		font-size: $fs-caption;
-		font-weight: $weight-semibold;
+		font-weight: $weight-medium;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-secondary);
@@ -70,6 +70,26 @@
 				display: none;
 			}
 		}
+		&--sortable {
+			cursor: pointer;
+			user-select: none;
+			&:hover {
+				color: var(--color-text-primary);
+			}
+			i {
+				display: inline-block;
+				margin-left: $space-1;
+				font-size: 1.2rem;
+				vertical-align: middle;
+				transition: transform $duration-fast $ease-standard;
+			}
+		}
+		&--sorted-asc i {
+			transform: rotate(-180deg);
+		}
+		&--sorted-desc i {
+			transform: rotate(0deg);
+		}
 	}
 
 	&__row {
@@ -81,12 +101,12 @@
 			border-bottom: none;
 		}
 		&:hover {
-			background: var(--color-bg-surface-sunk);
+			background: var(--color-bg-app);
 		}
 		&--selected {
-			background: rgba(34, 125, 83, 0.06);
+			background: var(--state-active-tint);
 			&:hover {
-				background: rgba(34, 125, 83, 0.09);
+				background: var(--state-active-tint);
 			}
 		}
 	}
@@ -107,6 +127,10 @@
 		}
 		&--actions {
 			width: 48px;
+			> * {
+				opacity: 0;
+				transition: opacity $duration-fast $ease-standard;
+			}
 		}
 		&--lg {
 			@media (max-width: 1023px) {
@@ -124,6 +148,10 @@
 			}
 		}
 	}
+
+	&__row:hover &__td--actions > * {
+		opacity: 1;
+	}
 }
 
 // Bulk-select checkbox rendered in the `--check` column of any list table.
@@ -132,8 +160,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 18px;
-	height: 18px;
+	width: 16px;
+	height: 16px;
 	border: 2px solid var(--color-border-strong);
 	border-radius: $radius-sm;
 	background: var(--color-bg-surface);
@@ -151,5 +179,36 @@
 		border-color: var(--color-brand-strong);
 		background: var(--color-brand-strong);
 		color: var(--color-text-on-brand);
+	}
+}
+
+// Bulk action bar — appears above the table when rows are selected.
+.list-bulk-bar {
+	display: flex;
+	align-items: center;
+	gap: $space-3;
+	padding: $space-3 $space-4;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--state-active-tint);
+	font-size: $fs-body;
+	color: var(--color-text-primary);
+
+	&__count {
+		font-weight: $weight-semibold;
+		margin-right: auto;
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: $space-2;
+	}
+
+	&__clear {
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		&:hover {
+			color: var(--color-text-primary);
+		}
 	}
 }

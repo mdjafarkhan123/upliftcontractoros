@@ -32,27 +32,27 @@ When no image is available:
 
 ## Bordered Avatar
 
-- 4px padding, `$radius-full`, 2px outline in `var(--color-border)` color
+- `$space-1` (4px) padding, `$radius-full`, 2px outline in `var(--color-border)` color
 - Alternative: `box-shadow: 0 0 0 2px var(--color-border), 0 0 0 4px var(--color-border)`
 
 ## Stacked Avatars
 
 - Flex row
 - Each avatar: 36×36px, `$radius-full`, 2px border in `var(--color-border)` color
-- Overlap: −12px negative margin on all except first
+- Overlap: −12px (~`$space-3`) negative margin on all except first
 - Max display: 4 avatars + counter
 
 ### Stacked Counter
 - Same size as avatars (36×36px), `$radius-full`
-- Background: `var(--color-text-primary)`, text: white, 12px, semibold
+- Background: `var(--color-text-primary)`, text: white, `$fs-caption` (12px), semibold
 - Same overlap margin as other avatars
 
 ## Avatar with Text
 
-- Flex row, 10px gap between avatar and text block
+- Flex row, `$space-2` (10px) gap between avatar and text block
 - Avatar: 40×40px, `$radius-full`, cover fit
-- Name: `var(--color-text-primary)`, medium weight, 14px
-- Subtitle: 13px, `var(--color-text-secondary)` color
+- Name: `var(--color-text-primary)`, medium weight, `$fs-body` (14px)
+- Subtitle: 13px (`$fs-body`~13px), `var(--color-text-secondary)` color
 - Used in: sidebar user profile, team member rows, client contacts
 
 ## Online Indicator

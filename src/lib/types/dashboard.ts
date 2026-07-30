@@ -12,6 +12,7 @@ export type DashboardActivityIcon =
 	| 'job_completed'
 	| 'lead'
 	| 'contact_became_customer'
+	| 'communication_preference'
 	| 'review_received';
 
 export type DashboardActivityTone = 'neutral' | 'positive' | 'attention' | 'negative';

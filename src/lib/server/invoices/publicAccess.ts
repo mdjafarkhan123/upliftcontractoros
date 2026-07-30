@@ -15,7 +15,7 @@ export type ValidInvoiceRow = {
 	org_name: string;
 	invoice_number: number;
 	title: string;
-	status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+	status: 'draft' | 'sent_not_due' | 'awaiting_payment' | 'paid' | 'past_due' | 'bad_debt';
 	subtotal: string;
 	discount_type: string;
 	discount_value: string | null;
@@ -37,6 +37,11 @@ export type ValidInvoiceRow = {
 	tips_enabled: boolean;
 	tip_preset_percents: number[];
 	stripe_secret_key: string | null;
+	// In-person customer signature (collected on the contractor's device). Displayed read-only on
+	// the public page. All null when unsigned. The data route resolves a signed URL from the media id.
+	signature_name: string | null;
+	signature_media_id: string | null;
+	signed_at: Date | null;
 };
 
 export type InvoiceLookupResult = { ok: true; invoice: ValidInvoiceRow } | { ok: false };
@@ -85,6 +90,9 @@ export async function lookupValidInvoiceByToken(rawToken: string): Promise<Invoi
 			tips_enabled: organizations.tips_enabled,
 			tip_preset_percents: organizations.tip_preset_percents,
 			accept_tips: invoices.accept_tips,
+			signature_name: invoices.signature_name,
+			signature_media_id: invoices.signature_media_id,
+			signed_at: invoices.signed_at,
 			stored_token: invoices.public_token,
 			deleted_at: invoices.deleted_at,
 			stripe_secret_key: organizations.stripe_restricted_key
@@ -99,7 +107,7 @@ export async function lookupValidInvoiceByToken(rawToken: string): Promise<Invoi
 	if (!constantTimeEqualString(row.stored_token, rawToken)) return { ok: false };
 	if (row.deleted_at) return { ok: false };
 	if (row.status === 'draft') return { ok: false };
-	if (row.status === 'cancelled') return { ok: false };
+	// (No cancelled state anymore — a cancelled invoice is soft-deleted, already blocked above.)
 
 	return {
 		ok: true,
@@ -131,7 +139,10 @@ export async function lookupValidInvoiceByToken(rawToken: string): Promise<Invoi
 			due_date: row.due_date,
 			tips_enabled: row.tips_enabled && row.accept_tips,
 			tip_preset_percents: row.tip_preset_percents,
-			stripe_secret_key: row.stripe_secret_key
+			stripe_secret_key: row.stripe_secret_key,
+			signature_name: row.signature_name,
+			signature_media_id: row.signature_media_id,
+			signed_at: row.signed_at
 		}
 	};
 }

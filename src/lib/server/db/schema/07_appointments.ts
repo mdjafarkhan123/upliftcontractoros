@@ -293,6 +293,11 @@ export const jobInvoiceReminders = pgTable(
 		status: jobInvoiceReminderStatusEnum('status').notNull().default('active'),
 		completed_at: timestamp('completed_at', { withTimezone: true }),
 		completed_by: uuid('completed_by').references(() => orgMembers.id),
+		// Once-only marker for the due-sweep cron (job-invoice-reminder-due-sweep). NULL = this
+		// reminder has not yet fired its "time to invoice" nudge. When scheduled_start arrives the
+		// sweep stamps this and emits job_invoice_reminder.due, so a re-run never double-notifies.
+		// Cleared when the reminder is re-dated (PATCH) so moving it to a new future date re-arms.
+		due_notified_at: timestamp('due_notified_at', { withTimezone: true }),
 		// Whether to email the assigned crew when this reminder is assigned. Stored
 		// now; the actual send is wired through the outbox in a later phase (B3.2).
 		notify_team_on_assign: boolean('notify_team_on_assign').notNull().default(false),

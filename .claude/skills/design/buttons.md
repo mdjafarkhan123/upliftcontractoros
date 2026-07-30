@@ -52,8 +52,8 @@ Sizes snap to the **4px grid** (not the off-grid px an earlier draft used). `.bt
 - **Hover:** background → `var(--color-bg-surface-sunk)`, `translateY(-1px)`.
 
 ### `.btn--outline`
-- **Background:** transparent · **Text:** `var(--color-text-primary)` · **Border:** `1px solid rgba(34, 125, 83, 0.4)` (brand @ 40%).
-- **Hover:** border → brand @ 70%, background → `var(--state-active-tint)`, `translateY(-1px)`.
+- **Background:** transparent · **Text:** `var(--color-text-primary)` · **Border:** `1px solid rgba(var(--color-brand-rgb), 0.4)` (brand @ 40%).
+- **Hover:** border → brand @ 70% (`rgba(var(--color-brand-rgb), 0.7)`), background → `var(--state-active-tint)`, `translateY(-1px)`.
 
 ### `.btn--ghost`
 - **Background:** transparent · **Text:** `var(--color-text-secondary)` · no border, no lift.
@@ -68,8 +68,8 @@ Sizes snap to the **4px grid** (not the off-grid px an earlier draft used). `.bt
 - **Hover:** `filter: brightness(0.9)`.
 
 ### `.btn--danger-outline`
-- **Background:** transparent · **Text:** `var(--danger-text)` · **Border:** `1px solid rgba(225, 29, 72, 0.4)`.
-- **Hover:** border → danger @ 70%, background → `rgba(225, 29, 72, 0.06)`, `translateY(-1px)`.
+- **Background:** transparent · **Text:** `var(--danger-text)` · **Border:** `1px solid rgba(var(--danger-solid-rgb), 0.4)`.
+- **Hover:** border → danger @ 70%, background → `rgba(var(--danger-solid-rgb), 0.06)`, `translateY(-1px)`.
 
 ### `.btn--success`
 - **Background:** `var(--color-brand)` · **Text:** `var(--color-text-on-brand)` · **Glint:** yes (used by the Button success state).

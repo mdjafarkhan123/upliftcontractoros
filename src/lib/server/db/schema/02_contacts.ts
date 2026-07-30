@@ -88,6 +88,9 @@ export const contacts = pgTable('contacts', {
 	sms_opt_out_at: timestamp('sms_opt_out_at', { withTimezone: true }),
 	sms_opt_out_source: text('sms_opt_out_source'),
 	sms_opted_in_at: timestamp('sms_opted_in_at', { withTimezone: true }),
+	// Review requests are a separate customer preference from SMS consent. A
+	// customer can keep receiving service texts while declining review asks.
+	receives_review_requests: boolean('receives_review_requests').notNull().default(true),
 	// Hard "block all outreach" flag — distinct from SMS opt-out. Set manually by
 	// staff (legal request, abusive contact, explicit request). Blocks all channels.
 	do_not_contact: boolean('do_not_contact').notNull().default(false),

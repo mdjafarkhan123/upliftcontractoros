@@ -172,8 +172,10 @@ USING (org_id = public.get_my_org_id());
 
 ## `payments`
 
-Payment record against an invoice. **No soft delete. No `deleted_at`.** Payments are
-immutable financial records. This table is the authoritative source of truth — not
+Append-only payment ledger against an invoice. **No soft delete. No `deleted_at`.**
+Payment rows are immutable financial records. Corrections, refunds, failed-payment
+reversals, and voids are represented as NEW ledger rows, never by editing or deleting
+the original payment. This table is the authoritative source of truth — not
 `invoices.amount_paid`.
 
 ```sql
@@ -182,6 +184,8 @@ CREATE TABLE payments (
   org_id                      UUID NOT NULL REFERENCES organizations (id),
   invoice_id                  UUID NOT NULL REFERENCES invoices (id),
   amount                      NUMERIC(12,2) NOT NULL,
+  adjustment_type             payment_adjustment_type NOT NULL DEFAULT 'payment',
+  applies_to_payment_id       UUID REFERENCES payments (id),
   payment_method              payment_method NOT NULL,
   stripe_payment_intent_id    TEXT,                          -- Null for non-Stripe payments.
   notes                       TEXT,
@@ -203,11 +207,16 @@ CREATE UNIQUE INDEX idx_payments_stripe_intent
 
 CREATE INDEX idx_payments_invoice_id ON payments (invoice_id);
 CREATE INDEX idx_payments_org_id ON payments (org_id);
+CREATE INDEX idx_payments_applies_to_payment_id ON payments (applies_to_payment_id);
 ```
 
 **Notes:**
 
 - No `deleted_at`. No `updated_at`. Payments are financially immutable.
+- `adjustment_type = 'payment'` rows are positive money received.
+- Refunds/corrections/failed-payment reversals/voids are inserted as negative `amount`
+  rows with `applies_to_payment_id` pointing to the original payment.
+- Never let reversal rows make net `SUM(amount)` or net `SUM(tip_amount)` negative.
 - `recorded_by` is NULL for Stripe webhook-created payments. Set for manually recorded payments (cash, check, etc.).
 - `receipt_sent_at` and `receipt_sent_via` are audit fields — never business-logic anchors.
 - Partial payment flow: when payment recorded, API recalculates `invoices.amount_paid` and `invoices.amount_due`, then transitions status: `amount_due > 0` → `partially_paid`; `amount_due = 0` → `paid`.

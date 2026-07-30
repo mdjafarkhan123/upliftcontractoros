@@ -22,6 +22,7 @@
 		job_completed: 'ri-briefcase-line',
 		lead: 'ri-user-add-line',
 		contact_became_customer: 'ri-user-follow-line',
+		communication_preference: 'ri-forbid-2-line',
 		review_received: 'ri-star-line'
 	};
 

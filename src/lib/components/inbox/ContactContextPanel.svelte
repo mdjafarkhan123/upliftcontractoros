@@ -51,8 +51,8 @@
 		const s = context?.latest_invoice?.status;
 		if (!s) return 'default';
 		if (s === 'paid') return 'success';
-		if (s === 'overdue') return 'danger';
-		if (s === 'sent' || s === 'partial') return 'info';
+		if (s === 'past_due') return 'danger';
+		if (s === 'sent_not_due' || s === 'awaiting_payment') return 'info';
 		return 'default';
 	});
 

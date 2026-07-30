@@ -97,7 +97,7 @@ scss/
 @use 'scss/mixins' as *;
 
 .crm-card {
-  @include card-base;                        // bg/border/radius-lg/shadow from mixin
+  @include card-base;                        // bg/border/radius-2xl/shadow-xs from mixin
   padding: $space-5;                         // SCSS var — compile-time (20px)
   color: var(--color-text-primary);          // CSS var — runtime (theme-aware)
 

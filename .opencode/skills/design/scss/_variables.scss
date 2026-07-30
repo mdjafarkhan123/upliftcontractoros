@@ -61,6 +61,7 @@ $space-16: 64px !default;
 $space-20: 80px !default;
 
 // ─── 5. RADIUS — generous by design (cards 16–28px, not 8px Bootstrap) ───────
+$radius-xs:  4px   !default;   // checkboxes, compact controls
 $radius-sm:   8px   !default;   // inputs, small controls, chips
 $radius-md:   12px  !default;   // buttons, badges
 $radius-lg:   16px  !default;   // cards, dropdowns, modals

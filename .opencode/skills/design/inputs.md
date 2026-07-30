@@ -9,10 +9,10 @@
 - **Border:** 1px solid `var(--color-border-strong)`
 - **Background:** `var(--color-bg-surface-sunk)`
 - **Shadow:** `$shadow-xs`
-- **Font:** 14px, `var(--color-text-primary)` color
-- **Padding:** 12px horizontal, 10px vertical
+- **Font:** `$fs-body`/`var(--text-body)` (14px), `var(--color-text-primary)` color
+- **Padding:** `$space-3` (12px) horizontal, 10px vertical
 - **Placeholder:** `var(--color-text-secondary)` color
-- **Transition:** all 200ms ease
+- **Transition:** all `$duration-base` `$ease-standard`
 
 ## Label
 
@@ -38,7 +38,7 @@ Focus ring: `box-shadow: 0 0 0 1px var(--color-brand)`. Not an outline.
 
 - Icon size: 16×16px, `var(--color-text-secondary)` color
 - Container: relative-positioned wrapper
-- **Start icon:** absolute left 12px; input `padding-left: 36px`
+- **Start icon:** absolute left `$space-3` (12px); input `padding-left: 36px`
 - **End icon:** absolute right 12px; input `padding-right: 36px`
 - Icons vertically centered (top 50%, translateY -50%)
 
@@ -65,8 +65,8 @@ Same border/background/radius as input. Additional:
 
 ## Helper / Error Text
 
-- Font: 12px, normal
-- Margin top: 6px
+- Font: `$fs-caption` (12px), normal
+- Margin top: 6px (~`$space-1`)
 - Error: `var(--danger-text)` color
 - Helper: `var(--color-text-muted)` color
 
@@ -75,7 +75,7 @@ Same border/background/radius as input. Additional:
 - Width: 280px default (expandable on focus to 360px)
 - Left icon: search icon 16×16px
 - Right shortcut badge: keyboard shortcut pill, 12px font, `var(--color-bg-surface-sunk)` bg
-- Radius: 8px
+- Radius: `$radius-sm` (8px)
 
 ## Rules
 

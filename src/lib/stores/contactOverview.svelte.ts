@@ -32,7 +32,7 @@ export type ContactOverviewResponse = {
 			id: string;
 			invoice_number: number;
 			title: string;
-			status: 'sent' | 'partially_paid' | 'overdue';
+			status: 'sent_not_due' | 'awaiting_payment' | 'past_due';
 			total: number;
 			amount_due: number;
 			due_date: string | null;

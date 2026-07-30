@@ -26,6 +26,12 @@ import { loadAssigneeMemberIds } from '$lib/server/appointments/assignees';
 import { interpolate, type TemplateVars } from '$lib/server/workers/templates';
 import { NOTIFICATION_SPEC } from '$lib/notifications/spec';
 import { formatCurrency } from '$lib/utils/format';
+import {
+	canContactReceiveCommunication,
+	type CommunicationPreferenceCategory
+} from '$lib/server/communication-preferences';
+
+type CustomerCommunicationCategory = Exclude<CommunicationPreferenceCategory, 'all'>;
 
 const env = process.env;
 
@@ -153,9 +159,26 @@ type Capabilities = { smsCapable: boolean; emailCapable: boolean };
 
 function capabilities(org: Organization, contact: Contact): Capabilities {
 	return {
-		smsCapable: Boolean(org.sms_enabled && contact.phone && !contact.sms_opt_out),
-		emailCapable: Boolean(contact.email && contact.email_opt_in)
+		smsCapable: Boolean(org.sms_enabled && contact.phone),
+		emailCapable: Boolean(contact.email)
 	};
+}
+
+function categoryForSequence(sequenceKey: string): CustomerCommunicationCategory {
+	switch (sequenceKey) {
+		case 'speed_to_lead':
+			return 'speed_to_lead';
+		case 'quote_followup':
+			return 'quote_followup';
+		case 'invoice_dunning':
+			return 'invoice_reminder';
+		case 'appointment_reminder':
+			return 'appointment_reminder';
+		case 'appointment_quote_nudge':
+			return 'private_feedback_recovery';
+		default:
+			return 'marketing';
+	}
 }
 
 // Resolve which channels to send on, given the step/sequence channel and the
@@ -290,6 +313,7 @@ async function sendStep(
 	contact: Contact,
 	step: AutomationSequenceStep,
 	sequenceChannel: StepChannel,
+	sequenceKey: string,
 	source: string,
 	resourceVars: Partial<TemplateVars> = {},
 	resourceType: string = 'contact',
@@ -310,8 +334,29 @@ async function sendStep(
 
 	const channel = step.channel ?? sequenceChannel;
 	const { sendSms, sendEmail } = resolveSend(channel, capabilities(org, contact));
+	const category = categoryForSequence(sequenceKey);
+	const [smsEligibility, emailEligibility] = await Promise.all([
+		sendSms
+			? canContactReceiveCommunication({
+					orgId,
+					contactId: contact.id,
+					channel: 'sms',
+					direction: 'outbound',
+					category
+				})
+			: Promise.resolve(null),
+		sendEmail
+			? canContactReceiveCommunication({
+					orgId,
+					contactId: contact.id,
+					channel: 'email',
+					direction: 'outbound',
+					category
+				})
+			: Promise.resolve(null)
+	]);
 
-	if (sendSms && step.sms_body) {
+	if (sendSms && smsEligibility?.allowed && step.sms_body) {
 		try {
 			await queueAutomationSms(db, {
 				orgId,
@@ -324,7 +369,7 @@ async function sendStep(
 		}
 	}
 
-	if (sendEmail && contact.email && step.email_body) {
+	if (sendEmail && emailEligibility?.allowed && contact.email && step.email_body) {
 		try {
 			await queueAutomationEmail(db, {
 				orgId,
@@ -447,11 +492,11 @@ async function loadResourceContext(
 			.select()
 			.from(invoices)
 			.where(and(eq(invoices.id, resourceId), eq(invoices.org_id, orgId)));
-		// Mirrors handleInvoiceReminder's guard: a paid/cancelled invoice stops dunning.
+		// Mirrors handleInvoiceReminder's guard: a paid/written-off invoice stops dunning.
 		if (!invoice || invoice.deleted_at) {
 			return { closed: true, closedReason: 'invoice_missing', vars: {} };
 		}
-		if (invoice.status === 'paid' || invoice.status === 'cancelled') {
+		if (invoice.status === 'paid' || invoice.status === 'bad_debt') {
 			return { closed: true, closedReason: 'invoice_closed', vars: {} };
 		}
 		const payLink = invoice.public_token
@@ -551,8 +596,8 @@ async function finalize(
 
 /**
  * Enroll a contact into a sequence (by org + key) and schedule the instant
- * reply. No-op if the sequence is missing/disabled, the contact is unreachable
- * (do_not_contact), the sequence has no steps, or a non-terminal enrollment
+ * reply. No-op if the sequence is missing/disabled, the contact is unavailable,
+ * the sequence has no steps, or a non-terminal enrollment
  * already exists (the partial-unique index is the race guard).
  *
  * Called from the BullMQ automation worker — NOT inside a DB transaction — so
@@ -578,7 +623,7 @@ export async function enroll(opts: {
 	if (!seq || !seq.enabled) return;
 
 	const contact = await loadContact(orgId, contactId);
-	if (!contact || contact.do_not_contact) return;
+	if (!contact) return;
 
 	const steps = await loadSteps(seq.id);
 	if (steps.length === 0) return;
@@ -664,20 +709,6 @@ export async function advanceEnrollment(enrollmentId: string): Promise<void> {
 	const org = await loadOrg(enr.org_id);
 	const contact = await loadContact(enr.org_id, enr.contact_id);
 	if (!org || !contact) return;
-	// do_not_contact stops customer-facing sequences; a staff-audience step (the
-	// internal "no quote" nudge) is not a message to the customer, so a marketing
-	// opt-out must not suppress the team's task reminder.
-	if (contact.do_not_contact && step.audience !== 'staff') {
-		await finalize(enr.id, {
-			status: 'stopped',
-			stop_reason: 'do_not_contact',
-			stopped_at: new Date(),
-			bull_job_id: null,
-			next_step_at: null
-		});
-		return;
-	}
-
 	// Resource-anchored guard (Stage 3.c.2): stop if the quote/invoice closed
 	// since the last step (a missed stop-event must not nudge a paid invoice or
 	// an accepted/declined quote). No-op for contact-anchored cards.
@@ -756,6 +787,7 @@ export async function advanceEnrollment(enrollmentId: string): Promise<void> {
 			contact,
 			step,
 			seq.channel,
+			seq.key,
 			`automation.${seq.key}.step_${step.position}`,
 			resource.vars,
 			enr.resource_type,

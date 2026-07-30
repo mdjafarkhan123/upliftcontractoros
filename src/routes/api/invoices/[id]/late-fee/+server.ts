@@ -79,8 +79,8 @@ export const POST: RequestHandler = async (event) => {
 		// Only an overdue balance can be charged a late fee. 'overdue' is the cron-flipped state;
 		// a sent/partially-paid invoice already past its due date is treated the same.
 		const pastDue =
-			inv.status === 'overdue' ||
-			((inv.status === 'sent' || inv.status === 'partially_paid') &&
+			inv.status === 'past_due' ||
+			((inv.status === 'sent_not_due' || inv.status === 'awaiting_payment') &&
 				inv.due_date != null &&
 				inv.due_date < new Date().toISOString().slice(0, 10));
 		if (!pastDue) {

@@ -37,6 +37,7 @@
 	const canCreate = $derived(member().can_view_full_pipeline);
 	const canDelete = $derived(member().can_view_full_pipeline);
 	const canViewAll = $derived(member().can_view_full_pipeline);
+	const canInvoice = $derived(member().can_create_invoices);
 
 	// ── Filter state (seeded from the URL once, then this page owns the URL) ──────
 	let searchInput = $state(untrack(() => data.q));
@@ -52,6 +53,9 @@
 	const contactId = $derived(page.url.searchParams.get('contact_id'));
 	// Recycle-bin view (Deleted tab) — swaps the table for the shared bin list.
 	const isDeletedView = $derived(statusFilter === 'deleted');
+	// Batch Create invoices is offered only from the Requires-Invoicing tab (Jobber's batch flow),
+	// where every listed job is billable, and only to members who can create invoices.
+	const showBatchInvoice = $derived(statusFilter === 'requires_invoicing' && canInvoice);
 
 	const filters = $derived({
 		status: statusFilter,
@@ -96,7 +100,8 @@
 		late: 0,
 		action_required: 0,
 		completed: 0,
-		cancelled: 0
+		cancelled: 0,
+		requires_invoicing: 0
 	});
 	let countsLoaded = $state(false);
 
@@ -266,14 +271,89 @@
 	});
 
 	const bulkActions = $derived<BulkAction[]>([
-		{
-			key: 'delete',
-			label: 'Delete',
-			icon: 'ri-delete-bin-line',
-			tone: 'danger',
-			onSelect: () => (bulkDeleteOpen = true)
-		}
+		...(showBatchInvoice
+			? [
+					{
+						key: 'create-invoices',
+						label: 'Create invoices',
+						icon: 'ri-bill-line',
+						loading: bulkBusy,
+						loadingLabel: 'Creating…',
+						onSelect: handleBatchInvoice
+					} satisfies BulkAction
+				]
+			: []),
+		...(canDelete
+			? [
+					{
+						key: 'delete',
+						label: 'Delete',
+						icon: 'ri-delete-bin-line',
+						tone: 'danger',
+						onSelect: () => (bulkDeleteOpen = true)
+					} satisfies BulkAction
+				]
+			: [])
 	]);
+
+	// ── Batch Create invoices (Jobber batch billing, part 1) ──────────────────────
+	// Generate one draft invoice per selected Requires-Invoicing job. Each job is billed server-side
+	// in its own transaction, so the response reports per-job created / skipped / failed.
+	async function handleBatchInvoice() {
+		if (bulkBusy || selectedIds.length === 0) return;
+		bulkBusy = true;
+		try {
+			const res = await fetch('/api/jobs/batch-invoice', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ids: selectedIds })
+			});
+			const b = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(b.error ?? 'Failed to create invoices');
+				return;
+			}
+			type BatchResult = { job_id: string; reason?: string };
+			const created = (b.data?.created ?? []) as BatchResult[];
+			const skipped = (b.data?.skipped ?? []) as BatchResult[];
+			const failed = (b.data?.failed ?? []) as BatchResult[];
+			const n = created.length;
+
+			// Turn each non-created job into a "Job title — reason" line the contractor can act on.
+			const titleOf = (id: string) => items.find((j) => j.id === id)?.title ?? 'This job';
+			const issues = [...skipped, ...failed].map(
+				(r) => `${titleOf(r.job_id)} — ${r.reason ?? 'Could not be invoiced.'}`
+			);
+			// Cap the toast so a big batch stays readable.
+			const detail = (() => {
+				if (issues.length === 0) return undefined;
+				const shown = issues.slice(0, 4).join('\n');
+				const more = issues.length > 4 ? `\n…and ${issues.length - 4} more` : '';
+				return shown + more;
+			})();
+
+			if (n > 0) {
+				const suffix = issues.length ? ` — ${issues.length} not invoiced` : '';
+				toast.success(`${n} invoice${n === 1 ? '' : 's'} created${suffix}`, {
+					description: detail,
+					duration: detail ? 8000 : undefined
+				});
+			} else {
+				toast.error('No invoices created', {
+					description: detail ?? 'Check the selected jobs and try again.',
+					duration: 8000
+				});
+			}
+			// Freshly-invoiced jobs leave "Requires Invoicing" — reload the list + stat counts.
+			void jobsStore.load(filters, true);
+			void loadStats();
+			exitSelect();
+		} catch {
+			toast.error('Network error. Please try again.');
+		} finally {
+			bulkBusy = false;
+		}
+	}
 
 	async function handleBulkDelete() {
 		if (bulkBusy || selectedIds.length === 0) return;
@@ -314,7 +394,7 @@
 		{#if selectionMode}
 			<Button type="button" variant="secondary" onclick={exitSelect}>Done</Button>
 		{:else}
-			{#if canDelete && !isDeletedView}
+			{#if (canDelete || showBatchInvoice) && !isDeletedView}
 				<Button type="button" variant="secondary" onclick={enterSelect}>
 					<i class="ri-checkbox-line" aria-hidden="true"></i> Select
 				</Button>

@@ -7,7 +7,8 @@ type Tx = Parameters<Parameters<typeof DbClient.transaction>[0]>[0];
  * Recalculate invoice subtotal/discount/tax/total from non-deleted line items,
  * and amount_paid/amount_due from immutable payments.
  * Caller MUST hold a row lock on the invoice (SELECT ... FOR UPDATE) before calling.
- * Updates status to 'paid' or 'partially_paid' and sets paid_at when balance hits zero.
+ * Re-derives status (paid / past_due / awaiting_payment / sent_not_due — Jobber's set) and sets
+ * paid_at when the balance hits zero. Draft and bad_debt rows are frozen.
  *
  * `subtotal` is the pre-discount sum of all lines. An invoice-level discount (fixed or
  * percent) is applied to that subtotal BEFORE tax — the industry-standard order (Jobber /
@@ -89,15 +90,22 @@ export async function recalcInvoiceTotals(tx: Tx, invoiceId: string): Promise<vo
 			-- Stripe-side refund/credit matter, not a negative receivable.
 			amount_due  = GREATEST(calc.total - paid.amount_paid, 0),
 			tip_total   = paid.tip_total,
+			-- Strict Jobber status derivation (no 'partially_paid' — a part-paid invoice sits in
+			-- awaiting_payment/past_due, the partial expressed via amount_paid). bad_debt (write-off)
+			-- and draft are frozen; a Mark-Received close (received_at set) reads as paid.
 			status = CASE
-				WHEN invoices.status = 'cancelled' THEN invoices.status
+				WHEN invoices.status = 'bad_debt' THEN invoices.status
 				WHEN invoices.status = 'draft' THEN invoices.status
-				WHEN paid.amount_paid >= calc.total
-					AND paid.amount_paid > 0 THEN 'paid'
-				WHEN paid.amount_paid > 0 THEN 'partially_paid'
-				ELSE invoices.status
+				WHEN invoices.received_at IS NOT NULL THEN 'paid'
+				WHEN paid.amount_paid >= calc.total AND paid.amount_paid > 0 THEN 'paid'
+				WHEN calc.total <= 0 THEN invoices.status
+				WHEN invoices.due_date IS NOT NULL AND invoices.due_date < CURRENT_DATE THEN 'past_due'
+				WHEN paid.amount_paid > 0 THEN 'awaiting_payment'
+				WHEN invoices.due_date IS NOT NULL AND invoices.due_date > CURRENT_DATE THEN 'sent_not_due'
+				ELSE 'awaiting_payment'
 			END,
 			paid_at = CASE
+				WHEN invoices.status = 'draft' THEN NULL
 				WHEN paid.amount_paid >= calc.total
 					AND paid.amount_paid > 0
 					AND invoices.paid_at IS NULL

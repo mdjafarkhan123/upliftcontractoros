@@ -137,6 +137,19 @@ const REGISTRY: Record<string, RegistryEntry> = {
 		build_label: (row) => `${who(row)} became a customer`,
 		build_target_route: (row) => `/contacts/${row.resource_id}`
 	},
+	'contact.communication_preference_changed': {
+		icon_key: 'communication_preference',
+		tone: 'attention',
+		is_renderable: hasResourceId,
+		build_label: (row) => {
+			const blocked = row.payload?.next_status === 'blocked' || row.payload?.next_status === 'permanent';
+			const channel = typeof row.payload?.channel === 'string' ? row.payload.channel : 'communication';
+			const direction = typeof row.payload?.direction === 'string' ? row.payload.direction : '';
+			const source = typeof row.payload?.source === 'string' ? row.payload.source : 'system';
+			return `${who(row)} ${blocked ? 'blocked from' : 'allowed for'} ${direction} ${channel} (${source})`;
+		},
+		build_target_route: (row) => `/contacts/${row.resource_id}`
+	},
 	'job.completed': {
 		icon_key: 'job_completed',
 		tone: 'positive',

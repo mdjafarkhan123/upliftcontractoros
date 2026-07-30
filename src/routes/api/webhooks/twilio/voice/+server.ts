@@ -12,6 +12,7 @@ import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twil
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/conversations';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -66,6 +67,22 @@ export const POST: RequestHandler = async ({ request }) => {
 		.where(eq(messages.twilio_message_sid, callSid))
 		.limit(1);
 	if (existingMsg) return twiml();
+
+	const [existingContactForDnd] = await db
+		.select({ id: contacts.id })
+		.from(contacts)
+		.where(and(eq(contacts.org_id, org.id), eq(contacts.phone, fromE164)))
+		.limit(1);
+	if (existingContactForDnd) {
+		const eligibility = await canContactReceiveCommunication({
+			orgId: org.id,
+			contactId: existingContactForDnd.id,
+			channel: 'call',
+			direction: 'inbound',
+			category: 'manual_message'
+		});
+		if (!eligibility.allowed) return twiml();
+	}
 
 	// Audit raw payload (best-effort).
 	void db

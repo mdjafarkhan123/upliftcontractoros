@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import { addDays, dayKey, isSameDay } from '$lib/utils/calendar';
 	import { formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
@@ -16,7 +17,9 @@
 		type VisitCardState
 	} from '$lib/appointments/cardState';
 	import type { EventListItem } from '$lib/types/events';
+	import type { ReminderCalendarItem } from '$lib/types/reminders';
 	import { isEventPast } from '$lib/appointments/eventState';
+	import { reminderDisplayStatus, REMINDER_DISPLAY_LABEL } from '$lib/jobs/billing';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { eventsStore } from '$lib/stores/events.svelte';
@@ -26,6 +29,7 @@
 	import QuickCreatePopover from './QuickCreatePopover.svelte';
 	import CardDetailPopover from './CardDetailPopover.svelte';
 	import EventDetailPopover from './EventDetailPopover.svelte';
+	import ReminderDetailController from './ReminderDetailController.svelte';
 	import NotifyDialog from '$lib/components/shared/NotifyDialog.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 
@@ -33,6 +37,8 @@
 		anchor,
 		items,
 		events = [],
+		reminders = [],
+		canInvoice = false,
 		dayStartHour,
 		dayEndHour,
 		canCreate,
@@ -50,6 +56,11 @@
 		// blocks alongside visits; draggable/resizable to reschedule (saves instantly,
 		// no customer notify) when the viewer has the reschedule permission.
 		events?: EventListItem[];
+		// Invoice reminders (Jobber INVOICE_REMINDER) — read-only amber to-do blocks. Never
+		// draggable: a reminder is a nudge, not reschedulable work. Click → detail popover.
+		reminders?: ReminderCalendarItem[];
+		// can_create_invoices — gates the reminder popover's actions.
+		canInvoice?: boolean;
 		dayStartHour: number;
 		dayEndHour: number;
 		canCreate: boolean;
@@ -157,11 +168,33 @@
 
 	const today = new Date();
 
-	// A calendar block is either a visit (colored) or a non-billable Event (neutral grey).
-	// Both are draggable to reschedule and share the grid, so they lay out in the same columns.
+	// A calendar block is a visit (colored), a non-billable Event (neutral grey), or an
+	// invoice reminder (amber, read-only). Visits + Events drag to reschedule; reminders never
+	// do — but all three share the grid, so they lay out in the same columns.
 	type CalBlock =
 		| { kind: 'appt'; appt: AppointmentListItem }
-		| { kind: 'event'; event: EventListItem };
+		| { kind: 'event'; event: EventListItem }
+		| { kind: 'reminder'; reminder: ReminderCalendarItem };
+
+	// Stable key for an #each over CalBlocks (id namespaced isn't needed — ids are uuids).
+	function blockId(b: CalBlock): string {
+		return b.kind === 'appt' ? b.appt.id : b.kind === 'event' ? b.event.id : b.reminder.id;
+	}
+
+	// The shared reminder popover (opened by a reminder click; deep-links create/edit to the
+	// job, runs complete/delete inline).
+	let reminderCtl: ReminderDetailController;
+
+	// Which Anytime columns are expanded. By default the lane shows only the FIRST card per
+	// column + a "View more" button, so a busy day doesn't push the whole lane tall (Jobber
+	// keeps the all-day row compact). Keyed by column key; a click toggles that column open.
+	const expandedAnytime = new SvelteSet<string>();
+	function toggleAnytime(key: string) {
+		if (expandedAnytime.has(key)) expandedAnytime.delete(key);
+		else expandedAnytime.add(key);
+	}
+	// How many cards to show when a column is collapsed.
+	const ANYTIME_COLLAPSED = 1;
 
 	type LaidOut = {
 		block: CalBlock;
@@ -247,53 +280,65 @@
 	// bucketing. Week view (current + default): 7 day columns, no crew scope. The day
 	// view will feed member columns here in a later step — the rest of the engine is
 	// already column-based, so only this list changes.
-	const columnDefs = $derived.by<{ key: string; date: Date; memberId: string | null; tzKey: string }[]>(
-		() => {
-			const out: { key: string; date: Date; memberId: string | null; tzKey: string }[] = [];
+	const columnDefs = $derived.by<
+		{ key: string; date: Date; memberId: string | null; tzKey: string }[]
+	>(() => {
+		const out: { key: string; date: Date; memberId: string | null; tzKey: string }[] = [];
 
-			// Day view: one crew-scoped column per team member on `anchor`'s single day.
-			// An extra "Unassigned" column appears only when a visible visit/event that day
-			// has no crew (so unassigned work is never invisible), and always as a fallback
-			// when there are no members to show at all.
-			if (columnMode === 'day') {
-				const d = anchor;
-				const tzKey = tzDateKey(d, orgTz);
-				let hasUnassigned = false;
-				for (const it of items) {
-					if (it.assigned_to === null && tzDateKey(new Date(it.scheduled_start), orgTz) === tzKey) {
+		// Day view: one crew-scoped column per team member on `anchor`'s single day.
+		// An extra "Unassigned" column appears only when a visible visit/event that day
+		// has no crew (so unassigned work is never invisible), and always as a fallback
+		// when there are no members to show at all.
+		if (columnMode === 'day') {
+			const d = anchor;
+			const tzKey = tzDateKey(d, orgTz);
+			let hasUnassigned = false;
+			for (const it of items) {
+				if (it.assigned_to === null && tzDateKey(new Date(it.scheduled_start), orgTz) === tzKey) {
+					hasUnassigned = true;
+					break;
+				}
+			}
+			if (!hasUnassigned) {
+				for (const ev of events) {
+					if (
+						ev.assigned_to === null &&
+						ev.start_at &&
+						tzDateKey(new Date(ev.start_at), orgTz) === tzKey
+					) {
 						hasUnassigned = true;
 						break;
 					}
 				}
-				if (!hasUnassigned) {
-					for (const ev of events) {
-						if (
-							ev.assigned_to === null &&
-							ev.start_at &&
-							tzDateKey(new Date(ev.start_at), orgTz) === tzKey
-						) {
-							hasUnassigned = true;
-							break;
-						}
+			}
+			if (!hasUnassigned) {
+				for (const rem of reminders) {
+					if (
+						rem.assigned_to === null &&
+						rem.scheduled_start &&
+						tzDateKey(new Date(rem.scheduled_start), orgTz) === tzKey
+					) {
+						hasUnassigned = true;
+						break;
 					}
 				}
-				for (const m of columnMembers) {
-					out.push({ key: `m:${m.id}`, date: d, memberId: m.id, tzKey });
-				}
-				if (hasUnassigned || columnMembers.length === 0) {
-					out.push({ key: `m:${UNASSIGNED_COL}`, date: d, memberId: UNASSIGNED_COL, tzKey });
-				}
-				return out;
 			}
-
-			// Week view (default): 7 date columns, no crew scope.
-			for (let i = 0; i < 7; i++) {
-				const d = addDays(anchor, i);
-				out.push({ key: dayKey(d), date: d, memberId: null, tzKey: tzDateKey(d, orgTz) });
+			for (const m of columnMembers) {
+				out.push({ key: `m:${m.id}`, date: d, memberId: m.id, tzKey });
+			}
+			if (hasUnassigned || columnMembers.length === 0) {
+				out.push({ key: `m:${UNASSIGNED_COL}`, date: d, memberId: UNASSIGNED_COL, tzKey });
 			}
 			return out;
 		}
-	);
+
+		// Week view (default): 7 date columns, no crew scope.
+		for (let i = 0; i < 7; i++) {
+			const d = addDays(anchor, i);
+			out.push({ key: dayKey(d), date: d, memberId: null, tzKey: tzDateKey(d, orgTz) });
+		}
+		return out;
+	});
 
 	// Does a block belong in this column? The day must match always; the crew must
 	// match only when the column is crew-scoped (day view). A null-crew column (week)
@@ -369,6 +414,25 @@
 			const { startMin, endMin } = timedMinutes(ev.start_at, ev.end_at);
 			timed[ci].push({
 				block: { kind: 'event', event: ev },
+				startMin,
+				endMin,
+				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
+			});
+		}
+		// Reminders share the grid too: all-day → anytime lane, timed → an amber block. In day
+		// view they land in their assignee's column (same crew match as visits/events).
+		for (const rem of reminders) {
+			if (!rem.scheduled_start) continue; // schedule-later reminder — not on the grid
+			const rTzKey = tzDateKey(new Date(rem.scheduled_start), orgTz);
+			const ci = defs.findIndex((c) => columnAccepts(c, rTzKey, rem.assigned_to));
+			if (ci < 0) continue;
+			if (rem.all_day) {
+				anytime[ci].push({ kind: 'reminder', reminder: rem });
+				continue;
+			}
+			const { startMin, endMin } = timedMinutes(rem.scheduled_start, rem.scheduled_end);
+			timed[ci].push({
+				block: { kind: 'reminder', reminder: rem },
 				startMin,
 				endMin,
 				paintEndMin: Math.max(endMin, startMin + MIN_BLOCK_MIN)
@@ -629,7 +693,8 @@
 
 	const eventDetailItem = $derived(
 		eventDetailPopover
-			? (eventsStore.items.find((e) => e.id === eventDetailPopover!.id) ?? eventDetailPopover.snapshot)
+			? (eventsStore.items.find((e) => e.id === eventDetailPopover!.id) ??
+					eventDetailPopover.snapshot)
 			: null
 	);
 
@@ -1072,7 +1137,13 @@
 			scheduled_end: endIso,
 			all_day: allDay,
 			// Reassign optimistically so the card jumps to the new member's column at once.
-			...(reassign ? { assigned_to: reassign.to, assignee_name: reassign.name, assignee_count: reassign.to ? 1 : 0 } : {})
+			...(reassign
+				? {
+						assigned_to: reassign.to,
+						assignee_name: reassign.name,
+						assignee_count: reassign.to ? 1 : 0
+					}
+				: {})
 		});
 
 		// Stage the move and ask for confirmation before touching the server.
@@ -1129,7 +1200,13 @@
 			start_at: startIso,
 			end_at: endIso,
 			all_day: allDay,
-			...(reassign ? { assigned_to: reassign.to, assignee_name: reassign.name, assignee_count: reassign.to ? 1 : 0 } : {})
+			...(reassign
+				? {
+						assigned_to: reassign.to,
+						assignee_name: reassign.name,
+						assignee_count: reassign.to ? 1 : 0
+					}
+				: {})
 		});
 
 		rescheduleDecided = false;
@@ -1587,6 +1664,9 @@
 		</div>
 		{#each columns as col, i (col.key)}
 			{@const today_ = columnMode === 'week' && isSameDay(col.date, today)}
+			{@const expanded = expandedAnytime.has(col.key)}
+			{@const hiddenCount = col.anytime.length - ANYTIME_COLLAPSED}
+			{@const visibleAnytime = expanded ? col.anytime : col.anytime.slice(0, ANYTIME_COLLAPSED)}
 			<button
 				type="button"
 				data-col-index={i}
@@ -1602,7 +1682,7 @@
 				]}
 				aria-label={canCreate ? `New Anytime visit on ${col.date.toDateString()}` : undefined}
 			>
-				{#each col.anytime as blk (blk.kind === 'appt' ? blk.appt.id : blk.event.id)}
+				{#each visibleAnytime as blk (blockId(blk))}
 					{#if blk.kind === 'appt'}
 						{@const ev = blk.appt}
 						{@const state = deriveVisitCardState(ev, now)}
@@ -1629,7 +1709,7 @@
 						>
 							{@render visitRows(ev, state, mark, false)}
 						</a>
-					{:else}
+					{:else if blk.kind === 'event'}
 						{@const evt = blk.event}
 						<!-- All-day Event: neutral grey chip, read-only. The lane's create-on-click
 						     already ignores clicks that land on a `.cal-week__anytime-chip`. -->
@@ -1650,17 +1730,68 @@
 							}}
 						>
 							<span class="cal-week__anytime-chip-title">
-								{#if evtDone}<i
-										class="cal-week__anytime-chip-tick ri-check-line"
-										aria-hidden="true"
+								{#if evtDone}<i class="cal-week__anytime-chip-tick ri-check-line" aria-hidden="true"
 									></i>{/if}{evt.title}</span
 							>
 							<!-- An Event is a team block — its "who" is the assignee, never a customer
 							     (Jobber never headlines an event with a client). -->
 							<span class="cal-week__anytime-chip-sub">{evt.assignee_name ?? 'Event'}</span>
 						</div>
+					{:else}
+						{@const rem = blk.reminder}
+						{@const rState = reminderDisplayStatus(rem)}
+						<!-- All-day invoice reminder: read-only amber chip. Click → detail popover. The
+						     lane's create-on-click already ignores clicks on a `.cal-week__anytime-chip`. -->
+						<div
+							role="button"
+							tabindex="0"
+							class={[
+								'cal-week__anytime-chip',
+								'cal-week__anytime-chip--reminder',
+								`cal-week__anytime-chip--rem-${rState}`
+							]}
+							title={rem.description || 'Invoice reminder'}
+							onclick={(e) => reminderCtl.open(rem, e.currentTarget)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') reminderCtl.open(rem, e.currentTarget);
+							}}
+						>
+							<span class="cal-week__anytime-chip-title">
+								<i class="ri-bill-line" aria-hidden="true"></i>{rem.description ||
+									'Invoice reminder'}
+							</span>
+							<span class="cal-week__anytime-chip-sub">{REMINDER_DISPLAY_LABEL[rState]}</span>
+						</div>
 					{/if}
 				{/each}
+
+				<!-- Collapse control: keep the lane compact by default (one card), expand on
+				     demand. Not a nested <button> (this column IS a button) — a role="button"
+				     span that stops propagation so the click doesn't also fire create-on-empty. -->
+				{#if hiddenCount > 0}
+					<div
+						role="button"
+						tabindex="0"
+						class="cal-week__anytime-more"
+						onclick={(e) => {
+							e.stopPropagation();
+							toggleAnytime(col.key);
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								e.stopPropagation();
+								toggleAnytime(col.key);
+							}
+						}}
+					>
+						{#if expanded}
+							Show less
+						{:else}
+							View more ({hiddenCount})
+						{/if}
+					</div>
+				{/if}
 			</button>
 		{/each}
 	</div>
@@ -1721,7 +1852,7 @@
 				{/if}
 
 				<!-- Blocks: visits (colored, draggable) + Events (neutral grey, read-only) -->
-				{#each col.laidOut as ev (ev.block.kind === 'appt' ? ev.block.appt.id : ev.block.event.id)}
+				{#each col.laidOut as ev (blockId(ev.block))}
 					{@const top = pxFromMin(ev.startMin)}
 					{@const height = pxFromMin(ev.paintEndMin) - top}
 					{@const widthPct = 100 / ev.cols}
@@ -1734,9 +1865,7 @@
 						{@const state = deriveVisitCardState(appt, now)}
 						{@const mark = visitCardStateIcon(state)}
 						<a
-							href={appt.request_id
-								? `/requests/${appt.request_id}`
-								: `/appointments/${appt.id}`}
+							href={appt.request_id ? `/requests/${appt.request_id}` : `/appointments/${appt.id}`}
 							draggable="false"
 							use:prefetchOnIntent={() =>
 								appt.request_id ? undefined : appointmentsStore.prefetchDetail(appt.id)}
@@ -1772,7 +1901,7 @@
 								></span>
 							{/if}
 						</a>
-					{:else}
+					{:else if ev.block.kind === 'event'}
 						{@const evt = ev.block.event}
 						{@const dragging = drag?.mode === 'move' && drag.eventItem?.id === evt.id}
 						{@const startTime = evt.start_at ? formatTimeInOrgTz(evt.start_at, orgTz) : ''}
@@ -1792,7 +1921,8 @@
 							onpointerdown={(e) => onTimeblockPointerDown(e, ev, evt, i)}
 							onclick={(e) => openEventDetail(e, evt)}
 							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') openEventDetail(e as unknown as MouseEvent, evt);
+								if (e.key === 'Enter' || e.key === ' ')
+									openEventDetail(e as unknown as MouseEvent, evt);
 							}}
 						>
 							<!-- Same layout skeleton and container rules as a visit card, but no status
@@ -1843,6 +1973,55 @@
 								></span>
 							{/if}
 						</div>
+					{:else}
+						{@const rem = ev.block.reminder}
+						{@const rState = reminderDisplayStatus(rem)}
+						<!-- Timed invoice reminder: read-only amber block (no drag / no resize — a
+						     reminder is a nudge, not reschedulable work). Click → detail popover. -->
+						<div
+							role="button"
+							tabindex="0"
+							class={[
+								'cal-week__timeblock',
+								'cal-week__timeblock--reminder',
+								`cal-week__timeblock--rem-${rState}`
+							]}
+							style={blockStyle}
+							title={rem.description || 'Invoice reminder'}
+							onpointerdown={(e) => e.stopPropagation()}
+							onclick={(e) => reminderCtl.open(rem, e.currentTarget)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') reminderCtl.open(rem, e.currentTarget);
+							}}
+						>
+							<i
+								class="cal-week__event-mark ri-bill-line"
+								title="Invoice reminder"
+								aria-hidden="true"
+							></i>
+							<span class="cal-week__event-top">
+								<span class="cal-week__event-timepill">
+									<i class="ri-time-line" aria-hidden="true"></i>
+									<span class="cal-week__event-timepill-text">
+										{rem.all_day ? 'Anytime' : formatTimeInOrgTz(rem.scheduled_start!, orgTz)}
+									</span>
+								</span>
+							</span>
+							<p class="cal-week__event-headline">
+								<span class="cal-week__event-names">
+									<span class="cal-week__timeblock-title"
+										>{rem.description || 'Invoice reminder'}</span
+									>
+								</span>
+							</p>
+							<p class="cal-week__timeblock-meta">
+								<i class="ri-user-line" aria-hidden="true"></i>
+								<span>{rem.contact_name}</span>
+							</p>
+							<div class="cal-week__event-footer">
+								<span class="cal-week__event-kind">{REMINDER_DISPLAY_LABEL[rState]}</span>
+							</div>
+						</div>
 					{/if}
 				{/each}
 
@@ -1874,6 +2053,9 @@
 		{/each}
 	</div>
 </div>
+
+<!-- Shared invoice-reminder detail popover (opened by a reminder block/chip click). -->
+<ReminderDetailController bind:this={reminderCtl} {canInvoice} />
 
 {#if popover}
 	<QuickCreatePopover

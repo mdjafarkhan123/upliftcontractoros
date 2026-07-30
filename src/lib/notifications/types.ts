@@ -11,6 +11,8 @@ export const NOTIFICATION_TYPES = [
 	'payment_received',
 	'invoice_viewed',
 	'job_invoice_reminder',
+	'job_invoice_reminder_assigned',
+	'job_invoice_reminder_due',
 	// Operations
 	'new_request',
 	'message_received',

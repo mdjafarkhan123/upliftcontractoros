@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import SignaturePad from '$lib/components/shared/SignaturePad.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCurrency } from '$lib/utils/format';
 
@@ -99,6 +100,7 @@
 		packages = [];
 		selectedPackageId = null;
 		signerName = quote.contact_name ?? '';
+		hasDrawn = false;
 		clearPad();
 		loadingDetail = true;
 		const id = quote.id;
@@ -153,68 +155,11 @@
 		})();
 	});
 
-	// ── Signature pad ────────────────────────────────────────────────────────────
-	let canvas: HTMLCanvasElement | undefined = $state();
-	let ctx: CanvasRenderingContext2D | null = null;
-	let drawing = false;
+	// ── Signature pad (shared component) ─────────────────────────────────────────
+	let pad: SignaturePad | undefined = $state();
 	let hasDrawn = $state(false);
-
-	// Prepare the drawing surface at device pixel ratio for a crisp line whenever the pad mounts
-	// (i.e. once we're on the sign step).
-	$effect(() => {
-		if (step !== 'sign' || !canvas) return;
-		const dpr = window.devicePixelRatio || 1;
-		const rect = canvas.getBoundingClientRect();
-		canvas.width = Math.round(rect.width * dpr);
-		canvas.height = Math.round(rect.height * dpr);
-		const c = canvas.getContext('2d');
-		if (!c) return;
-		c.scale(dpr, dpr);
-		c.lineWidth = 2.5;
-		c.lineCap = 'round';
-		c.lineJoin = 'round';
-		c.strokeStyle = '#0f172a';
-		ctx = c;
-		hasDrawn = false;
-	});
-
-	function point(e: PointerEvent): { x: number; y: number } {
-		const rect = canvas!.getBoundingClientRect();
-		return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-	}
-	function start(e: PointerEvent) {
-		if (!ctx) return;
-		drawing = true;
-		canvas!.setPointerCapture(e.pointerId);
-		const p = point(e);
-		ctx.beginPath();
-		ctx.moveTo(p.x, p.y);
-	}
-	function move(e: PointerEvent) {
-		if (!drawing || !ctx) return;
-		const p = point(e);
-		ctx.lineTo(p.x, p.y);
-		ctx.stroke();
-		hasDrawn = true;
-	}
-	function end(e: PointerEvent) {
-		if (!drawing) return;
-		drawing = false;
-		try {
-			canvas!.releasePointerCapture(e.pointerId);
-		} catch {
-			/* already released */
-		}
-	}
 	function clearPad() {
-		if (ctx && canvas) {
-			const dpr = window.devicePixelRatio || 1;
-			ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-		}
-		hasDrawn = false;
-	}
-	function toBlob(): Promise<Blob | null> {
-		return new Promise((resolve) => canvas!.toBlob((b) => resolve(b), 'image/png'));
+		pad?.clear();
 	}
 
 	function goToSign() {
@@ -237,7 +182,7 @@
 		busy = true;
 		try {
 			// 1) Upload the drawn signature as a quote_signature media row.
-			const blob = await toBlob();
+			const blob = await (pad?.toBlob() ?? Promise.resolve(null));
 			if (!blob) throw new Error('Could not read the signature.');
 			const fd = new FormData();
 			fd.append('file', new File([blob], 'signature.png', { type: 'image/png' }));
@@ -379,16 +324,7 @@
 							<i class="ri-eraser-line" aria-hidden="true"></i> Clear
 						</button>
 					</div>
-					<canvas
-						id="quote-sign-pad"
-						bind:this={canvas}
-						class="quote-sign__pad"
-						onpointerdown={start}
-						onpointermove={move}
-						onpointerup={end}
-						onpointercancel={end}
-						onpointerleave={end}
-					></canvas>
+					<SignaturePad bind:this={pad} bind:hasDrawn disabled={busy} showClear={false} />
 				</div>
 
 				<p class="quote-sign__ack">

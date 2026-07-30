@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import SignaturePad from '$lib/components/shared/SignaturePad.svelte';
 	import type { JobFormFieldMedia } from '$lib/types/jobs';
 
 	let {
@@ -20,73 +21,10 @@
 		onCleared: (id: string) => void;
 	} = $props();
 
-	let canvas: HTMLCanvasElement | undefined = $state();
-	let ctx: CanvasRenderingContext2D | null = null;
-	let drawing = false;
+	let pad: SignaturePad | undefined = $state();
 	let hasDrawn = $state(false);
 	let saving = $state(false);
 	let clearing = $state(false);
-
-	// Prepare the drawing surface at device pixel ratio for a crisp line, once mounted with no
-	// saved signature (a saved signature shows the image instead of the pad).
-	$effect(() => {
-		if (!canvas || signature) return;
-		const dpr = window.devicePixelRatio || 1;
-		const rect = canvas.getBoundingClientRect();
-		canvas.width = Math.round(rect.width * dpr);
-		canvas.height = Math.round(rect.height * dpr);
-		const c = canvas.getContext('2d');
-		if (!c) return;
-		c.scale(dpr, dpr);
-		c.lineWidth = 2;
-		c.lineCap = 'round';
-		c.lineJoin = 'round';
-		c.strokeStyle = '#0f172a';
-		ctx = c;
-	});
-
-	function point(e: PointerEvent): { x: number; y: number } {
-		const rect = canvas!.getBoundingClientRect();
-		return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-	}
-
-	function start(e: PointerEvent) {
-		if (!ctx || !canEdit) return;
-		drawing = true;
-		canvas!.setPointerCapture(e.pointerId);
-		const p = point(e);
-		ctx.beginPath();
-		ctx.moveTo(p.x, p.y);
-	}
-
-	function move(e: PointerEvent) {
-		if (!drawing || !ctx) return;
-		const p = point(e);
-		ctx.lineTo(p.x, p.y);
-		ctx.stroke();
-		hasDrawn = true;
-	}
-
-	function end(e: PointerEvent) {
-		if (!drawing) return;
-		drawing = false;
-		try {
-			canvas!.releasePointerCapture(e.pointerId);
-		} catch {
-			/* pointer already released */
-		}
-	}
-
-	function clearPad() {
-		if (!ctx || !canvas) return;
-		const dpr = window.devicePixelRatio || 1;
-		ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-		hasDrawn = false;
-	}
-
-	function toBlob(): Promise<Blob | null> {
-		return new Promise((resolve) => canvas!.toBlob((b) => resolve(b), 'image/png'));
-	}
 
 	async function signedUrls(id: string): Promise<{ thumb?: string; full?: string }> {
 		const [t, w] = await Promise.all([
@@ -104,7 +42,7 @@
 		if (!hasDrawn || saving) return;
 		saving = true;
 		try {
-			const blob = await toBlob();
+			const blob = await (pad?.toBlob() ?? Promise.resolve(null));
 			if (!blob) throw new Error('Could not read the signature');
 			const file = new File([blob], 'signature.png', { type: 'image/png' });
 			const fd = new FormData();
@@ -158,17 +96,14 @@
 	</div>
 {:else if canEdit}
 	<div class="sig-field">
-		<canvas
-			bind:this={canvas}
-			class="sig-field__pad"
-			onpointerdown={start}
-			onpointermove={move}
-			onpointerup={end}
-			onpointercancel={end}
-			onpointerleave={end}
-		></canvas>
+		<SignaturePad bind:this={pad} bind:hasDrawn disabled={!canEdit || saving} showClear={false} />
 		<div class="sig-field__actions">
-			<Button variant="ghost" size="sm" onclick={clearPad} disabled={!hasDrawn || saving}>
+			<Button
+				variant="ghost"
+				size="sm"
+				onclick={() => pad?.clear()}
+				disabled={!hasDrawn || saving}
+			>
 				Clear
 			</Button>
 			<Button size="sm" loading={saving} disabled={!hasDrawn} onclick={save}>Save signature</Button>
@@ -186,17 +121,6 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: $space-2;
-
-		&__pad {
-			width: 100%;
-			max-width: 360px;
-			height: 140px;
-			border: 1px solid var(--color-border-strong);
-			border-radius: $radius-md;
-			background: var(--color-bg-surface);
-			touch-action: none;
-			cursor: crosshair;
-		}
 
 		&__saved {
 			max-width: 360px;

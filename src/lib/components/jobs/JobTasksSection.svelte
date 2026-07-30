@@ -3,6 +3,7 @@
 	import { jobDetailStore } from '$lib/stores/jobDetail.svelte';
 	import type { JobTaskRow } from '$lib/types/jobs';
 	import { Button } from '$lib/components/ui/button';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		jobId,
@@ -37,15 +38,6 @@
 		} catch {
 			// leave the picker empty — non-fatal
 		}
-	}
-
-	function initials(name: string): string {
-		return name
-			.split(' ')
-			.map((p) => p[0] ?? '')
-			.slice(0, 2)
-			.join('')
-			.toUpperCase();
 	}
 
 	// Due-date helpers — due_date is a plain 'YYYY-MM-DD' calendar day (no time zone). Parse it in
@@ -251,7 +243,7 @@
 					<div class="job-tasks__meta">
 						{#if t.assignee_name}
 							<span class="job-tasks__assignee">
-								<span class="job-tasks__avatar">{initials(t.assignee_name)}</span>
+								<Avatar size="sm" name={t.assignee_name} />
 								{t.assignee_name}
 							</span>
 						{/if}
@@ -462,19 +454,6 @@
 			gap: $space-2;
 			font-size: $fs-body;
 			color: var(--color-text-secondary);
-		}
-
-		&__avatar {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			width: 22px;
-			height: 22px;
-			border-radius: $radius-full;
-			background: var(--color-bg-surface-sunk);
-			color: var(--color-text-secondary);
-			font-size: $fs-caption;
-			font-weight: $weight-semibold;
 		}
 
 		&__due {

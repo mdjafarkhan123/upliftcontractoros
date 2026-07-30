@@ -14,7 +14,7 @@
 	type PublicInvoice = {
 		invoice_number_display: string;
 		title: string;
-		status: 'sent' | 'partially_paid' | 'paid' | 'overdue';
+		status: 'sent_not_due' | 'awaiting_payment' | 'paid' | 'past_due' | 'bad_debt';
 		subtotal: string;
 		discount_type: string;
 		discount_value: string | null;
@@ -35,6 +35,8 @@
 		tips_enabled: boolean;
 		tip_presets: number[];
 		line_items: LineItem[];
+		// Read-only in-person signature, when the contractor collected one. Null otherwise.
+		signature: { signer_name: string | null; signed_at: string; url: string } | null;
 	};
 
 	let { data }: { data: { invoice: PublicInvoice | null } } = $props();
@@ -88,7 +90,7 @@
 	const payCustomTotalCents = $derived((customAmountCents ?? 0) + tipCents);
 
 	const isPaid = $derived(data.invoice?.status === 'paid' || justPaid);
-	const isOverdue = $derived(data.invoice?.status === 'overdue' && !isPaid);
+	const isOverdue = $derived(data.invoice?.status === 'past_due' && !isPaid);
 	const canPay = $derived(
 		data.invoice !== null &&
 			!isPaid &&
@@ -242,7 +244,7 @@
 					</div>
 				{/if}
 
-				{#if inv.status === 'partially_paid'}
+				{#if Number(inv.amount_paid) > 0 && Number(inv.amount_due) > 0}
 					<div class="pub-notice pub-notice--partial">
 						<i class="pub-notice__icon ri-time-line" aria-hidden="true"></i>
 						<div>
@@ -299,7 +301,7 @@
 						<dt>Total</dt>
 						<dd>{formatCurrency(inv.total)}</dd>
 					</div>
-					{#if inv.status === 'partially_paid' && Number(inv.amount_paid) > 0}
+					{#if Number(inv.amount_paid) > 0 && Number(inv.amount_due) > 0}
 						<div class="pub-invoice__total-row pub-invoice__total-row--paid">
 							<dt>Paid</dt>
 							<dd>−{formatCurrency(inv.amount_paid)}</dd>
@@ -335,6 +337,27 @@
 					<div class="pub-invoice__terms">
 						<p class="pub-invoice__terms-title">Terms &amp; Conditions</p>
 						<div class="pub-invoice__terms-body">{inv.terms}</div>
+					</div>
+				{/if}
+
+				{#if inv.signature}
+					<div class="pub-invoice__signature">
+						<p class="pub-invoice__signature-title">Signature</p>
+						<img
+							class="pub-invoice__signature-img"
+							src={inv.signature.url}
+							alt="Customer signature"
+						/>
+						<p class="pub-invoice__signature-meta">
+							Signed{inv.signature.signer_name ? ` by ${inv.signature.signer_name}` : ''}
+							{#if inv.signature.signed_at}
+								· {new Date(inv.signature.signed_at).toLocaleDateString('en-US', {
+									year: 'numeric',
+									month: 'short',
+									day: 'numeric'
+								})}
+							{/if}
+						</p>
 					</div>
 				{/if}
 

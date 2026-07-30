@@ -5,7 +5,6 @@
 
 ## Core Specs
 
-- **Border:** 1px
 - **Default radius:** pill (`$radius-full`)
 - **Pill radius:** 9999px (`$radius-full`) — preferred for status badges
 - **Font weight:** 500 (medium)
@@ -14,8 +13,8 @@
 
 | Size | Font size | Horizontal padding | Vertical padding |
 |---|---|---|---|
-| Default (small) | 12px | 6px | 2px |
-| Large | 14px | 10px | 4px |
+| Default (small) | `$fs-caption` (12px) | 6px | 2px |
+| Large | `$fs-body` (14px) | 10px | 4px |
 
 ## Variants
 
@@ -65,7 +64,7 @@ Use `$radius-full` on any variant for pill shape — this is the standard for CR
 
 ## Badges with Icons
 
-- Icon size (default): 12×12px; (large): 14×14px
+- Icon size (default): `$fs-caption`×`$fs-caption` (12×12px); (large): 14×14px
 - Icon spacing: 4px margin next to label
 
 ## Icon-only Badge
@@ -96,5 +95,5 @@ Badge content + a close (×) button inline.
 - Size: auto width, min 20px, 20px height
 - Radius: `$radius-full`
 - Background: `var(--color-brand)`
-- Text: white, 11px, semibold
+- Text: white, `$fs-caption` (11px), semibold
 - Padding: 0 6px

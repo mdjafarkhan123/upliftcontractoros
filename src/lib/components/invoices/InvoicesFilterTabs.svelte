@@ -17,11 +17,11 @@
 	const tabs: ListTab<InvoicesStatusChip>[] = [
 		{ value: 'all', label: 'All' },
 		{ value: 'draft', label: 'Draft' },
-		{ value: 'sent', label: 'Sent' },
-		{ value: 'partially_paid', label: 'Partial' },
-		{ value: 'overdue', label: 'Overdue' },
+		{ value: 'sent_not_due', label: 'Sent' },
+		{ value: 'awaiting_payment', label: 'Awaiting Payment' },
+		{ value: 'past_due', label: 'Past Due' },
 		{ value: 'paid', label: 'Paid' },
-		{ value: 'cancelled', label: 'Cancelled' }
+		{ value: 'bad_debt', label: 'Bad Debt' }
 	];
 
 	function onChange(next: InvoicesStatusChip) {

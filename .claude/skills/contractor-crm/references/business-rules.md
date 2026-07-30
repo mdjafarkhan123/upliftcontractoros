@@ -296,6 +296,8 @@ any            → cancelled        (manual by Admin only)
 - `invoice_number` is org-scoped sequential: `UNIQUE(org_id, invoice_number)` — never reused
 - `stripe_payment_link_url` stores the Stripe Payment Link for online payment
 - When `amount_due = 0`: `status → paid`, `paid_at` set, `invoice.paid` event emitted
+- Payments are an append-only ledger. Never edit/delete a payment to fix it; insert a
+  negative refund/correction/failed-payment/void row linked by `applies_to_payment_id`.
 
 ### Payment Recording (Critical Transaction Pattern)
 
@@ -304,8 +306,9 @@ BEGIN;
   -- 1. Lock the invoice row to prevent concurrent payment races
   SELECT * FROM invoices WHERE id = $invoice_id FOR UPDATE;
 
-  -- 2. Insert the payment (immutable — never edited after)
-  INSERT INTO payments (org_id, invoice_id, amount, payment_method, ...) VALUES (...);
+  -- 2. Insert the payment ledger row (immutable — never edited/deleted after)
+  INSERT INTO payments (org_id, invoice_id, amount, adjustment_type, payment_method, ...)
+  VALUES (..., 'payment', ...);
 
   -- 3. Recalculate invoice totals from payments
   UPDATE invoices SET
@@ -326,7 +329,10 @@ COMMIT;
 
 - `stripe_payment_intent_id` has a UNIQUE partial index (WHERE NOT NULL) — Stripe webhook idempotency guard; duplicate webhook fires fail gracefully
 - `recorded_by` is NULL for Stripe webhook payments, set for manual payments (cash, check, etc.)
-- Payments are never deleted — no `deleted_at`, no `updated_at` — intentionally immutable
+- Payments are never edited or deleted — no `deleted_at`, no `updated_at` — intentionally immutable
+- Reversals/refunds/corrections are new negative rows in `payments`, linked to the
+  original payment by `applies_to_payment_id`; they must hold the invoice row lock,
+  recalculate totals in the same transaction, and never drive net paid/tip totals below zero
 - Multiple payments per invoice are supported (partial payments and deposits)
 
 ### Sequential Number Generation Pattern

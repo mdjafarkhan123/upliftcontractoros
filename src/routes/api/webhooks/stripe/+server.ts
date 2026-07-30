@@ -143,6 +143,21 @@ async function handlePaymentEvent(evt: Stripe.Event, orgId: string): Promise<boo
 			return false;
 		}
 
+		// Payment links are created from a snapshot of the balance. A manual payment or another
+		// Stripe capture may have reduced that balance before this webhook arrives, so checking only
+		// for an already-settled invoice is not enough. Never apply a captured balance amount above
+		// the current due amount; the real Stripe charge must be refunded instead of entering the
+		// ledger as an overpayment.
+		const amountDueCents = Math.round(Number(existing.amount_due) * 100);
+		if (balanceCents <= 0 || balanceCents > amountDueCents) {
+			console.error(
+				`[stripe-webhook] Payment ${paymentIntentId} exceeds the current balance for invoice ` +
+					`${invoiceId} (captured_balance_cents=${balanceCents}, amount_due_cents=${amountDueCents}). ` +
+					`NOT applied — refund this charge in Stripe.`
+			);
+			return false;
+		}
+
 		const [payment] = await tx
 			.insert(payments)
 			.values({
@@ -287,7 +302,7 @@ async function handleQuoteDepositPayment(evt: Stripe.Event, orgId: string): Prom
 				WHERE id = ${quote.deposit_applied_invoice_id} AND org_id = ${orgId}
 				FOR UPDATE
 			`);
-			if (invoice && !invoice.deleted_at && invoice.status !== 'cancelled') {
+			if (invoice && !invoice.deleted_at && invoice.status !== 'bad_debt') {
 				const [dup] = await tx
 					.select({ id: payments.id })
 					.from(payments)

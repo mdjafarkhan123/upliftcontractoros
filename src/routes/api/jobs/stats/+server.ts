@@ -44,12 +44,29 @@ export const GET: RequestHandler = async (event) => {
 		action_required: number;
 		completed: number;
 		cancelled: number;
+		requires_invoicing: number;
 	}>(sql`
 		WITH job_state AS (
 			SELECT
 				jobs.status AS status,
 				jobs.completed_at AS completed_at,
 				jobs.cancelled_at AS cancelled_at,
+				-- Billable work with no invoice yet (Jobber "Requires Invoicing"). Kept identical to
+				-- needsInvoiceSql in /api/jobs so the tab list and this count never disagree.
+				(
+					EXISTS (SELECT 1 FROM job_payment_milestones m
+						WHERE m.job_id = jobs.id AND m.deleted_at IS NULL AND m.invoice_id IS NULL)
+					OR (jobs.billing_type = 'visit_based' AND jobs.total > 0
+						AND EXISTS (SELECT 1 FROM appointments a
+							WHERE a.job_id = jobs.id AND a.deleted_at IS NULL AND a.status <> 'cancelled'
+							  AND a.billed_invoice_id IS NULL AND a.scheduled_start <= now()))
+					OR (jobs.job_type = 'one_off' AND jobs.status = 'archived' AND jobs.completed_at IS NOT NULL
+						AND jobs.total > 0
+						AND NOT EXISTS (SELECT 1 FROM job_payment_milestones m
+							WHERE m.job_id = jobs.id AND m.deleted_at IS NULL)
+						AND NOT EXISTS (SELECT 1 FROM invoices i
+							WHERE i.job_id = jobs.id AND i.deleted_at IS NULL AND i.status <> 'bad_debt'))
+				) AS needs_invoice,
 				EXISTS (SELECT 1 FROM appointments a
 					WHERE a.job_id = jobs.id AND a.deleted_at IS NULL
 					  AND a.status IN ('scheduled','unscheduled')) AS has_open,
@@ -88,7 +105,10 @@ export const GET: RequestHandler = async (event) => {
 			-- Archived jobs, split by WHY they closed (Jobber stores only archived; the close
 			-- timestamp is the discriminator). Cancelled wins if both somehow set.
 			COUNT(*) FILTER (WHERE status = 'archived' AND cancelled_at IS NULL AND completed_at IS NOT NULL)::int AS completed,
-			COUNT(*) FILTER (WHERE status = 'archived' AND cancelled_at IS NOT NULL)::int AS cancelled
+			COUNT(*) FILTER (WHERE status = 'archived' AND cancelled_at IS NOT NULL)::int AS cancelled,
+			-- Cross-cutting money-state: billable work, no invoice, not cancelled. Overlaps the
+			-- schedule counts above, so it is NOT summed into the "All" total on the client.
+			COUNT(*) FILTER (WHERE needs_invoice AND cancelled_at IS NULL)::int AS requires_invoicing
 		FROM job_state
 	`);
 
@@ -108,7 +128,8 @@ export const GET: RequestHandler = async (event) => {
 				late: row?.late ?? 0,
 				action_required: row?.action_required ?? 0,
 				completed: row?.completed ?? 0,
-				cancelled: row?.cancelled ?? 0
+				cancelled: row?.cancelled ?? 0,
+				requires_invoicing: row?.requires_invoicing ?? 0
 			}
 		}
 	});

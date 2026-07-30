@@ -27,6 +27,8 @@ import { runContactPurgeSweep } from './contactPurgeSweep';
 import { runSoftDeletePurgeSweep } from './softDeletePurgeSweep';
 import { runSmsMonthlyGrant } from './smsMonthlyGrant';
 import { runSmsMasterBalanceSync } from './smsMasterBalanceSync';
+import { runBilledVisitAutoComplete } from './billedVisitAutoComplete';
+import { runJobInvoiceReminderDueSweep } from './jobInvoiceReminderDueSweep';
 
 const log = createLogger('cron');
 
@@ -108,7 +110,13 @@ const JOBS: CronSpec[] = [
 	{ name: 'contact-purge-sweep', schedule: '15 3 * * *', run: runContactPurgeSweep },
 	{ name: 'soft-delete-purge-sweep', schedule: '45 3 * * *', run: runSoftDeletePurgeSweep },
 	{ name: 'sms-monthly-grant', schedule: '0 5 1 * *', run: runSmsMonthlyGrant },
-	{ name: 'sms-master-balance-sync', schedule: '*/15 * * * *', run: runSmsMasterBalanceSync }
+	{ name: 'sms-master-balance-sync', schedule: '*/15 * * * *', run: runSmsMasterBalanceSync },
+	{ name: 'billed-visit-auto-complete', schedule: '*/15 * * * *', run: runBilledVisitAutoComplete },
+	{
+		name: 'job-invoice-reminder-due-sweep',
+		schedule: '*/15 * * * *',
+		run: runJobInvoiceReminderDueSweep
+	}
 ];
 
 let registered = false;

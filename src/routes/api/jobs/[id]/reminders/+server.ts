@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { jobInvoiceReminders } from '$lib/server/db/schema';
+import { jobInvoiceReminders, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice } from '$lib/server/invoices/permissions';
 import {
@@ -109,6 +109,28 @@ export const POST: RequestHandler = async (event) => {
 				reminderId: inserted.id,
 				assigneeIds,
 				leadMemberId
+			});
+		}
+
+		// "Email team when assigned" — notify the assigned crew. The send goes through the
+		// outbox (transaction-boundary law: the business write + this event commit together,
+		// the actual email/in-app alert is fanned out later by the notification worker).
+		if (input.notify_team_on_assign && assigneeIds.length > 0) {
+			await tx.insert(outboxEvents).values({
+				org_id: auth.orgId,
+				event_type: 'job_invoice_reminder.assigned',
+				resource_type: 'job_invoice_reminder',
+				resource_id: inserted.id,
+				payload: {
+					reminder_id: inserted.id,
+					org_id: auth.orgId,
+					job_id: jobId,
+					// The members to alert — everyone assigned on create.
+					assignee_ids: assigneeIds
+				},
+				idempotency_key: `job_invoice_reminder.assigned:${inserted.id}:${[...assigneeIds]
+					.sort()
+					.join('.')}`
 			});
 		}
 

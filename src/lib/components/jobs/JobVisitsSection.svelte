@@ -1,5 +1,4 @@
 <script lang="ts">
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
@@ -8,6 +7,9 @@
 	import JobVisitPhotos from './JobVisitPhotos.svelte';
 	import VisitScheduleModal, { type VisitJobInfo } from './VisitScheduleModal.svelte';
 	import VisitDetailModal from './VisitDetailModal.svelte';
+	import VisitCompleteActionsDialog from './VisitCompleteActionsDialog.svelte';
+	import { getMemberContext } from '$lib/context/member';
+	import { shouldPromptVisitComplete } from '$lib/jobs/visitCompletePrompt';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { formatDateInOrgTz, formatTimeInOrgTz } from '$lib/utils/formatInOrgTz';
@@ -58,6 +60,7 @@
 	} = $props();
 
 	const orgTz = $derived(sessionStore.data?.org.timezone);
+	const member = getMemberContext();
 
 	let visits = $state<JobVisitRow[]>([]);
 	let loading = $state(true);
@@ -251,73 +254,32 @@
 		return { ok: true, job: body.data.job ?? null };
 	}
 
-	// The "Final visit completed" popup (Jobber ref/2) — shown only after the LAST open
-	// visit is completed. `finalVisit` is that just-completed visit; the popup's choices
-	// act on the job, not on the (already-done) visit.
-	let finalVisit = $state<JobVisitRow | null>(null);
-	let finalBusy = $state(false);
-
-	function closeFinalPopup() {
-		if (finalBusy) return;
-		finalVisit = null;
-	}
+	// Jobber's post-completion prompt (VisitActionUponComplete, jobber-04 §3.3): the shared
+	// dialog handles both the invoice choice (billable jobs) and — on the LAST visit — the
+	// Close/Leave-open choice, exactly as it does from the calendar popover.
+	let visitPromptOpen = $state(false);
+	let completionEcho = $state<AppointmentStatusJobEcho>(null);
 
 	// The tick on ANY visit (dated or unscheduled placeholder). Marks it complete with a
-	// per-row spinner, then — ONLY when it was the last still-open visit on the job — raises
-	// the follow-up popup. When other visits remain, completion is silent (toast only),
-	// matching Jobber's "prompt to close only on the last visit" behaviour.
+	// per-row spinner, then raises the shared prompt when there is a choice to offer
+	// (billable → Invoice now/later; last visit → Close/Leave-open). Otherwise completion is
+	// silent (toast only) — matching Jobber's "prompt only when there's something to decide".
 	async function completeVisit(v: JobVisitRow) {
 		if (busyId) return;
-		// Open = still schedulable/doable: a dated 'scheduled' visit OR a dateless
-		// 'unscheduled' placeholder. v itself is open, so <= 1 means it's the only one left.
-		const openCount = visits.filter(
-			(x) => x.status === 'scheduled' || x.status === 'unscheduled'
-		).length;
-		const wasLast = openCount <= 1;
 		busyId = v.id;
 		try {
 			const { ok, job } = await transitionStatus(v.id, 'completed');
 			if (!ok) return;
 			onChanged?.(job);
-			if (wasLast) {
-				finalVisit = v;
-				finalBusy = false;
+			if (shouldPromptVisitComplete(job, member())) {
+				completionEcho = job;
+				visitPromptOpen = true;
 			} else {
 				toast.success('Visit completed');
 			}
 		} finally {
 			busyId = null;
 		}
-	}
-
-	// Popup choices act on the ALREADY-completed final visit. Close = mark the job done;
-	// Schedule = book a follow-up visit; Leave = dismiss (job stays open / action-required).
-	async function finalAction(kind: 'close' | 'schedule' | 'leave') {
-		if (finalBusy) return;
-		if (kind === 'close') {
-			finalBusy = true;
-			try {
-				const res = await fetch(`/api/jobs/${jobId}/status`, {
-					method: 'PATCH',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ status: 'completed' })
-				});
-				if (!res.ok) {
-					const body = await res.json().catch(() => ({}));
-					toast.error(body.error ?? 'Could not close the job.');
-					return;
-				}
-				toast.success('Job closed');
-				finalVisit = null;
-				onChanged?.();
-			} finally {
-				finalBusy = false;
-			}
-			return;
-		}
-		// schedule / leave are instant — close the popup, and for schedule open the create modal.
-		finalVisit = null;
-		if (kind === 'schedule') openCreate();
 	}
 
 	// ── Mark a completed visit back to incomplete ────────────────────────────────────
@@ -644,46 +606,16 @@
 	onPhotoRemoved={(id, pid) => patchVisitPhotos(id, (p) => p.filter((x) => x.id !== pid))}
 />
 
-<!-- "Final visit completed" popup — raised only after the last open visit is completed (Jobber ref/2). -->
-<Dialog.Root open={finalVisit !== null} onOpenChange={(o) => !o && closeFinalPopup()}>
-	<Dialog.Content class="visit-final" showClose={false}>
-		<div class="visit-final__header">
-			<Dialog.Title class="visit-final__title">Final visit completed</Dialog.Title>
-			<Dialog.Close class="dialog-content__close" aria-label="Close">
-				<i class="ri-close-line" aria-hidden="true"></i>
-			</Dialog.Close>
-		</div>
-		<div class="visit-final__options">
-			<button
-				type="button"
-				class="visit-final__opt"
-				disabled={finalBusy}
-				onclick={() => finalAction('close')}
-			>
-				<i class="ri-hammer-line visit-final__opt-icon" aria-hidden="true"></i>
-				<span>Close Job</span>
-			</button>
-			<button
-				type="button"
-				class="visit-final__opt"
-				disabled={finalBusy}
-				onclick={() => finalAction('schedule')}
-			>
-				<i class="ri-truck-line visit-final__opt-icon" aria-hidden="true"></i>
-				<span>Schedule new visit</span>
-			</button>
-			<button
-				type="button"
-				class="visit-final__opt"
-				disabled={finalBusy}
-				onclick={() => finalAction('leave')}
-			>
-				<i class="ri-inbox-line visit-final__opt-icon" aria-hidden="true"></i>
-				<span>Leave as Action Required</span>
-			</button>
-		</div>
-	</Dialog.Content>
-</Dialog.Root>
+<!-- Post-completion prompt — Invoice now/later (+ Close/Leave-open on the last visit).
+     The same shared dialog fires from the calendar popover (Jobber jobber-04 §3.3). -->
+<VisitCompleteActionsDialog
+	bind:open={visitPromptOpen}
+	{jobId}
+	jobTitle={jobInfo.title}
+	echo={completionEcho}
+	onClosed={() => onChanged?.()}
+	onInvoiced={() => onChanged?.()}
+/>
 
 <style lang="scss">
 	@use '$lib/styles/tokens' as *;
@@ -951,65 +883,8 @@
 		}
 	}
 
-	.visit-final {
-		&__header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: $space-3;
-			margin-bottom: $space-4;
-		}
-
-		&__options {
-			display: flex;
-			flex-direction: column;
-		}
-
-		&__opt {
-			display: flex;
-			align-items: center;
-			gap: $space-3;
-			padding: $space-3 $space-2;
-			border: none;
-			border-bottom: 1px solid var(--color-border);
-			background: transparent;
-			color: var(--color-text-primary);
-			font-size: $fs-body;
-			font-weight: $weight-semibold;
-			text-align: left;
-			cursor: pointer;
-			transition: background-color $duration-fast $ease-standard;
-
-			&:last-child {
-				border-bottom: none;
-			}
-
-			&:hover:not(:disabled) {
-				background: var(--color-bg-surface-sunk);
-			}
-
-			&:disabled {
-				opacity: 0.6;
-				cursor: default;
-			}
-		}
-
-		&__opt-icon {
-			font-size: 1.35rem;
-			color: var(--color-brand);
-			flex-shrink: 0;
-		}
-	}
-
-	// These classes ride on Bits UI's <Dialog.Title> / <DropdownMenu.Trigger> (child
-	// components), so the scoped compiler can't see the element — style them globally
-	// (BEM-unique names, no collision risk).
-	:global(.visit-final__title) {
-		font-size: $fs-lg;
-		font-weight: $weight-semibold;
-		color: var(--color-text-primary);
-	}
-
+	// These classes ride on Bits UI's <DropdownMenu.Trigger> (child component), so the scoped
+	// compiler can't see the element — style them globally (BEM-unique names, no collision risk).
 	:global(.job-visits__filter) {
 		display: inline-flex;
 		align-items: center;

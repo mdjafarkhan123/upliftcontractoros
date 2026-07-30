@@ -13,6 +13,7 @@
 	import EmptyState from '$lib/components/shared/EmptyState.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { eventsStore } from '$lib/stores/events.svelte';
+	import { remindersStore } from '$lib/stores/reminders.svelte';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import {
@@ -35,6 +36,9 @@
 	const canViewAll = $derived(member().can_view_all_appointments);
 	const canCreate = $derived(member().can_create_appointments);
 	const canReschedule = $derived(member().can_reschedule_appointments);
+	// Invoice reminders are an invoicing surface — only members who can invoice see them on the
+	// calendar (same gate as the job's Reminders tab + the /api/jobs/reminders feed).
+	const canInvoice = $derived(member().can_create_invoices);
 
 	let view = $state<AppointmentView>('calendar');
 	let range = $state<CalendarRange>('week');
@@ -166,6 +170,18 @@
 
 	const events = $derived(showEvents ? eventsStore.items : []);
 
+	// Invoice reminders (Jobber INVOICE_REMINDER) — dated to-dos rendered read-only on the
+	// calendar. Same window+assignee feed as Events; only loaded for members who can invoice.
+	const showReminders = $derived(view === 'calendar' && !searchActive && canInvoice);
+
+	$effect(() => {
+		if (!showReminders) return;
+		const f = eventFilters;
+		untrack(() => void remindersStore.load(f));
+	});
+
+	const reminders = $derived(showReminders ? remindersStore.items : []);
+
 	// After an inline create, revalidate both windows — the new item may be a visit OR
 	// an Event (the quick-create popover posts to either endpoint).
 	function reloadAfterCreate() {
@@ -229,6 +245,15 @@
 		for (const ev of events) {
 			if (ev.assigned_to && ev.start_at && orgDayKey(new Date(ev.start_at)) === key) {
 				scheduled.add(ev.assigned_to);
+			}
+		}
+		for (const rem of reminders) {
+			if (
+				rem.assigned_to &&
+				rem.scheduled_start &&
+				orgDayKey(new Date(rem.scheduled_start)) === key
+			) {
+				scheduled.add(rem.assigned_to);
 			}
 		}
 		return base.filter((m) => scheduled.has(m.id));
@@ -427,13 +452,15 @@
 					<!-- Day view — Jobber dispatch grid (one column per team member) on desktop;
 					     stacked day list on narrow screens. -->
 					<div class="appt-body__day-list">
-						<CalendarDayList {anchor} days={1} {items} {events} />
+						<CalendarDayList {anchor} days={1} {items} {events} {reminders} {canInvoice} />
 					</div>
 					<div class="appt-body__day-grid">
 						<CalendarWeekGrid
 							{anchor}
 							{items}
 							{events}
+							{reminders}
+							{canInvoice}
 							{dayStartHour}
 							{dayEndHour}
 							{canCreate}
@@ -448,17 +475,26 @@
 					</div>
 				{:else if range === 'month'}
 					<!-- Month view -->
-					<CalendarMonthView {anchor} {items} {events} onDayClick={openDay} />
+					<CalendarMonthView
+						{anchor}
+						{items}
+						{events}
+						{reminders}
+						{canInvoice}
+						onDayClick={openDay}
+					/>
 				{:else}
 					<!-- Week view -->
 					<div class="appt-body__week-list">
-						<CalendarDayList {anchor} days={7} {items} {events} />
+						<CalendarDayList {anchor} days={7} {items} {events} {reminders} {canInvoice} />
 					</div>
 					<div class="appt-body__week-grid">
 						<CalendarWeekGrid
 							{anchor}
 							{items}
 							{events}
+							{reminders}
+							{canInvoice}
 							{dayStartHour}
 							{dayEndHour}
 							{canCreate}

@@ -3,14 +3,15 @@
  *
  * Schedule: 0 2 * * * (UTC).
  * Purpose:
- *   Phase A — Flip eligible invoices to 'overdue' and emit invoice.overdue events so the
- *             outbox worker can enqueue a single invoice_reminder job.
+ *   Phase A — Flip eligible invoices to 'past_due' (and sent_not_due→awaiting_payment on the due
+ *             date) and emit invoice.overdue events so the outbox worker can enqueue a single
+ *             invoice_reminder job.
  *   Phase B — (M8 Phase 2) Auto-apply a one-time late fee to invoices that are overdue past
  *             the org's grace period, computing the fee from each invoice's own snapshot terms.
  * Idempotency:
  *   Phase A:
- *   - UPDATE only matches sent/partially_paid rows past due_date, so a re-run produces no
- *     transitions and no events.
+ *   - UPDATE only matches sent_not_due/awaiting_payment rows past due_date, so a re-run produces
+ *     no transitions and no events.
  *   - outbox_events.idempotency_key = `invoice.overdue:{invoice_id}:{utc_date}` is UNIQUE;
  *     same-day duplicates are silently skipped via ON CONFLICT.
  *   - Before emitting, we check automation_jobs for an existing pending/processing
@@ -72,10 +73,21 @@ export async function runInvoiceOverdueSweep(): Promise<CronJobResult> {
 
 	// ── Phase A: flip to overdue + emit reminder events ─────────────────────────
 	const phaseA = await db.transaction(async (tx) => {
+		// Quiet transition: a sent_not_due invoice whose due date has ARRIVED (today) but not
+		// passed moves to awaiting_payment. No dunning event — it isn't overdue yet.
+		await tx.execute(sql`
+			UPDATE invoices
+			SET status = 'awaiting_payment', updated_at = now()
+			WHERE status = 'sent_not_due'
+				AND due_date IS NOT NULL
+				AND due_date = CURRENT_DATE
+				AND deleted_at IS NULL
+		`);
+
 		const updated = await tx.execute<OverdueRow>(sql`
 			UPDATE invoices
-			SET status = 'overdue', updated_at = now()
-			WHERE status IN ('sent', 'partially_paid')
+			SET status = 'past_due', updated_at = now()
+			WHERE status IN ('sent_not_due', 'awaiting_payment')
 				AND due_date < CURRENT_DATE
 				AND deleted_at IS NULL
 			RETURNING id, org_id, contact_id, invoice_number, total, due_date
@@ -136,7 +148,7 @@ export async function runInvoiceOverdueSweep(): Promise<CronJobResult> {
 		FROM invoices i
 		JOIN organizations o ON o.id = i.org_id
 		WHERE i.deleted_at IS NULL
-			AND i.status IN ('sent', 'partially_paid', 'overdue')
+			AND i.status IN ('sent_not_due', 'awaiting_payment', 'past_due')
 			AND i.due_date IS NOT NULL
 			-- Genuinely past due (day after the due date at the earliest, matching the overdue flip)
 			-- AND past the grace window. For grace=0 this collapses to "the day after it's due".
@@ -186,7 +198,7 @@ export async function runInvoiceOverdueSweep(): Promise<CronJobResult> {
 				// Re-verify every gate under the lock. The existing-fee check is the charge-once guard.
 				if (inv.existing_fee != null) return false;
 				if (!inv.org_late_fee_enabled || !inv.late_fee_enabled) return false;
-				if (!['sent', 'partially_paid', 'overdue'].includes(inv.status)) return false;
+				if (!['sent_not_due', 'awaiting_payment', 'past_due'].includes(inv.status)) return false;
 				if (Number(inv.amount_due) <= 0) return false;
 				if (inv.due_date == null) return false;
 				// Genuinely past due (not merely due today), matching the candidate query + overdue flip.

@@ -28,14 +28,6 @@
 						: 'ri-chat-1-line'
 	);
 
-	const initials = $derived(
-		(c.contact_name || '?')
-			.split(/\s+/)
-			.map((p) => p[0]?.toUpperCase() ?? '')
-			.slice(0, 2)
-			.join('') || '?'
-	);
-
 	const timeLabel = $derived(formatRelative(c.last_message_at));
 	const hasUnread = $derived(c.unread_count > 0);
 	const isSnoozed = $derived(c.status === 'snoozed');
@@ -124,7 +116,6 @@
 		<ConversationRowBody
 			{c}
 			{dense}
-			{initials}
 			channelKey={channel}
 			{channelIcon}
 			{timeLabel}
@@ -154,7 +145,6 @@
 		<ConversationRowBody
 			{c}
 			{dense}
-			{initials}
 			channelKey={channel}
 			{channelIcon}
 			{timeLabel}

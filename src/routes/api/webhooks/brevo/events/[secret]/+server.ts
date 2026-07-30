@@ -14,7 +14,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { inboundCommunicationEvents, messages, outboxEvents } from '$lib/server/db/schema';
+import {
+	conversations,
+	contacts,
+	inboundCommunicationEvents,
+	messages,
+	outboxEvents
+} from '$lib/server/db/schema';
+import { changeCommunicationPreferenceInTransaction } from '$lib/server/communication-preferences/mutations';
 import { createLogger } from '$lib/server/log';
 
 const log = createLogger('email.webhook.brevo.events');
@@ -189,6 +196,38 @@ async function applyEvent(event: BrevoEvent): Promise<void> {
 				},
 				idempotency_key: `message.delivery_failed:${msg.id}:${now.getTime()}`
 			});
+
+			// HighLevel's bounce workflow scopes the suppression to outbound Email;
+			// it never blocks SMS or calls. Hard/invalid/spam outcomes are permanent
+			// provider DND; a generic/soft bounce is a removable channel block.
+			const permanentEmailFailure = new Set(['hard_bounce', 'invalid_email', 'spam', 'blocked']);
+			const [conversation] = await tx
+				.select({ contactId: conversations.contact_id })
+				.from(conversations)
+				.where(eq(conversations.id, msg.conversation_id))
+				.limit(1);
+			if (conversation?.contactId) {
+				await changeCommunicationPreferenceInTransaction(tx, {
+					orgId: msg.org_id,
+					contactId: conversation.contactId,
+					channel: 'email',
+					direction: 'outbound',
+					category: 'all',
+					status: permanentEmailFailure.has(event.event ?? '') ? 'permanent' : 'blocked',
+					source: 'provider',
+					reasonCode: `BREVO_${(event.event ?? 'failure').toUpperCase()}`,
+					reasonMessage: failure.failureReason,
+					provider: 'brevo',
+					providerEventId: eventKey,
+					metadata: { event: event.event ?? null }
+				});
+				if (permanentEmailFailure.has(event.event ?? '')) {
+					await tx
+						.update(contacts)
+						.set({ email_opt_in: false, updated_at: now })
+						.where(and(eq(contacts.org_id, msg.org_id), eq(contacts.id, conversation.contactId)));
+				}
+			}
 		}
 
 		await tx

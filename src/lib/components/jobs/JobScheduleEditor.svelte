@@ -368,7 +368,6 @@
 				<Calendar
 					value={oneoffDate}
 					onValueChange={setOneoffDate}
-					min={todayStr}
 					placeholder="Pick a date"
 				/>
 				{#if errors.scheduledStart}

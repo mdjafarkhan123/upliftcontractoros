@@ -11,6 +11,7 @@
 	import SmsOptOutBanner from '$lib/components/contacts/SmsOptOutBanner.svelte';
 	import ContactOverviewTab from '$lib/components/contacts/ContactOverviewTab.svelte';
 	import ContactDetailsPanel from '$lib/components/contacts/ContactDetailsPanel.svelte';
+	import CommunicationPreferencesPanel from '$lib/components/contacts/CommunicationPreferencesPanel.svelte';
 	import TimelineTab from '$lib/components/contacts/TimelineTab.svelte';
 	import NotesTab from '$lib/components/contacts/NotesTab.svelte';
 	import AddressesTab from '$lib/components/contacts/AddressesTab.svelte';
@@ -443,6 +444,8 @@
 							next_follow_up_at={detail.contact.next_follow_up_at}
 							contactId={detail.contact.id}
 						/>
+
+						<CommunicationPreferencesPanel contactId={detail.contact.id} />
 
 						<!-- Money records — self-carded stacked sections (Quotes / Jobs / Invoices / Appointments) -->
 						<ContactOverviewTab contactId={detail.contact.id} />

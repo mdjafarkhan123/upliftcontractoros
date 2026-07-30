@@ -13,6 +13,7 @@ const STATUSES: readonly JobsFilterStatus[] = [
 	'action_required',
 	'completed',
 	'cancelled',
+	'requires_invoicing',
 	'deleted'
 ];
 

@@ -10,6 +10,7 @@ import { formatCurrencyUsd, formatQuoteNumber } from '$lib/server/quotes/format'
 import { quoteSentEvent } from '$lib/server/quotes/events';
 import { snapshotQuoteVersion } from '$lib/server/quotes/versions';
 import { sendQuoteSchema } from '$lib/server/quotes/schemas';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
@@ -46,30 +47,32 @@ export const POST: RequestHandler = async (event) => {
 	// (clean field-error response). The authoritative send happens in the tx below;
 	// the worker also hard-blocks SMS on opt-out as a final safety net.
 	if (send) {
-		const [reach] = await db.execute<{ email: string | null; sms_opt_out: boolean }>(sql`
-			SELECT c.email, c.sms_opt_out
+		const [reach] = await db.execute<{ contact_id: string }>(sql`
+			SELECT q.contact_id
 			FROM quotes q JOIN contacts c ON c.id = q.contact_id
 			WHERE q.id = ${id} AND q.org_id = ${auth.orgId} AND q.deleted_at IS NULL
 		`);
 		if (reach) {
-			if (send.channels.includes('email') && !reach.email) {
+			const results = await Promise.all(
+				send.channels.map((channel) =>
+					canContactReceiveCommunication({
+						orgId: auth.orgId,
+						contactId: reach.contact_id,
+						channel,
+						direction: 'outbound',
+						category: 'quote_send'
+					})
+				)
+			);
+			const blocked = results.find((result) => !result.allowed);
+			if (blocked)
 				return json(
 					{
-						error: 'This customer has no email address — choose Text instead.',
-						field_errors: { channels: 'No email on file for this customer' }
+						error: blocked.reasonMessage ?? 'This communication is blocked.',
+						field_errors: { channels: blocked.reasonMessage ?? 'Channel unavailable' }
 					},
 					{ status: 422 }
 				);
-			}
-			if (send.channels.includes('sms') && reach.sms_opt_out) {
-				return json(
-					{
-						error: 'This customer opted out of texts — choose Email instead.',
-						field_errors: { channels: 'This customer opted out of texts' }
-					},
-					{ status: 422 }
-				);
-			}
 		}
 	}
 

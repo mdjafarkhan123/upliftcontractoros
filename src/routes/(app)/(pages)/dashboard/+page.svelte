@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
+	import ErrorState from '$lib/components/shared/ErrorState.svelte';
 	import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
 	import QuickActions from '$lib/components/dashboard/QuickActions.svelte';
 	import TodaySchedule from '$lib/components/dashboard/TodaySchedule.svelte';
@@ -96,17 +97,11 @@
 			</div>
 		</div>
 	{:else if showError}
-		<div class="dashboard-error">
-			<p class="dashboard-error__title">Couldn't load dashboard</p>
-			<p class="dashboard-error__sub">{dashboardStore.error}</p>
-			<button
-				type="button"
-				class="btn btn--ghost dashboard-error__retry"
-				onclick={() => dashboardStore.load(true)}
-			>
-				Try again
-			</button>
-		</div>
+		<ErrorState
+			title="Couldn't load dashboard"
+			message={dashboardStore.error}
+			onRetry={() => dashboardStore.load(true)}
+		/>
 	{:else if summary}
 		{@const kpis = summary.kpis}
 		{@const locks = summary.locks}
@@ -344,36 +339,6 @@
 		&__block {
 			height: 280px;
 			border-radius: $radius-2xl;
-		}
-	}
-
-	// ── Error state ──────────────────────────────────────────
-	.dashboard-error {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: $space-2;
-		padding: $space-8 $space-6;
-		border-radius: $radius-2xl;
-		border: 1px solid var(--danger-bg);
-		background: var(--danger-bg);
-		text-align: center;
-
-		&__title {
-			font-size: $fs-body;
-			font-weight: $weight-medium;
-			color: var(--danger-text);
-		}
-
-		&__sub {
-			font-size: $fs-body;
-			color: var(--color-text-muted);
-		}
-
-		&__retry {
-			margin-top: $space-1;
-			font-size: $fs-body;
-			color: var(--color-brand);
 		}
 	}
 </style>

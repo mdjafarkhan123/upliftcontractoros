@@ -10,21 +10,21 @@
 ## Trigger (Button)
 
 - **Layout:** flex, space-between, full width
-- **Padding:** 20px horizontal, 16px vertical
-- **Font:** 14px, medium (500)
+- **Padding:** `$space-5` (20px) horizontal, `$space-4` (16px) vertical
+- **Font:** `$fs-body`/`var(--text-body)` (14px), medium (500)
 - **Text:** `var(--color-text-primary)`
 - **Background:** `var(--color-bg-app)`
 - **Hover:** `var(--color-bg-surface-sunk)` background
 - **Focus:** no outline; 2px ring in `var(--color-brand)` color
 - **Open state:** `var(--color-bg-surface-sunk)` background
-- **Transition:** colors 150ms
+- **Transition:** colors `$duration-base`
 
 ## Panel (Content)
 
-- **Padding:** 20px horizontal, 16px vertical
+- **Padding:** `$space-5` (20px) horizontal, `$space-4` (16px) vertical
 - **Background:** `var(--color-bg-surface-sunk)`
 - **Top border:** 1px `var(--color-border)`
-- **Font:** 14px, `var(--color-text-secondary)`, 1.625 line-height
+- **Font:** `$fs-body`/`var(--text-body)` (14px), `var(--color-text-secondary)`, 1.625 line-height
 
 ## Chevron Icon
 

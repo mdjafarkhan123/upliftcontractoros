@@ -13,7 +13,11 @@ import {
 	payments
 } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
-import { canDeleteInvoice, canEditInvoice, canViewAnyInvoice } from '$lib/server/invoices/permissions';
+import {
+	canDeleteInvoice,
+	canEditInvoice,
+	canViewAnyInvoice
+} from '$lib/server/invoices/permissions';
 import { updateInvoiceSchema } from '$lib/server/invoices/schemas';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
 import { computeLineTotal, recalcInvoiceTotals } from '$lib/server/invoices/recalc';
@@ -55,6 +59,12 @@ export const GET: RequestHandler = async (event) => {
 			stripe_payment_link_url: invoices.stripe_payment_link_url,
 			sent_at: invoices.sent_at,
 			paid_at: invoices.paid_at,
+			received_at: invoices.received_at,
+			bad_debt_at: invoices.bad_debt_at,
+			written_off_amount: invoices.written_off_amount,
+			signature_name: invoices.signature_name,
+			signature_media_id: invoices.signature_media_id,
+			signed_at: invoices.signed_at,
 			created_at: invoices.created_at,
 			updated_at: invoices.updated_at,
 			contact_id: invoices.contact_id,
@@ -104,11 +114,15 @@ export const GET: RequestHandler = async (event) => {
 				id: payments.id,
 				amount: payments.amount,
 				tip_amount: payments.tip_amount,
+				adjustment_type: payments.adjustment_type,
+				applies_to_payment_id: payments.applies_to_payment_id,
 				payment_method: payments.payment_method,
 				stripe_payment_intent_id: payments.stripe_payment_intent_id,
 				notes: payments.notes,
 				recorded_by_name: orgMembers.full_name,
 				paid_at: payments.paid_at,
+				receipt_sent_at: payments.receipt_sent_at,
+				receipt_sent_via: payments.receipt_sent_via,
 				created_at: payments.created_at
 			})
 			.from(payments)
@@ -125,10 +139,14 @@ export const GET: RequestHandler = async (event) => {
 			updated_at: row.updated_at.toISOString(),
 			sent_at: row.sent_at?.toISOString() ?? null,
 			paid_at: row.paid_at?.toISOString() ?? null,
+			received_at: row.received_at?.toISOString() ?? null,
+			bad_debt_at: row.bad_debt_at?.toISOString() ?? null,
+			signed_at: row.signed_at?.toISOString() ?? null,
 			line_items: lineItems,
 			payments: paymentsRows.map((p) => ({
 				...p,
 				paid_at: p.paid_at.toISOString(),
+				receipt_sent_at: p.receipt_sent_at?.toISOString() ?? null,
 				created_at: p.created_at.toISOString()
 			}))
 		}
@@ -182,8 +200,8 @@ export const PATCH: RequestHandler = async (event) => {
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Invoice not found');
-		if (existing.status === 'paid' || existing.status === 'cancelled') {
-			throw error(422, 'Paid or cancelled invoices can’t be edited');
+		if (existing.status === 'paid' || existing.status === 'bad_debt') {
+			throw error(422, 'Paid or written-off invoices can’t be edited');
 		}
 
 		const prevTotal = Number(existing.total);
@@ -379,7 +397,9 @@ export const DELETE: RequestHandler = async (event) => {
 				completed_via_invoice_id: null,
 				updated_at: now
 			})
-			.where(and(eq(appointments.org_id, auth.orgId), eq(appointments.completed_via_invoice_id, id)))
+			.where(
+				and(eq(appointments.org_id, auth.orgId), eq(appointments.completed_via_invoice_id, id))
+			)
 			.returning({ id: appointments.id });
 
 		// 3) Reopen the auto invoice-reminders the invoice had discharged for those visits, so the

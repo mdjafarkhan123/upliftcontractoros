@@ -566,6 +566,7 @@
 								grouped={gi.grouped}
 								inboundInitials={contactInitials}
 								outboundInitials={memberInitials}
+								outboundName={member().full_name}
 								contactId={contact?.id ?? ''}
 								contactName={contact?.full_name ?? ''}
 							/>

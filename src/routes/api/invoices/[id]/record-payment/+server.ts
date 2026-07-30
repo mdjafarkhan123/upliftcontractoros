@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { invoices, outboxEvents, payments } from '$lib/server/db/schema';
+import { outboxEvents, payments } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canRecordPayment } from '$lib/server/invoices/permissions';
 import { recordPaymentSchema } from '$lib/server/invoices/schemas';
+import { parsePaymentDate } from '$lib/server/invoices/paymentDate';
 import { recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { invoicePaidEvent, paymentRecordedEvent } from '$lib/server/invoices/events';
 import { formatCurrencyUsd, formatInvoiceNumber } from '$lib/server/invoices/format';
@@ -55,10 +56,10 @@ export const POST: RequestHandler = async (event) => {
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Invoice not found');
-		if (existing.status === 'cancelled')
-			throw error(422, 'Cancelled invoice cannot receive payments');
-		if (existing.status === 'draft')
-			throw error(422, 'Send the invoice before recording a payment');
+		if (existing.status === 'bad_debt')
+			throw error(422, 'Reopen the written-off invoice before recording a payment');
+		// Jobber allows staff to record money from the draft invoice screen. The ledger and
+		// balance update now; recalc keeps the invoice status as draft until it is sent.
 
 		const amountStr = input.amount.toFixed(2);
 		if (Number(amountStr) > Number(existing.amount_due) + 0.001) {
@@ -71,7 +72,7 @@ export const POST: RequestHandler = async (event) => {
 			existing.tips_enabled && existing.accept_tips ? (input.tip_amount ?? 0) : 0
 		).toFixed(2);
 
-		const paidAt = input.paid_at ? new Date(input.paid_at) : new Date();
+		const paidAt = parsePaymentDate(input.paid_at);
 
 		const [payment] = await tx
 			.insert(payments)

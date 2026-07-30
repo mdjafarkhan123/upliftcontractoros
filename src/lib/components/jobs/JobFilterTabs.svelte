@@ -33,6 +33,12 @@
 		{ value: 'action_required', label: 'Action Required', count: counts?.action_required },
 		{ value: 'completed', label: 'Completed', count: counts?.completed },
 		{ value: 'cancelled', label: 'Cancelled', count: counts?.cancelled },
+		// Money-state worklist — deliberately kept OUT of `total` above (it overlaps the schedule tabs).
+		{
+			value: 'requires_invoicing',
+			label: 'Requires Invoicing',
+			count: counts?.requires_invoicing
+		},
 		{ value: 'deleted', label: 'Deleted' }
 	]);
 </script>

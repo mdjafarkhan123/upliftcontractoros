@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import * as Popover from '$lib/components/ui/popover';
+	import Input from '$lib/components/ui/input/input.svelte';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import ChannelSelector from './ChannelSelector.svelte';
 	import { bookingPublicUrl } from '$lib/components/booking/publicUrl';
 	import type { OutboundChannel, MessageMedia } from '$lib/stores/inbox.svelte';
@@ -377,16 +379,18 @@
 	class="composer"
 >
 	<div class="composer__toolbar">
-		<label class="composer__note-toggle" class:composer__note-toggle--active={isInternalNote}>
-			<input
-				type="checkbox"
-				class="composer__note-input"
-				bind:checked={isInternalNote}
-				disabled={sending}
-			/>
+		<button
+			type="button"
+			role="switch"
+			aria-checked={isInternalNote}
+			class="composer__note-toggle"
+			class:composer__note-toggle--active={isInternalNote}
+			disabled={sending}
+			onclick={() => { if (!sending) isInternalNote = !isInternalNote; }}
+		>
 			<i class="ri-sticky-note-line" aria-hidden="true"></i>
 			Internal note
-		</label>
+		</button>
 
 		{#if !isInternalNote && availableChannels.length > 0}
 			<ChannelSelector
@@ -543,9 +547,9 @@
 	{/if}
 
 	{#if showSubjectInput}
-		<input
+		<Input
 			type="text"
-			value={emailSubject}
+			value={emailSubject ?? ''}
 			oninput={(e) => (emailSubjectInput = (e.currentTarget as HTMLInputElement).value)}
 			placeholder={subjectRequired ? 'Subject (required)' : 'Subject'}
 			disabled={sending || !canSend || channelBlocked !== null}
@@ -615,7 +619,7 @@
 				<i class="ri-attachment-2" aria-hidden="true"></i>
 			</button>
 		{/if}
-		<textarea
+		<Textarea
 			bind:value={body}
 			onkeydown={handleKey}
 			oninput={handleTyping}
@@ -629,7 +633,7 @@
 			rows={1}
 			disabled={(channelBlocked !== null && !isInternalNote) || sending || !canSend}
 			class="composer__textarea"
-		></textarea>
+		/>
 		<button
 			type="submit"
 			disabled={submitDisabled}

@@ -152,6 +152,26 @@ export const NOTIFICATION_SPEC: Record<NotificationType, NotificationSpec> = {
 		label: 'Time to invoice',
 		description: "A job you finished is ready to bill — don't leave money on the table"
 	},
+	job_invoice_reminder_assigned: {
+		priority: 'normal',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		// Lands on the job — the Reminders tab is where the assigned reminder lives.
+		route: (id) => `/jobs/${id}`,
+		label: 'Invoice reminder assigned',
+		description: "You've been assigned an invoice reminder on a job"
+	},
+	job_invoice_reminder_due: {
+		priority: 'high',
+		defaultVisible: true,
+		batchable: false,
+		requireInteraction: false,
+		// Lands on the job — the Billing → Reminders tab is where you act on the due reminder.
+		route: (id) => `/jobs/${id}`,
+		label: 'Invoice reminder due',
+		description: "An invoice reminder came due — it's time to bill this job"
+	},
 	appointment_booked: {
 		priority: 'high',
 		defaultVisible: false,

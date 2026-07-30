@@ -203,7 +203,7 @@ export const GET: RequestHandler = async (event) => {
 								) p on p.invoice_id = i.id
 								where i.org_id = ${orgId}
 									and i.deleted_at is null
-									and i.status in ('sent', 'partially_paid')
+									and i.status in ('sent_not_due', 'awaiting_payment', 'past_due')
 							`)
 						]);
 						const paidRow = paidResult[0];
@@ -230,7 +230,7 @@ export const GET: RequestHandler = async (event) => {
 						from invoices i
 						where i.org_id = ${orgId}
 							and i.deleted_at is null
-							and i.status in ('sent', 'partially_paid')
+							and i.status in ('sent_not_due', 'awaiting_payment', 'past_due')
 							and i.due_date is not null
 							and i.due_date < ${todayDate}
 					`);

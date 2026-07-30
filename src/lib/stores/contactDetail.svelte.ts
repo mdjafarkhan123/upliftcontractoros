@@ -27,6 +27,7 @@ export type ContactDetailResponse = {
 		converted_at: string | null;
 		preferred_contact_method: 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger' | null;
 		email_opt_in: boolean;
+		receives_review_requests: boolean;
 		do_not_contact: boolean;
 		do_not_contact_at: string | null;
 		created_at: string;

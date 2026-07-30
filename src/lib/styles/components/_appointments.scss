@@ -686,8 +686,8 @@ $cal-rail-w: 88px;
 		align-items: center;
 	}
 
-	// Initials circle (no photo URL in list item — initials are the standard)
-	&__avatar {
+	// "+N" overflow chip — stacked alongside the lead assignee avatar
+	&__more {
 		display: inline-flex;
 		height: 28px;
 		width: 28px;
@@ -695,21 +695,14 @@ $cal-rail-w: 88px;
 		align-items: center;
 		justify-content: center;
 		border-radius: $radius-full;
-		background: var(--color-brand);
-		color: var(--color-text-on-brand);
-		font-size: 1.1rem;
+		margin-left: -10px;
+		background: var(--color-bg-surface-sunk);
+		color: var(--color-text-secondary);
+		font-size: $fs-caption;
 		font-weight: $weight-semibold;
 		line-height: 1;
-		text-transform: uppercase;
 		user-select: none;
 		box-shadow: 0 0 0 2px var(--color-bg-surface);
-
-		&--more {
-			margin-left: -10px;
-			background: var(--color-bg-surface-sunk);
-			color: var(--color-text-secondary);
-			font-size: $fs-caption;
-		}
 	}
 
 	&__assignee-name {
@@ -1048,6 +1041,27 @@ $cal-rail-w: 88px;
 		}
 	}
 
+	// "View more (N)" / "Show less" — keeps the Anytime lane compact by default (one card per
+	// column); a click expands just this column to reveal the rest of its stacked cards.
+	&__anytime-more {
+		align-self: flex-start;
+		padding: 2px $space-1;
+		border-radius: $radius-sm;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		color: var(--color-brand);
+		cursor: pointer;
+		user-select: none;
+
+		&:hover {
+			background: var(--state-active-tint);
+		}
+		&:focus-visible {
+			outline: 2px solid var(--color-brand);
+			outline-offset: 1px;
+		}
+	}
+
 	&__anytime-chip {
 		position: relative;
 		display: flex;
@@ -1110,6 +1124,36 @@ $cal-rail-w: 88px;
 
 			&.cal-week__anytime-chip--completed .cal-week__anytime-chip-title {
 				color: var(--color-text-secondary);
+			}
+		}
+
+		// All-day invoice reminder chip — amber, clickable (opens the detail popover).
+		&--reminder {
+			cursor: pointer;
+			--appt-accent: var(--warning-solid);
+			background: var(--warning-bg);
+
+			.cal-week__anytime-chip-title i {
+				margin-right: 4px;
+				color: var(--warning-solid);
+			}
+		}
+		// Paired with --reminder in markup; source-order-after so these win.
+		&--rem-late {
+			--appt-accent: var(--danger-solid);
+			background: var(--danger-bg);
+
+			.cal-week__anytime-chip-title i {
+				color: var(--danger-solid);
+			}
+		}
+		&--rem-completed {
+			--appt-accent: var(--success-solid);
+			background: var(--color-bg-surface-sunk);
+
+			.cal-week__anytime-chip-title {
+				color: var(--color-text-muted);
+				text-decoration: line-through;
 			}
 		}
 	}
@@ -1466,6 +1510,44 @@ $cal-rail-w: 88px;
 		// same signal a completed visit uses.
 		&--completed {
 			.cal-week__event-timepill-text {
+				text-decoration: line-through;
+			}
+			.cal-week__event-mark {
+				color: var(--color-text-muted);
+			}
+		}
+
+		// Invoice reminder block — amber, read-only (clickable, never draggable). A reminder is
+		// money-work-to-do, so unlike a neutral Event it carries a warning accent + tint.
+		&--reminder {
+			cursor: pointer;
+			border-left-color: var(--warning-solid);
+			background: var(--warning-bg);
+
+			.cal-week__event-mark {
+				color: var(--warning-solid);
+			}
+			.cal-week__timeblock-title {
+				color: var(--color-text-primary);
+			}
+		}
+		// Overdue reminder reads danger (Jobber "Overdue").
+		&--rem-late {
+			border-left-color: var(--danger-solid);
+			background: var(--danger-bg);
+
+			.cal-week__event-mark {
+				color: var(--danger-solid);
+			}
+		}
+		// Done reminder recedes like a completed item.
+		&--rem-completed {
+			border-left-color: var(--success-solid);
+			background: var(--color-bg-surface-sunk);
+
+			.cal-week__event-timepill-text,
+			.cal-week__timeblock-title {
+				color: var(--color-text-muted);
 				text-decoration: line-through;
 			}
 			.cal-week__event-mark {
@@ -2066,6 +2148,33 @@ $cal-rail-w: 88px;
 				opacity: 1;
 			}
 		}
+
+		// Invoice reminder pill — amber, clickable (renders as a button → reset chrome).
+		&--reminder {
+			appearance: none;
+			border: none;
+			border-left: 3px solid var(--warning-solid);
+			background: var(--warning-bg);
+			color: var(--color-text-primary);
+			text-align: left;
+			font: inherit;
+			font-size: 1.1rem;
+			cursor: pointer;
+
+			.cal-month__pill-time i {
+				margin-right: 2px;
+			}
+		}
+		&--rem-late {
+			border-left-color: var(--danger-solid);
+			background: var(--danger-bg);
+			color: var(--danger-text);
+		}
+		&--rem-completed {
+			background: var(--color-bg-surface-sunk);
+			color: var(--color-text-muted);
+			text-decoration: line-through;
+		}
 	}
 
 	&__pill-time {
@@ -2191,6 +2300,57 @@ $cal-rail-w: 88px;
 		gap: 4px;
 		font-size: $fs-caption;
 		color: var(--color-text-muted);
+
+		i {
+			font-size: 1.2rem;
+		}
+	}
+
+	// Invoice reminder row — amber, clickable (opens the detail popover). Reuses the
+	// &__event-body / -title / -sub structure; only the container + time chrome differ.
+	&__reminder {
+		display: flex;
+		align-items: flex-start;
+		gap: $space-3;
+		width: 100%;
+		padding: $space-3;
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--warning-solid);
+		border-radius: $radius-lg;
+		background: var(--warning-bg);
+		text-align: left;
+		cursor: pointer;
+		transition: box-shadow $duration-fast $ease-standard;
+
+		&:hover {
+			box-shadow: var(--shadow-sm);
+		}
+
+		&--late {
+			border-left-color: var(--danger-solid);
+			background: var(--danger-bg);
+		}
+		&--completed {
+			border-left-color: var(--success-solid);
+			background: var(--color-bg-surface-sunk);
+
+			.cal-daylist__event-title {
+				color: var(--color-text-muted);
+				text-decoration: line-through;
+			}
+		}
+	}
+
+	&__reminder-time {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+		min-width: 64px;
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		font-variant-numeric: tabular-nums;
+		color: var(--warning-text);
 
 		i {
 			font-size: 1.2rem;
@@ -3299,18 +3459,6 @@ $cal-rail-w: 88px;
 		color: var(--color-text-primary);
 	}
 
-	&__avatar {
-		display: inline-grid;
-		place-items: center;
-		width: 24px;
-		height: 24px;
-		border-radius: $radius-full;
-		background: var(--avatar-fallback-bg);
-		color: var(--avatar-fallback-text);
-		font-size: 1rem;
-		font-weight: $weight-bold;
-	}
-
 	&__more {
 		padding: 1px $space-2;
 		border-radius: $radius-full;
@@ -3632,7 +3780,7 @@ $cal-rail-w: 88px;
 	}
 
 	&__section {
-		font: $weight-semibold #{$fs-body}/1.2 $font-display;
+		font: $weight-semibold #{$fs-body}/ 1.2 $font-display;
 		color: var(--color-text-primary);
 		margin: 0;
 	}

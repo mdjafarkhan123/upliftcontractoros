@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD COLUMN "receives_review_requests" boolean DEFAULT true NOT NULL;

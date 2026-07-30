@@ -6,11 +6,14 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
 	import AppointmentStatusBadge from '$lib/components/appointments/AppointmentStatusBadge.svelte';
+	import VisitCompleteActionsDialog from '$lib/components/jobs/VisitCompleteActionsDialog.svelte';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
 	import { getMemberContext } from '$lib/context/member';
+	import { shouldPromptVisitComplete } from '$lib/jobs/visitCompletePrompt';
 	import { formatDateTimeInOrgTz, formatInOrgTz } from '$lib/utils/formatInOrgTz';
 	import { sessionStore } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import type { AppointmentStatusJobEcho } from '$lib/types/jobs';
 	import type { AppointmentDetail, AppointmentStatus } from '$lib/types/appointments';
 
 	let { data }: { data: PageData } = $props();
@@ -37,6 +40,9 @@
 	let completeOpen = $state(false);
 	let cancelOpen = $state(false);
 	let noShowOpen = $state(false);
+	// Jobber's post-completion prompt (Invoice now/later + Close/Leave-open on the last visit).
+	let visitPromptOpen = $state(false);
+	let completionEcho = $state<AppointmentStatusJobEcho>(null);
 	let assignees = $state<{ id: string; full_name: string }[]>([]);
 
 	// Edit form + status confirm dialogs are click-gated — lazy-load each so the
@@ -106,6 +112,14 @@
 			};
 			appointmentsStore.setDetail(merged);
 			appointmentsStore.invalidateList();
+			// A completed job visit raises the Invoice-now/later (+ Close/Leave-open) prompt.
+			if (next === 'completed' && appointment.job_id) {
+				const echo = (body.data?.job ?? null) as AppointmentStatusJobEcho;
+				if (shouldPromptVisitComplete(echo, member())) {
+					completionEcho = echo;
+					visitPromptOpen = true;
+				}
+			}
 		} finally {
 			actionLoading = false;
 		}
@@ -422,6 +436,16 @@
 				onConfirm={async () => {
 					await transition('cancelled');
 				}}
+			/>
+		{/if}
+
+		<!-- Post-completion prompt — Invoice now/later (+ Close/Leave-open on the last visit). -->
+		{#if appointment.job_id}
+			<VisitCompleteActionsDialog
+				bind:open={visitPromptOpen}
+				jobId={appointment.job_id}
+				jobTitle={appointment.job_title}
+				echo={completionEcho}
 			/>
 		{/if}
 	{/if}

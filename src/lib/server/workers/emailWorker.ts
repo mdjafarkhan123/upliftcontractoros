@@ -18,6 +18,11 @@ import { sendConversationEmail } from '$lib/server/email/conversationEmails';
 import { ensureReplyAlias } from '$lib/server/email/replyAlias';
 import { r2Get } from '$lib/server/media/r2';
 import { createLogger } from '$lib/server/log';
+import {
+	canContactReceiveCommunication,
+	communicationCategoryFromSource
+} from '$lib/server/communication-preferences';
+import { changeCommunicationPreferenceInTransaction } from '$lib/server/communication-preferences/mutations';
 
 const env = process.env;
 const log = createLogger('email.worker');
@@ -155,6 +160,25 @@ async function processEmailSend(job: Job<EmailJobData>) {
 			.set({
 				status: 'undeliverable',
 				failure_reason: 'Contact has no email address',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
+	const eligibility = await canContactReceiveCommunication({
+		orgId: msg.org_id,
+		contactId: contact.id,
+		channel: 'email',
+		direction: 'outbound',
+		category: communicationCategoryFromSource(msg.source)
+	});
+	if (!eligibility.allowed) {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason: eligibility.reasonMessage ?? 'Customer communication is blocked',
 				failed_at: new Date(),
 				updated_at: new Date()
 			})
@@ -327,15 +351,48 @@ async function processEmailSend(job: Job<EmailJobData>) {
 		});
 
 		if (permanent) {
-			await db
-				.update(messages)
-				.set({
-					status: 'undeliverable',
-					failure_reason: reason,
-					failed_at: new Date(),
-					updated_at: new Date()
-				})
-				.where(eq(messages.id, messageId));
+			await db.transaction(async (tx) => {
+				const now = new Date();
+				await tx
+					.update(messages)
+					.set({
+						status: 'undeliverable',
+						failure_reason: reason,
+						failed_at: now,
+						updated_at: now
+					})
+					.where(eq(messages.id, messageId));
+				await tx.insert(outboxEvents).values({
+					org_id: msg.org_id,
+					event_type: 'message.delivery_failed',
+					resource_type: 'message',
+					resource_id: messageId,
+					payload: {
+						message_id: messageId,
+						conversation_id: conv.id,
+						contact_id: conv.contact_id,
+						channel: 'email',
+						status: 'undeliverable',
+						is_terminal: true,
+						failure_reason: reason,
+						failed_at: now.toISOString()
+					},
+					idempotency_key: `message.delivery_failed:${messageId}:send-error`
+				});
+				await changeCommunicationPreferenceInTransaction(tx, {
+					orgId: msg.org_id,
+					contactId: conv.contact_id,
+					channel: 'email',
+					direction: 'outbound',
+					category: 'all',
+					status: 'permanent',
+					source: 'provider',
+					reasonCode: 'EMAIL_PROVIDER_FAILURE',
+					reasonMessage: reason,
+					provider: 'brevo',
+					providerEventId: `send-error:${messageId}`
+				});
+			});
 			return; // do not throw — no retry
 		}
 

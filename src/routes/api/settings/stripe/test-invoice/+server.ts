@@ -150,7 +150,7 @@ export const POST: RequestHandler = async (event) => {
 				issued_by: auth.member.id,
 				invoice_number: invoiceNumber,
 				title: 'Stripe test payment',
-				status: 'sent',
+				status: 'awaiting_payment',
 				tax_rate: '0',
 				notes:
 					'This is a $1.00 test invoice sent from your Stripe settings. Pay it with Stripe test card 4242 4242 4242 4242 to confirm the full flow works.',

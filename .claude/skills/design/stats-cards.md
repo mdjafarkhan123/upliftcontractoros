@@ -24,35 +24,35 @@ Stats cards (KPI cards) appear in the dashboard header row and on module summary
 
 ### Standard Stat Card
 - Base card styles from `cards.md`
-- Padding: 20px
-- **Label:** 14px, `var(--color-text-secondary)`, medium
-- **Value:** 44px, semibold, `var(--color-text-primary)` *(see Typography — Numeric Data)*
-- **Trend:** 13px, medium + icon 14×14px
-- **Link icon (↗):** 20×20px ghost button, top-right, `var(--color-text-secondary)` → `var(--color-text-primary)` on hover
+- Padding: `$space-5` (20px)
+- **Label:** `$fs-body`/`var(--text-body)` (14px), `var(--color-text-secondary)`, medium
+- **Value:** 44px (near `$fs-display` 48px / `$fs-h1` 36px), semibold, `var(--color-text-primary)` *(see Typography — Numeric Data)*
+- **Trend:** 13px (~`$fs-caption`), medium + icon 14×14px
+- **Link icon (↗):** `$space-5` (20px) ghost button, top-right, `var(--color-text-secondary)` → `var(--color-text-primary)` on hover
 
 ### Featured Stat Card (Primary KPI — brand green background)
 Use for the most important metric on the page (e.g., Total Projects, Total Revenue).
-- Background: `var(--color-brand)` → #227d53 light / #5fbd92 dark
+- Background: `var(--color-brand)` (theme-aware — light/dark automatically via token)
 - Border: transparent
 - Shadow: `$shadow-sm`
-- **Label:** 14px, `rgba(255,255,255,0.80)`, medium
-- **Value:** 44px, semibold, white
-- **Trend text:** 13px, `rgba(255,255,255,0.80)`
+- **Label:** `$fs-body`/`var(--text-body)` (14px), `var(--color-text-on-brand-soft)`, medium
+- **Value:** 44px (near `$fs-display` 48px / `$fs-h1` 36px), semibold, white
+- **Trend text:** 13px (~`$fs-caption`), `var(--color-text-on-brand-soft)`
 - **Trend icon:** white
 - **Link icon:** white, 50% opacity → full on hover
 
 ### Compact Stat Card
 For tighter grids (e.g., inline summary rows within module pages):
-- Padding: 16px
-- Value: 24px, semibold, `var(--color-text-primary)`
-- Label: 13px, `var(--color-text-secondary)`
+- Padding: `$space-4` (16px)
+- Value: `$fs-h2`/`var(--text-h2)` (24px), semibold, `var(--color-text-primary)`
+- Label: 13px (~`$fs-caption`), `var(--color-text-secondary)`
 - No trend line
 
 ### Mini Stat (Inline / Widget)
 For sidebar widgets or inline summary bars:
 - No card border, no shadow (borderless)
-- Value: 20px, semibold, `var(--color-text-primary)`
-- Label: 12px, `var(--color-text-muted)`
+- Value: `$fs-h3`/`var(--text-h3)` (20px), semibold, `var(--color-text-primary)`
+- Label: `$fs-caption`/`var(--text-caption)` (12px), `var(--color-text-muted)`
 - Stacked: value on top, label below
 
 ---
@@ -73,13 +73,13 @@ Format: `↑ 8% · Increased from last month` or `↓ 3% · 2 fewer than last we
 Trend area:
 - Flex row, 4px gap
 - Icon + percentage: colored per direction
-- Description text: `var(--color-text-secondary)` (or `rgba(255,255,255,0.70)` on featured card)
+- Description text: `var(--color-text-secondary)` (or `var(--color-text-on-brand-subtle)` on featured card)
 
 ---
 
 ## Dashboard Stats Row Layout
 
-Four stat cards in a row, 24px gap:
+Four stat cards in a row, `$space-6` (24px) gap:
 - Card 1: **Featured** (brand green bg) — primary metric e.g. Total Jobs
 - Cards 2–4: **Standard** — secondary metrics e.g. Active, Completed, Pending
 

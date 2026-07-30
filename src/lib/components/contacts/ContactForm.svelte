@@ -64,6 +64,7 @@
 		(c?.preferred_contact_method as '' | 'sms' | 'call' | 'email' | 'whatsapp' | 'messenger') ?? ''
 	);
 	let email_opt_in = $state(c?.email_opt_in ?? false);
+	let receives_review_requests = $state(c?.receives_review_requests ?? true);
 	let do_not_contact = $state(c?.do_not_contact ?? false);
 
 	// Editable multi-address list (edit mode) + recent notes (read-only, edit mode)
@@ -292,6 +293,7 @@
 			next_follow_up_at: fromLocalInput(next_follow_up_at_local),
 			preferred_contact_method: preferred_contact_method || null,
 			email_opt_in,
+			receives_review_requests,
 			do_not_contact,
 			tags
 		};
@@ -906,6 +908,25 @@
 											class="toggle {email_opt_in ? 'toggle--on' : ''}"
 											onclick={() => (email_opt_in = !email_opt_in)}
 											aria-label="Email opt-in"
+										>
+											<span class="toggle__thumb"></span>
+										</button>
+									</div>
+
+									<div class="contact-form__toggle-row contact-form__span-2">
+										<div>
+											<p class="contact-form__toggle-label">Review requests</p>
+											<p class="contact-form__toggle-desc">
+												Allow review request text messages. Other job messages are unaffected.
+											</p>
+										</div>
+										<button
+											type="button"
+											role="switch"
+											aria-checked={receives_review_requests}
+											class="toggle {receives_review_requests ? 'toggle--on' : ''}"
+											onclick={() => (receives_review_requests = !receives_review_requests)}
+											aria-label="Allow review request text messages"
 										>
 											<span class="toggle__thumb"></span>
 										</button>

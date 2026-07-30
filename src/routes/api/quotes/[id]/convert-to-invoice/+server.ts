@@ -63,12 +63,12 @@ export const POST: RequestHandler = async (event) => {
 			throw error(422, 'Only accepted quotes can be converted to an invoice');
 		}
 
-		// Check if an active invoice already exists for this quote (unique index guard).
+		// Check if an existing invoice already exists for this quote (matches the unique-index guard,
+		// which keys on deleted_at IS NULL — strict Jobber has no cancelled status, cancel = delete).
 		const [existing] = await tx.execute<{ id: string; invoice_number: number }>(sql`
 			SELECT id, invoice_number FROM invoices
 			WHERE quote_id = ${quoteId}
 			  AND deleted_at IS NULL
-			  AND status != 'cancelled'
 			LIMIT 1
 		`);
 		if (existing) {

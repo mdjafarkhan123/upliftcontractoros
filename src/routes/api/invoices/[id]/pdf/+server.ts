@@ -6,6 +6,7 @@ import {
 	contacts,
 	invoiceLineItems,
 	invoices,
+	media,
 	organizations,
 	payments
 } from '$lib/server/db/schema';
@@ -14,6 +15,7 @@ import { canViewAnyInvoice } from '$lib/server/invoices/permissions';
 import { generateAndStoreInvoicePdf } from '$lib/server/invoices/pdf';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
 import { loadJobSignoff } from '$lib/server/jobs/signoffResponse';
+import { r2Presign } from '$lib/server/media/r2';
 
 export const POST: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -81,6 +83,35 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
+	// This invoice's own in-person signature (collected on the contractor's device). Resolve a
+	// short-lived signed URL for the drawn image when one is on file.
+	let signature: {
+		signer_name: string | null;
+		signed_at: string;
+		signature_url: string;
+	} | null = null;
+	if (row.invoice.signature_media_id && row.invoice.signed_at) {
+		const [sig] = await db
+			.select({ r2_key: media.r2_key, web_key: media.web_key })
+			.from(media)
+			.where(
+				and(
+					eq(media.id, row.invoice.signature_media_id),
+					eq(media.org_id, auth.orgId),
+					eq(media.purpose_tag, 'invoice_signature'),
+					isNull(media.deleted_at)
+				)
+			)
+			.limit(1);
+		if (sig) {
+			signature = {
+				signer_name: row.invoice.signature_name,
+				signed_at: row.invoice.signed_at.toISOString(),
+				signature_url: await r2Presign(sig.web_key ?? sig.r2_key, 3600)
+			};
+		}
+	}
+
 	const { url } = await generateAndStoreInvoicePdf({
 		org: {
 			name: row.org.name,
@@ -119,7 +150,8 @@ export const POST: RequestHandler = async (event) => {
 		},
 		lineItems,
 		payments: paymentRows,
-		signoff
+		signoff,
+		signature
 	});
 
 	return json({ data: { url, expires_in: 3600 } });

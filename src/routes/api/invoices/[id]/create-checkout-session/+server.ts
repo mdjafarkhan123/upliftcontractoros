@@ -34,7 +34,7 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 
 	if (!row) error(404, 'Invoice not found');
-	if (row.status === 'cancelled') error(422, 'Cancelled invoices cannot accept payments');
+	if (row.status === 'bad_debt') error(422, 'Written-off invoices cannot accept payments');
 	if (row.status === 'paid') error(422, 'Invoice is already paid');
 	if (Number(row.amount_due) <= 0) error(422, 'Nothing to charge — balance is zero');
 	if (!row.stripe_secret_key) {

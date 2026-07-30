@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 	import type { TeamMemberItem } from '$lib/stores/team.svelte';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { teamDetailStore } from '$lib/stores/teamDetail.svelte';
@@ -10,15 +11,6 @@
 		member: TeamMemberItem;
 		onclick: () => void;
 	} = $props();
-
-	const initials = $derived(
-		member.full_name
-			.split(' ')
-			.map((p) => p[0] ?? '')
-			.slice(0, 2)
-			.join('')
-			.toUpperCase()
-	);
 
 	const roleLabel = $derived(
 		member.role === 'admin' ? 'Admin' : member.role === 'manager' ? 'Manager' : 'Member'
@@ -32,12 +24,12 @@
 	class="member-card"
 	class:member-card--inactive={!member.is_active}
 >
-	<div class="member-avatar member-avatar--{member.role}">
-		<div class="member-avatar__disc">{initials}</div>
-		{#if member.is_active}
-			<span class="member-avatar__dot"></span>
-		{/if}
-	</div>
+	<Avatar
+		size="md"
+		name={member.full_name}
+		online={member.is_active}
+		palette={member.role === 'admin' ? 'brand' : member.role === 'manager' ? 'amber' : 'indigo'}
+	/>
 
 	<div class="member-card__info">
 		<div class="member-card__name-row">

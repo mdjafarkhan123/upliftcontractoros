@@ -14,9 +14,9 @@ Data display components visualize project analytics, time tracking, revenue, and
 - Chart area: flex row of bars, aligned to baseline, equal width columns
 
 ### Bar Specs
-- Bar width: flexible (fill column width), min 24px, max 48px
-- Bar radius: 6px top only (`border-radius: 6px 6px 0 0`)
-- Gap between bars: 8px
+- Bar width: flexible (fill column width), min `$space-6` (24px), max `$space-12` (48px)
+- Bar radius: 6px top only (custom, no token) (`border-radius: 6px 6px 0 0`)
+- Gap between bars: `$space-2` (8px)
 - Max bar height: 160px
 - Column labels below: 12px, `var(--color-text-secondary)`, centered
 
@@ -46,7 +46,7 @@ background: repeating-linear-gradient(
 
 ### Value Label
 - Shown above tallest bar or hovered bar
-- Font: 12px, medium, `var(--color-text-primary)`
+- Font: `$fs-caption`, medium, `var(--color-text-primary)`
 - Position: absolute, centered above bar
 
 ---
@@ -63,7 +63,7 @@ Used for "Project Progress" / "Project Ended" metric.
 
 ### Value inside gauge
 - Large %: 30px, semibold, `var(--color-text-primary)`, centered below arc
-- Label below: 14px, `var(--color-text-secondary)`, e.g. "Project Ended"
+- Label below: `$fs-body`/`var(--text-body)` (14px), `var(--color-text-secondary)`, e.g. "Project Ended"
 
 ### Full Donut
 - Full 360deg circle
@@ -72,7 +72,7 @@ Used for "Project Progress" / "Project Ended" metric.
 - Legend: horizontal pill badges below, gap 12px
 
 ### Legend Item
-- 8×8px `$radius-full` colored dot + label text 13px `var(--color-text-secondary)`
+- 8×8px `$radius-full` colored dot + label text 13px (~`$fs-caption`) `var(--color-text-secondary)`
 - 16px gap between legend items
 
 ---
@@ -80,7 +80,7 @@ Used for "Project Progress" / "Project Ended" metric.
 ## Progress Bar (Linear)
 
 ### Standard
-- Height: 8px, `$radius-full`
+- Height: `$space-2` (8px), `$radius-full`
 - Track: `var(--color-border-strong)` background
 - Fill: `var(--color-brand)` background
 - Radius: `$radius-full`
@@ -88,14 +88,14 @@ Used for "Project Progress" / "Project Ended" metric.
 
 ### Multi-segment Progress Bar
 Used for invoice payment breakdown (Paid / Outstanding / Overdue):
-- Height: 8px, `$radius-full` on outer wrapper
+- Height: `$space-2` (8px), `$radius-full` on outer wrapper
 - Segments: flex row, proportional widths
 - Colors: `var(--color-brand)` / `var(--warning-solid)` / `var(--danger-solid)` respectively
 - First segment: `$radius-full` left; last: `$radius-full` right
 
 ### With Label
-- Flex row: label (left, 14px body) + percentage (right, 14px semibold heading)
-- Progress bar below, 6px margin top
+- Flex row: label (left, `$fs-body`/`var(--text-body)` (14px)) + percentage (right, 14px semibold heading)
+- Progress bar below, 6px (~`$space-1`) margin top
 
 ---
 
@@ -113,13 +113,13 @@ A dark card (see `cards.md` — Dark Card variant) containing the live timer.
 └──────────────────────────────────────┘
 ```
 
-- **Timer text:** 36px, semibold, white, monospace (`font-variant-numeric: tabular-nums`)
+- **Timer text:** `$fs-h1`/`var(--text-h1)` (36px), semibold, white, monospace (`font-variant-numeric: tabular-nums`)
 - **Card background:** `var(--color-text-primary)` → very dark green
 - **Status dot:** pulsing green (see `status-indicators.md` — Time Tracking Status)
-- **Control buttons:** circular, 40×40px, `$radius-full`
+- **Control buttons:** circular, `$space-10`×`$space-10` (40×40px), `$radius-full`
   - Pause: white bg, `var(--color-text-primary)` icon
   - Stop: `var(--danger-solid)` bg, white icon
-- **Header:** "Time Tracker" 14px medium, `rgba(255,255,255,0.70)`
+- **Header:** "Time Tracker" `$fs-body`/`var(--text-body)` (14px), medium, `var(--color-text-on-brand-subtle)`
 
 ---
 
@@ -135,10 +135,10 @@ Used in project history, invoice activity, client notes.
   ● ─── Team member assigned              Nov 22
 ```
 
-- Left column: 20px wide, continuous 1px vertical `var(--color-border)` line
+- Left column: `$space-5` (20px) wide, continuous 1px vertical `var(--color-border)` line
 - Dot: 10×10px `$radius-full`, `var(--state-active-tint)` border 2px + `var(--color-brand)` fill for brand events
-- Content: flex row — description (14px `var(--color-text-secondary)`) + date (12px `var(--color-text-muted)`, right-aligned)
-- Gap between items: 20px
+- Content: flex row — description (`$fs-body`/`var(--text-body)` (14px) `var(--color-text-secondary)`) + date (`$fs-caption`/`var(--text-caption)` (12px) `var(--color-text-muted)`, right-aligned)
+- Gap between items: `$space-5` (20px)
 - Last item: no bottom border on connector line
 
 ---

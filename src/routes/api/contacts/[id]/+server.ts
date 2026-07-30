@@ -15,6 +15,11 @@ import {
 	cascadeDeleteContact,
 	hardPurgeContact
 } from '$lib/server/contacts/contactRepo';
+import {
+	changeCommunicationConsentInTransaction,
+	changeCommunicationPreferenceInTransaction,
+	CommunicationPreferenceMutationError
+} from '$lib/server/communication-preferences/mutations';
 
 export const GET: RequestHandler = async (event) => {
 	const auth = event.locals.auth;
@@ -161,6 +166,9 @@ export const PATCH: RequestHandler = async (event) => {
 		next.preferred_contact_method = updates.preferred_contact_method;
 	}
 	if (updates.email_opt_in !== undefined) next.email_opt_in = updates.email_opt_in;
+	if (updates.receives_review_requests !== undefined) {
+		next.receives_review_requests = updates.receives_review_requests;
+	}
 
 	// Profile photo. `avatar_url` carries an uploaded media row id (purpose_tag
 	// 'contact_avatar'); we store its r2_key. null clears the photo. The previous
@@ -316,6 +324,60 @@ export const PATCH: RequestHandler = async (event) => {
 				}
 			}
 
+			if (
+				updates.do_not_contact !== undefined &&
+				updates.do_not_contact !== existing.do_not_contact
+			) {
+				await changeCommunicationPreferenceInTransaction(tx, {
+					orgId: auth.orgId,
+					contactId: event.params.id,
+					channel: 'all',
+					direction: 'all',
+					category: 'all',
+					status: updates.do_not_contact ? 'blocked' : 'allowed',
+					source: 'user',
+					actorMemberId: auth.member.id,
+					reasonCode: updates.do_not_contact ? 'CONTACT_DNC_ENABLED' : 'CONTACT_DNC_DISABLED',
+					reasonMessage: updates.do_not_contact
+						? 'Do not contact was enabled from the contact record.'
+						: 'Do not contact was disabled from the contact record.'
+				});
+			}
+
+			if (updates.email_opt_in !== undefined && updates.email_opt_in !== existing.email_opt_in) {
+				await changeCommunicationConsentInTransaction(tx, {
+					orgId: auth.orgId,
+					contactId: event.params.id,
+					channel: 'email',
+					category: 'marketing',
+					status: updates.email_opt_in ? 'opted_in' : 'opted_out',
+					source: 'user',
+					evidence: { contact_field: 'email_opt_in', actor_member_id: auth.member.id }
+				});
+			}
+
+			if (
+				updates.receives_review_requests !== undefined &&
+				updates.receives_review_requests !== existing.receives_review_requests
+			) {
+				await changeCommunicationPreferenceInTransaction(tx, {
+					orgId: auth.orgId,
+					contactId: event.params.id,
+					channel: 'all',
+					direction: 'outbound',
+					category: 'review_request',
+					status: updates.receives_review_requests ? 'allowed' : 'blocked',
+					source: 'user',
+					actorMemberId: auth.member.id,
+					reasonCode: updates.receives_review_requests
+						? 'REVIEW_REQUESTS_ENABLED'
+						: 'REVIEW_REQUESTS_DISABLED',
+					reasonMessage: updates.receives_review_requests
+						? 'Review requests were enabled from the contact record.'
+						: 'Review requests were disabled from the contact record.'
+				});
+			}
+
 			return row;
 		});
 
@@ -323,6 +385,9 @@ export const PATCH: RequestHandler = async (event) => {
 			contact: { ...updated, avatar_url: await resolveLogoUrl(updated.avatar_url) }
 		});
 	} catch (e) {
+		if (e instanceof CommunicationPreferenceMutationError) {
+			return json({ error: e.message }, { status: e.status });
+		}
 		const msg = e instanceof Error ? e.message : 'Update failed';
 		if (/unique|duplicate/i.test(msg)) {
 			return json(

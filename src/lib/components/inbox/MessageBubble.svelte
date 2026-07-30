@@ -4,12 +4,14 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import EmailMessageCard from './EmailMessageCard.svelte';
 	import MessageMedia from './MessageMedia.svelte';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		message: m,
 		canRetry = false,
 		inboundInitials = '',
 		outboundInitials = '',
+		outboundName = '',
 		grouped = false,
 		contactId = '',
 		contactName = ''
@@ -18,6 +20,7 @@
 		canRetry?: boolean;
 		inboundInitials?: string;
 		outboundInitials?: string;
+		outboundName?: string;
 		grouped?: boolean;
 		contactId?: string;
 		contactName?: string;
@@ -142,7 +145,7 @@
 </script>
 
 {#if isEmail}
-	<EmailMessageCard message={m} {canRetry} {inboundInitials} {outboundInitials} {grouped} />
+	<EmailMessageCard message={m} {canRetry} {inboundInitials} {outboundInitials} {outboundName} {grouped} />
 {:else if isMissedCall}
 	<div class="msg-event">
 		<div class="msg-event__chip">
@@ -187,15 +190,13 @@
 	<div class="msg msg--{isInbound ? 'in' : 'out'}" class:msg--grouped={grouped}>
 		{#if isInbound}
 			{#if !grouped}
-				<div class="msg__avatar msg__avatar--in" aria-hidden="true">
-					{#if inboundInitials}
-						{inboundInitials}
-					{:else if m.channel === 'webchat'}
-						<i class="ri-global-line" aria-hidden="true"></i>
-					{:else}
-						<i class="ri-chat-1-line" aria-hidden="true"></i>
-					{/if}
-				</div>
+				{#if contactName || inboundInitials}
+					<Avatar size="sm" name={contactName || inboundInitials} />
+				{:else if m.channel === 'webchat'}
+					<div class="msg__avatar-icon"><i class="ri-global-line" aria-hidden="true"></i></div>
+				{:else}
+					<div class="msg__avatar-icon"><i class="ri-chat-1-line" aria-hidden="true"></i></div>
+				{/if}
 			{:else}
 				<div class="msg__spacer"></div>
 			{/if}
@@ -295,13 +296,11 @@
 
 		{#if !isInbound}
 			{#if !grouped}
-				<div class="msg__avatar msg__avatar--out" aria-hidden="true">
-					{#if outboundInitials}
-						{outboundInitials}
-					{:else}
-						<i class="ri-chat-1-line" aria-hidden="true"></i>
-					{/if}
-				</div>
+				{#if outboundName || outboundInitials}
+					<Avatar size="sm" name={outboundName || outboundInitials} />
+				{:else}
+					<div class="msg__avatar-icon"><i class="ri-chat-1-line" aria-hidden="true"></i></div>
+				{/if}
 			{:else}
 				<div class="msg__spacer"></div>
 			{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { beforeNavigate } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import PageWrapper from '$lib/components/shared/PageWrapper.svelte';
 	import EditPencil from '$lib/components/shared/EditPencil.svelte';
@@ -30,7 +30,9 @@
 	import JobTagsEditor from '$lib/components/jobs/JobTagsEditor.svelte';
 	import JobCategoryPicker from '$lib/components/jobs/JobCategoryPicker.svelte';
 	import RecurringScheduleModal from '$lib/components/jobs/RecurringScheduleModal.svelte';
+	import NotifyDialog from '$lib/components/shared/NotifyDialog.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import EditActionBar from '$lib/components/shared/EditActionBar.svelte';
 	import { getMemberContext } from '$lib/context/member';
 	import { jobsStore } from '$lib/stores/jobs.svelte';
@@ -73,6 +75,7 @@
 	const canInlineEdit = $derived(canEdit && job?.status === 'active');
 	const canCancel = $derived(member().can_view_full_pipeline);
 	const canInvoice = $derived(member().can_create_invoices);
+	const canDuplicate = $derived(member().can_view_full_pipeline);
 	// A recurring job bills on a schedule (S4); a one-off job uses the payment schedule (S3).
 	// Reads the STORED type: an "as needed" job has no rule but is still recurring, so testing
 	// `!!job.recurrence` here used to mis-read it as one-off and show the wrong billing rail.
@@ -755,7 +758,14 @@
 	let actionLoading = $state(false);
 	let completeOpen = $state(false);
 	let cancelOpen = $state(false);
+	let reviewPromptOpen = $state(false);
+	let reviewNotifyOpen = $state(false);
 	let actionError = $state<string | null>(null);
+	type ReviewDelivery = {
+		contact: { name: string; email: string | null; phone: string | null; sms_opt_out: boolean };
+		defaults: { sms: string; email_subject: string; email_body: string };
+	};
+	let reviewDelivery = $state<ReviewDelivery | null>(null);
 
 	async function transition(action: 'complete' | 'cancel' | 'reopen') {
 		if (!job) return;
@@ -769,7 +779,9 @@
 			});
 			const body = await res.json();
 			if (!res.ok) {
-				actionError = body.error ?? 'Could not update status.';
+				const message = body.error ?? 'Could not update status.';
+				actionError = message;
+				toast.error(message);
 				return;
 			}
 			const merged: JobDetail = { ...job, ...body.job };
@@ -786,8 +798,136 @@
 			resetFormFromJob(merged);
 			loadedJobId = merged.id;
 			jobVersion++;
+			toast.success(
+				action === 'reopen'
+					? 'Job reopened'
+					: action === 'complete'
+						? 'Job marked complete'
+						: 'Job cancelled'
+			);
+			if (action === 'complete' && member().can_send_review_requests) reviewPromptOpen = true;
 		} finally {
 			actionLoading = false;
+		}
+	}
+
+	function fillReviewTemplate(template: string, reviewLink: string): string {
+		if (!job) return template;
+		return template
+			.replaceAll('{contact_name}', job.contact_name)
+			.replaceAll('{org_name}', 'your service team')
+			.replaceAll('{review_link}', reviewLink);
+	}
+
+	async function openReviewPicker() {
+		if (!job) return;
+		try {
+			const res = await fetch(`/api/jobs/${job.id}/review-request`);
+			const body = (await res.json().catch(() => ({}))) as {
+				data?: ReviewDelivery;
+				error?: string;
+			};
+			if (!res.ok || !body.data) {
+				toast.error(body.error ?? 'Could not prepare the review request.');
+				return;
+			}
+			reviewDelivery = body.data;
+			reviewNotifyOpen = true;
+		} catch {
+			toast.error('Network error. Please try again.');
+		}
+	}
+
+	async function sendReviewRequest(
+		channels: ('email' | 'sms')[],
+		edited: { sms: string | null; subject: string | null; body: string | null } | null
+	): Promise<{ ok: boolean; channelError?: string }> {
+		if (!job) return { ok: false, channelError: 'Job not loaded.' };
+		try {
+			const res = await fetch(`/api/jobs/${job.id}/review-request`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					channels,
+					sms_message: edited?.sms ?? undefined,
+					email_subject: edited?.subject ?? undefined,
+					email_body: edited?.body ?? undefined
+				})
+			});
+			const body = (await res.json().catch(() => ({}))) as { error?: string };
+			if (!res.ok) {
+				return { ok: false, channelError: body.error ?? 'Could not send the review request.' };
+			}
+			jobDetailStore.patch(id, (current) => ({ ...current, review_request_status: 'sent' }));
+			toast.success('Review request queued.');
+			return { ok: true };
+		} catch {
+			return { ok: false, channelError: 'Network error. Please try again.' };
+		}
+	}
+
+	// Jobber keeps "Create similar job" in More for both open and closed jobs. Our existing
+	// duplicate endpoint intentionally creates a clean, unscheduled copy, so no completed visits,
+	// invoices, or customer notifications are carried into the new work.
+	let duplicating = $state(false);
+	async function createSimilarJob() {
+		if (!job || duplicating) return;
+		duplicating = true;
+		try {
+			const res = await fetch(`/api/jobs/${job.id}/duplicate`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Could not create a similar job.');
+				return;
+			}
+			toast.success('Similar job created');
+			await goto(`/jobs/${body.job.id}`);
+		} catch {
+			toast.error('Network error. Please try again.');
+		} finally {
+			duplicating = false;
+		}
+	}
+
+	// The header invoice action uses the same safe path as the existing Related links control:
+	// reuse an active invoice when one exists, otherwise create one from job line items; jobs with
+	// no lines open a pre-linked blank invoice instead.
+	let creatingInvoice = $state(false);
+	async function createInvoice() {
+		if (!job || creatingInvoice) return;
+		if (job.line_items.length === 0) {
+			await goto(
+				`/invoices/new?contact_id=${encodeURIComponent(job.contact_id)}` +
+					`&contact_name=${encodeURIComponent(job.contact_name)}` +
+					`&job_id=${encodeURIComponent(job.id)}` +
+					`&job_title=${encodeURIComponent(job.title)}`
+			);
+			return;
+		}
+
+		creatingInvoice = true;
+		try {
+			const res = await fetch(`/api/jobs/${job.id}/convert-to-invoice`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Could not create invoice.');
+				return;
+			}
+			const invoice = body.data as {
+				id: string;
+				invoice_number_display: string;
+				already_existed: boolean;
+			};
+			toast.success(
+				invoice.already_existed
+					? `Invoice ${invoice.invoice_number_display} already exists`
+					: `Invoice ${invoice.invoice_number_display} created`
+			);
+			await goto(`/invoices/${invoice.id}`);
+		} catch {
+			toast.error('Network error. Please try again.');
+		} finally {
+			creatingInvoice = false;
 		}
 	}
 
@@ -796,7 +936,7 @@
 		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
 	>(null);
 	$effect(() => {
-		if (!(completeOpen || cancelOpen) || ConfirmDialog) return;
+		if (!(completeOpen || cancelOpen || reviewPromptOpen) || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
 			ConfirmDialog = m.default;
 		});
@@ -828,6 +968,11 @@
 	const showActions = $derived(
 		!anySectionEditing && (showComplete || showCancel || showOnMyWay || showReopen)
 	);
+	const showInvoicePrimary = $derived(!anySectionEditing && canInvoice && job?.status === 'active');
+	const showInvoiceInMore = $derived(
+		!anySectionEditing && canInvoice && job?.status === 'archived'
+	);
+	const showMore = $derived(!anySectionEditing && !!job);
 	let onMyWayOpen = $state(false);
 </script>
 
@@ -855,6 +1000,65 @@
 				error={sectionError}
 				label={`Editing ${sectionLabel}`}
 			/>
+		{:else}
+			{#if showMore}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger class="btn btn--secondary" aria-label="More job actions">
+						<i class="ri-more-fill" aria-hidden="true"></i>
+						More
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						{#if showInvoiceInMore}
+							<DropdownMenu.Item onclick={() => void createInvoice()} disabled={creatingInvoice}>
+								<i class="ri-bill-line" aria-hidden="true"></i>
+								Create invoice
+							</DropdownMenu.Item>
+						{/if}
+						{#if canDuplicate}
+							<DropdownMenu.Item onclick={() => void createSimilarJob()} disabled={duplicating}>
+								<i class="ri-file-copy-line" aria-hidden="true"></i>
+								Create similar job
+							</DropdownMenu.Item>
+						{/if}
+						{#if (showInvoiceInMore || canDuplicate) && (showOnMyWay || showComplete || showCancel)}
+							<DropdownMenu.Separator />
+						{/if}
+						{#if showOnMyWay}
+							<DropdownMenu.Item onclick={() => (onMyWayOpen = true)}>
+								<i class="ri-send-plane-line" aria-hidden="true"></i>
+								On my way
+							</DropdownMenu.Item>
+						{/if}
+						{#if showComplete}
+							<DropdownMenu.Item onclick={() => (completeOpen = true)}>
+								<i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+								Close job
+							</DropdownMenu.Item>
+						{/if}
+						{#if showCancel}
+							<DropdownMenu.Item variant="destructive" onclick={() => (cancelOpen = true)}>
+								<i class="ri-close-circle-line" aria-hidden="true"></i>
+								Cancel job
+							</DropdownMenu.Item>
+						{/if}
+						{#if !showInvoiceInMore && !canDuplicate && !showOnMyWay && !showComplete && !showCancel}
+							<DropdownMenu.Item disabled>No additional actions available</DropdownMenu.Item>
+						{/if}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/if}
+			{#if showInvoicePrimary}
+				<Button loading={creatingInvoice} onclick={() => void createInvoice()}>
+					<i class="ri-bill-line" aria-hidden="true"></i>
+					Create invoice
+				</Button>
+			{/if}
+			{#if showReopen}
+				<Button loading={actionLoading} onclick={() => void transition('reopen')}>
+					<i class="ri-arrow-go-back-line" aria-hidden="true"></i>
+					Reopen job
+				</Button>
+			{/if}
 		{/if}
 	{/snippet}
 
@@ -1174,16 +1378,10 @@
 							<div class="job-status-card__review">
 								<span class="job-status-card__review-label">Review request</span>
 								<JobReviewIndicator
-									jobId={job.id}
 									jobStatus={job.status}
 									completedAt={job.completed_at}
 									status={job.review_request_status}
-									onSent={(next) => {
-										jobDetailStore.patch(id, (prev) => ({
-											...prev,
-											review_request_status: next
-										}));
-									}}
+									onTrigger={openReviewPicker}
 								/>
 							</div>
 						{/if}
@@ -1369,6 +1567,14 @@
 				}}
 			/>
 			<ConfirmDialog
+				bind:open={reviewPromptOpen}
+				title="Job marked complete"
+				description="Would you like to send a review request to the customer now?"
+				confirmLabel="Send review request"
+				cancelLabel="Not now"
+				onConfirm={openReviewPicker}
+			/>
+			<ConfirmDialog
 				bind:open={cancelOpen}
 				title="Cancel this job?"
 				description="The job will be closed as cancelled. You can reopen it later if needed."
@@ -1382,6 +1588,30 @@
 		{/if}
 		{#if job}
 			<OnMyWayDialog bind:open={onMyWayOpen} jobId={job.id} />
+		{/if}
+		{#if reviewDelivery}
+			<NotifyDialog
+				bind:open={reviewNotifyOpen}
+				title="Send review request"
+				subtitle="Ask this customer to share feedback about their completed service."
+				recipientName={reviewDelivery.contact.name}
+				recipientEmail={reviewDelivery.contact.email}
+				recipientPhone={reviewDelivery.contact.phone}
+				recipientSmsOptOut={reviewDelivery.contact.sms_opt_out}
+				mergeFields={[
+					{ token: 'contact_name', label: 'Customer name' },
+					{ token: 'org_name', label: 'Business name' },
+					{ token: 'review_link', label: 'Review link' }
+				]}
+				fill={fillReviewTemplate}
+				defaultSms={reviewDelivery.defaults.sms}
+				defaultSubject={reviewDelivery.defaults.email_subject}
+				defaultBody={reviewDelivery.defaults.email_body}
+				linkDisplay="your secure review link"
+				linkForCount="https://review-link.example"
+				confirmLabel="Send review request"
+				onConfirm={sendReviewRequest}
+			/>
 		{/if}
 	{:else}
 		<EmptyState title="Couldn't load job" description={errorMsg ?? 'Unknown error.'} />

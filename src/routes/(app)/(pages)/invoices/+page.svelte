@@ -8,11 +8,15 @@
 	import InvoiceTable from '$lib/components/invoices/InvoiceTable.svelte';
 	import InvoiceListItem from '$lib/components/invoices/InvoiceListItem.svelte';
 	import ListSearchBar from '$lib/components/shared/ListSearchBar.svelte';
+	import ListBulkBar, { type BulkAction } from '$lib/components/shared/ListBulkBar.svelte';
+	import BatchDeliverDialog from '$lib/components/invoices/BatchDeliverDialog.svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { invoicesStore } from '$lib/stores/invoices.svelte';
 	import { invoiceStatsStore } from '$lib/stores/invoiceStats.svelte';
 	import type {
 		InvoicesGroup,
 		InvoicesStatusChip,
+		InvoiceStatus,
 		InvoiceListItem as InvoiceRow
 	} from '$lib/types/invoices';
 	import { goto } from '$app/navigation';
@@ -22,7 +26,7 @@
 	const member = getMemberContext();
 	const canEdit = $derived(member().can_create_invoices);
 	const canSend = $derived(member().can_send_invoices);
-	const canCancel = $derived(member().can_delete_invoices);
+	const canDelete = $derived(member().can_delete_invoices);
 
 	let group = $state<InvoicesGroup>('all');
 	let statusChip = $state<InvoicesStatusChip>('all');
@@ -30,14 +34,138 @@
 	let searchQuery = $state('');
 	const filters = $derived({ group, status: statusChip, search: searchQuery });
 
+	const items = $derived(invoicesStore.items);
+	const nextCursor = $derived(invoicesStore.nextCursor);
+	const status = $derived(invoicesStore.status);
+	const errorMsg = $derived(invoicesStore.error);
+
 	$effect(() => {
 		void invoicesStore.load(filters);
 	});
 
-	// ── Send + Cancel — one lazy ConfirmDialog, mirroring the Quotes page ─────────
-	let confirmAction = $state<{ kind: 'send' | 'cancel' | 'delete'; invoice: InvoiceRow } | null>(
-		null
+	// ── Batch Deliver (Jobber batch billing, part 2) ─────────────────────────────
+	// Multi-select drafts on the Draft tab → "Send invoices" → pick channel(s) once →
+	// each draft is delivered to its own client. Only offered on the Draft tab (drafts
+	// are exactly the unsent invoices Batch Create produced).
+	const showBatchDeliver = $derived(statusChip === 'draft' && canSend);
+
+	let selectionMode = $state(false);
+	const selected = new SvelteSet<string>();
+	const selectedIds = $derived([...selected]);
+	let bulkBusy = $state(false);
+	let deliverOpen = $state(false);
+
+	function enterSelect() {
+		selectionMode = true;
+	}
+	function exitSelect() {
+		selectionMode = false;
+		selected.clear();
+	}
+	function toggleSelect(id: string) {
+		if (selected.has(id)) selected.delete(id);
+		else selected.add(id);
+	}
+	const allSelected = $derived(items.length > 0 && items.every((i) => selected.has(i.id)));
+	function toggleSelectAll() {
+		if (allSelected) selected.clear();
+		else for (const i of items) selected.add(i.id);
+	}
+
+	// Leaving the Draft tab (the only place a bulk action exists) drops selection.
+	$effect(() => {
+		if (!showBatchDeliver && selectionMode) exitSelect();
+	});
+
+	const bulkActions = $derived<BulkAction[]>(
+		showBatchDeliver
+			? [
+					{
+						key: 'deliver',
+						label: 'Send invoices',
+						icon: 'ri-send-plane-line',
+						loading: bulkBusy,
+						loadingLabel: 'Sending…',
+						onSelect: () => (deliverOpen = true)
+					}
+				]
+			: []
 	);
+
+	// Runs the batch send. NotifyDialog owns the in-dialog busy spinner + closes on `ok`; here we
+	// perform the fetch and patch the list/stats from the per-invoice result.
+	async function handleBatchDeliver(
+		channels: ('email' | 'sms')[],
+		edited: { sms: string | null; subject: string | null; body: string | null } | null
+	): Promise<{ ok: boolean }> {
+		if (selectedIds.length === 0) return { ok: false };
+		bulkBusy = true;
+		try {
+			const ids = selectedIds;
+			const res = await fetch('/api/invoices/batch-deliver', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					ids,
+					channels,
+					sms_body: edited?.sms ?? null,
+					email_subject: edited?.subject ?? null,
+					email_body: edited?.body ?? null
+				})
+			});
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Failed to send invoices');
+				return { ok: false };
+			}
+			const data = body.data as {
+				sent: { invoice_id: string }[];
+				skipped: { invoice_number_display: string; reason: string }[];
+				failed: { invoice_number_display: string; reason: string }[];
+			};
+			// Patch each freshly-sent draft so it drops out of the Draft tab immediately. The exact
+			// sent_not_due/awaiting_payment split is settled by the follow-up store reload below.
+			for (const s of data.sent) {
+				invoicesStore.update({
+					id: s.invoice_id,
+					status: 'awaiting_payment',
+					sent_at: new Date().toISOString()
+				});
+			}
+			void invoiceStatsStore.load(true);
+
+			const parts: string[] = [];
+			if (data.sent.length) parts.push(`${data.sent.length} sent`);
+			if (data.skipped.length) parts.push(`${data.skipped.length} skipped`);
+			if (data.failed.length) parts.push(`${data.failed.length} failed`);
+			const summary = parts.join(' · ') || 'Nothing to send';
+			// Show per-invoice reasons for anything that didn't go out (capped).
+			const reasons = [...data.skipped, ...data.failed]
+				.slice(0, 4)
+				.map((r) => `${r.invoice_number_display} — ${r.reason}`);
+			const extra = data.skipped.length + data.failed.length - reasons.length;
+			const description =
+				reasons.length > 0
+					? reasons.join('\n') + (extra > 0 ? `\n…and ${extra} more` : '')
+					: undefined;
+
+			if (data.failed.length > 0) toast.error(summary, { description, duration: 8000 });
+			else toast.success(summary, description ? { description, duration: 8000 } : undefined);
+
+			exitSelect();
+			// Freshly-sent drafts have left this tab — refresh the list.
+			void invoicesStore.load(filters, true);
+			return { ok: true };
+		} catch {
+			toast.error('Network error');
+			return { ok: false };
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	// ── Send + Delete — one lazy ConfirmDialog, mirroring the Quotes page ─────────
+	let confirmAction = $state<{ kind: 'send' | 'delete'; invoice: InvoiceRow } | null>(null);
 	let confirmOpen = $state(false);
 	let confirmBusy = $state(false);
 
@@ -52,28 +180,16 @@
 				variant: 'default' as const
 			};
 		}
-		if (kind === 'delete') {
-			return {
-				title: `Delete ${invoice.invoice_number_display}?`,
-				description: `This removes the invoice for ${invoice.contact_name} from your list. You can only delete invoices with no recorded payments.`,
-				confirmLabel: 'Delete invoice',
-				variant: 'destructive' as const
-			};
-		}
 		return {
-			title: `Cancel ${invoice.invoice_number_display}?`,
-			description: `This invoice for ${invoice.contact_name} will be voided. You can't collect payment on a cancelled invoice.`,
-			confirmLabel: 'Cancel invoice',
+			title: `Delete ${invoice.invoice_number_display}?`,
+			description: `This removes the invoice for ${invoice.contact_name} from your list. You can only delete invoices with no recorded payments.`,
+			confirmLabel: 'Delete invoice',
 			variant: 'destructive' as const
 		};
 	});
 
 	function requestSend(invoice: InvoiceRow) {
 		confirmAction = { kind: 'send', invoice };
-		confirmOpen = true;
-	}
-	function requestCancel(invoice: InvoiceRow) {
-		confirmAction = { kind: 'cancel', invoice };
 		confirmOpen = true;
 	}
 	function requestDelete(invoice: InvoiceRow) {
@@ -95,7 +211,7 @@
 				}
 				invoicesStore.update({
 					id: invoice.id,
-					status: 'sent',
+					status: (body.data?.status ?? 'awaiting_payment') as InvoiceStatus,
 					sent_at: body.data?.sent_at ?? new Date().toISOString()
 				});
 				void invoiceStatsStore.load(true);
@@ -103,28 +219,15 @@
 				confirmOpen = false;
 				return;
 			}
-			if (kind === 'delete') {
-				const res = await fetch(`/api/invoices/${invoice.id}`, { method: 'DELETE' });
-				if (!res.ok) {
-					const body = await res.json().catch(() => ({}));
-					toast.error(body.error ?? 'Failed to delete invoice');
-					return;
-				}
-				invoicesStore.remove(invoice.id);
-				void invoiceStatsStore.load(true);
-				toast.success(`${invoice.invoice_number_display} deleted`);
-				confirmOpen = false;
-				return;
-			}
-			const res = await fetch(`/api/invoices/${invoice.id}/cancel`, { method: 'POST' });
-			const body = await res.json().catch(() => ({}));
+			const res = await fetch(`/api/invoices/${invoice.id}`, { method: 'DELETE' });
 			if (!res.ok) {
-				toast.error(body.error ?? 'Failed to cancel invoice');
+				const body = await res.json().catch(() => ({}));
+				toast.error(body.error ?? 'Failed to delete invoice');
 				return;
 			}
-			invoicesStore.update({ id: invoice.id, status: 'cancelled' });
+			invoicesStore.remove(invoice.id);
 			void invoiceStatsStore.load(true);
-			toast.success(`${invoice.invoice_number_display} cancelled`);
+			toast.success(`${invoice.invoice_number_display} deleted`);
 			confirmOpen = false;
 		} catch {
 			toast.error('Network error');
@@ -143,11 +246,6 @@
 		});
 	});
 
-	const items = $derived(invoicesStore.items);
-	const nextCursor = $derived(invoicesStore.nextCursor);
-	const status = $derived(invoicesStore.status);
-	const errorMsg = $derived(invoicesStore.error);
-
 	let loadingMore = $state(false);
 	async function loadMore() {
 		if (!nextCursor || loadingMore) return;
@@ -161,10 +259,20 @@
 
 <PageWrapper title="Invoices" subtitle="Sent, paid, and outstanding">
 	{#snippet actions()}
-		<Button type="button" onclick={() => goto('/invoices/new')}>
-			<i class="ri-add-line" aria-hidden="true"></i>
-			New invoice
-		</Button>
+		{#if selectionMode}
+			<Button type="button" variant="secondary" onclick={exitSelect}>Done</Button>
+		{:else}
+			{#if showBatchDeliver}
+				<Button type="button" variant="secondary" onclick={enterSelect}>
+					<i class="ri-checkbox-multiple-line" aria-hidden="true"></i>
+					Select
+				</Button>
+			{/if}
+			<Button type="button" onclick={() => goto('/invoices/new')}>
+				<i class="ri-add-line" aria-hidden="true"></i>
+				New invoice
+			</Button>
+		{/if}
 	{/snippet}
 
 	<ListPageShell
@@ -219,9 +327,13 @@
 					{items}
 					{canEdit}
 					{canSend}
-					{canCancel}
+					{canDelete}
+					selectable={selectionMode}
+					{selected}
+					onToggleSelect={toggleSelect}
+					onToggleAll={toggleSelectAll}
+					{allSelected}
 					onSend={requestSend}
-					onCancel={requestCancel}
 					onDelete={requestDelete}
 				/>
 			</div>
@@ -247,6 +359,21 @@
 		onConfirm={handleConfirm}
 	/>
 {/if}
+
+{#if selectionMode && selectedIds.length > 0}
+	<ListBulkBar
+		count={selectedIds.length}
+		actions={bulkActions}
+		busy={bulkBusy}
+		onCancel={exitSelect}
+	/>
+{/if}
+
+<BatchDeliverDialog
+	bind:open={deliverOpen}
+	count={selectedIds.length}
+	onConfirm={handleBatchDeliver}
+/>
 
 <style lang="scss">
 	@use '$lib/styles/tokens' as *;

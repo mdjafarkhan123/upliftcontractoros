@@ -8,7 +8,7 @@
 - Background: `var(--neutral-primary-soft)`
 - Radius: 8px
 - Border: 1px `var(--border-default)`
-- Shadow: `$shadow-xs`
+- Shadow: `var(--shadow-xs)`
 
 ## Table Element
 
@@ -33,7 +33,7 @@
 - Row bottom border: 1px `var(--border-default)` (omit on last row)
 - Row hover: `var(--neutral-secondary-soft)` background (always on for CRM data tables)
 - Row header cells: medium weight, `var(--heading)` color, white-space: nowrap
-- Cell padding: 16px horizontal, 14px vertical
+- Cell padding: 16px horizontal, 12px vertical
 
 ## Column Types
 
@@ -57,7 +57,7 @@
 
 ## Checkbox Selection (Bulk Actions)
 
-- Column 1: 16×16px checkbox, 4px radius
+- Column 1: 16×16px checkbox, `$radius-sm` (8px) radius
 - Selected row: `var(--brand-softer)` background
 - Header checkbox: selects/deselects all
 - Bulk action bar appears above table when rows are selected

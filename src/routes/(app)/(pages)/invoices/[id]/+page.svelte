@@ -14,7 +14,8 @@
 	import DocumentTotalsCard from '$lib/components/documents/DocumentTotalsCard.svelte';
 	import DocumentDiscountEditor from '$lib/components/documents/DocumentDiscountEditor.svelte';
 	import InvoiceStatusBadge from '$lib/components/invoices/InvoiceStatusBadge.svelte';
-	import PaymentHistory from '$lib/components/invoices/PaymentHistory.svelte';
+	import PaymentsCard from '$lib/components/invoices/PaymentsCard.svelte';
+	import InvoiceSignatureCard from '$lib/components/invoices/InvoiceSignatureCard.svelte';
 	import AttachmentList from '$lib/components/media/AttachmentList.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -261,13 +262,16 @@
 
 	let catalogOpen = $state(false);
 	let sendOpen = $state(false);
-	let paymentOpen = $state(false);
 	let linkOpen = $state(false);
-	let cancelOpen = $state(false);
 	let deleteOpen = $state(false);
+	let markReceivedOpen = $state(false);
+	let badDebtOpen = $state(false);
 	let saving = $state(false);
-	let cancelling = $state(false);
+	let closing = $state(false);
+	let reopening = $state(false);
 	let deleting = $state(false);
+	let markingSent = $state(false);
+	let duplicating = $state(false);
 
 	// Edit-after-send: the contractor has re-opened an already-sent (sent / partially_paid / overdue)
 	// invoice to amend it. Draft invoices are edited without this toggle (always editable).
@@ -286,14 +290,18 @@
 	const pricingEditing = $derived(editingSection === 'pricing');
 
 	const isDraft = $derived(invoice?.status === 'draft');
-	const isCancelled = $derived(invoice?.status === 'cancelled');
 	const isPaid = $derived(invoice?.status === 'paid');
-	// Intrinsically editable = draft (edits inline immediately). A sent / partially_paid / overdue
-	// invoice unlocks editing via the header "Edit" (edit-after-send). Paid / cancelled stay locked.
+	const isBadDebt = $derived(invoice?.status === 'bad_debt');
+	// Mark-Received closes the invoice AS paid but with received_at set (no payment logged). Both it
+	// and bad_debt are "closed" states that can be reopened.
+	const isReceived = $derived(!!invoice?.received_at);
+	const isClosed = $derived(isBadDebt || isReceived);
+	// Intrinsically editable = draft (edits inline immediately). A sent_not_due / awaiting_payment /
+	// past_due invoice unlocks editing via the header "Edit" (edit-after-send). Paid / bad_debt lock.
 	const canResend = $derived(
-		invoice?.status === 'sent' ||
-			invoice?.status === 'partially_paid' ||
-			invoice?.status === 'overdue'
+		invoice?.status === 'sent_not_due' ||
+			invoice?.status === 'awaiting_payment' ||
+			invoice?.status === 'past_due'
 	);
 	const alwaysEditable = $derived(isDraft);
 	const isEditable = $derived(alwaysEditable || editMode);
@@ -320,8 +328,19 @@
 	);
 
 	const canCollect = $derived(
-		invoice && !isDraft && !isCancelled && !isPaid && Number(invoice.amount_due) > 0
+		invoice && !isDraft && !isBadDebt && !isPaid && Number(invoice.amount_due) > 0
 	);
+	// Close actions (Jobber): Mark-Received / Bad-Debt on an open, collectible invoice; Reopen /
+	// Unmark on a closed one. Same authority as delete (can_delete_invoices).
+	const canClose = $derived(
+		!!invoice &&
+			!isDraft &&
+			!isPaid &&
+			!isBadDebt &&
+			Number(invoice.amount_due) > 0 &&
+			canCancelPerm
+	);
+	const canReopen = $derived(isClosed && canCancelPerm);
 	const overdue = $derived(
 		invoice ? isEffectivelyOverdue(invoice.status, invoice.due_date, invoice.amount_due) : false
 	);
@@ -526,6 +545,49 @@
 	}
 
 	let pdfBusy = $state(false);
+	async function markAsSent() {
+		if (!invoice || markingSent || !isDraft) return;
+		markingSent = true;
+		try {
+			const res = await fetch(`/api/invoices/${invoice.id}/mark-sent`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Could not mark invoice as sent');
+				return;
+			}
+			toast.success('Invoice marked as sent');
+			await refresh();
+		} catch {
+			toast.error('Network error');
+		} finally {
+			markingSent = false;
+		}
+	}
+
+	async function createSimilar() {
+		if (!invoice || duplicating) return;
+		duplicating = true;
+		try {
+			const res = await fetch(`/api/invoices/${invoice.id}/duplicate`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Could not create similar invoice');
+				return;
+			}
+			toast.success(`${body.data.invoice_number_display} created as a draft`);
+			await goto(`/invoices/${body.data.id}`);
+		} catch {
+			toast.error('Network error');
+		} finally {
+			duplicating = false;
+		}
+	}
+
+	function previewAsClient() {
+		if (!invoice) return;
+		window.open(`/invoice-preview/${invoice.id}`, '_blank', 'noopener');
+	}
+
 	async function downloadPdf() {
 		if (!invoice || pdfBusy) return;
 		pdfBusy = true;
@@ -649,16 +711,6 @@
 		});
 	});
 
-	let RecordPaymentDialog = $state<
-		typeof import('$lib/components/invoices/RecordPaymentDialog.svelte').default | null
-	>(null);
-	$effect(() => {
-		if (!paymentOpen || RecordPaymentDialog) return;
-		void import('$lib/components/invoices/RecordPaymentDialog.svelte').then((m) => {
-			RecordPaymentDialog = m.default;
-		});
-	});
-
 	let PaymentLinkDialog = $state<
 		typeof import('$lib/components/invoices/PaymentLinkDialog.svelte').default | null
 	>(null);
@@ -673,26 +725,52 @@
 		typeof import('$lib/components/shared/ConfirmDialog.svelte').default | null
 	>(null);
 	$effect(() => {
-		if ((!cancelOpen && !deleteOpen) || ConfirmDialog) return;
+		if ((!deleteOpen && !markReceivedOpen && !badDebtOpen) || ConfirmDialog) return;
 		void import('$lib/components/shared/ConfirmDialog.svelte').then((m) => {
 			ConfirmDialog = m.default;
 		});
 	});
 
-	async function cancelInvoice() {
+	// Close an invoice (Jobber). mode 'mark_received' = closed as paid, no payment logged; 'bad_debt'
+	// = write off the remaining balance. Both reversible via reopenInvoice().
+	async function closeInvoice(mode: 'mark_received' | 'bad_debt') {
 		if (!invoice) return;
-		cancelling = true;
+		closing = true;
 		try {
-			const res = await fetch(`/api/invoices/${invoice.id}/cancel`, { method: 'POST' });
+			const res = await fetch(`/api/invoices/${invoice.id}/close`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ mode })
+			});
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				toast.error(body.error ?? 'Failed to cancel');
+				toast.error(body.error ?? 'Failed to close invoice');
 				return;
 			}
-			toast.success('Invoice cancelled');
+			toast.success(mode === 'mark_received' ? 'Marked as received' : 'Written off as bad debt');
+			markReceivedOpen = false;
+			badDebtOpen = false;
 			await refresh();
 		} finally {
-			cancelling = false;
+			closing = false;
+		}
+	}
+
+	// Reverse a close (invoiceReopen / invoiceUnmarkBadDebt).
+	async function reopenInvoice() {
+		if (!invoice) return;
+		reopening = true;
+		try {
+			const res = await fetch(`/api/invoices/${invoice.id}/reopen`, { method: 'POST' });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(body.error ?? 'Failed to reopen invoice');
+				return;
+			}
+			toast.success('Invoice reopened');
+			await refresh();
+		} finally {
+			reopening = false;
 		}
 	}
 
@@ -795,20 +873,40 @@
 					<Button type="button" variant="outline" onclick={() => (linkOpen = true)}>
 						<i class="ri-link" aria-hidden="true"></i>Payment link
 					</Button>
-					<Button type="button" onclick={() => (paymentOpen = true)}>
-						<i class="ri-bank-card-line" aria-hidden="true"></i>Record payment
-					</Button>
 				{/if}
 			{/if}
 			{#if editingSection === null}
-				{@const showPdf = !isDraft}
-				{@const showCancel = !isDraft && !isCancelled && !isPaid && canCancelPerm}
-				{#if showPdf || showCancel || showDelete}
+				{@const showPdf = true}
+				{#if showPdf || canClose || canReopen || showDelete}
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger class="btn btn--icon btn--outline" aria-label="More actions">
 							<i class="ri-more-2-fill" aria-hidden="true"></i>
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="end">
+							{#if isDraft}
+								<DropdownMenu.Item
+									closeOnSelect={false}
+									onclick={markAsSent}
+									disabled={markingSent}
+								>
+									{#if markingSent}
+										<i
+											class="ri-loader-4-line"
+											aria-hidden="true"
+											style="animation: spin 1s linear infinite;"
+										></i> Marking as sent…
+									{:else}
+										<i class="ri-send-plane-line" aria-hidden="true"></i> Mark as sent
+									{/if}
+								</DropdownMenu.Item>
+								<DropdownMenu.Item onclick={createSimilar} disabled={duplicating}>
+									<i class="ri-file-copy-line" aria-hidden="true"></i> Create similar invoice
+								</DropdownMenu.Item>
+								<DropdownMenu.Separator />
+							{/if}
+							<DropdownMenu.Item onclick={previewAsClient}>
+								<i class="ri-eye-line" aria-hidden="true"></i> Preview as client
+							</DropdownMenu.Item>
 							{#if showPdf}
 								<DropdownMenu.Item closeOnSelect={false} onclick={downloadPdf} disabled={pdfBusy}>
 									{#if pdfBusy}
@@ -818,21 +916,35 @@
 											style="animation: spin 1s linear infinite;"
 										></i> Preparing PDF…
 									{:else}
-										<i class="ri-download-line" aria-hidden="true"></i> Download PDF
+										<i class="ri-printer-line" aria-hidden="true"></i> Print / Save PDF
 									{/if}
 								</DropdownMenu.Item>
 							{/if}
-							{#if showCancel}
+							{#if canClose}
 								{#if showPdf}<DropdownMenu.Separator />{/if}
+								<DropdownMenu.Item onclick={() => (markReceivedOpen = true)}>
+									<i class="ri-checkbox-circle-line" aria-hidden="true"></i> Mark as received
+								</DropdownMenu.Item>
 								<DropdownMenu.Item
 									class="dropdown__item--danger"
-									onclick={() => (cancelOpen = true)}
+									onclick={() => (badDebtOpen = true)}
 								>
-									<i class="ri-forbid-line" aria-hidden="true"></i> Cancel invoice
+									<i class="ri-forbid-line" aria-hidden="true"></i> Write off (bad debt)
+								</DropdownMenu.Item>
+							{/if}
+							{#if canReopen}
+								{#if showPdf}<DropdownMenu.Separator />{/if}
+								<DropdownMenu.Item
+									closeOnSelect={false}
+									onclick={reopenInvoice}
+									disabled={reopening}
+								>
+									<i class="ri-arrow-go-back-line" aria-hidden="true"></i>
+									{isBadDebt ? 'Unmark bad debt' : 'Reopen invoice'}
 								</DropdownMenu.Item>
 							{/if}
 							{#if showDelete}
-								{#if showPdf || showCancel}<DropdownMenu.Separator />{/if}
+								{#if showPdf || canClose || canReopen}<DropdownMenu.Separator />{/if}
 								<DropdownMenu.Item
 									class="dropdown__item--danger"
 									onclick={() => (deleteOpen = true)}
@@ -1062,6 +1174,34 @@
 						/>
 					{/if}
 				</DocumentSectionCard>
+
+				<!-- Payments (record / reverse / receipt) -->
+				<PaymentsCard
+					invoiceId={inv.id}
+					invoiceNumberDisplay={inv.invoice_number_display}
+					payments={inv.payments}
+					amountDue={inv.amount_due}
+					tipsEnabled={org().tips_enabled && inv.accept_tips}
+					canRecord={member().can_record_payments}
+					orgName={org().name}
+					contactName={inv.contact_name}
+					contactEmail={inv.contact_email}
+					contactPhone={inv.contact_phone}
+					contactSmsOptOut={inv.contact_sms_opt_out}
+					onChanged={() => void refresh()}
+				/>
+
+				<!-- Signature — collected in person on this device (any status, incl. draft) -->
+				<InvoiceSignatureCard
+					invoiceId={inv.id}
+					invoiceNumberDisplay={inv.invoice_number_display}
+					contactName={inv.contact_name}
+					signerName={inv.signature_name}
+					signedAt={inv.signed_at}
+					signatureMediaId={inv.signature_media_id}
+					canEdit={member().can_create_invoices}
+					onChanged={() => void refresh()}
+				/>
 			{/snippet}
 
 			{#snippet sidebar()}
@@ -1083,7 +1223,7 @@
 
 				<!-- Late fee (M8): ONE card — policy + overdue "apply now" + applied state.
 				     Shown while the org has late fees on and the invoice is still collectible. -->
-				{#if org().late_fee_enabled && !isPaid && !isCancelled && invoice}
+				{#if org().late_fee_enabled && !isPaid && !isBadDebt && invoice}
 					<div class="invoice-latefee-config">
 						{#if hasLateFee}
 							<!-- Applied: collapsed summary + remove -->
@@ -1249,13 +1389,8 @@
 					</div>
 				{/if}
 
-				<!-- Payment history -->
-				{#if !isDraft}
-					<PaymentHistory payments={inv.payments} />
-				{/if}
-
 				<!-- Automatic payment reminders (per-invoice opt-out) -->
-				{#if !isCancelled && !isPaid}
+				{#if !isBadDebt && !isPaid}
 					<div class="invoice-reminders-card">
 						<div class="invoice-reminders-card__row">
 							<div class="invoice-reminders-card__text">
@@ -1283,7 +1418,7 @@
 				{/if}
 
 				<!-- Accept tips (per-invoice opt-out; org tips_enabled is the master gate) -->
-				{#if !isCancelled && !isPaid}
+				{#if !isBadDebt && !isPaid}
 					<div class="invoice-reminders-card">
 						<div class="invoice-reminders-card__row">
 							<div class="invoice-reminders-card__text">
@@ -1339,18 +1474,6 @@
 			/>
 		{/if}
 
-		{#if RecordPaymentDialog}
-			<RecordPaymentDialog
-				bind:open={paymentOpen}
-				invoiceId={inv.id}
-				amountDue={inv.amount_due}
-				tipsEnabled={org().tips_enabled && inv.accept_tips}
-				onRecorded={() => {
-					void refresh();
-				}}
-			/>
-		{/if}
-
 		{#if PaymentLinkDialog}
 			<PaymentLinkDialog
 				bind:open={linkOpen}
@@ -1361,14 +1484,23 @@
 
 		{#if ConfirmDialog}
 			<ConfirmDialog
-				bind:open={cancelOpen}
-				title="Cancel invoice?"
-				description="The customer will no longer be able to pay this invoice. This cannot be undone."
-				confirmLabel="Cancel invoice"
+				bind:open={markReceivedOpen}
+				title="Mark as received?"
+				description="Closes this invoice as paid without recording a payment — use it when you were paid outside the app. You can reopen it later."
+				confirmLabel="Mark as received"
+				cancelLabel="Keep open"
+				loading={closing}
+				onConfirm={() => closeInvoice('mark_received')}
+			/>
+			<ConfirmDialog
+				bind:open={badDebtOpen}
+				title="Write off as bad debt?"
+				description="Writes off the remaining balance as uncollectible. The invoice stays on record but leaves your outstanding and past-due lists. You can unmark it later."
+				confirmLabel="Write off"
 				cancelLabel="Keep open"
 				variant="destructive"
-				loading={cancelling}
-				onConfirm={cancelInvoice}
+				loading={closing}
+				onConfirm={() => closeInvoice('bad_debt')}
 			/>
 			<ConfirmDialog
 				bind:open={deleteOpen}

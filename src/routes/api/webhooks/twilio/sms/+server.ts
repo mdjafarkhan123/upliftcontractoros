@@ -11,6 +11,8 @@ import {
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { detectOptKeyword } from '$lib/server/twilio/optOut';
 import { stopEnrollmentsForContact } from '$lib/server/automation/engine';
+import { changeCommunicationPreferenceInTransaction } from '$lib/server/communication-preferences/mutations';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 import { toE164, PhoneInvalidError } from '$lib/utils/phone';
 import { touchContactLastContacted } from '$lib/server/contacts/touchLastContacted';
 import { findOrCreateOpenConversation, recordInboundMessage } from '$lib/server/conversations';
@@ -103,18 +105,47 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// STOP from known contact → apply opt-out, no events, no message stored
 	if (optKeyword === 'stop' && existingContact) {
-		await db
-			.update(contacts)
-			.set({
-				sms_opt_out: true,
-				sms_opt_out_at: new Date(),
-				sms_opt_out_source: 'customer_reply',
-				updated_at: new Date()
-			})
-			.where(eq(contacts.id, existingContact.id));
+		await db.transaction(async (tx) => {
+			await tx
+				.update(contacts)
+				.set({
+					sms_opt_out: true,
+					sms_opt_out_at: new Date(),
+					sms_opt_out_source: 'customer_reply',
+					updated_at: new Date()
+				})
+				.where(eq(contacts.id, existingContact.id));
+			await changeCommunicationPreferenceInTransaction(tx, {
+				orgId: org.id,
+				contactId: existingContact.id,
+				channel: 'sms',
+				direction: 'outbound',
+				category: 'all',
+				status: 'permanent',
+				source: 'customer',
+				reasonCode: 'SMS_STOP',
+				reasonMessage: 'Contact replied with an opt-out keyword.',
+				provider: 'twilio',
+				providerEventId: sid,
+				metadata: { keyword: optKeyword }
+			});
+		});
 		// Hard stop any active sequence-engine enrollment for this contact (Stage 3.b).
 		await stopEnrollmentsForContact(org.id, existingContact.id, 'opt_out');
 		return twiml();
+	}
+
+	// HighLevel inbound DND blocks SMS before it creates inbox or lead activity.
+	// STOP/START remain above this gate so compliance commands can be processed.
+	if (existingContact && optKeyword !== 'start') {
+		const eligibility = await canContactReceiveCommunication({
+			orgId: org.id,
+			contactId: existingContact.id,
+			channel: 'sms',
+			direction: 'inbound',
+			category: 'manual_message'
+		});
+		if (!eligibility.allowed) return twiml();
 	}
 
 	// Normal inbound path — wrap business mutations + outbox in one transaction
@@ -138,6 +169,21 @@ export const POST: RequestHandler = async ({ request }) => {
 							updated_at: new Date()
 						})
 						.where(eq(contacts.id, contactId));
+					await changeCommunicationPreferenceInTransaction(tx, {
+						orgId: org.id,
+						contactId,
+						channel: 'sms',
+						direction: 'outbound',
+						category: 'all',
+						status: 'allowed',
+						source: 'customer',
+						reasonCode: 'SMS_START',
+						reasonMessage: 'Contact replied with an opt-in keyword.',
+						provider: 'twilio',
+						providerEventId: sid,
+						allowPermanentClear: true,
+						metadata: { keyword: optKeyword }
+					});
 					wasReOptIn = true;
 				}
 				await tx.insert(outboxEvents).values({

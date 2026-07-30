@@ -4,7 +4,7 @@
 
 ## Core Specs
 
-- Font: 14px, medium (500), `var(--color-text-secondary)` color
+- Font: `$fs-body`/`var(--text-body)` (14px), medium (500), `var(--color-text-secondary)` color
 - Transitions: all 200ms ease
 
 ## Variants
@@ -14,9 +14,9 @@
 **Wrapper:** bottom border 1px `var(--color-border)`
 
 **Tab Item:**
-- Padding: 16px horizontal, 14px vertical
+- Padding: `$space-4` (16px) horizontal, 14px vertical
 - Bottom border: 2px transparent
-- Top corners: 8px radius
+- Top corners: `$radius-sm` (8px)
 - Transition: colors 150ms
 
 | State | Appearance |
@@ -28,8 +28,8 @@
 ### 2. Pills
 
 **Tab Item:**
-- Padding: 10px horizontal, 8px vertical
-- Radius: 8px
+- Padding: `$space-2` (10px) horizontal, `$space-2` (8px) vertical
+- Radius: `$radius-sm` (8px)
 - Font weight: medium
 - Transition: all 200ms
 
@@ -58,7 +58,7 @@ Children: −1px left margin on all except first.
 
 ## Tabs with Icons
 
-- Icon: 16×16px, 8px right margin
+- Icon: 16×16px, `$space-2` (8px) right margin
 - Layout: inline-flex, vertically centered
 - Icons inherit tab state text color
 

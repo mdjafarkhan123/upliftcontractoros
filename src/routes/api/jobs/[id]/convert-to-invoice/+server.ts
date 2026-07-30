@@ -9,6 +9,7 @@ import { generateToken } from '$lib/server/quotes/token';
 import { recalcInvoiceTotals } from '$lib/server/invoices/recalc';
 import { orgLateFeeSnapshot } from '$lib/server/invoices/lateFee';
 import { formatInvoiceNumber } from '$lib/server/invoices/format';
+import { dischargeJobInvoiceReminders } from '$lib/server/jobs/reminderDischarge';
 
 // Create an invoice from a job (Jobber/Autopilot model: the invoice flows from the job's
 // committed work). Snapshots the job's line items into invoice_line_items — independent copies,
@@ -43,12 +44,12 @@ export const POST: RequestHandler = async (event) => {
 		`);
 		if (!job) throw error(404, 'Job not found');
 
-		// An active (non-cancelled) invoice already exists → return it (no duplicates).
+		// An existing (non-deleted) invoice already exists → return it (no duplicates). Strict Jobber
+		// has no cancelled status — a cancelled invoice is soft-deleted, so deleted_at carries the gate.
 		const [existing] = await tx.execute<{ id: string; invoice_number: number }>(sql`
 			SELECT id, invoice_number FROM invoices
 			WHERE job_id = ${jobId}
 			  AND deleted_at IS NULL
-			  AND status != 'cancelled'
 			LIMIT 1
 		`);
 		if (existing) {
@@ -150,6 +151,15 @@ export const POST: RequestHandler = async (event) => {
 			}))
 		);
 		await recalcInvoiceTotals(tx, inserted.id);
+
+		// Auto-complete any of the job's invoice reminders whose date window covers today (an
+		// invoice created within a reminder's range clears it). No billed visits on this path.
+		await dischargeJobInvoiceReminders(tx, {
+			orgId: auth.orgId,
+			jobId,
+			now: new Date(),
+			completedBy: auth.member.id
+		});
 
 		return { existing: false, id: inserted.id, invoice_number: invoiceNumber };
 	});

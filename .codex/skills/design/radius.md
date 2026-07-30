@@ -1,12 +1,13 @@
 # Border Radius
 
-> SCSS variables: `$radius-sm`, `$radius-md`, `$radius-lg`, `$radius-xl`, `$radius-2xl`, `$radius-full`
-> Runtime mirrors: `var(--radius-sm)` … `var(--radius-full)` (for use outside compiled Sass).
+> SCSS variables: `$radius-xs`, `$radius-sm`, `$radius-md`, `$radius-lg`, `$radius-xl`, `$radius-2xl`, `$radius-full`
+> Runtime mirrors: `var(--radius-xs)` … `var(--radius-full)` (for use outside compiled Sass).
 
 Radii are **generous by design** — this is not the 8px Bootstrap default. Cards sit at 20–28px.
 
 | Token | Value | SCSS | Live usage |
 |---|---|---|---|
+| xs | 4px | `$radius-xs` | Checkboxes, compact controls |
 | sm | 8px | `$radius-sm` | Buttons, small controls, sidebar active-indicator corner |
 | md | 12px | `$radius-md` | Inputs / fields, icon-shape containers, nav items, dialog inner blocks |
 | lg | 16px | `$radius-lg` | Dropdown / command-palette panels, larger surface panels |

@@ -62,6 +62,7 @@
 	let tagsDraft = $state<string[]>([]);
 	let dncSaving = $state(false);
 	let emailOptInSaving = $state(false);
+	let reviewRequestsSaving = $state(false);
 
 	// Inline editing is coordinated by the shared page-level controller so the ONE
 	// Save/Cancel bar (in the header topbar) serves every field on the page. Each
@@ -246,6 +247,14 @@
 		const err = await patchField({ do_not_contact: !contact.do_not_contact });
 		if (err) toast.error(err);
 		dncSaving = false;
+	}
+
+	async function toggleReviewRequests() {
+		if (!canEdit || reviewRequestsSaving) return;
+		reviewRequestsSaving = true;
+		const err = await patchField({ receives_review_requests: !contact.receives_review_requests });
+		if (err) toast.error(err);
+		reviewRequestsSaving = false;
 	}
 
 	const sourceLabel = $derived(
@@ -597,6 +606,27 @@
 				class="toggle {contact.email_opt_in ? 'toggle--on' : ''}"
 				disabled={!canEdit || emailOptInSaving}
 				onclick={toggleEmailOptIn}
+			>
+				<span class="toggle__thumb"></span>
+			</button>
+		</div>
+
+		<!-- Review requests are separate from service-message consent. -->
+		<div class="details-panel__dnc">
+			<div>
+				<p class="details-panel__dnc-label">Review requests</p>
+				<p class="details-panel__dnc-desc">
+					Allow review request text messages. Other job messages are unaffected.
+				</p>
+			</div>
+			<button
+				type="button"
+				role="switch"
+				aria-checked={contact.receives_review_requests}
+				aria-label="Allow review request text messages"
+				class="toggle {contact.receives_review_requests ? 'toggle--on' : ''}"
+				disabled={!canEdit || reviewRequestsSaving}
+				onclick={toggleReviewRequests}
 			>
 				<span class="toggle__thumb"></span>
 			</button>

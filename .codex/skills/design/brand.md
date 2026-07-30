@@ -33,7 +33,7 @@ These mirror `colors.md` (the authoritative token contract) — same token, both
 ## Rules
 
 - Pair the logo with an accessible text label where the mark alone would be ambiguous.
-- Never use brand green (#227d53) for long-form body paragraphs.
+- Never use brand green (`var(--color-brand)` → `#227d53`) for long-form body paragraphs.
 - Never use brand backgrounds for large layout surfaces (sidebar fill, full-page backgrounds).
 - Brand color is for actions, links, active states, and key data highlights only.
 - Use `colors.md`, `typography.md`, `layout.md`, and component modules for all visual values.

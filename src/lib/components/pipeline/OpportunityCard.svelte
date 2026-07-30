@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { formatCurrency, formatDate, formatRelativeShort } from '$lib/utils/format';
 	import type { OpportunityQuoteSummary } from '$lib/types/pipeline';
@@ -40,15 +41,6 @@
 		onMarkLost,
 		onQuickFollowUp
 	}: Props = $props();
-
-	const initials = $derived(
-		(assignee_name ?? '')
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(0, 2)
-			.map((s) => s[0]!.toUpperCase())
-			.join('')
-	);
 
 	// --- Stage staleness ---
 	const daysInStage = $derived(
@@ -254,7 +246,7 @@
 					</span>
 				{/if}
 				{#if assignee_name}
-					<span class="pipeline-card__avatar" aria-label={assignee_name}>{initials}</span>
+					<Avatar size="sm" name={assignee_name} />
 				{/if}
 			</div>
 		</div>

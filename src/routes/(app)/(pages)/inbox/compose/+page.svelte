@@ -386,7 +386,7 @@
 			padding: $space-3;
 			background-color: var(--color-bg-surface);
 			border-top: 1px solid var(--color-border);
-			box-shadow: 0 -10px 30px -20px rgba(13, 21, 15, 0.18);
+			box-shadow: var(--shadow-sm);
 
 			@media (min-width: $bp-mobile) {
 				padding: $space-3 $space-5;

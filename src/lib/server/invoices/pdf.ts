@@ -34,7 +34,7 @@ export type InvoicePdfData = {
 		id: string;
 		invoice_number_display: string;
 		title: string;
-		status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+		status: 'draft' | 'sent_not_due' | 'awaiting_payment' | 'paid' | 'past_due' | 'bad_debt';
 		subtotal: string;
 		discount_type: string;
 		discount_value: string | null;
@@ -72,6 +72,13 @@ export type InvoicePdfData = {
 	// Client sign-off carried over from the linked job (Session 6). Null when the job wasn't
 	// signed off, or the invoice has no linked job. `signature_url` is a short-lived signed R2 URL.
 	signoff?: {
+		signer_name: string | null;
+		signed_at: string;
+		signature_url: string;
+	} | null;
+	// The customer's in-person signature acknowledging THIS invoice (collected on the contractor's
+	// device). Null when unsigned. `signature_url` is a short-lived signed R2 URL.
+	signature?: {
 		signer_name: string | null;
 		signed_at: string;
 		signature_url: string;
@@ -140,6 +147,16 @@ function renderHtml(d: InvoicePdfData): string {
 			</div>`
 		: '';
 
+	const signatureHtml = d.signature
+		? `<div class="signoff">
+				<div class="section-title">Signature</div>
+				<img class="signoff-img" src="${escapeHtml(d.signature.signature_url)}" alt="Customer signature" />
+				<div class="muted">Signed${
+					d.signature.signer_name ? ` by ${escapeHtml(d.signature.signer_name)}` : ''
+				} on ${fmtDate(new Date(d.signature.signed_at))}</div>
+			</div>`
+		: '';
+
 	// Invoice-level discount row — shown only when a real dollars-off amount exists.
 	const discountNum = Number(d.invoice.discount_amount ?? 0);
 	const discountLabel = (() => {
@@ -157,7 +174,15 @@ function renderHtml(d: InvoicePdfData): string {
 				)}</span></div>`
 			: '';
 
-	const statusLabel = d.invoice.status === 'partially_paid' ? 'Partially paid' : d.invoice.status;
+	const statusLabel =
+		{
+			draft: 'Draft',
+			sent_not_due: 'Sent',
+			awaiting_payment: 'Awaiting payment',
+			paid: 'Paid',
+			past_due: 'Past due',
+			bad_debt: 'Bad debt'
+		}[d.invoice.status] ?? d.invoice.status;
 	const dueDateLine = d.invoice.due_date
 		? `<div class="muted">Due ${fmtDate(new Date(d.invoice.due_date + 'T00:00:00'))}</div>`
 		: '';
@@ -233,6 +258,7 @@ function renderHtml(d: InvoicePdfData): string {
 			: ''
 	}
 	${signoffHtml}
+	${signatureHtml}
 </body></html>`;
 }
 

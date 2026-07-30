@@ -10,7 +10,10 @@ import {
 	quotes,
 	invoices,
 	conversations,
-	outboxEvents
+	outboxEvents,
+	contactCommunicationPreferences,
+	contactCommunicationPreferenceEvents,
+	contactCommunicationConsents
 } from '$lib/server/db/schema';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { resolveLogoUrl } from '$lib/server/media/resolveLogo';
@@ -240,7 +243,7 @@ export async function loadContactDetail(orgId: string, contactId: string) {
 			SELECT
 				COALESCE((SELECT SUM(amount_paid::numeric) FROM invoices
 					WHERE contact_id = ${contactId} AND org_id = ${orgId}
-					AND deleted_at IS NULL AND status IN ('paid', 'partially_paid')), 0)::text AS lifetime_revenue,
+					AND deleted_at IS NULL AND status IN ('paid', 'awaiting_payment', 'past_due')), 0)::text AS lifetime_revenue,
 				(SELECT COUNT(*)::int FROM quotes
 					WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL AND status IN ('draft', 'sent', 'viewed', 'changes_requested')) AS open_quotes_count,
@@ -415,7 +418,7 @@ export async function loadContactOverview(
 				FROM invoices
 				WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL
-					AND status IN ('sent', 'partially_paid', 'overdue')
+					AND status IN ('sent_not_due', 'awaiting_payment', 'past_due')
 					AND amount_due::numeric > 0
 				ORDER BY due_date ASC NULLS LAST
 				LIMIT ${OVERVIEW_LIMIT}
@@ -423,7 +426,7 @@ export async function loadContactOverview(
 			(SELECT COUNT(*)::int FROM invoices
 				WHERE contact_id = ${contactId} AND org_id = ${orgId}
 					AND deleted_at IS NULL
-					AND status IN ('sent', 'partially_paid', 'overdue')
+					AND status IN ('sent_not_due', 'awaiting_payment', 'past_due')
 					AND amount_due::numeric > 0) AS unpaid_invoices_count,
 
 			COALESCE((SELECT json_agg(a) FROM (
@@ -589,6 +592,127 @@ export async function mergeContacts(
 			);
 		}
 
+		// Communication preferences and consents have unique per-contact scopes.
+		// Reparent non-colliding rows and keep the most restrictive value when both
+		// contacts have the same scope. Audit history is retained on the survivor.
+		const [survivorPreferences, sourcePreferences, survivorConsents, sourceConsents] =
+			await Promise.all([
+				tx
+					.select()
+					.from(contactCommunicationPreferences)
+					.where(
+						and(
+							eq(contactCommunicationPreferences.org_id, orgId),
+							eq(contactCommunicationPreferences.contact_id, survivorId)
+						)
+					),
+				tx
+					.select()
+					.from(contactCommunicationPreferences)
+					.where(
+						and(
+							eq(contactCommunicationPreferences.org_id, orgId),
+							eq(contactCommunicationPreferences.contact_id, sourceId)
+						)
+					),
+				tx
+					.select()
+					.from(contactCommunicationConsents)
+					.where(
+						and(
+							eq(contactCommunicationConsents.org_id, orgId),
+							eq(contactCommunicationConsents.contact_id, survivorId)
+						)
+					),
+				tx
+					.select()
+					.from(contactCommunicationConsents)
+					.where(
+						and(
+							eq(contactCommunicationConsents.org_id, orgId),
+							eq(contactCommunicationConsents.contact_id, sourceId)
+						)
+					)
+			]);
+
+		const preferenceRank = (status: string) =>
+			status === 'permanent' ? 3 : status === 'blocked' ? 2 : 1;
+		for (const sourcePreference of sourcePreferences) {
+			const survivorPreference = survivorPreferences.find(
+				(row) =>
+					row.channel === sourcePreference.channel &&
+					row.direction === sourcePreference.direction &&
+					row.category === sourcePreference.category
+			);
+			if (!survivorPreference) {
+				await tx
+					.update(contactCommunicationPreferences)
+					.set({ contact_id: survivorId })
+					.where(eq(contactCommunicationPreferences.id, sourcePreference.id));
+				continue;
+			}
+			if (preferenceRank(sourcePreference.status) > preferenceRank(survivorPreference.status)) {
+				await tx
+					.update(contactCommunicationPreferences)
+					.set({
+						status: sourcePreference.status,
+						source: sourcePreference.source,
+						reason_code: sourcePreference.reason_code,
+						reason_message: sourcePreference.reason_message,
+						provider: sourcePreference.provider,
+						provider_event_id: sourcePreference.provider_event_id,
+						metadata: sourcePreference.metadata,
+						effective_from: sourcePreference.effective_from,
+						updated_at: sourcePreference.updated_at
+					})
+					.where(eq(contactCommunicationPreferences.id, survivorPreference.id));
+			}
+			await tx
+				.delete(contactCommunicationPreferences)
+				.where(eq(contactCommunicationPreferences.id, sourcePreference.id));
+		}
+
+		const consentRank = (status: string) =>
+			status === 'revoked' || status === 'opted_out' ? 3 : status === 'opted_in' ? 2 : 1;
+		for (const sourceConsent of sourceConsents) {
+			const survivorConsent = survivorConsents.find(
+				(row) => row.channel === sourceConsent.channel && row.category === sourceConsent.category
+			);
+			if (!survivorConsent) {
+				await tx
+					.update(contactCommunicationConsents)
+					.set({ contact_id: survivorId })
+					.where(eq(contactCommunicationConsents.id, sourceConsent.id));
+				continue;
+			}
+			if (consentRank(sourceConsent.status) > consentRank(survivorConsent.status)) {
+				await tx
+					.update(contactCommunicationConsents)
+					.set({
+						status: sourceConsent.status,
+						source: sourceConsent.source,
+						evidence: sourceConsent.evidence,
+						consented_at: sourceConsent.consented_at,
+						revoked_at: sourceConsent.revoked_at,
+						updated_at: sourceConsent.updated_at
+					})
+					.where(eq(contactCommunicationConsents.id, survivorConsent.id));
+			}
+			await tx
+				.delete(contactCommunicationConsents)
+				.where(eq(contactCommunicationConsents.id, sourceConsent.id));
+		}
+
+		await tx
+			.update(contactCommunicationPreferenceEvents)
+			.set({ contact_id: survivorId })
+			.where(
+				and(
+					eq(contactCommunicationPreferenceEvents.org_id, orgId),
+					eq(contactCommunicationPreferenceEvents.contact_id, sourceId)
+				)
+			);
+
 		// Rewrite referral pointers from other contacts that were referred by the
 		// source. Exclude the survivor/source themselves to avoid self-reference.
 		await tx
@@ -656,6 +780,10 @@ export async function mergeContacts(
 				tags: dedupe([...survivor.tags, ...source.tags]),
 				status: finalStatus,
 				converted_at: convertedAt,
+				do_not_contact: survivor.do_not_contact || source.do_not_contact,
+				email_opt_in: survivor.email_opt_in && source.email_opt_in,
+				receives_review_requests:
+					survivor.receives_review_requests && source.receives_review_requests,
 				next_follow_up_at: earliest([survivor.next_follow_up_at, source.next_follow_up_at]),
 				last_contacted_at: latest([survivor.last_contacted_at, source.last_contacted_at]),
 				sms_opt_out: optOut,

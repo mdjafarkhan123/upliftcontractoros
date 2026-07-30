@@ -7,7 +7,7 @@
 - **Padding:** 16px
 - **Radius:** 8px (`$radius-sm`)
 - **Border:** 1px
-- **Heading:** 16px, medium (500)
+- **Heading:** `$fs-lg`/`var(--text-lg)` (16px), medium (500)
 - **Body:** 14px, normal, 1.6 line-height
 - **Layout:** flex row, 12px gap between icon and content
 
@@ -40,7 +40,7 @@
 
 ## Anatomy
 
-- **Icon:** 20×20px, left-aligned, matches text color
+- **Icon:** 20×20px (`$space-5`), left-aligned, matches text color
 - **Content:** flex column — heading (optional) + body text
 - **Close button (optional):** ghost button, right-aligned, 20×20px icon
 

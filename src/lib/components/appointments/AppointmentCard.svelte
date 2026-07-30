@@ -5,6 +5,7 @@
 	import type { AppointmentListItem, AppointmentType } from '$lib/types/appointments';
 	import { prefetchOnIntent } from '$lib/actions/prefetch';
 	import { appointmentsStore } from '$lib/stores/appointments.svelte';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	let {
 		appointment,
@@ -36,15 +37,6 @@
 	const endTime = $derived(
 		appointment.scheduled_end ? formatTimeInOrgTz(appointment.scheduled_end, orgTz) : null
 	);
-
-	const avatarInitials = $derived.by(() => {
-		const name = appointment.assignee_name;
-		if (!name) return '?';
-		const parts = name.trim().split(/\s+/);
-		return parts.length >= 2
-			? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-			: parts[0][0].toUpperCase();
-	});
 
 	// Crew stack — list data carries only the lead name + a total count, so we
 	// render the lead avatar and an overlapping "+N" chip for the rest of the crew.
@@ -112,9 +104,9 @@
 	<div class="appt-card__footer">
 		<div class="appt-card__assignee">
 			<span class="appt-card__crew" aria-hidden="true">
-				<span class="appt-card__avatar">{avatarInitials}</span>
+				<Avatar size="sm" name={appointment.assignee_name ?? ''} />
 				{#if extraCrew > 0}
-					<span class="appt-card__avatar appt-card__avatar--more">+{extraCrew}</span>
+					<span class="appt-card__more">+{extraCrew}</span>
 				{/if}
 			</span>
 			{#if appointment.assignee_name}

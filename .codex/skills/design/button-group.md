@@ -16,16 +16,16 @@
 - Shadow: `$shadow-xs`
 
 ### First Button
-- 8px radius on inline-start side only, 0 on inline-end
+- `$radius-sm` (8px) on inline-start side only, 0 on inline-end
 
 ### Middle Buttons
 - No radius (0 on all corners)
 
 ### Last Button
-- 8px radius on inline-end side only, 0 on inline-start
+- `$radius-sm` (8px) on inline-end side only, 0 on inline-start
 
 ### All buttons except first
-- −1px left margin to collapse shared borders
+- −1px left margin (shared border collapse)
 
 ## Rules
 

@@ -115,6 +115,51 @@ export function invoicePaidEvent(args: {
 	};
 }
 
+// Emitted when the contractor chooses to send a payment receipt to the customer (from the Add
+// Payment dialog's "Send receipt" toggle, or the per-row "Send receipt" action). Routed to the
+// automation queue's `payment_receipt` handler, which delivers over the chosen channel(s) and
+// stamps payments.receipt_sent_at/receipt_sent_via. Each request is its own event (random key) so
+// a re-send is never deduped.
+export function paymentReceiptRequestedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	paymentId: string;
+	contactId: string;
+	amountFormatted: string;
+	tipFormatted: string | null;
+	methodLabel: string;
+	paidAtIso: string;
+	invoiceNumberDisplay: string;
+	publicToken: string | null;
+	channels: ('email' | 'sms')[];
+	smsBody?: string | null;
+	emailSubject?: string | null;
+	emailBody?: string | null;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'payment.receipt_requested',
+		resource_type: 'invoice',
+		resource_id: args.invoiceId,
+		payload: {
+			invoice_id: args.invoiceId,
+			payment_id: args.paymentId,
+			contact_id: args.contactId,
+			amount_formatted: args.amountFormatted,
+			tip_formatted: args.tipFormatted,
+			method_label: args.methodLabel,
+			paid_at_iso: args.paidAtIso,
+			invoice_number_display: args.invoiceNumberDisplay,
+			public_token: args.publicToken,
+			channels: args.channels,
+			sms_body: args.smsBody ?? null,
+			email_subject: args.emailSubject ?? null,
+			email_body: args.emailBody ?? null
+		},
+		idempotency_key: `payment.receipt_requested:${args.paymentId}:${randomUUID()}`
+	};
+}
+
 export function paymentRecordedEvent(args: {
 	orgId: string;
 	invoiceId: string;
@@ -134,5 +179,83 @@ export function paymentRecordedEvent(args: {
 			invoice_number_display: args.invoiceNumberDisplay
 		},
 		idempotency_key: `payment.recorded:${args.paymentId}`
+	};
+}
+
+export function paymentUpdatedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	paymentId: string;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'payment.updated',
+		resource_type: 'payment',
+		resource_id: args.paymentId,
+		payload: { invoice_id: args.invoiceId, payment_id: args.paymentId },
+		idempotency_key: `payment.updated:${args.paymentId}:${randomUUID()}`
+	};
+}
+
+export function paymentDeletedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	paymentId: string;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'payment.deleted',
+		resource_type: 'payment',
+		resource_id: args.paymentId,
+		payload: { invoice_id: args.invoiceId, payment_id: args.paymentId },
+		idempotency_key: `payment.deleted:${args.paymentId}:${randomUUID()}`
+	};
+}
+
+export function paymentRefundedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	paymentId: string;
+	originalPaymentId: string;
+	amountFormatted: string;
+	invoiceNumberDisplay: string;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'payment.refunded',
+		resource_type: 'payment',
+		resource_id: args.paymentId,
+		payload: {
+			payment_id: args.paymentId,
+			original_payment_id: args.originalPaymentId,
+			invoice_id: args.invoiceId,
+			amount_formatted: args.amountFormatted,
+			invoice_number_display: args.invoiceNumberDisplay
+		},
+		idempotency_key: `payment.refunded:${args.paymentId}`
+	};
+}
+
+export function paymentReversedEvent(args: {
+	orgId: string;
+	invoiceId: string;
+	paymentId: string;
+	originalPaymentId: string;
+	amountFormatted: string;
+	invoiceNumberDisplay: string;
+}): NewOutboxEvent {
+	return {
+		org_id: args.orgId,
+		event_type: 'payment.reversed',
+		resource_type: 'payment',
+		resource_id: args.paymentId,
+		payload: {
+			payment_id: args.paymentId,
+			original_payment_id: args.originalPaymentId,
+			invoice_id: args.invoiceId,
+			amount_formatted: args.amountFormatted,
+			invoice_number_display: args.invoiceNumberDisplay
+		},
+		idempotency_key: `payment.reversed:${args.paymentId}`
 	};
 }

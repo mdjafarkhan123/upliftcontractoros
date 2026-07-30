@@ -972,42 +972,33 @@
 // scoped in the contact pages themselves.
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// AVATAR — status-tinted initials or photo, sized via inline width/height.
-// -----------------------------------------------------------------------------
-.contact-avatar {
-	flex-shrink: 0;
+.contact-avatar-wrap {
+	display: inline-flex;
 	border-radius: $radius-full;
 
-	&--img {
-		object-fit: cover;
-		box-shadow: 0 0 0 2px var(--color-border);
-	}
-
-	&--lead,
-	&--customer,
-	&--archived {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: $weight-semibold;
-		line-height: 1;
+	.avatar {
+		border-radius: inherit;
 	}
 
 	&--lead {
-		background: rgba(34, 125, 83, 0.1);
-		color: var(--color-brand);
 		box-shadow: 0 0 0 2px rgba(34, 125, 83, 0.2);
 	}
 	&--customer {
-		background: var(--success-bg);
-		color: var(--success-text);
 		box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
 	}
 	&--archived {
-		background: var(--warning-bg);
-		color: var(--warning-text);
 		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+	}
+
+	&--fill {
+		display: flex;
+		width: 100%;
+		height: 100%;
+
+		.avatar {
+			width: 100%;
+			height: 100%;
+		}
 	}
 }
 

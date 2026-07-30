@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Sheet from '$lib/components/ui/sheet';
+	import Input from '$lib/components/ui/input/input.svelte';
 	import InboxFilterPanel from './InboxFilterPanel.svelte';
 	import type { StatusFilter, AssigneeFilter } from '$lib/stores/inbox.svelte';
 
@@ -73,7 +74,7 @@
 	<div class="inbox-cmd__row">
 		<div class="inbox-cmd__search">
 			<i class="ri-search-line inbox-cmd__search-icon" aria-hidden="true"></i>
-			<input
+			<Input
 				type="search"
 				inputmode="search"
 				placeholder="Search contacts & messages"

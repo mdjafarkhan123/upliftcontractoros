@@ -15,12 +15,12 @@ export const GET: RequestHandler = async (event) => {
 	assertOrgActive(auth);
 	if (!canViewAnyInvoice(auth.member)) error(403, 'Forbidden');
 
-	// Effective-overdue mirrors isEffectivelyOverdue() + the list's `overdue`
-	// filter: actual 'overdue' status OR sent/partially_paid past due with a balance.
+	// Effective-overdue mirrors isEffectivelyOverdue() + the list's `past_due`
+	// filter: actual 'past_due' status OR sent_not_due/awaiting_payment past due with a balance.
 	const overdueCond = sql`(
-		${invoices.status} = 'overdue'
+		${invoices.status} = 'past_due'
 		OR (
-			${invoices.status} IN ('sent', 'partially_paid')
+			${invoices.status} IN ('sent_not_due', 'awaiting_payment')
 			AND ${invoices.due_date} IS NOT NULL
 			AND ${invoices.due_date} < CURRENT_DATE
 			AND ${invoices.amount_due} > 0
@@ -36,7 +36,7 @@ export const GET: RequestHandler = async (event) => {
 		SELECT
 			COALESCE(
 				SUM(${invoices.amount_due}) FILTER (
-					WHERE ${invoices.status} IN ('sent', 'partially_paid', 'overdue')
+					WHERE ${invoices.status} IN ('sent_not_due', 'awaiting_payment', 'past_due')
 				), 0
 			)::text AS outstanding_total,
 			COALESCE(SUM(${invoices.amount_due}) FILTER (WHERE ${overdueCond}), 0)::text AS overdue_total,

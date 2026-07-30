@@ -5,11 +5,11 @@
 ## Tooltips
 
 ### Core Specs
-- Padding: 8px horizontal, 6px vertical
-- Font: 13px, medium (500)
-- Radius: 8px
+- Padding: `$space-2` (8px) horizontal, 6px vertical
+- Font: 13px, medium (500) (~`$fs-caption`)
+- Radius: `$radius-sm` (8px)
 - Shadow: `$shadow-xs`
-- Z-index: `$z-tooltip` (80)
+- Z-index: `$z-tooltip` (1200)
 - Transition: opacity 200ms ease
 - Max-width: 240px
 
@@ -33,23 +33,23 @@
 
 ### Core Specs
 - Background: `var(--color-bg-surface)`
-- Radius: 8px
+- Radius: `$radius-sm` (8px)
 - Shadow: `$shadow-lg`
 - Border: 1px `var(--color-border)`
-- Z-index: `$z-dropdown` (40)
+- Z-index: `$z-dropdown` (250)
 - Transition: opacity 200ms, scale 150ms
 - Max-width: 320px default
 
 ### Header / Title
-- Padding: 12px 16px 10px
+- Padding: `$space-3` (12px) `$space-4` (16px) 10px
 - Background: `var(--color-bg-app)`
 - Bottom border: 1px `var(--color-border)`
-- Font: 14px, medium, `var(--color-text-primary)`
+- Font: `$fs-body`/`var(--text-body)` (14px), medium, `var(--color-text-primary)`
 
 ### Body / Content
-- Standard padding: 12px 16px
-- Font: 14px, `var(--color-text-secondary)`, 1.5 line-height
-- Rich: 16px padding
+- Standard padding: `$space-3` (12px) `$space-4` (16px)
+- Font: `$fs-body`/`var(--text-body)` (14px), `var(--color-text-secondary)`, 1.5 line-height
+- Rich: `$space-4` (16px) padding
 
 ### Popover Arrow
 - Size: 8×8px, rotated 45deg

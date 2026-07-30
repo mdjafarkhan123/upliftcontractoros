@@ -250,15 +250,15 @@ export const GET: RequestHandler = async (event) => {
 	const hasOverdueSql = sql<boolean>`EXISTS (
 		SELECT 1 FROM ${invoices} i
 		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL
-		  AND (i.status = 'overdue'
-		    OR (i.status IN ('sent','partially_paid') AND i.due_date < CURRENT_DATE AND i.amount_due > 0))
+		  AND (i.status = 'past_due'
+		    OR (i.status IN ('sent_not_due','awaiting_payment') AND i.due_date < CURRENT_DATE AND i.amount_due > 0))
 	)`;
 
 	// A sent invoice with money still outstanding (not necessarily overdue).
 	const hasUnpaidSentSql = sql<boolean>`EXISTS (
 		SELECT 1 FROM ${invoices} i
 		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL
-		  AND i.status IN ('sent','partially_paid') AND i.amount_due > 0
+		  AND i.status IN ('sent_not_due','awaiting_payment') AND i.amount_due > 0
 	)`;
 
 	// Billable work exists with NO invoice on it yet — create one. Any of: an un-invoiced
@@ -269,15 +269,16 @@ export const GET: RequestHandler = async (event) => {
 	const needsInvoiceSql = sql<boolean>`(
 		EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 			WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL AND m.invoice_id IS NULL)
-		OR (${jobs.billing_type} = 'visit_based'
+		OR (${jobs.billing_type} = 'visit_based' AND ${jobs.total} > 0
 			AND EXISTS (SELECT 1 FROM ${appointments} a
 				WHERE a.job_id = ${jobs.id} AND a.deleted_at IS NULL AND a.status <> 'cancelled'
 				  AND a.billed_invoice_id IS NULL AND a.scheduled_start <= now()))
 		OR (${jobs.job_type} = 'one_off' AND ${jobs.status} = 'archived' AND ${jobs.completed_at} IS NOT NULL
+			AND ${jobs.total} > 0
 			AND NOT EXISTS (SELECT 1 FROM ${jobPaymentMilestones} m
 				WHERE m.job_id = ${jobs.id} AND m.deleted_at IS NULL)
 			AND NOT EXISTS (SELECT 1 FROM ${invoices} i
-				WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'cancelled'))
+				WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'bad_debt'))
 	)`;
 
 	// A draft invoice exists but hasn't been sent yet — the work IS invoiced, it just needs sending.
@@ -286,18 +287,26 @@ export const GET: RequestHandler = async (event) => {
 		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status = 'draft'
 	)`;
 
+	// Requires Invoicing worklist (Jobber): the same billable-work-with-no-invoice signal that drives
+	// the row's "Needs Invoice" badge, surfaced as a filter. Cancelled jobs are excluded (you don't
+	// bill a called-off job — mirrors deriveJobBillingBadge returning null for cancelled). This cuts
+	// across the schedule tabs, so it's appended here rather than in the mutually-exclusive chain above.
+	if (statusFilter === 'requires_invoicing') {
+		conditions.push(sql`${needsInvoiceSql}`, isNull(jobs.cancelled_at));
+	}
+
 	// Fully collected: at least one non-cancelled invoice exists and none has a balance owing.
 	const allSettledSql = sql<boolean>`(
 		EXISTS (SELECT 1 FROM ${invoices} i
-			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'cancelled')
+			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'bad_debt')
 		AND NOT EXISTS (SELECT 1 FROM ${invoices} i
-			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'cancelled' AND i.amount_due > 0)
+			WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'bad_debt' AND i.amount_due > 0)
 	)`;
 
 	// Money collected so far (progress-bar numerator).
 	const totalPaidSql = sql<string>`COALESCE((
 		SELECT SUM(i.amount_paid) FROM ${invoices} i
-		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'cancelled'
+		WHERE i.job_id = ${jobs.id} AND i.deleted_at IS NULL AND i.status <> 'bad_debt'
 	), 0)`;
 
 	const rowsPromise = db

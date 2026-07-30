@@ -67,7 +67,13 @@ const FEED_ONLY_EVENTS = new Set<string>([
 	// A logged call with a non-spoke outcome (voicemail/no answer/wrong number)
 	// has no consumer — the row stays in outbox_events as a permanent audit record.
 	// (The 'spoke' outcome routes to pipeline_auto_advance and never reaches here.)
-	'call.logged'
+	'call.logged',
+	// Payment reversals are immutable financial audit entries. They do not represent
+	// newly received money, so they must not trigger the payment-received notification.
+	'payment.reversed',
+	'payment.refunded',
+	'payment.updated',
+	'payment.deleted'
 ]);
 
 function routeEvent(event: OutboxEvent): QueueTarget[] {
@@ -138,22 +144,18 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'invoice.sent':
 			return [{ queue: 'automation', jobName: 'invoice_dispatch' }];
 		case 'job.completed':
-			// Customer review request + (conditionally, inside the handler) the contractor's
-			// "remind me to invoice" nudge when the job is billed on_completion.
-			return [
-				{ queue: 'automation', jobName: 'review.send' },
-				{ queue: 'notification', jobName: 'job.completed' }
-			];
+			// Review requests are intentionally staff-triggered from the completed-job flow.
+			return [{ queue: 'notification', jobName: 'job.completed' }];
+		case 'job_invoice_reminder.assigned':
+			// "Email team when assigned" on an invoice reminder — staff alert only.
+			return [{ queue: 'notification', jobName: 'job_invoice_reminder.assigned' }];
+		case 'job_invoice_reminder.due':
+			// An invoice reminder came due (due-sweep cron) — nudge the assignee/admins to bill.
+			return [{ queue: 'notification', jobName: 'job_invoice_reminder.due' }];
 		case 'review_request.sent':
-			// Pre-schedule both the unengaged reminder (72h) and the absolute
-			// expiry (14d). Each handler re-reads the row at fire time and
-			// no-ops if the lifecycle has moved past the relevant state.
+			// Keep the lifecycle expiry, but do not schedule another customer-facing
+			// review message after a staff member's manual send.
 			return [
-				{
-					queue: 'automation',
-					jobName: 'review.unengaged',
-					delayMs: 72 * 60 * 60 * 1000
-				},
 				{
 					queue: 'automation',
 					jobName: 'review.expire',
@@ -161,21 +163,7 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 				}
 			];
 		case 'review_request.engaged':
-			// Customer submitted a rating ≥ 4. Pre-schedule both nudges; the
-			// `nudge_count` row guard inside the worker prevents double-fires
-			// even on retry.
-			return [
-				{
-					queue: 'automation',
-					jobName: 'review.nudge_1',
-					delayMs: 24 * 60 * 60 * 1000
-				},
-				{
-					queue: 'automation',
-					jobName: 'review.nudge_2',
-					delayMs: 72 * 60 * 60 * 1000
-				}
-			];
+			return [];
 		case 'invoice.overdue':
 			// Dunning reminders are pre-scheduled at invoice.sent time; the cron's
 			// status-flip event is no longer routed to the reminder queue. Empty
@@ -229,6 +217,10 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 			];
 		case 'payment.recorded':
 			return [{ queue: 'notification', jobName: 'payment.recorded' }];
+		case 'payment.receipt_requested':
+			// Customer-facing payment receipt over the chosen channel(s). Delivered by the automation
+			// worker (mirrors invoice_dispatch); ungated like the invoice send itself.
+			return [{ queue: 'automation', jobName: 'payment_receipt' }];
 		case 'invoice.viewed':
 			return [{ queue: 'notification', jobName: 'invoice.viewed' }];
 		case 'opportunity.created':
@@ -279,7 +271,8 @@ function routeEvent(event: OutboxEvent): QueueTarget[] {
 		case 'quote.viewed':
 		case 'quote.changes_requested':
 		case 'quote.expired':
-		case 'message.delivery_failed':
+		case 'contact.communication_preference_changed':
+			return [{ queue: 'automation', jobName: event.event_type }];
 		case 'review.received':
 		case 'private_feedback.received':
 		case 'negative_feedback':

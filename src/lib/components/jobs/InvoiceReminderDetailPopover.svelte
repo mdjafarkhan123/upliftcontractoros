@@ -3,6 +3,7 @@
 	import { formatDate } from '$lib/utils/format';
 	import { reminderDisplayStatus, REMINDER_DISPLAY_LABEL } from '$lib/jobs/billing';
 	import type { JobInvoiceReminderRow } from '$lib/types/jobs';
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 
 	// Invoice Reminder Details popup (Jobber ref/billing/18). Clicking a reminder on the
 	// Billing → Reminders tab opens this free-floating detail card. Reuses the same
@@ -52,13 +53,6 @@
 	const status = $derived(reminderDisplayStatus(reminder));
 	const done = $derived(reminder.status === 'completed');
 
-	function initials(name: string): string {
-		const parts = name.trim().split(/\s+/).filter(Boolean);
-		if (parts.length === 0) return '?';
-		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-	}
-
 	// When line — "no date yet" for schedule-later, "· Anytime" for all-day, else date + time.
 	const whenText = $derived.by(() => {
 		if (!reminder.scheduled_start) return 'No date yet';
@@ -76,8 +70,9 @@
 
 <DraggablePanel {anchorEl} ariaLabel="Invoice reminder details" {onClose} width="340px">
 	<div class="card-detail-pop card-detail-pop--panel">
-		<h3 class="card-detail-pop__title">{reminder.description || 'Invoice reminder'}</h3>
-		<p class="card-detail-pop__subtype">Invoice reminder</p>
+		<h3 class="card-detail-pop__title">Invoice reminder for {contactName} for {jobTitle}</h3>
+		<!-- Keep any custom note the contractor typed as the secondary line. -->
+		<p class="card-detail-pop__subtype">{reminder.description || 'Invoice reminder'}</p>
 
 		<!-- Derived status pill (Upcoming / Today / Overdue / Completed / Unscheduled). -->
 		<span class="job-billing__status job-billing__status--{status}">
@@ -133,7 +128,7 @@
 				<span class="card-detail-pop__team-label">Assigned to</span>
 				{#if lead}
 					<span class="card-detail-pop__crew">
-						<span class="card-detail-pop__avatar">{initials(lead.full_name)}</span>
+						<Avatar size="sm" name={lead.full_name} />
 						<span>{lead.full_name}</span>
 						{#if reminder.assignees.length > 1}
 							<span class="card-detail-pop__more">+{reminder.assignees.length - 1}</span>
@@ -166,12 +161,7 @@
 		<!-- More actions revealed inline (Edit / complete / delete) — no nested portal. -->
 		{#if showMore && canInvoice}
 			<div class="card-detail-pop__more-row">
-				<button
-					type="button"
-					class="card-detail-pop__more-btn"
-					disabled={busy}
-					onclick={onEdit}
-				>
+				<button type="button" class="card-detail-pop__more-btn" disabled={busy} onclick={onEdit}>
 					<i class="ri-pencil-line" aria-hidden="true"></i>
 					<span>Edit</span>
 				</button>

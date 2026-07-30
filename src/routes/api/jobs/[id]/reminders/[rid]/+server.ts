@@ -2,14 +2,14 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { jobInvoiceReminders } from '$lib/server/db/schema';
+import { jobInvoiceReminders, outboxEvents } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canCreateInvoice } from '$lib/server/invoices/permissions';
 import {
 	resolveAssigneeInput,
 	validateAssigneesBelongToOrg
 } from '$lib/server/appointments/assignees';
-import { syncReminderAssignees } from '$lib/server/jobs/reminderAssignees';
+import { loadReminderAssignees, syncReminderAssignees } from '$lib/server/jobs/reminderAssignees';
 import { updateReminderSchema } from '$lib/server/jobs/reminderSchemas';
 
 // PATCH /api/jobs/[id]/reminders/[rid] — edit a reminder AND complete/reopen it
@@ -94,7 +94,12 @@ export const PATCH: RequestHandler = async (event) => {
 		const updates: Record<string, unknown> = { updated_at: new Date() };
 		if (input.description !== undefined) updates.description = input.description;
 		if (input.all_day !== undefined) updates.all_day = input.all_day;
-		if (input.scheduled_start !== undefined) updates.scheduled_start = input.scheduled_start;
+		if (input.scheduled_start !== undefined) {
+			updates.scheduled_start = input.scheduled_start;
+			// Re-dating a reminder re-arms its due nudge: the due-sweep cron fires again once the
+			// new date arrives (job-invoice-reminder-due-sweep gates on due_notified_at IS NULL).
+			updates.due_notified_at = null;
+		}
 		// Becoming all-day / anytime clears the end; otherwise honour an explicit end change.
 		if (nextAllDay) updates.scheduled_end = null;
 		else if (input.scheduled_end !== undefined) updates.scheduled_end = input.scheduled_end;
@@ -113,6 +118,19 @@ export const PATCH: RequestHandler = async (event) => {
 			}
 		}
 
+		// "Email team when assigned" — effective flag = the change, else the stored value.
+		const notifyOnAssign =
+			input.notify_team_on_assign !== undefined
+				? input.notify_team_on_assign
+				: existing.notify_team_on_assign;
+
+		// Capture the prior crew BEFORE the sync replaces it, so we can notify only the
+		// members who are NEWLY added (re-saving an unchanged reminder must not re-alert).
+		let priorAssigneeIds: string[] = [];
+		if (crew && notifyOnAssign) {
+			priorAssigneeIds = (await loadReminderAssignees(tx, reminderId)).map((a) => a.id);
+		}
+
 		await tx.update(jobInvoiceReminders).set(updates).where(eq(jobInvoiceReminders.id, reminderId));
 
 		// Sync crew AFTER the main UPDATE so the helper's write to assigned_to wins.
@@ -123,6 +141,30 @@ export const PATCH: RequestHandler = async (event) => {
 				assigneeIds: crew.assigneeIds,
 				leadMemberId: crew.leadMemberId
 			});
+		}
+
+		if (crew && notifyOnAssign) {
+			const prior = new Set(priorAssigneeIds);
+			const newcomers = crew.assigneeIds.filter((id) => !prior.has(id));
+			if (newcomers.length > 0) {
+				await tx.insert(outboxEvents).values({
+					org_id: auth.orgId,
+					event_type: 'job_invoice_reminder.assigned',
+					resource_type: 'job_invoice_reminder',
+					resource_id: reminderId,
+					payload: {
+						reminder_id: reminderId,
+						org_id: auth.orgId,
+						job_id: jobId,
+						assignee_ids: newcomers
+					},
+					// Keyed by the exact recipient set so re-adding the same members is deduped,
+					// while adding a genuinely new member fires a fresh event.
+					idempotency_key: `job_invoice_reminder.assigned:${reminderId}:${[...newcomers]
+						.sort()
+						.join('.')}`
+				});
+			}
 		}
 
 		return { kind: 'ok' as const };

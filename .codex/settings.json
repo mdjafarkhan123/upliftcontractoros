@@ -1,0 +1,25 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(Get-ChildItem *)",
+			"Bash(npx svelte-check *)",
+			"Bash(npx tsc *)",
+			"mcp__ide__getDiagnostics"
+		]
+	},
+	"enabledPlugins": {
+		"twilio-developer-kit@twilio": true
+	},
+	"hooks": {
+		"UserPromptSubmit": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "jq -r '.prompt // empty' | grep -qiE 'jobber|housecall|servicetitan|gohighlevel|pipedrive|hubspot' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"CLAUDE.md JOBBER RULE TRIGGERED: this prompt mentions a competitor CRM. Before answering, do NOT rely on memory or the schedule-hub memory files. First load the Jobber/industry reference in .claude/skills/contractor-crm/references/jobber/ (start at jobber-00-overview-lifecycle.md, then the file for the relevant domain) so any comparison is grounded in the real competitor model.\"}}' || true"
+					}
+				]
+			}
+		]
+	}
+}

@@ -150,6 +150,9 @@
 			font-size: $fs-caption;
 			line-height: 1.4;
 			color: var(--color-text-muted);
+			// Preserve newlines (e.g. batch-invoice per-job reasons) as real line breaks; a
+			// single-line description is unaffected.
+			white-space: pre-line;
 		}
 
 		&__action {

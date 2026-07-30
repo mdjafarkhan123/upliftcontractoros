@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import Input from '$lib/components/ui/input/input.svelte';
 	import SnoozeMenu from './SnoozeMenu.svelte';
 	import type { ConversationDetail, SnoozePreset } from '$lib/stores/inbox.svelte';
 
@@ -124,7 +125,7 @@
 				</button>
 			{/snippet}
 		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="end" class="w-56">
+		<DropdownMenu.Content align="end">
 			<DropdownMenu.Group>
 				<DropdownMenu.Label>Assign to</DropdownMenu.Label>
 				<DropdownMenu.Separator />
@@ -177,11 +178,10 @@
 				</span>
 			{/each}
 			{#if currentTags.length < 5}
-				<input
+				<Input
 					type="text"
 					class="convo-tags__input"
-					value={tagInput}
-					oninput={(e) => (tagInput = (e.currentTarget as HTMLInputElement).value)}
+					bind:value={tagInput}
 					onkeydown={onTagKey}
 					placeholder="Add tag…"
 					disabled={!canManage}

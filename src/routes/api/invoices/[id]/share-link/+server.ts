@@ -32,15 +32,16 @@ export const POST: RequestHandler = async (event) => {
 			id: string;
 			status: string;
 			public_token: string | null;
+			due_date: string | null;
 		}>(sql`
-			SELECT id, status, public_token FROM invoices
+			SELECT id, status, public_token, due_date FROM invoices
 			WHERE id = ${id} AND org_id = ${auth.orgId} AND deleted_at IS NULL
 			FOR UPDATE
 		`);
 		if (!existing) throw error(404, 'Invoice not found');
 
-		if (existing.status === 'cancelled') {
-			throw error(422, 'This invoice was cancelled — reopen it before sharing');
+		if (existing.status === 'bad_debt') {
+			throw error(422, 'This invoice was written off — reopen it before sharing');
 		}
 
 		// Already live and already carries a token → hand back the same link.
@@ -61,10 +62,21 @@ export const POST: RequestHandler = async (event) => {
 		const now = new Date();
 		const updates: Record<string, unknown> = { updated_at: now };
 		if (!existing.public_token) updates.public_token = rawToken;
-		// First time it becomes viewable: leave Draft and stamp the delivered date, exactly
-		// like /send — but without the outbox event (manual delivery, no automation).
+		// First time it becomes viewable: leave Draft and stamp the delivered date, exactly like
+		// /send — but without the outbox event (manual delivery, no automation). Strict Jobber:
+		// sent_not_due when a due date is still in the future, else awaiting_payment.
 		if (existing.status === 'draft') {
-			updates.status = 'sent';
+			let firstStatus: 'sent_not_due' | 'awaiting_payment' = 'awaiting_payment';
+			if (existing.due_date) {
+				const due = new Date(existing.due_date);
+				if (!Number.isNaN(due.getTime())) {
+					const today = new Date();
+					today.setHours(0, 0, 0, 0);
+					due.setHours(0, 0, 0, 0);
+					if (due.getTime() > today.getTime()) firstStatus = 'sent_not_due';
+				}
+			}
+			updates.status = firstStatus;
 			updates.sent_at = now;
 		}
 		await tx.update(invoices).set(updates).where(eq(invoices.id, id));

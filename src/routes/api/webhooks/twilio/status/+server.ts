@@ -5,8 +5,11 @@ import {
 	inboundCommunicationEvents,
 	messages,
 	organizations,
-	outboxEvents
+	outboxEvents,
+	conversations,
+	contacts
 } from '$lib/server/db/schema';
+import { changeCommunicationPreferenceInTransaction } from '$lib/server/communication-preferences/mutations';
 import { validateTwilioSignature, reconstructWebhookUrl } from '$lib/server/twilio/client';
 import { refundSmsCredit } from '$lib/server/sms/credit';
 import { createLogger } from '$lib/server/log';
@@ -170,6 +173,52 @@ export const POST: RequestHandler = async ({ request }) => {
 				},
 				idempotency_key: `message.delivery_failed:${msg.id}:${now.getTime()}`
 			});
+
+			// Match HighLevel's provider classification exactly: only the documented
+			// undelivered codes change SMS DND. 30004 is permanent; the other
+			// documented codes are temporary. Unknown failures do not change DND.
+			const errorCode = params.ErrorCode?.trim();
+			const temporaryCodes = new Set(['30003', '30005', '30006']);
+			const dndStatus =
+				errorCode === '30004'
+					? 'permanent'
+					: temporaryCodes.has(errorCode ?? '')
+						? 'blocked'
+						: null;
+			if (dndStatus) {
+				const [conversation] = await tx
+					.select({ contactId: conversations.contact_id })
+					.from(conversations)
+					.where(eq(conversations.id, msg.conversation_id))
+					.limit(1);
+				if (conversation?.contactId) {
+					await changeCommunicationPreferenceInTransaction(tx, {
+						orgId: msg.org_id,
+						contactId: conversation.contactId,
+						channel: 'sms',
+						direction: 'outbound',
+						category: 'all',
+						status: dndStatus,
+						source: 'provider',
+						reasonCode: `TWILIO_${errorCode}`,
+						reasonMessage: failureReason,
+						provider: 'twilio',
+						providerEventId: eventKey,
+						metadata: { error_code: errorCode, message_status: mapped }
+					});
+					if (dndStatus === 'permanent') {
+						await tx
+							.update(contacts)
+							.set({
+								sms_opt_out: true,
+								sms_opt_out_at: now,
+								sms_opt_out_source: 'provider',
+								updated_at: now
+							})
+							.where(and(eq(contacts.org_id, msg.org_id), eq(contacts.id, conversation.contactId)));
+					}
+				}
+			}
 		}
 
 		await tx

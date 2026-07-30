@@ -7,6 +7,8 @@ import {
 	conversations,
 	invoices,
 	jobs,
+	jobInvoiceReminders,
+	jobInvoiceReminderAssignees,
 	memberNotificationPreferences,
 	notifications,
 	notificationDeliveryState,
@@ -599,7 +601,7 @@ async function handleJobCompleted(data: EventJobData) {
 				eq(invoices.job_id, jobId),
 				eq(invoices.org_id, data.org_id),
 				isNull(invoices.deleted_at),
-				sql`${invoices.status} NOT IN ('draft', 'cancelled')`
+				sql`${invoices.status} NOT IN ('draft', 'bad_debt')`
 			)
 		)
 		.limit(1);
@@ -637,6 +639,174 @@ async function handleJobCompleted(data: EventJobData) {
 			route: invoiceRoute,
 			metadata: { customer_name: job.contact_name ?? '', job_title: job.title },
 			idempotencyKey: `job.invoice_reminder:${jobId}:${r.id}`
+		});
+	}
+}
+
+// "Email team when assigned" on an invoice reminder (B3.2b). The route emits this only
+// for the members newly assigned to the reminder; here we alert exactly those members.
+// Informational (normal priority) — a courtesy nudge, not a money-critical escalation.
+async function handleJobInvoiceReminderAssigned(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const reminderId = data.resource_id;
+	const jobId = typeof data.payload.job_id === 'string' ? data.payload.job_id : null;
+	const assigneeIds = Array.isArray(data.payload.assignee_ids)
+		? (data.payload.assignee_ids as string[])
+		: [];
+	if (!jobId || assigneeIds.length === 0) return;
+
+	// Fetch the reminder (skip if it was deleted before this event was processed) and
+	// the job/customer context for a readable alert. Independent reads, one wave (Rule 20).
+	const [[reminder], [job]] = await Promise.all([
+		db
+			.select({ description: jobInvoiceReminders.description })
+			.from(jobInvoiceReminders)
+			.where(
+				and(
+					eq(jobInvoiceReminders.id, reminderId),
+					eq(jobInvoiceReminders.org_id, orgId),
+					isNull(jobInvoiceReminders.deleted_at)
+				)
+			)
+			.limit(1),
+		db
+			.select({ title: jobs.title, contact_name: contacts.full_name })
+			.from(jobs)
+			.leftJoin(contacts, eq(contacts.id, jobs.contact_id))
+			.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId)))
+			.limit(1)
+	]);
+	if (!reminder || !job) return;
+
+	// Only alert members still active in the org (a removed member gets nothing).
+	const validMembers = await db
+		.select({ id: orgMembers.id })
+		.from(orgMembers)
+		.where(
+			and(
+				inArray(orgMembers.id, assigneeIds),
+				eq(orgMembers.org_id, orgId),
+				eq(orgMembers.is_active, true),
+				isNull(orgMembers.deleted_at)
+			)
+		);
+	if (validMembers.length === 0) return;
+
+	const title = job.contact_name
+		? `Invoice reminder assigned — ${job.contact_name}`
+		: 'Invoice reminder assigned';
+	const body = reminder.description ?? job.title ?? null;
+
+	for (const member of validMembers) {
+		await dispatchToMember({
+			orgId,
+			memberId: member.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'job_invoice_reminder_assigned',
+			title,
+			body,
+			resourceType: 'job',
+			resourceId: jobId,
+			route: NOTIFICATION_SPEC.job_invoice_reminder_assigned.route(jobId),
+			metadata: { reminder_id: reminderId, job_title: job.title },
+			// One alert per (reminder, member) across outbox retries.
+			idempotencyKey: `job_invoice_reminder.assigned:${reminderId}:${member.id}`
+		});
+	}
+}
+
+// An invoice reminder came DUE (job-invoice-reminder-due-sweep cron). This is the nudge that
+// makes a dated reminder actually poke someone when its day arrives — matching Jobber, where a
+// due invoice reminder flips the job to "Requires Invoicing" and surfaces it for billing. We keep
+// our money-truth badge untouched (deriveJobBillingBadge) and use this purely as the prompt.
+// Recipients: the reminder's crew + its denormalized lead (auto reminders set assigned_to only,
+// without seeding the crew join), filtered to members still active in the org; if none, the
+// admins/managers — the owners still need to know money is waiting to be billed.
+async function handleJobInvoiceReminderDue(data: EventJobData) {
+	if (!data.org_id) return;
+	const orgId = data.org_id;
+	const reminderId = data.resource_id;
+	// The due instant travels in the payload so a re-dated (re-armed) reminder produces a
+	// genuinely new notification instead of being deduped against the first fire.
+	const dueAt = typeof data.payload.due_at === 'string' ? data.payload.due_at : null;
+
+	// Fetch the reminder (skip if it was completed/deleted before this event ran) and its crew,
+	// concurrently (Rule 20).
+	const [[reminder], crew] = await Promise.all([
+		db
+			.select({
+				description: jobInvoiceReminders.description,
+				status: jobInvoiceReminders.status,
+				job_id: jobInvoiceReminders.job_id,
+				assigned_to: jobInvoiceReminders.assigned_to
+			})
+			.from(jobInvoiceReminders)
+			.where(
+				and(
+					eq(jobInvoiceReminders.id, reminderId),
+					eq(jobInvoiceReminders.org_id, orgId),
+					isNull(jobInvoiceReminders.deleted_at)
+				)
+			)
+			.limit(1),
+		db
+			.select({ member_id: jobInvoiceReminderAssignees.member_id })
+			.from(jobInvoiceReminderAssignees)
+			.where(eq(jobInvoiceReminderAssignees.reminder_id, reminderId))
+	]);
+	// Raced a completion/reopen? Only nudge for a still-active reminder.
+	if (!reminder || reminder.status !== 'active') return;
+
+	const [job] = await db
+		.select({ title: jobs.title, contact_name: contacts.full_name })
+		.from(jobs)
+		.leftJoin(contacts, eq(contacts.id, jobs.contact_id))
+		.where(and(eq(jobs.id, reminder.job_id), eq(jobs.org_id, orgId)))
+		.limit(1);
+	if (!job) return;
+
+	const candidateIds = new Set<string>(crew.map((c) => c.member_id));
+	if (reminder.assigned_to) candidateIds.add(reminder.assigned_to);
+
+	let recipients: { id: string }[] = [];
+	if (candidateIds.size > 0) {
+		recipients = await db
+			.select({ id: orgMembers.id })
+			.from(orgMembers)
+			.where(
+				and(
+					inArray(orgMembers.id, [...candidateIds]),
+					eq(orgMembers.org_id, orgId),
+					eq(orgMembers.is_active, true),
+					isNull(orgMembers.deleted_at)
+				)
+			);
+	}
+	if (recipients.length === 0) recipients = await adminManagerMembers(orgId);
+	if (recipients.length === 0) return;
+
+	const title = job.contact_name
+		? `Time to invoice ${job.contact_name}`
+		: 'A job is ready to invoice';
+	const body = reminder.description ?? job.title ?? null;
+	// Per (reminder, member, due-instant): re-firing the same due instant is deduped, while a
+	// re-dated reminder (new due instant) legitimately nudges again.
+	const dueKey = dueAt ? new Date(dueAt).toISOString() : 'now';
+
+	for (const r of recipients) {
+		await dispatchToMember({
+			orgId,
+			memberId: r.id,
+			outboxEventId: data.outbox_event_id,
+			type: 'job_invoice_reminder_due',
+			title,
+			body,
+			resourceType: 'job',
+			resourceId: reminder.job_id,
+			route: NOTIFICATION_SPEC.job_invoice_reminder_due.route(reminder.job_id),
+			metadata: { reminder_id: reminderId, job_title: job.title },
+			idempotencyKey: `job_invoice_reminder.due:${reminderId}:${r.id}:${dueKey}`
 		});
 	}
 }
@@ -1721,6 +1891,10 @@ export const notificationWorker = new Worker<EventJobData>(
 				return handleJobCreated(data);
 			case 'job.completed':
 				return handleJobCompleted(data);
+			case 'job_invoice_reminder.assigned':
+				return handleJobInvoiceReminderAssigned(data);
+			case 'job_invoice_reminder.due':
+				return handleJobInvoiceReminderDue(data);
 			case 'invoice.paid':
 				return handleInvoicePaid(data);
 			case 'quote.viewed':

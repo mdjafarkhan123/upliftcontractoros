@@ -105,16 +105,59 @@ export const updateInvoiceSchema = z
 		validateDiscount(val, ctx);
 	});
 
+// Manual payment methods a contractor can record/edit by hand. Excludes 'stripe' (online capture
+// only). credit_card + paypal added for Jobber parity (ref/invoice/4.jpg).
+const manualPaymentMethod = z.enum([
+	'cash',
+	'check',
+	'bank_transfer',
+	'other',
+	'credit_card',
+	'paypal'
+]);
+
+// A payment date accepts either a plain calendar date (YYYY-MM-DD, from the built Calendar) or a
+// full ISO datetime. The route normalizes a bare date to local noon so it never drifts a day.
+const paymentDate = z
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/, 'Use a valid date')
+	.optional();
+
 export const recordPaymentSchema = z.object({
 	amount: z.coerce.number().positive('Amount must be greater than zero').max(9999999.99),
-	payment_method: z.enum(['cash', 'check', 'bank_transfer', 'other']),
-	paid_at: z.string().datetime().optional(),
+	payment_method: manualPaymentMethod,
+	paid_at: paymentDate,
+	// Free-text "Details" about the payment (stored in payments.notes; relabeled in the UI).
 	notes: z.string().trim().max(500).nullable().optional(),
 	// Optional tip (M7) logged alongside a manual cash/check payment. EXTRA money on top of the
 	// balance — never validated against amount_due (that check applies to `amount` only). 0/omitted
 	// = no tip. Only accepted when the org enabled tips (route re-checks org.tips_enabled).
 	tip_amount: z.coerce.number().min(0).max(9999999.99).optional()
 });
+
+// Refund an online payment by appending a negative ledger row after the processor refund.
+export const refundPaymentSchema = z.object({
+	amount: z.coerce.number().positive('Amount must be greater than zero').max(9999999.99),
+	paid_at: paymentDate,
+	notes: z.string().trim().max(500).nullable().optional(),
+	tip_amount: z.coerce.number().min(0).max(9999999.99).optional()
+});
+
+// Send a receipt for a recorded payment over the chosen channel(s), reusing the shared
+// NotifyDialog. Optional copy overrides carry merge tokens interpolated at delivery.
+export const sendReceiptSchema = z.object({
+	channels: z
+		.array(z.enum(['email', 'sms']))
+		.min(1, 'Choose at least one channel')
+		.max(2)
+		.transform((arr) => Array.from(new Set(arr))),
+	sms_body: z.string().trim().max(640).nullable().optional(),
+	email_subject: z.string().trim().max(200).nullable().optional(),
+	email_body: z.string().trim().max(5000).nullable().optional()
+});
+
+export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
+export type SendReceiptInput = z.infer<typeof sendReceiptSchema>;
 
 // Send / re-send an invoice. The contractor picks the delivery channel(s) and may
 // override the default message copy. Bodies carry merge tokens ({contact_name},

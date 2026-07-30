@@ -30,7 +30,8 @@ export const GET: RequestHandler = async (event) => {
 			completed_at: jobs.completed_at,
 			contact_id: contacts.id,
 			contact_name: contacts.full_name,
-			sms_opt_out: contacts.sms_opt_out
+			sms_opt_out: contacts.sms_opt_out,
+			receives_review_requests: contacts.receives_review_requests
 		})
 		.from(jobs)
 		.innerJoin(contacts, eq(contacts.id, jobs.contact_id))
@@ -43,6 +44,7 @@ export const GET: RequestHandler = async (event) => {
 				isNull(jobs.deleted_at),
 				isNull(contacts.deleted_at),
 				eq(contacts.sms_opt_out, false),
+				eq(contacts.receives_review_requests, true),
 				not(hasReviewRequest)
 			)
 		)

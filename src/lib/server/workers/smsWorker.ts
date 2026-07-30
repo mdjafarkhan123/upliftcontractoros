@@ -17,6 +17,11 @@ import { r2Presign } from '$lib/server/media/r2';
 import { isReleasedPhone } from '$lib/utils/phone';
 import { createLogger } from '$lib/server/log';
 import {
+	canContactReceiveCommunication,
+	communicationCategoryFromSource
+} from '$lib/server/communication-preferences';
+import { changeCommunicationPreferenceInTransaction } from '$lib/server/communication-preferences/mutations';
+import {
 	reserveSmsCredit,
 	refundSmsCredit,
 	getCreditState,
@@ -53,6 +58,13 @@ function isPermanentFailure(err: unknown): boolean {
 		msg.includes('region') ||
 		msg.includes('geo-permission')
 	);
+}
+
+function dndStatusForTwilioError(err: unknown): 'blocked' | 'permanent' | null {
+	const code = String((err as { code?: unknown })?.code ?? '').trim();
+	if (code === '30004') return 'permanent';
+	if (code === '30003' || code === '30005' || code === '30006') return 'blocked';
+	return null;
 }
 
 async function markSending(messageId: string): Promise<boolean> {
@@ -142,6 +154,25 @@ async function processSmsSend(job: Job<SmsJobData>) {
 			.set({
 				status: 'undeliverable',
 				failure_reason: 'Contact has opted out of SMS',
+				failed_at: new Date(),
+				updated_at: new Date()
+			})
+			.where(eq(messages.id, messageId));
+		return;
+	}
+	const eligibility = await canContactReceiveCommunication({
+		orgId: msg.org_id,
+		contactId: contact.id,
+		channel: 'sms',
+		direction: 'outbound',
+		category: communicationCategoryFromSource(msg.source)
+	});
+	if (!eligibility.allowed) {
+		await db
+			.update(messages)
+			.set({
+				status: 'undeliverable',
+				failure_reason: eligibility.reasonMessage ?? 'Customer communication is blocked',
 				failed_at: new Date(),
 				updated_at: new Date()
 			})
@@ -455,6 +486,23 @@ async function processSmsSend(job: Job<SmsJobData>) {
 					messageId,
 					note: 'Permanent send failure'
 				});
+				const dndStatus = dndStatusForTwilioError(err);
+				if (dndStatus) {
+					await changeCommunicationPreferenceInTransaction(tx, {
+						orgId: msg.org_id,
+						contactId: conv.contact_id,
+						channel: 'sms',
+						direction: 'outbound',
+						category: 'all',
+						status: dndStatus,
+						source: 'provider',
+						reasonCode: `TWILIO_${String((err as { code?: unknown }).code)}`,
+						reasonMessage: reason,
+						provider: 'twilio',
+						providerEventId: `send-error:${messageId}:${String((err as { code?: unknown }).code)}`,
+						metadata: { error_code: String((err as { code?: unknown }).code) }
+					});
+				}
 			});
 			return;
 		}

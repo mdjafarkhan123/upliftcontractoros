@@ -123,12 +123,12 @@
 	@use '$lib/styles/tokens' as *;
 
 	.rep-empty--active {
-		background: rgba(48, 176, 112, 0.06);
+		background: var(--success-bg);
 	}
 
 	.rep-empty-icon--active {
-		background: rgba(48, 176, 112, 0.12) !important;
-		color: var(--success-solid) !important;
+		background: var(--success-bg);
+		color: var(--success-text);
 	}
 
 	.rep-requests-sent {
@@ -152,7 +152,7 @@
 
 		&__star {
 			font-size: 2rem;
-			color: #f59e0b;
+			color: var(--warning-solid);
 			align-self: center;
 		}
 

@@ -6,56 +6,53 @@
 	import { Button } from '$lib/components/ui/button';
 
 	let {
-		jobId,
 		jobStatus,
 		completedAt = null,
 		status,
-		onSent
+		onTrigger
 	}: {
-		jobId: string;
 		jobStatus: JobStatus;
 		// Set when the job was closed as complete (archived + completed_at). A cancelled job is also
 		// archived but has no completed_at — it must never offer a review request.
 		completedAt?: string | null;
 		status: ReviewRequestStatus | null;
-		onSent?: (next: ReviewRequestStatus) => void;
+		onTrigger?: () => void | Promise<void>;
 	} = $props();
 
 	const member = getMemberContext();
 	const canSend = $derived(member().can_send_review_requests);
 
 	const label = $derived(
-		status === 'responded'
-			? 'Responded'
+		status === 'scheduled'
+			? 'Queued'
 			: status === 'sent'
 				? 'Sent'
-				: status === 'failed'
-					? 'Failed'
-					: status === 'no_response'
-						? 'No response'
-						: status === 'pending'
-							? 'Queued'
-							: 'Not triggered'
+				: status === 'engaged'
+					? 'Opened'
+					: status === 'likely_reviewed'
+						? 'Likely reviewed'
+						: status === 'completed_internal'
+							? 'Internal feedback'
+							: status === 'expired'
+								? 'Expired'
+								: 'Not requested'
 	);
 
 	const variant = $derived(
-		status === 'responded'
+		status === 'likely_reviewed'
 			? 'success'
-			: status === 'sent' || status === 'pending'
+			: status === 'sent' || status === 'scheduled' || status === 'engaged'
 				? 'info'
-				: status === 'failed'
-					? 'danger'
-					: 'default'
+				: status === 'completed_internal'
+					? 'warning'
+					: status === 'expired'
+						? 'danger'
+						: 'default'
 	);
 
 	const canTrigger = $derived(
-		canSend &&
-			jobStatus === 'archived' &&
-			!!completedAt &&
-			(status === null || status === 'failed' || status === 'no_response')
+		canSend && jobStatus === 'archived' && !!completedAt && status === null && !!onTrigger
 	);
-
-	const isResend = $derived(status === 'failed' || status === 'no_response');
 
 	let sending = $state(false);
 
@@ -63,14 +60,7 @@
 		if (sending || !canTrigger) return;
 		sending = true;
 		try {
-			const res = await fetch(`/api/jobs/${jobId}/review-request`, { method: 'POST' });
-			const body = await res.json();
-			if (!res.ok) {
-				toast.error(body.error ?? 'Could not send review request.');
-				return;
-			}
-			toast.success('Review request sent.');
-			onSent?.('sent');
+			await onTrigger?.();
 		} catch {
 			toast.error('Network error. Try again.');
 		} finally {
@@ -83,8 +73,8 @@
 	<Badge {variant} {label} />
 	{#if canTrigger}
 		<Button variant="secondary" size="sm" loading={sending} onclick={send}>
-			<i class={isResend ? 'ri-refresh-line' : 'ri-send-plane-line'} aria-hidden="true"></i>
-			{isResend ? 'Resend' : 'Send'}
+			<i class="ri-send-plane-line" aria-hidden="true"></i>
+			Send
 		</Button>
 	{/if}
 </div>

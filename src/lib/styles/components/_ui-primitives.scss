@@ -446,6 +446,77 @@
 			outline: none;
 		}
 	}
+
+	// Underline variant (design system default) — bottom-border active indicator.
+	&__list--underline {
+		display: flex;
+		gap: $space-4;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
+		background: transparent;
+		padding: 0;
+		height: auto;
+		width: 100%;
+		margin-bottom: $space-4;
+		overflow: visible;
+	}
+
+	&__trigger--underline {
+		position: relative;
+		padding: 1.4rem $space-4;
+		border: none;
+		background: transparent;
+		border-radius: $radius-sm $radius-sm 0 0;
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		flex: none;
+		min-height: auto;
+		box-shadow: none;
+		white-space: nowrap;
+		transition: color 150ms ease;
+
+		&::after {
+			content: '';
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: -1px;
+			height: 2px;
+			border-radius: $radius-full;
+			background: transparent;
+			transition: background 150ms ease;
+		}
+
+		&:hover:not([data-disabled]) {
+			color: var(--color-text-primary);
+			background: transparent;
+			&::after {
+				background: var(--color-border-strong);
+			}
+		}
+
+		&[data-state='active'] {
+			color: var(--color-brand);
+			background: transparent;
+			box-shadow: none;
+			&::after {
+				background: var(--color-brand);
+			}
+		}
+
+		&:disabled,
+		&[data-disabled] {
+			pointer-events: none;
+			opacity: 0.5;
+		}
+		&:focus-visible {
+			outline: none;
+			box-shadow: var(--shadow-focus);
+		}
+	}
+
 }
 
 // -----------------------------------------------------------------------------

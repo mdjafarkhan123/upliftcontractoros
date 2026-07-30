@@ -313,6 +313,9 @@ $j-radius-full: 9999px;
 	&--full {
 		width: 100%;
 	}
+	&--retry {
+		margin-top: 0.5rem;
+	}
 }
 
 // ─── INPUT ───────────────────────────────────────────────────────────────────
@@ -2856,4 +2859,101 @@ $j-radius-full: 9999px;
 	font-size: 1.4rem;
 	font-weight: 600;
 	color: #fff;
+}
+
+// ─── DASHBOARD PAGE ────────────────────────────────────────────────────────────
+.jafar-dash {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+
+	&__hd {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		@media (min-width: 640px) {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+	}
+
+	&__title {
+		font-size: 1.5rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		color: #fff;
+		@media (min-width: 640px) {
+			font-size: 1.875rem;
+		}
+	}
+
+	&__sub {
+		margin-top: 0.25rem;
+		font-size: 0.875rem;
+		color: $j-400;
+	}
+
+	&__refresh {
+		margin-left: 0.25rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: $j-500;
+		i {
+			animation: jafar-spin 0.7s linear infinite;
+			font-size: 0.625rem;
+		}
+	}
+
+	&__scroll {
+		overflow-x: auto;
+	}
+
+	&__empty {
+		padding: 3rem 1.25rem;
+		text-align: center;
+		p:first-child {
+			font-size: 0.875rem;
+			color: $j-400;
+		}
+		p + p {
+			margin-top: 0.25rem;
+			font-size: 0.75rem;
+			color: $j-500;
+		}
+	}
+
+	&__ok {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: $j-emerald-400;
+	}
+	&__muted {
+		font-size: 0.75rem;
+		color: $j-500;
+	}
+
+	&__action-err {
+		border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+		background: rgba(239, 68, 68, 0.1);
+		padding: 0.75rem 1.25rem;
+		font-size: 0.875rem;
+		color: $j-red-300;
+	}
+
+	&__error-cell {
+		font-size: 0.75rem;
+		color: $j-400;
+		max-width: 20rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__cache-warn {
+		font-size: 0.75rem;
+		color: rgba(251, 191, 36, 0.8);
+	}
 }

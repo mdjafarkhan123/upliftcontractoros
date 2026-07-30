@@ -40,6 +40,10 @@ export const mediaPurposeTagEnum = pgEnum('media_purpose_tag', [
 	// captured in person on the tech's device when they approve the quote ("close in the field").
 	// Referenced by quotes.acceptance_signature_media_id. Hidden from the Files tab.
 	'quote_signature',
+	// Bound to an invoice (invoice_id, no line_key — one per invoice). The customer's drawn
+	// signature captured in person on the contractor's device, acknowledging the invoice.
+	// Referenced by invoices.signature_media_id. Hidden from the Files tab.
+	'invoice_signature',
 	// Bound to a request (request_id). Photos the client attached describing the
 	// work — up to 10 on the public form, also addable internally (Overview block).
 	'request_photo'

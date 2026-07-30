@@ -132,7 +132,7 @@ export const GET: RequestHandler = async (event) => {
 					eq(invoices.job_id, id),
 					eq(invoices.org_id, auth.orgId),
 					isNull(invoices.deleted_at),
-					ne(invoices.status, 'cancelled')
+					ne(invoices.status, 'bad_debt')
 				)
 			),
 

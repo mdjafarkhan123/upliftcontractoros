@@ -9,6 +9,13 @@ export type AppointmentStatusJobEcho = {
 	scheduled_end: string | null;
 	next_open_visit_start: string | null;
 	has_open_visits: boolean;
+	// Billing context for the post-completion prompt (Jobber VisitActionUponComplete, jobber-04
+	// §3.3). `has_open_visits === false` ⇒ this was the last open visit → offer Close/Leave-open;
+	// `billing_frequency !== 'never'` ⇒ billing is configured → offer Invoice now/later.
+	// `assigned_to` lets the client apply the same canEditJob rule the server enforces on close.
+	billing_type: 'fixed' | 'visit_based' | null;
+	billing_frequency: 'on_completion' | 'per_visit' | 'periodic' | 'never' | null;
+	assigned_to: string | null;
 } | null;
 
 // Jobber's persisted job state: open (`active`) vs closed (`archived`). Everything else a
@@ -90,7 +97,13 @@ export type JobBillingSignals = {
 	total_paid: string;
 };
 
-export type ReviewRequestStatus = 'pending' | 'sent' | 'responded' | 'failed' | 'no_response';
+export type ReviewRequestStatus =
+	| 'scheduled'
+	| 'sent'
+	| 'engaged'
+	| 'likely_reviewed'
+	| 'completed_internal'
+	| 'expired';
 
 // A line item on a job, as served to the UI. Mirrors the quote line shape minus offer-only
 // fields. quantity/unit_price/total are numeric strings (numeric columns).
@@ -123,7 +136,14 @@ export type JobPaymentMilestoneRow = {
 	// Invoice linkage — null until the milestone is turned into an invoice ("Create").
 	invoice_id: string | null;
 	invoice_number: number | null;
-	invoice_status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | null;
+	invoice_status:
+		| 'draft'
+		| 'sent_not_due'
+		| 'awaiting_payment'
+		| 'paid'
+		| 'past_due'
+		| 'bad_debt'
+		| null;
 	invoice_total: string | null;
 	invoice_amount_paid: string | null;
 };
@@ -157,7 +177,7 @@ export type JobInvoiceListRow = {
 	id: string;
 	invoice_number: number;
 	subject: string;
-	status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+	status: 'draft' | 'sent_not_due' | 'awaiting_payment' | 'paid' | 'past_due' | 'bad_debt';
 	due_date: string | null;
 	total: string;
 	balance: string;
@@ -493,6 +513,10 @@ export type JobsFilterStatus =
 	| 'action_required'
 	| 'completed'
 	| 'cancelled'
+	// Money-state worklist (Jobber "Requires Invoicing"): jobs with billable work and no invoice
+	// yet. Cuts ACROSS the schedule faces above (a Late job can also require invoicing), so it is a
+	// filter, not a mutually-exclusive schedule status. Maps to the list query's needs_invoice signal.
+	| 'requires_invoicing'
 	// Recycle-bin tab: soft-deleted jobs (deleted=1). Not a real job status.
 	| 'deleted';
 
@@ -530,4 +554,7 @@ export type JobsStatusCounts = {
 	action_required: number;
 	completed: number;
 	cancelled: number;
+	// Cross-cutting money-state count (Jobber "Requires Invoicing"): jobs with billable work and no
+	// invoice yet, excluding cancelled. NOT part of the schedule-state total (it overlaps them).
+	requires_invoicing: number;
 };

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Avatar from '$lib/components/shared/Avatar.svelte';
+
 	let {
 		contact_id,
 		contact_name,
@@ -20,15 +22,6 @@
 		service_address_state?: string | null;
 		service_address_zip?: string | null;
 	} = $props();
-
-	function initials(name: string): string {
-		return name
-			.split(' ')
-			.filter(Boolean)
-			.slice(0, 2)
-			.map((w) => w[0]?.toUpperCase() ?? '')
-			.join('');
-	}
 
 	const mapsUrl = $derived.by(() => {
 		const parts = [
@@ -52,7 +45,7 @@
 	<p class="job-eyebrow">Client</p>
 
 	<a href="/contacts/{contact_id}" class="job-client__contact">
-		<span class="job-client__avatar">{initials(contact_name)}</span>
+		<Avatar size="md" name={contact_name} />
 		<span class="job-client__identity">
 			<span class="job-client__name">{contact_name}</span>
 			<span class="job-client__view">View contact →</span>

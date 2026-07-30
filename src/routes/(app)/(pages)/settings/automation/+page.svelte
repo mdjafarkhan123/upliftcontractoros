@@ -16,6 +16,7 @@
 	import { getMemberContext } from '$lib/context/member';
 	import { getFeatureFlagsContext } from '$lib/context/featureFlags';
 	import { validateTemplateVariables } from '$lib/utils/validation/templateVariables';
+	import CommunicationWorkflowManager from '$lib/components/settings/automation/CommunicationWorkflowManager.svelte';
 	import {
 		AUTOMATION_CARDS,
 		type AutomationCardDef,
@@ -379,6 +380,8 @@
 			<SkeletonLoader lines={8} label="Loading automation settings" height="84px" />
 		{:else}
 			<div class="automation-page__sections">
+				<CommunicationWorkflowManager />
+
 				<!-- Engine-backed automations -->
 				{#each CATEGORIES as cat (cat)}
 					<section class="auto-section">

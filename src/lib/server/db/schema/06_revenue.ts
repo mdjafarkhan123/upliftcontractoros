@@ -11,7 +11,8 @@ import {
 	date,
 	jsonb,
 	index,
-	uniqueIndex
+	uniqueIndex,
+	foreignKey
 } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import { organizations, orgMembers } from './01_org_identity';
@@ -29,21 +30,49 @@ export const quoteStatusEnum = pgEnum('quote_status', [
 	'changes_requested'
 ]);
 
+// Strict Jobber parity (InvoiceStatusTypeEnum). See jobber-05 §2 / jobber-00 §4.
+// - draft: created, not sent.
+// - sent_not_due: sent to client, due date has NOT passed, nothing paid.
+// - awaiting_payment: sent + due-now/no-due-date, OR partially paid (Jobber has no partial status —
+//   a part-paid invoice sits here; the partial is expressed via amount_paid/amount_due, not status).
+// - past_due: sent, unpaid, past its due date → feeds dunning.
+// - paid: full balance paid, OR closed via Mark-Received (received_at set, no payment logged).
+// - bad_debt: uncollectible write-off (remaining/full balance); stays on record, off the chase lists.
+// We deliberately DROPPED the old 'partially_paid' (folded into awaiting_payment/past_due) and
+// 'cancelled' (Jobber has no cancel — the cancel action became a soft-delete, migration 0175).
 export const invoiceStatusEnum = pgEnum('invoice_status', [
 	'draft',
-	'sent',
-	'partially_paid',
+	'sent_not_due',
+	'awaiting_payment',
 	'paid',
-	'overdue',
-	'cancelled'
+	'past_due',
+	'bad_debt'
 ]);
 
+// 'stripe' is the internal online-capture method (Stripe Checkout / Payment Link) and is never
+// offered in the manual "Add payment" dropdown. The rest are manual record types the contractor
+// picks when logging a payment taken outside the app. credit_card + paypal were added to match
+// Jobber's payment-type list (ref/invoice/4.jpg): Other, Bank transfer, Cash, Check, Credit/debit
+// card, PayPal. Enum values are append-only (ALTER TYPE ADD VALUE) — never reordered/removed.
 export const paymentMethodEnum = pgEnum('payment_method', [
 	'stripe',
 	'cash',
 	'check',
 	'bank_transfer',
-	'other'
+	'other',
+	'credit_card',
+	'paypal'
+]);
+
+// Append-only payment ledger movement type. Positive rows are normal payments; negative rows
+// correct/refund/reverse earlier rows without ever mutating the original financial record.
+export const paymentAdjustmentTypeEnum = pgEnum('payment_adjustment_type', [
+	'payment',
+	'refund',
+	'correction',
+	'failed_payment',
+	'bad_debt',
+	'void'
 ]);
 
 export const quotes = pgTable('quotes', {
@@ -597,6 +626,24 @@ export const invoices = pgTable(
 		stripe_payment_link_id: text('stripe_payment_link_id'),
 		sent_at: timestamp('sent_at', { withTimezone: true }),
 		paid_at: timestamp('paid_at', { withTimezone: true }),
+		// Close-invoice markers (Jobber InvoiceCloseOptionsType). Both closes are reversible.
+		// received_at: set when the invoice is closed via MARK_RECEIVED (paid outside the app — status
+		// flips to 'paid' with NO payment row logged). Distinguishes a courtesy close from a real
+		// collected payment; cleared on reopen. paid_at is also stamped so the invoice reads as settled.
+		received_at: timestamp('received_at', { withTimezone: true }),
+		// bad_debt_at: set when closed via BAD_DEBT (write-off). written_off_amount snapshots the
+		// remaining balance written off at that moment (for reporting). Both cleared on unmark/reopen.
+		bad_debt_at: timestamp('bad_debt_at', { withTimezone: true }),
+		written_off_amount: numeric('written_off_amount', { precision: 12, scale: 2 }),
+		// In-person "sign on this device": the customer's acknowledgement of this invoice, collected
+		// by the contractor handing over their device (mirrors quotes.acceptance_signature_*). Purely a
+		// record — it never changes status or money. signature_name is the customer's typed full name;
+		// signature_media_id is the drawn signature image (stored in R2 as a media row, purpose_tag
+		// 'invoice_signature'; no FK — same circular-import avoidance as quotes.acceptance_signature_media_id,
+		// media is soft-deleted so the id stays resolvable); signed_at stamps when. All NULL = not signed.
+		signature_name: text('signature_name'),
+		signature_media_id: uuid('signature_media_id'),
+		signed_at: timestamp('signed_at', { withTimezone: true }),
 		deleted_at: timestamp('deleted_at', { withTimezone: true }),
 		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -676,29 +723,47 @@ export type InvoiceView = InferSelectModel<typeof invoiceViews>;
 export type NewInvoiceView = InferInsertModel<typeof invoiceViews>;
 
 // Immutable financial records — no updated_at, no deleted_at
-export const payments = pgTable('payments', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	org_id: uuid('org_id')
-		.notNull()
-		.references(() => organizations.id),
-	invoice_id: uuid('invoice_id')
-		.notNull()
-		.references(() => invoices.id),
-	amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-	// Tip (gratuity) portion of THIS payment (M7). SEPARATE from `amount` (the balance-applied
-	// portion) so a tip never touches amount_due/amount_paid — recalc sums `amount` for the
-	// balance and `tip_amount` for tips independently. Set at insert (online: from Stripe
-	// metadata; manual: from the record-payment dialog). Default 0 = no tip on this payment.
-	tip_amount: numeric('tip_amount', { precision: 12, scale: 2 }).notNull().default('0'),
-	payment_method: paymentMethodEnum('payment_method').notNull(),
-	stripe_payment_intent_id: text('stripe_payment_intent_id'),
-	notes: text('notes'),
-	recorded_by: uuid('recorded_by').references(() => orgMembers.id),
-	paid_at: timestamp('paid_at', { withTimezone: true }).notNull().defaultNow(),
-	receipt_sent_at: timestamp('receipt_sent_at', { withTimezone: true }),
-	receipt_sent_via: text('receipt_sent_via'),
-	created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const payments = pgTable(
+	'payments',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		org_id: uuid('org_id')
+			.notNull()
+			.references(() => organizations.id),
+		invoice_id: uuid('invoice_id')
+			.notNull()
+			.references(() => invoices.id),
+		amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+		// What kind of ledger movement this row represents. `payment` rows are positive. Refunds,
+		// corrections, failed-payment reversals, bad-debt movements, and voids are stored as NEW rows,
+		// usually with negative amount/tip_amount values, linked back via applies_to_payment_id.
+		adjustment_type: paymentAdjustmentTypeEnum('adjustment_type').notNull().default('payment'),
+		applies_to_payment_id: uuid('applies_to_payment_id'),
+		// Tip (gratuity) portion of THIS payment (M7). SEPARATE from `amount` (the balance-applied
+		// portion) so a tip never touches amount_due/amount_paid — recalc sums `amount` for the
+		// balance and `tip_amount` for tips independently. Set at insert (online: from Stripe
+		// metadata; manual: from the record-payment dialog). Default 0 = no tip on this payment.
+		tip_amount: numeric('tip_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+		payment_method: paymentMethodEnum('payment_method').notNull(),
+		stripe_payment_intent_id: text('stripe_payment_intent_id'),
+		stripe_refund_id: text('stripe_refund_id'),
+		notes: text('notes'),
+		recorded_by: uuid('recorded_by').references(() => orgMembers.id),
+		paid_at: timestamp('paid_at', { withTimezone: true }).notNull().defaultNow(),
+		receipt_sent_at: timestamp('receipt_sent_at', { withTimezone: true }),
+		receipt_sent_via: text('receipt_sent_via'),
+		created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		uniqueIndex('idx_payments_stripe_refund_id').on(t.stripe_refund_id),
+		index('idx_payments_applies_to_payment_id').on(t.applies_to_payment_id),
+		foreignKey({
+			columns: [t.applies_to_payment_id],
+			foreignColumns: [t.id],
+			name: 'payments_applies_to_payment_id_payments_id_fk'
+		})
+	]
+);
 
 export type Payment = InferSelectModel<typeof payments>;
 export type NewPayment = InferInsertModel<typeof payments>;

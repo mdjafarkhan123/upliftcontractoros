@@ -3,6 +3,7 @@
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { TimePicker } from '$lib/components/ui/time-picker';
 	import { Switch } from '$lib/components/ui/switch';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
 	import CrewPicker from '$lib/components/appointments/CrewPicker.svelte';
 	import { dateTimeLocalValue } from '$lib/utils/calendar';
@@ -222,15 +223,14 @@
 			<div class="event-form__group">
 				<div class="event-form__group-field">
 					<label class="event-form__mini-label" for="reminder-desc">Details</label>
-					<textarea
+					<Textarea
 						id="reminder-desc"
-						class="event-form__textarea"
 						placeholder="What to remember (e.g. Invoice after final walkthrough)"
-						rows="3"
+						rows={3}
 						bind:value={description}
 						maxlength={5000}
 						oninput={() => (errorMsg = null)}
-					></textarea>
+					/>
 				</div>
 			</div>
 
@@ -318,40 +318,42 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<style>
+<style lang="scss">
+	@use '$lib/styles/tokens' as *;
+
 	.reminder-form__job {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 1rem;
-		background: var(--color-surface-2, #f6f7f9);
-		border: 1px solid var(--color-border, #e4e7ec);
-		border-radius: var(--radius-md, 0.5rem);
+		gap: $space-3;
+		padding: $space-3 $space-4;
+		background: var(--color-bg-surface-sunk);
+		border: 1px solid var(--color-border);
+		border-radius: $radius-md;
 	}
 	.reminder-form__job-icon {
-		font-size: 1.25rem;
-		color: var(--color-text-muted, #667085);
+		font-size: 1.5rem;
+		color: var(--color-text-muted);
 	}
 	.reminder-form__job-text {
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
+		gap: 2px;
 		min-width: 0;
 	}
 	.reminder-form__job-title {
-		font-size: 1.3rem;
-		font-weight: 600;
-		color: var(--color-text, #101828);
+		font-size: $fs-body;
+		font-weight: $weight-semibold;
+		color: var(--color-text-primary);
 	}
 	.reminder-form__job-num {
-		font-weight: 500;
-		color: var(--color-text-muted, #667085);
+		font-weight: $weight-medium;
+		color: var(--color-text-muted);
 	}
 	.reminder-form__job-client {
-		font-size: 1.2rem;
-		color: var(--color-text-muted, #667085);
+		font-size: $fs-caption;
+		color: var(--color-text-muted);
 	}
 	.reminder-form__notify {
-		margin-top: 0.75rem;
+		margin-top: $space-3;
 	}
 </style>

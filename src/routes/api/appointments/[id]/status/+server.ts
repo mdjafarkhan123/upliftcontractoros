@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/client';
-import { appointments, outboxEvents, type Appointment } from '$lib/server/db/schema';
+import { appointments, jobs, outboxEvents, type Appointment } from '$lib/server/db/schema';
 import { assertOrgActive } from '$lib/server/auth/assertOrgActive';
 import { canRescheduleAppointment } from '$lib/server/appointments/permissions';
 import { transitionStatusSchema } from '$lib/server/appointments/schemas';
@@ -24,6 +24,12 @@ type JobEcho = {
 	scheduled_end: string | null;
 	next_open_visit_start: string | null;
 	has_open_visits: boolean;
+	// Billing context so the client can raise Jobber's post-completion prompt
+	// (Invoice now/later + Close/Leave-open — VisitActionUponComplete, jobber-04 §3.3).
+	// `billing_frequency = 'never'` means billing isn't configured → no invoice choice.
+	billing_type: 'fixed' | 'visit_based' | null;
+	billing_frequency: 'on_completion' | 'per_visit' | 'periodic' | 'never' | null;
+	assigned_to: string | null;
 };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -34,28 +40,46 @@ async function computeJobEcho(
 	orgId: string
 ): Promise<JobEcho | null> {
 	if (!jobId) return null;
+	// Repin is a write that must settle before the signal read; the signal aggregate and the
+	// job's billing columns are independent reads → one concurrent wave (Rule 20).
 	const repinned = await repinOneOffJobSchedule(tx, { orgId, jobId });
-	const [sig] = await tx
-		.select({
-			next_open_visit_start: sql<Date | null>`MIN(${appointments.scheduled_start}) FILTER (WHERE ${appointments.status} = 'scheduled')`,
-			has_open_visits: sql<
-				boolean | null
-			>`bool_or(${appointments.status} IN ('scheduled','unscheduled'))`
-		})
-		.from(appointments)
-		.where(
-			and(
-				eq(appointments.job_id, jobId),
-				eq(appointments.org_id, orgId),
-				isNull(appointments.deleted_at)
-			)
-		);
+	const [sigRows, billingRows] = await Promise.all([
+		tx
+			.select({
+				next_open_visit_start: sql<Date | null>`MIN(${appointments.scheduled_start}) FILTER (WHERE ${appointments.status} = 'scheduled')`,
+				has_open_visits: sql<
+					boolean | null
+				>`bool_or(${appointments.status} IN ('scheduled','unscheduled'))`
+			})
+			.from(appointments)
+			.where(
+				and(
+					eq(appointments.job_id, jobId),
+					eq(appointments.org_id, orgId),
+					isNull(appointments.deleted_at)
+				)
+			),
+		tx
+			.select({
+				billing_type: jobs.billing_type,
+				billing_frequency: jobs.billing_frequency,
+				assigned_to: jobs.assigned_to
+			})
+			.from(jobs)
+			.where(and(eq(jobs.id, jobId), eq(jobs.org_id, orgId), isNull(jobs.deleted_at)))
+			.limit(1)
+	]);
+	const sig = sigRows[0];
+	const billing = billingRows[0];
 	return {
 		repinned: repinned != null,
 		scheduled_start: toISO(repinned?.scheduled_start ?? null),
 		scheduled_end: toISO(repinned?.scheduled_end ?? null),
 		next_open_visit_start: toISO(sig?.next_open_visit_start ?? null),
-		has_open_visits: sig?.has_open_visits ?? false
+		has_open_visits: sig?.has_open_visits ?? false,
+		billing_type: (billing?.billing_type as JobEcho['billing_type']) ?? null,
+		billing_frequency: (billing?.billing_frequency as JobEcho['billing_frequency']) ?? null,
+		assigned_to: billing?.assigned_to ?? null
 	};
 }
 

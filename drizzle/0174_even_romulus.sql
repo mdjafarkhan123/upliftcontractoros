@@ -1,0 +1,1 @@
+ALTER TABLE "job_invoice_reminders" ADD COLUMN "due_notified_at" timestamp with time zone;

@@ -9,7 +9,7 @@ Layout: flex row, align-center, justify between results-text (left) and page con
 
 ## Results Text (Left)
 - "Showing 1–25 of 143 results"
-- Font: 14px, `var(--color-text-secondary)`
+- Font: `$fs-body`/`var(--text-body)` (14px), `var(--color-text-secondary)`
 
 ## Pagination Item
 
@@ -24,9 +24,9 @@ Layout: flex row, align-center, justify between results-text (left) and page con
 
 ## Previous / Next Buttons
 
-- Horizontal padding: 12px, height: 36px
-- First item: 8px radius inline-start
-- Last item: 8px radius inline-end
+- Horizontal padding: `$space-3` (12px), height: 36px
+- First item: `$radius-sm` (8px) inline-start
+- Last item: `$radius-sm` (8px) inline-end
 
 ## Active Page Item
 

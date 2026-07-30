@@ -1,54 +1,148 @@
 @use '../tokens' as *;
 
+// =============================================================================
+// AVATAR — person photo / initials circle
+// Docs: .opencode/skills/design/avatars.md
+// =============================================================================
 .avatar {
-	border-radius: $radius-full;
-	object-fit: cover;
+	position: relative;
 	flex-shrink: 0;
 	display: block;
+	overflow: hidden;
+	border-radius: $radius-full;
+	object-fit: cover;
 
-	&--sm {
-		width: 32px;
-		height: 32px;
-		font-size: $fs-body;
-	}
-	&--md {
-		width: 40px;
-		height: 40px;
-		font-size: $fs-body;
-	}
-	&--lg {
-		width: 56px;
-		height: 56px;
-		font-size: $fs-lg;
-	}
-	&--xl {
-		width: 72px;
-		height: 72px;
-		font-size: $fs-h3;
+	// ---- Square variant ----
+	&--square {
+		border-radius: $radius-sm;
 	}
 
-	// Initials fallback — shown when no photo is available
-	&--fallback {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--avatar-fallback-bg);
-		color: var(--avatar-fallback-text);
-		font-weight: $weight-semibold;
-		user-select: none;
+	// ---- Bordered variant ----
+	&--bordered {
+		box-shadow: 0 0 0 2px var(--color-border);
+	}
+
+	// ---- Size system (7 sizes) ----
+	&--xs  { width: 18px; height: 18px; }
+	&--sm  { width: 24px; height: 24px; }
+	&--base{ width: 32px; height: 32px; }
+	&--md  { width: 40px; height: 40px; }
+	&--lg  { width: 44px; height: 44px; }
+	&--xl  { width: 56px; height: 56px; }
+	&--2xl { width: 64px; height: 64px; }
+}
+
+// -----------------------------------------------------------------------------
+// AVATAR IMAGE — <img> inside .avatar
+// -----------------------------------------------------------------------------
+.avatar__img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+// -----------------------------------------------------------------------------
+// AVATAR FALLBACK — initials when no image
+// Style is set via class — palette is driven by data-palette attribute.
+// -----------------------------------------------------------------------------
+.avatar__fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	font-weight: $weight-semibold;
+	line-height: 1;
+	user-select: none;
+	background: var(--avatar-fallback-bg);
+	color: var(--avatar-fallback-text);
+
+	// 8-color palette — applied via data-palette attribute
+	&[data-palette='brand']  { background: var(--palette-brand-bg);  color: var(--palette-brand-text); }
+	&[data-palette='sky']    { background: var(--palette-sky-bg);    color: var(--palette-sky-text); }
+	&[data-palette='purple'] { background: var(--palette-purple-bg); color: var(--palette-purple-text); }
+	&[data-palette='orange'] { background: var(--palette-orange-bg); color: var(--palette-orange-text); }
+	&[data-palette='teal']   { background: var(--palette-teal-bg);   color: var(--palette-teal-text); }
+	&[data-palette='pink']   { background: var(--palette-pink-bg);   color: var(--palette-pink-text); }
+	&[data-palette='indigo'] { background: var(--palette-indigo-bg); color: var(--palette-indigo-text); }
+	&[data-palette='amber']  { background: var(--palette-amber-bg);  color: var(--palette-amber-text); }
+}
+
+// -----------------------------------------------------------------------------
+// ONLINE INDICATOR — small dot at bottom-right of .avatar
+// -----------------------------------------------------------------------------
+.avatar-indicator {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: $radius-full;
+	border: 2px solid var(--color-border);
+	background: var(--success-solid);
+	pointer-events: none;
+
+	&--offline {
+		background: var(--color-text-muted);
 	}
 }
 
-// Avatar group — stacked row of avatars with overlap
+// -----------------------------------------------------------------------------
+// AVATAR GROUP — stacked row of avatars with overlap
+// -----------------------------------------------------------------------------
 .avatar-group {
 	display: flex;
 
-	.avatar {
+	.avatar,
+	&__counter {
 		border: 2px solid var(--color-bg-surface);
-		margin-left: -$space-2;
+		margin-left: -$space-3;
 
 		&:first-child {
 			margin-left: 0;
 		}
+	}
+
+	// Stacked counter — "+N" chip for overflow
+	&__counter {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: $radius-full;
+		background: var(--color-text-primary);
+		color: white;
+		font-size: $fs-caption;
+		font-weight: $weight-semibold;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// AVATAR WITH TEXT — inline avatar + name/subtitle layout
+// -----------------------------------------------------------------------------
+.avatar-text {
+	display: flex;
+	align-items: center;
+	gap: $space-2;
+
+	&__name {
+		font-size: $fs-body;
+		font-weight: $weight-medium;
+		color: var(--color-text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__subtitle {
+		font-size: $fs-caption;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 }

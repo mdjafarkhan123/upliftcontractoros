@@ -20,7 +20,7 @@ Status indicators are the visual language for job, project, invoice, and team en
 
 ### Status Dot
 
-A 8×8px `$radius-full` circle of the dot color sits to the left of the status label inside the badge:
+A `$space-2`×`$space-2` (8×8px) `$radius-full` circle of the dot color sits to the left of the status label inside the badge:
 ```
 ● Active     ● In Progress     ● Completed
 ```
@@ -66,7 +66,7 @@ Used on Project detail and Invoice flow views.
  Lead  Quote  Won  Active  Done
 ```
 
-- Step circle: 28×28px, `$radius-full`
+- Step circle: `$space-7`×`$space-7` (28×28px), `$radius-full`
 - Complete step: `var(--color-brand)` bg, white checkmark, 1px `var(--color-brand)` border
 - Active step: white bg, `var(--color-brand)` border 2px, `var(--color-brand)` number
 - Upcoming step: `var(--color-bg-surface-sunk)` bg, `var(--color-text-secondary)` border, `var(--color-text-secondary)` number
@@ -91,8 +91,8 @@ Used on Project detail and Invoice flow views.
   animation: pulse 1.5s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34,125,83, 0.5); }
-  50%       { box-shadow: 0 0 0 6px rgba(34,125,83, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-brand-rgb), 0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(var(--color-brand-rgb), 0); }
 }
 ```
 

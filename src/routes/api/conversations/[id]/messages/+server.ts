@@ -22,6 +22,7 @@ import { touchContactLastContacted } from '$lib/server/contacts/touchLastContact
 import { recordOutboundMessage, type OutboundChannel } from '$lib/server/conversations';
 import { ensureReplyAlias } from '$lib/server/email/replyAlias';
 import { getCreditState } from '$lib/server/sms/credit';
+import { canContactReceiveCommunication } from '$lib/server/communication-preferences';
 
 const log = createLogger('inbox.message.insert');
 
@@ -323,14 +324,7 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 	if (!contact) return json({ error: 'Contact not found.' }, { status: 404 });
 
-	// Block all outbound messages (any channel) when the contact has a hard DNC flag.
-	// Internal notes are exempt — they are staff-only and never reach the contact.
-	if (contact.do_not_contact && !parsed.is_internal_note) {
-		return json(
-			{ error: 'This contact is marked Do Not Contact. Remove the flag before sending.' },
-			{ status: 422 }
-		);
-	}
+	// Internal notes are staff-only and never reach the contact.
 
 	const mediaIds = parsed.media_ids ?? [];
 
@@ -409,6 +403,20 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const outboundChannel = await resolveOutboundChannel(conv.id, parsed.channel);
+	const eligibility = await canContactReceiveCommunication({
+		orgId: auth.orgId,
+		contactId: contact.id,
+		channel: outboundChannel,
+		direction: 'outbound',
+		category: 'manual_message',
+		conversationId: conv.id
+	});
+	if (!eligibility.allowed) {
+		return json(
+			{ error: eligibility.reasonMessage ?? 'This communication is blocked.' },
+			{ status: 422 }
+		);
+	}
 
 	// ── Email branch (async via outbox → email worker) ───────────────────────
 	if (outboundChannel === 'email') {
@@ -764,9 +772,6 @@ export const POST: RequestHandler = async (event) => {
 			},
 			{ status: 400 }
 		);
-	}
-	if (contact.sms_opt_out) {
-		return json({ error: 'Contact has opted out of SMS.' }, { status: 400 });
 	}
 	if (isReleasedPhone(contact.phone)) {
 		return json({ error: 'Contact phone number has been released.' }, { status: 400 });

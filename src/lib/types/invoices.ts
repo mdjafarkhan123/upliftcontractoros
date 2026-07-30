@@ -1,6 +1,34 @@
-export type InvoiceStatus = 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+// Strict Jobber InvoiceStatusTypeEnum (see schema 06_revenue.ts + jobber-05 §2). No 'partially_paid'
+// (folded into awaiting_payment) and no 'cancelled' (cancel is now a soft-delete).
+export type InvoiceStatus =
+	| 'draft'
+	| 'sent_not_due'
+	| 'awaiting_payment'
+	| 'paid'
+	| 'past_due'
+	| 'bad_debt';
 
-export type PaymentMethod = 'stripe' | 'cash' | 'check' | 'bank_transfer' | 'other';
+// 'stripe' = online capture (never offered in the manual Add-payment dropdown). The rest are
+// manual record types. credit_card + paypal match Jobber's list (ref/invoice/4.jpg).
+export type PaymentMethod =
+	| 'stripe'
+	| 'cash'
+	| 'check'
+	| 'bank_transfer'
+	| 'other'
+	| 'credit_card'
+	| 'paypal';
+
+// The manual record types the contractor can pick / edit (everything except 'stripe').
+export type ManualPaymentMethod = Exclude<PaymentMethod, 'stripe'>;
+
+export type PaymentAdjustmentType =
+	| 'payment'
+	| 'refund'
+	| 'correction'
+	| 'failed_payment'
+	| 'bad_debt'
+	| 'void';
 
 export type InvoicesGroup = 'all' | 'open' | 'closed';
 export type InvoicesStatusChip = 'all' | InvoiceStatus;
@@ -15,7 +43,8 @@ export type InvoicesFilters = {
 // row every accounting-grade CRM opens with: QuickBooks, Jobber, Housecall Pro).
 // All figures are org-scoped and independent of the active list filter.
 export type InvoiceStats = {
-	// Unpaid balance across sent / partially_paid / overdue invoices (drafts excluded).
+	// Unpaid balance across sent_not_due / awaiting_payment / past_due invoices (drafts + bad-debt
+	// excluded — bad debt is written off, no longer collectible).
 	outstanding_total: string;
 	// Balance + count of effectively-overdue invoices (past due date with a balance).
 	overdue_total: string;
@@ -75,11 +104,19 @@ export type InvoicePaymentRow = {
 	amount: string;
 	// Tip (gratuity) portion of this payment (M7). '0' when none. Shown beside the amount.
 	tip_amount: string;
+	adjustment_type: PaymentAdjustmentType;
+	applies_to_payment_id: string | null;
 	payment_method: PaymentMethod;
 	stripe_payment_intent_id: string | null;
+	// Free-text "Details" about the payment (reuses the payments.notes column; relabeled in the UI).
 	notes: string | null;
 	recorded_by_name: string | null;
 	paid_at: string;
+	// Receipt delivery markers. receipt_sent_at is set the first time a receipt is sent for this
+	// payment; receipt_sent_via records the channel(s) ('email' | 'sms' | 'email, sms'). Null = never
+	// sent. A Stripe (online) payment is immutable and never edited/deleted from the UI.
+	receipt_sent_at: string | null;
+	receipt_sent_via: string | null;
 	created_at: string;
 };
 
@@ -124,6 +161,18 @@ export type InvoiceDetail = {
 	stripe_payment_link_url: string | null;
 	sent_at: string | null;
 	paid_at: string | null;
+	// Close-invoice markers (Jobber). received_at set ⇒ closed via Mark-Received (status 'paid', no
+	// payment logged). bad_debt_at + written_off_amount set ⇒ closed via Bad-Debt write-off. Both
+	// reversible; the detail page reads these to show Reopen / Unmark Bad Debt.
+	received_at: string | null;
+	bad_debt_at: string | null;
+	written_off_amount: string | null;
+	// In-person customer signature acknowledging the invoice (collected on the contractor's device).
+	// All three are null until signed. signature_media_id points at the drawn image (media row,
+	// purpose 'invoice_signature'); the detail page resolves a short-lived signed URL from it.
+	signature_name: string | null;
+	signature_media_id: string | null;
+	signed_at: string | null;
 	created_at: string;
 	updated_at: string;
 	contact_id: string;

@@ -27,12 +27,12 @@ export function milestoneStatus(m: JobPaymentMilestoneRow): MilestoneStatus {
 	switch (m.invoice_status) {
 		case 'paid':
 			return 'paid';
-		case 'cancelled':
+		case 'bad_debt':
 			return 'cancelled';
 		case 'draft':
 			return 'draft';
 		default:
-			// sent / partially_paid / overdue → awaiting payment
+			// sent_not_due / awaiting_payment / past_due → awaiting payment
 			return 'awaiting';
 	}
 }

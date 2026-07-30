@@ -59,9 +59,9 @@ export const POST: RequestHandler = async (event) => {
 		// signal the worker to re-enroll or stop it. Drafts have no enrollment yet, so
 		// there's nothing to change until they're sent (the flag is read at send time).
 		const live =
-			existing.status === 'sent' ||
-			existing.status === 'partially_paid' ||
-			existing.status === 'overdue';
+			existing.status === 'sent_not_due' ||
+			existing.status === 'awaiting_payment' ||
+			existing.status === 'past_due';
 		if (live) {
 			await tx.insert(outboxEvents).values(
 				invoiceRemindersToggledEvent({

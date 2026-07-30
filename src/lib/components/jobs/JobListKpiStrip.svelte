@@ -30,7 +30,11 @@
 			tone: 'warn'
 		},
 		{ key: 'completed', label: 'Completed', icon: 'ri-checkbox-circle-line', tone: 'success' },
-		{ key: 'cancelled', label: 'Cancelled', icon: 'ri-close-circle-line', tone: 'muted' }
+		{ key: 'cancelled', label: 'Cancelled', icon: 'ri-close-circle-line', tone: 'muted' },
+		// Money-state worklist (Jobber "Requires Invoicing") — the on-ramp to billing. Amber like the
+		// row's "Needs Invoice" badge; it counts jobs that overlap the schedule tiles, so it reads as
+		// an extra actionable number rather than a slice of the schedule breakdown.
+		{ key: 'requires_invoicing', label: 'Requires Invoicing', icon: 'ri-bill-line', tone: 'warn' }
 	];
 
 	const tiles = $derived<KpiTile[]>(

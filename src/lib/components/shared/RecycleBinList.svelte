@@ -12,6 +12,7 @@
 </script>
 
 <script lang="ts">
+	import Avatar from '$lib/components/shared/Avatar.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 
@@ -42,14 +43,6 @@
 		return Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000));
 	}
 
-	function initials(title: string): string {
-		return title
-			.split(/\s+/)
-			.slice(0, 2)
-			.map((p) => p[0]?.toUpperCase() ?? '')
-			.join('');
-	}
-
 	async function restore(item: RecycleBinItem) {
 		if (busyId) return;
 		busyId = item.id;
@@ -72,7 +65,7 @@
 	{#each items as item (item.id)}
 		{@const left = daysLeft(item.deleted_at)}
 		<li class="recycle-bin__row">
-			<div class="recycle-bin__avatar">{initials(item.title) || '?'}</div>
+			<Avatar size="sm" name={item.title} />
 
 			<div class="recycle-bin__body">
 				<p class="recycle-bin__name">{item.title}</p>
